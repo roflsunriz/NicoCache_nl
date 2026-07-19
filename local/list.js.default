@@ -1,0 +1,66 @@
+// このファイルは編集・削除しないでください
+// カスタマイズする際は、list.jsにmakeCacheList関数を持った
+// スクリプトを作成してください。
+// cssが必要な場合は、list.cssという名前が利用できます。
+
+function makeCacheList()
+{
+	function getSmid(s) {
+		var a = /^\w{2}\d+/.exec(s);
+		if (!a) return "";
+		else return a[0];
+	}
+	var start = new Date;
+	// 一時ファイル
+	var tstr = "";
+	if (typeof tempList != "undefined")
+	{
+		for (k in tempList)
+		{
+			var nowDL = tempList[k][3];
+			var percentDL = "";
+			if (nowDL && tempList[k][2] > 1)
+				percentDL = parseInt(tempList[k][1] / tempList[k][2] * 100.0);
+			tstr +=	"\t<li>" + 
+					"[<a href='../watch/" + getSmid(k) + "'>再生</a>]" + 
+					(nowDL ? ("[DL中 (" + percentDL + "%)] ")  : "[一時]") + 
+					(nowDL ? "" : "[<a href='./rmtmp?" + k + "'>削除</a>] ") +
+					"<span style='width:100px;'>" + k + "</span>" + 
+					"[" + tempList[k][0] + "] " +
+					tempList[k][1] + " bytes"  + 
+					"</li>\n";
+		}
+	}
+	
+	// キャッシュファイル
+	var cstr = ""
+	if (typeof cacheList != "undefined")
+	{
+		for (k in cacheList)
+		{
+			var ci = cacheList[k];
+			cstr +=	"\t<li>" +
+				"[<a href='../watch/" + getSmid(k) + "'>再生</a>]" + 
+				"[<a href='./" + k + "/movie'>保存</a>]" +
+				"[<a href='./" + k + "/audio'>音声</a>]" +
+				"[<a href='./rm?" + k + "'>削除</a>] " +
+				"<span style='width:100px;'>" + k + "</span>" +
+				"[" + (ci[0] != "" ?
+							ci[0]
+							: "(<a href='title?" + k + "' style='color:red;'>タイトルを取得</a>)")
+				 + "]" +
+				"</li>\n";
+		}
+	}
+	document.write("<a href='http://www.nicovideo.jp/'>トップに戻る</a>。 " + ncversion + " powered by <a href='http://nicolist.net/'>nicolist.net</a>");
+	document.write("<ul>");
+	if (tstr != "")
+		document.write("<li>一時ファイル</li><ul>" + tstr + "</ul>");
+
+	if (cstr != "")
+		document.write("<li>キャッシュファイル</li><ul>" + cstr + "</ul>");
+	else
+		document.write("<li>キャッシュはまだありません。</li>");
+	document.write("</ul>");
+	//alert(new Date - start);
+}

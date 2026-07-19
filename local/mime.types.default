@@ -1,0 +1,23 @@
+﻿# ローカルファイル用 Content-Type 設定ファイル
+#
+# 内容を変更する時はファイル名から".default"を削った上で編集してください
+#
+# Apache の mime.types 形式なので、
+#   mimeTypes=/etc/mime.types
+# といった感じで Apache 用のファイルを直接指定することもできます
+#
+# 書式: Content-Type<TAB>[<TAB>...]ext1[ ext2...]
+#
+application/json	json
+application/x-javascript	js
+application/x-shockwave-flash	swf
+image/gif	gif
+image/jpeg	jpg jpeg
+image/png	png
+text/css	css
+text/html	html htm
+text/plain	txt
+text/xml	xml
+video/flv	flv
+video/mp4	mp4
+video/webm	webm

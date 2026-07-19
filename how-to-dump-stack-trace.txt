@@ -1,0 +1,8 @@
+jps -> show pid of java processes
+jstack -> show stack trace of a java process
+jmap -> show memory usage of a java process
+jstat -> show statistics of a java process
+jconsole -> heap memory usage, thread usage, class loading, CPU usage Console
+jinfo -> show configuration of a java process
+
+jstack (pid) > (filename) -> save stack trace to file

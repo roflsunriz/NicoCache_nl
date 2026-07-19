@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="NicoCache_nl" default="jar">
+  <!-- CA(証明書生成)関係は全て"ca-"プレフィックス. -->
+
+  <property name="nicocache.jar" value="NicoCache_nl.jar"/>
+  <property name="extproj-dir" value="../NicoCache_nl-ext"/>
+  <property environment="env"/>
+  <available file="src" type="dir" property="srcdir-exists"/>
+  <available file="${extproj-dir}/deploy.xml" property="extdeploy-exists"/>
+  <path id="extensions-classpath">
+    <pathelement location="."/>
+    <pathelement location="./NicoCache_nl.jar"/>
+  </path>
+
+  <target name="version" description="java version">
+    <echoproperties prefix="java."/>
+    <echo message="# 以下再表示を含みます"/>
+    <echo message="JAVACMD: ${env.JAVACMD}"/>
+    <echo message="ANT_OPTS: ${env.ANT_OPTS}"/>
+    <echo message="ant.java.version: ${ant.java.version}"/>
+    <echo message="java.version: ${java.version}"/>
+    <echo message="java.home: ${java.home}"/>
+    <echo message="java.vm.version: ${java.vm.version}"/>
+    <echo message="java.vm.vendor: ${java.vm.vendor}"/>
+    <echo message="java.vm.name: ${java.vm.name}"/>
+    <echo message="Ant version: ${ant.version}"/>
+  </target>
+
+  <target name="detect-jdk-version">
+    <!-- ${ant.java.version}="9" on AdoptOpenJDK11+Windows10 :thinking_face: -->
+    <condition property="jdk8">
+      <equals arg1="${java.specification.version}" arg2="1.8"/>
+    </condition>
+  </target>
+
+  <target name="compile-pre-jdk8" depends="detect-jdk-version" if="jdk8">
+    <javac source="1.8" target="1.8" encoding="UTF-8"
+           srcdir="src" destdir="src"
+           includeantruntime="false"
+           bootclasspath="${java.home}/lib/rt.jar"
+           debug="on" debuglevel="lines,source">
+      <compilerarg value="-Xlint:-options"/>
+      <include name="dareka/**"/>
+      <exclude name="dareka/**/package-info.java"/>
+    </javac>
+  </target>
+
+  <target name="compile-post-jdk9" depends="detect-jdk-version" unless="jdk8">
+    <fail message="Antをアップデートしてください">
+      <condition>
+        <not><antversion atleast="1.9.8"/></not>
+      </condition>
+    </fail>
+    <javac release="11" encoding="UTF-8"
+           srcdir="src" destdir="src"
+           includeantruntime="false"
+           debug="on" debuglevel="lines,source">
+      <compilerarg value="-Xlint:-options"/>
+      <include name="dareka/**"/>
+      <exclude name="dareka/**/package-info.java"/>
+    </javac>
+  </target>
+
+  <target name="compile" depends="compile-pre-jdk8,compile-post-jdk9"/>
+
+  <target name="extensions-pre-jdk8" depends="detect-jdk-version" if="jdk8">
+    <javac source="1.8" target="1.8" encoding="UTF-8"
+           classpathref="extensions-classpath"
+           srcdir="." destdir="."
+           includeantruntime="false"
+           bootclasspath="${java.home}/lib/rt.jar"
+           debug="on" debuglevel="lines,source">
+      <compilerarg value="-Xlint:-options"/>
+      <include name="extensions/*.java"/>
+      <exclude name="extensions/*Sample.java"/>
+    </javac>
+  </target>
+
+  <target name="extensions-post-jdk9" depends="detect-jdk-version" unless="jdk8">
+    <fail message="Antをアップデートしてください">
+      <condition>
+        <not><antversion atleast="1.9.8"/></not>
+      </condition>
+    </fail>
+    <javac release="11" encoding="UTF-8"
+           classpathref="extensions-classpath"
+           srcdir="." destdir="."
+           includeantruntime="false"
+           debug="on" debuglevel="lines,source">
+      <compilerarg value="-Xlint:-options"/>
+      <include name="extensions/*.java"/>
+      <exclude name="extensions/*Sample.java"/>
+    </javac>
+  </target>
+
+  <target name="extensions" depends="extensions-pre-jdk8,extensions-post-jdk9" unless="eclipse.running"/>
+
+  <target name="jar" depends="compile" if="srcdir-exists">
+    <move file="${nicocache.jar}" tofile="${nicocache.jar}.old"
+          failonerror="false"/>
+    <jar destfile="${nicocache.jar}">
+      <manifest>
+        <attribute name="Class-Path"
+                   value="sqlite-jdbc.jar igo.jar library.jar"/>
+        <attribute name="Main-Class" value="dareka.NLMain"/>
+        <attribute name="Add-Opens" value="java.base/sun.net java.base/sun.net.www.protocol.http java.base/java.net java.base/java.lang java.base/java.lang.reflect"/>
+      </manifest>
+      <fileset dir="src">
+        <include name="dareka/**"/>
+        <exclude name="dareka/**/package-info.class"/>
+        <include name="native/*.cpp"/>
+        <include name="native/*.sln"/>
+        <include name="native/*.vcproj"/>
+      </fileset>
+    </jar>
+  </target>
+
+  <target name="archive">
+    <zip destfile="development.zip" compress="false">
+      <fileset dir=".">
+        <include name=".externalToolBuilders/**"/>
+        <include name=".settings/**"/>
+        <include name=".classpath"/>
+        <include name=".project"/>
+        <include name="build.xml"/>
+      </fileset>
+      <fileset dir="src">
+        <include name="extensions/*.java"/>
+        <include name="extensions/*.cmd"/>
+      </fileset>
+    </zip>
+  </target>
+
+  <target name="deploy" depends="jar" if="env.NICOCACHE_HOME">
+    <copy file="${nicocache.jar}" todir="${env.NICOCACHE_HOME}"
+          preservelastmodified="true"/>
+    <antcall target="deploy-ext" inheritAll="false"/>
+  </target>
+
+  <target name="deploy-ext" if="extdeploy-exists">
+    <ant dir="${extproj-dir}" antfile="deploy.xml"/>
+  </target>
+  <target name="clean" if="srcdir-exists">
+    <delete>
+      <fileset dir="src" includes="**/*.class"/>
+      <fileset file="${nicocache.jar}"/>
+      <fileset file="development.zip"/>
+    </delete>
+    <delete dir="documents/javadoc"/>
+  </target>
+
+  <target name="extract">
+    <unjar src="${nicocache.jar}" dest="src" overwrite="false">
+      <patternset>
+        <include name="dareka/**"/>
+        <include name="native/**"/>
+        <exclude name="**/*.class"/>
+      </patternset>
+    </unjar>
+    <delete quiet="true">
+      <fileset dir="src" includes="**/*.class"/>
+    </delete>
+  </target>
+
+  <target name="javadoc">
+    <mkdir dir="documents/javadoc"/>
+    <javadoc sourcepath="src" destdir="documents/javadoc" encoding="UTF-8"
+             excludepackagenames="extensions"
+             doctitle="NicoCache_nl API Reference"
+             windowtitle="NicoCache_nl API Reference"
+             link="http://docs.oracle.com/javase/jp/7/api/"/>
+  </target>
+
+  <!-- CA(証明書生成)関係 -->
+  <property name="ca-jar" value="NicoCacheCA.jar"/>
+  <property name="ca-src-dir" value="src/nicocacheca"/>
+  <property name="ca-src-root-dir" value="src"/>
+
+  <available property="ca-srcdir-exists" file="${ca-src-dir}" type="dir"/>
+  <path id="ca-extensions-classpath">
+    <pathelement location="lib/bcpkix.jar" />
+    <pathelement location="lib/bcprov.jar" />
+    <pathelement location="lib/bcutil.jar" />
+  </path>
+
+  <target name="ca-extract">
+    <unjar src="${ca-jar}" dest="${ca-src-dir}" overwrite="false">
+      <patternset>
+        <include name="**/*.java"/>
+        <exclude name="**/*.class"/>
+      </patternset>
+    </unjar>
+    <delete quiet="true">
+      <fileset dir="${ca-src-dir}" includes="**/*.class"/>
+    </delete>
+  </target>
+
+  <target name="ca-compile">
+    <javac release="11" encoding="UTF8"
+           classpathref="ca-extensions-classpath"
+           srcdir="${ca-src-dir}" destdir="${ca-src-root-dir}"
+           includeantruntime="false"
+           debug="on" debuglevel="lines,source">
+      <compilerarg value="-Xlint:-options"/>
+    </javac>
+  </target>
+
+  <target name="ca-jar" depends="ca-compile" if="ca-srcdir-exists">
+    <move file="${ca-jar}" tofile="${ca-jar}.old"
+          failonerror="false"/>
+    <jar destfile="${ca-jar}">
+      <manifest>
+        <attribute name="Class-Path"
+                   value="lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar"/>
+        <attribute name="Main-Class"
+                   value="nicocacheca.NicoCacheCA"/>
+      </manifest>
+      <fileset dir="${ca-src-root-dir}">
+        <include name="nicocacheca/**"/>
+      </fileset>
+    </jar>
+  </target>
+
+  <target name="ca-clean" if="ca-srcdir-exists">
+    <delete>
+      <fileset dir="${ca-src-dir}" includes="**/*.class"/>
+      <fileset file="${ca-jar}"/>
+    </delete>
+  </target>
+
+</project>

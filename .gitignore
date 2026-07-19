@@ -1,0 +1,78 @@
+# Build artifacts
+*.class
+*.jar
+*.jar.sig
+
+# Editor and temporary files
+*~
+*.old
+.#*
+.playwright-mcp/
+.vscode/
+link/
+others/
+list/
+.agents/
+
+# Local configuration, caches, generated data, and secrets
+/config.properties
+proxy.pac
+Uninstall.exe
+/cache/**
+/cvcache/**
+/thcache/**
+/certs/**
+!/certs/readme.txt
+/data/**
+!/data/cors/99_sample.conf
+!/data/readme.txt
+!/data/tlsclient/cacerts2
+
+# Runtime extension files (keep only the distributed samples)
+/extensions/**
+!/extensions/addTabSample.java
+!/extensions/build.cmd
+!/extensions/completeCacheSample.java
+!/extensions/eventListenerSample.java
+!/extensions/extLoggerSample.java
+!/extensions/makedoc.cmd
+!/extensions/readme.txt
+
+# Bundled libraries (keep their documentation)
+/lib/**
+!/lib/readme.txt
+
+# User-maintained lists (keep the distributed default)
+/list/**
+!/list/NGtitle.txt
+
+# Locally served/generated files (keep the distributed defaults)
+/local/**
+!/local/05_cache_remove_button.js
+!/local/15_cached_link_color.js
+!/local/20_watchpage.js
+!/local/cacheeconomy.gif
+!/local/cacheicon.gif
+!/local/list.js.default
+!/local/mime.types.default
+!/local/nlThumbInfoRewriter.js
+!/local/nl_cacheIcon.css
+!/local/nllib.js
+!/local/nllib_watch.js
+!/local/nllib_xsStorage.html
+!/local/overlib_mini.js
+!/local/popThumb.js
+!/local/url_injection_sys.js
+
+# Managed by separate repositories or linked from outside this repository.
+# Git cannot ignore by link type, so every known link path is listed here.
+/nlFilters/
+/scripts
+/nico-cache-gui-launcher.bat
+/nico-cache-nl-starter.bat
+/local/background-images
+/local/features
+/local/images
+/local/list.js
+/local/mime.types
+

@@ -1,0 +1,53 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<script>
+"use strict";
+window.addEventListener("message", (event) => {
+  const TOKEN = "nl_xsStorage";
+  if (/^https?:\/\/(?:.+?\.)?nicovideo\.jp$/.test(event.origin)) {
+    if (typeof event.data !== 'object' || event.data.TOKEN !== TOKEN)
+      return;
+    let id = event.data.id;
+    function respond(o) {
+      let message = Object.assign({
+        TOKEN: TOKEN,
+        id: id,
+      }, o);
+      event.source.postMessage(message, event.origin);
+    }
+    try {
+      let command = event.data.command;
+      let data = event.data.data;
+      let storage = data.isLocalStorage ? window.localStorage : window.sessionStorage;
+      switch (command) {
+        case "setItem": {
+          storage.setItem(data.key, data.value);
+          respond({ data: "done" });
+          break;
+        }
+        case "getItem": {
+          let value = storage.getItem(data.key);
+          respond({ data: value });
+          break;
+        }
+        case "removeItem": {
+          storage.removeItem(data.key);
+          respond({ data: "done" });
+          break;
+        }
+        default: {
+          throw "error";
+        }
+      }
+    } catch (e) {
+      respond({ error: "Failed to process the command" });
+    }
+  }
+});
+
+</script>
+</head>
+<body>
+</body>
+</html>

@@ -1,0 +1,123 @@
+(2024-03-26追記。ChangeLog.txtと照らし合わせると、このドキュメントが保守されていたのは2015-03-04までと推測。)
+
+NicoCache_nl+mod 版のインストール
+
+最低限 NicoCache_nl+mod が動作するまでのインストール方法の説明です。
+othersフォルダにリンクが入っているので、適宜利用して最新情報をゲットしてください。
+避難所うpろだでは、拡張機能や最新のフィルタ/ソース累積差分が公開されていることがあります。
+
+    最新の Java Development Kit(JDK) をインストールする。
+
+    Apache Antをダウンロードする。
+    C:\直下にantフォルダを作り、bin,etc,lib,manual,CONTRIBUTORS,.....などが入っているフォルダを直接展開しておく。
+    antのインストールマニュアル（英語）
+
+    bin
+    etc
+    lib
+    manual
+    CONTRIBUTORS
+    contributors.xml
+    fetch.xml
+    get-m2.xml
+    INSTALL
+    KEYS
+    LICENSE
+    NOTICE
+    patch.xml
+    README
+    WHATSNEW
+
+    「システムのプロパティ」を開き、「環境変数(N)...」を開く。
+    PATHにC:\ant\binを追加する。必ず半角の「;」（セミコロン）で区切ること。Windows 10以降では気にしなくてもよい。
+	ANT_HOMEを新規作成しC:\antを入力する。 JAVA_HOMEを新規作成し、jre(又はjdk）のフルパスを入力する。
+    [!]慎重に操作してください！
+    [!]PATHには他にもプログラムのディレクトリが指定されていますが、それらは決して削除したり、誤って変更したりしないようにご注意ください！
+    [!]ディレクトリが変更されたプログラムが起動しなくなったり、最悪の場合コンピュータが起動不能になります！！
+
+    PATH C:\ant\bin
+    ANT_HOME C:\ant
+    JAVA_HOME C:\Program Files\Java\jdk1.8.0_121
+
+    最新版のNicocache_nl本体をダウンロードし、任意の場所にNicoCacheフォルダを作成し、展開する。
+    避難所に最新フィルター/ソース差分がある場合はそちらもダウンロードする。
+    最新のソース差分等があるなら NicoCache フォルダに展開する。
+    適宜、管理者権限でコマンドプロンプトを起動し、cd (nicocacheのフォルダのフルパス）、若しくはcd /d (nicocacheのフォルダのフルパス）で
+	カレントディレクトリを移動させた後、コマンドラインから >ant extract jarを打つ。
+
+    cd C:\Nicocache_nl
+    ant extract jar
+
+    /dスイッチはドライブが違う場合に利用
+
+    cd /d D:\Tools\nicovideo\Nicocache_nl
+    ant extract jar
+
+    NicoCache_nl.jar が更新されていれば成功。
+
+    成功例：
+    Microsoft Windows [Version 10.0.10586]
+    (c) 2015 Microsoft Corporation. All rights reserved.
+
+    C:\Windows\system32>cd /d D:\NicoCache_nl
+
+    D:\NicoCache_nl>ant extract jar
+    Buildfile: D:\NicoCache_nl\build.xml
+
+    extract:
+        [unjar] Expanding: D:\NicoCache_nl\NicoCache_nl.jar 
+    into D:\NicoCache_nl\src
+
+    compile:
+        [javac] Compiling 107 source files to D:\NicoCache_nl\src
+
+    jar:
+         [move] Moving 1 file to D:\NicoCache_nl
+          [jar] Building jar: D:\NicoCache_nl\NicoCache_nl.jar
+
+    BUILD SUCCESSFUL
+    Total time: 8 seconds
+
+    D:\NicoCache_nl>
+
+    MP4Box+swfextractを展開し、以下のファイルを "NicoCache_nl.jar" のあるフォルダに移動する。
+
+    MP4Box.exe
+    swfextract.exe
+    libgpac.dll
+    js32.dll
+
+    設定のページなどを参考に、nl 本体とブラウザの設定をする。
+    Windows なら "NicoCache_nl.bat" を実行して起動する。
+        Linux の場合は "NicoCache_nl.sh" を実行する。
+        必要に応じてスタートアップ等に登録する。
+
+
+
+
+以上でインストールは終了です。なお、アンインストール時には "NicoCache_nl.jar" の入っているフォルダごと削除すれば完了です。 
+
+■開発者向け
+
+Eclipseでビルドする方法:
+
+  1. 以下から適当なバージョンの zip を取得＆展開して Eclipse を起動
+    Pleiades All in One 日本語ディストリビューション
+      http://mergedoc.sourceforge.jp/
+      
+  2. [ファイル]→[インポート]を開き、ワークスペースにプロジェクトを追加
+    一般＞既存プロジェクトをワークスペースへ＞ルート・ディレクトリーの選択
+      [参照...] から development.zip を展開したフォルダを選択
+      
+  3. [プロジェクト]→[すべてビルド] を実行すれば NicoCache_nl.jar が出来るはず
+    ※エラーや警告がある場合は下の「問題」タブに随時表示される
+    
+  4. [ウィンドウ]→[設定] を開き、以下の項目を設定しておくと良い
+    一般＞エディター＞テキスト・エディター
+      印刷マージンの表示」をチェック(横80桁の目安に)
+
+Javadocを作る:
+
+  1. NicoCache フォルダでコマンドラインから >ant javadoc
+    ※当然ですがソースに書いてない Javadoc は出来ません
+      Eclipse 使うならインラインヘルプの方が便利だと思います

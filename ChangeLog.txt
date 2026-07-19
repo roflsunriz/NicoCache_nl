@@ -1,0 +1,2785 @@
+Java 17環境での利用を推奨します．Java 11以降が必要です
+OpenJDK(無印)のjava 21環境動作可.
+Temurin, Semeruではタイムシフト動画関連に機能制限が発生するかも.
+
+
+開発版56 2026-07-13(マージ: ajax-rm-domand-cache-reset):
+- キャッシュ削除時、その動画ID（smid）のキャッシュ保存用内部状態も削除するように変更。
+  再視聴・再キャッシュ時に古い状態が利用されエラーする問題を回避する。
+  (削除後に再びキャッシュを行なってもキャッシュ完成しないバグは残存)
+- CMAF/HLS キャッシュ進捗ログの詳細化
+  - showCaching 有効時のログを、単なる caching smXXX から以下の情報を含む形式へ変更。
+    - 保存済みバイト数
+    - 保存済みセグメント数／総セグメント数
+    - 進捗率
+  - 例: caching smXXX: 12.3 MiB (54/55 segments, 98%)
+- チャンクファイルの Content-Range の開始位置が現在の部分ファイル長と一致するケースを、異常ではなく正常な継続ダウンロードとして扱うよう変更。
+  最後のチャンクだけが保存されず、54/55・98% などでキャッシュが停止する問題を回避する。
+- ファイルは揃っているのにコンプリート処理へ進まない問題に対して、ディスク上の m3u8 と実チャンクから再構築する回避策を追加。
+- コンプリート処理時に統合先を失った別品質用の nltmp を削除する処理を追加。
+  例: 480p,192 が完成したあと、音声を持たない 360p-lowest,0 の nltmp が残り続けるケースを対象とする。
+  完成済みキャッシュは維持する。
+- GUI ログの caching smXXX: ... 行を同じ動画IDごとに置き換えるようにした。
+  - セグメント進捗を更新するたびに GUI ログの行数が増えないようにするための変更。
+- 意図しないローカル側接続・sinkhole 的な宛先への接続を抑止するよう変更。
+  接続先が any-local-address（例: 0.0.0.0 / ::）へ解決された場合、接続を試みず HTTP 503 を返して終了する。
+- Java 9 以降では、旧来の HttpURLConnection の PATCH メソッド対応ワークアラウンドを実行しないように変更。
+  - Java 9 以降で不要または互換性問題になり得るリフレクション処理を回避する。
+
+
+開発版55 2026-07-02:
+- v2026-06-30で /cache/ にアクセス出来なくなっていた問題を修正.
+
+
+開発版54 2026-06-30:
+- /cache/info, /cache/info/v2, /cache/rmall 及びそれらのajax版APIでパラメータ不一致時に404 not foundを返していたのを, 400 bad requestを返すように変更.
+- /cache/rm, /cache/rmtmp が保持内最上位品質キャッシュに対して動作していた問題を修正.
+- /cache/echo を追加. 仕様未定です. この結果はjsonですが, 現時点では人が読むことのみを想定しています. 要求パラメータのalt idを解析した結果を表示します.
+
+
+開発版53 2026-06-13:
+- http://ext.nicovideo.jp/thumb/smXXX の処理でAccept-Encoding削除が行われておらず不整合なレスポンスが返されていたのを修正.
+- ショート動画などに対してキャッシュ済みリンク色スクリプトが動作していなかった問題を修正.
+
+
+開発版52 2026-01-15:
+- ニコニコ動画がzstdを利用するようになった．Accept-Encodingから削除するものを増やして対処．
+
+
+開発版51 2025-08-26:
+- 2025-08-20にサムネイルプレビュー再生が実装された．それを把握していない動画通信としてエラーしていた．それらが出力されないように変更(debugメッセージへ)．
+
+
+開発版50 2025-07-06:
+- dmc/hlsキャッシュ利用時に再生不能だった. キャッシュ応答方法を変更し再生出来るようにした.
+- dmc/hlsキャッシュが利用に適するかどうかの判定に誤りがあったのを修正.
+- 誤ったキャッシュを利用してしまう問題を修正. プレイリスト通信ハンドラ(DomandCVIEntry)のkey値がユニークでなかったために、誤った動画を利用する場合があった. master playlistのみが非ユニークだったため、sub playlistから情報を使うキャッシュ保存処理に影響はしていなかったはず.
+
+
+開発版49 2025-07-05:
+- 新たなキャッシュ保存のためにdmc/hlsキャッシュを利用を抑制するための判定コードが間違っていたのを修正.
+
+
+開発版48 2025-06-29:
+- 360p画質等で再生した場合に間違ってeconomyと判定してしまう問題を修正. 例: sm1234が正しいのにsm1234lowになってしまっていた.
+
+
+開発版47 2025-04-03:
+- 現在持っている音声と映像に対して両方が上位であるキャッシュを保存する際にレースコンディションによりエラーしていた問題を修正.
+
+
+開発版46 2025-04-02:
+- 音声品質の"-hr"suffixに対応. 例:"audio-aac-576kbps-hr".
+- 持っているキャッシュと比べて音声だけが上位のキャッシュを取得した時のキャッシュコンプリート処理が正常に働いていなかった問題を修正.
+
+
+開発版45 2025-03-25:
+- 下位映像品質キャッシュを持つ時に上位品質をキャッシュ保存する際のコードに誤りがありキャッシュコンプリート処理が実行されなかった問題を修正.
+- 複数の音声品質仕様問題によって生成されたnltmp内の誤ったマスタープレイリストキャッシュを修正する機能を追加(コンプリート後キャッシュ内の修正はまだ).
+
+
+開発版44 2025-03-24:
+- 複数の音声品質に対応.
+- Note: 複数音質がある動画でニコニコ動画公式の現在のブラウザプレイヤーは、低音質(64Kbps)を選んでいても、試聴ページを開いた一瞬は標準音質(128Kbps)が読み込まれる(必ずではない). 一度読み込まれたデータは品質設定を変えても読み込み直しされない. このために一部の音声チャンク(多くは冒頭の1.cmfa)を目的品質で取得出来ず、キャッシュコンプリート処理が動作しないことがある. 同じ条件が繰り替えされるためページ更新でも改善しないことがある.
+- Note: https://qa.nicovideo.jp/faq/show/5685 音質の刻みは 576, 320, 192, 128, 64kbps.
+
+
+開発版43 2025-03-18:
+- 状況: ニコニコ動画は今まで1動画には1音質だったが複数の音質が選択可能になった.
+- 現象観測は18日から. 複数音質に関するインフォメーションはない. 高音質対応のタイミングからじわじわ切り替わっていたかも知れない. 11日 https://blog.nicovideo.jp/niconews/244548.html .
+- 修正: 現在の実装でも最高音質を選んでいればキャッシュ出来るがローカル側master.m3u8にゴミ(2つ目以降のaudioに関する行)が入ってしまっていた. これを入らないように修正した.
+- 未対応: 不明URLであるというエラーが出る問題.
+- 未対応: 最高ではない音質を選んでいる場合のキャッシュ保存.
+- 未対応: ゴミ行が入ってしまったmaster.m3u8の自動修正機能.
+
+開発版42 2025-03-02:
+- chunk url正規表現が誤っていたか仕様変更に追従出来ていなかっために有料動画がキャッシュ出来なかった問題を修正.
+
+
+開発版41 2025-02-27:
+- anime.nicovideo.jp動画を埋め込みで参照する際のurlの"/hlsext/"に対応.
+- 埋め込み動画のキャッシュ保存を回避する機能を追加. 現時点では保存するようにするオプションは用意していません.
+- 動画毎ではなく動画通信ごとにキャッシュを保存するかどうかを示すための内部用クエリーパラメーター"nicocachenl_save"を追加.
+
+
+開発版40 2025-01-13:
+- キャッシュ完了処理時にデッドロックするバグを修正.
+
+
+開発版39 2025-01-11:
+- キャッシュ保存フラグ変更時に時々デッドロックするバグを修正.
+
+
+開発版38 2024-12-17:
+- ローカルファイルサーバ機能にパーセントエンコーディング対応を追加.
+  これにより特殊な字や日本語を含むファイル名にアクセス出来るようになりました.
+
+
+開発版37 2024-12-11:
+- 下位品質の非互換hlsキャッシュが上位品質の再生とキャッシュ保存を抑制してしまう問題を修正.
+  - dmc時代のhls形式のキャッシュが存在するとその品質以上の再生とキャッシュ保存が抑制されていた.
+
+
+開発版36 2024-12-05:
+- 無限ループ検出閾値を4から200に. バグ対応処理一部削除.
+
+
+開発版35 2024-12-02:
+- 下位品質のhlsキャッシュがある状態で上位品質をキャッシュコンプリート前処理する際に時々無限ループするバグを修正.
+
+
+開発版34 2024-11-18:
+- コメント保存機能を仮追加. 保存するだけ. 表示方法なし.
+  - autoCacheCommentがtrueである場合に動作します(all,one,[0-9]+もtrueと等価).
+  - この設定値はcacheCommentExtension仕様を流用したものです.
+  - <cacheFolder>/<smid>.data/comment.0.ja-jp.json に保存されます(ロケール部(ja-jp)はニコニコ動画の動作言語ごとに変わります).
+  - json構造を含めた細かい仕様は未定.
+- ディレクトリ仕様: <cacheFolder>/<smid>.data/ を追加.
+  - このディレクトリには一つの動画に紐付いているとみなせる情報を配置します.
+  - プレフィックスで区別出来るようにしてください.
+
+
+開発版33 2024-11-10:
+- ドメイン追加: *.nvcomment.nicovideo.jp
+
+
+開発版32 2024-10-19:
+- キャッシュコンプリート時に時々無限ループするバグを修正.
+
+
+開発版31 2024-10-04:
+- マスタープレイリストURLとsmidの対応を通信からも拾うように変更. これによりzenzawatch利用時でもNicoCacheが使えるようになりました.
+- url_injection_sys.jsを廃止.
+
+
+開発版30 2024-09-17:
+- キャッシュ保存フラグ変更に関するバグ修正.
+- 動画情報の忘却方法を変更.
+- 再度コンプリート不発を改善.
+- nlFilters処理でAccept-Encodingからbr(brotli圧縮)を除去.
+- ドメイン追加: *.video.nimg.jp
+  - certs更新作業の documents/Readme_TLS.txt を行なってください.
+  - pacファイルも変更してください. proxy_sample.pacを参考に *.video.nimg.jp も対象になるようにしてください.
+
+
+開発版29 2024-09-08:
+- キャッシュコンプリート不発を改善.
+- コマンド ant version でjavaやantのversionを表示する機能を追加.
+
+
+開発版28 2024-09-06:
+- nllib_watch.js: NicoCache_nl.watch, initializedイベント, videoChangedイベントが動作するようにした. spawn系イベントはまだ動作しません.
+- 開発者が個人的に使っていたキャッシュ済動画のリンク色変更スクリプトを追加(local/15_cached_link_color.js).
+- nlFilterに直書きされていたjavascriptを個別のjsファイルにした(一部).
+
+
+開発版27 2024-08-31:
+- どの品質でもキャッシュ保存出来るように実装変更と追加.
+- 従来と違い「画質自動」であってもキャッシュ保存されます(NicoCache側は画質自動であるかどうかを知れないため).
+- 音声を他のコンプリート済みキャッシュ(nltmpではないもの)から拾って来る動作にしたため，「この動画は投稿者によって修正されました」の場合に，不整合な動画キャッシュが作られる可能性があります. この場合は一旦当該動画IDのキャッシュを削除してから，キャッシュ保存をしなおして下さい.
+  - 要求された音声と同じ品質のキャッシュがある場合，そこから音声を応答するため上記の動作です.
+- そもそも「この動画は投稿者によって修正されました」に対応するにはキャッシュファイル名の情報を増やす必要がある. 現時点では全く対応していない.
+- キャッシュ保存過程でnltmp_smXX[0p,192]_title.hlsのようなディレクトリが作られます. この中には音声だけが入れられます. 動画側と音声側両方のキャッシュファイルが揃ってから，音声データが動画側hlsに移動されます.
+- ニコニコ動画のcmaf動画は1つの音声に複数の動画品質が結び付いているため，キャッシュファイルもそれに合わせて，音声用のキャッシュディレクトリと動画用のキャッシュディレクトリを分けたいところだが，それはキャッシュファイルをローカルで利用する上で不便であるため，従来通り一つのhlsフォルダに音声と動画が入っている形式でキャッシュを保存する.
+- 2つ以上の音声が含まれる動画には対応していません(そもそも存在しないはず).
+
+
+開発版26 2024-08-24:
+- nlFilters/10_thumbInfoFilter(ポップアップリンク用).txt でランキング表示が崩れる症状を修正.
+- 各画質をキャッシュ保存するための準備として以下を実装.
+  - キャッシュ利用時にマスタープレイリストの応答を乗っ取るのではなくサブプレイリストの応答を乗っ取る方法に変更.
+  - 動画音声チャンク要求をキャッチするまで一時個別キャッシュディレクトリ(nltmp_smXXX[XXXp,XXX]_*.hls)を作らないように変更.
+
+
+開発版25 2024-08-08:
+- 選択可能なうちの最高品質を再生していればキャッシュ保存が動作するところまで実装.
+  例えば一般会員ならば720p, プレミアム会員ならば1080p, あるいはそもそも480pで投稿された動画ならば480pモードで再生している場合にのみキャッシュ保存が動作します.
+  それ未満の品質を再生してもキャッシュ保存はされません. これは一時的な縮退実装措置です.
+- キャッシュ利用時にニコニコ動画のプレイヤーの品質選択表示がおかしくなります.
+- nlFilters/10_thumbInfoFilter(ポップアップリンク用).txt で検索結果の表示が崩れる症状を簡易的に修正. あまり検証していない.
+
+
+開発版24 2024-08-06:
+- キャッシュ済み動画を再生時に，キャッシュを利用するところまで実装.
+- url_injection_sys.js の Request を Proxy による実装にした.
+- 属性値server-responseからWatchVarsを取り出すようにした.
+- 不便そうだから hlsキャッシュに対する /cache/<smid>/auto/movie を，hls to mp4変換URLにリダイレクトするように戻した.
+  (ニコニコ動画公式プレイヤーに任意のhlsキャッシュを再生させる作業はまだ着手しない).
+
+
+2024-08-05 リリース無し:
+- ニコニコ動画がクラッキング被害を受けていた.
+- 2024-08-05にサービスを再開. 動画ページを含む各所に仕様変更あり.
+- 動画ページHTMLの属性値data-api-data(WatchVars)が属性値server-responseに移動し，json構造も少し変更された.
+- 従来は品質モードごとにマスタープレイリスト(1つのvideo m3u8 URLと1つのaudio m3u8 URLを内容に持つプレイリスト)が提供されていたが，これは廃止されたらしい.
+  従来の自動画質モード用と同じ仕様のプレイリストのみが提供されるようになった.
+  (例えば 1080p.m3u8 から 144p.m3u8 の各URLが一つのプレイリストに入っているもの. hls仕様上は音声も複数品質がありえるが，ニコ動にその例はない.)
+  NicoCacheは画質モードごとのプレイリストに依存していたため，対応コードを追加する必要がある.
+
+
+開発版23 2024-06-02:
+- hls to mp4変換失敗時にffmpeg起動引数を表示する機能を追加．引数解釈過程を取得する目的でffmpegのloglevelをdebugに．
+
+
+開発版22 2024-06-01 sub2:
+- url_injection_sys.js を/watch/ページでのみ作動させるように変更.
+- インジェクションは問題が起きやすい. 廃止を長期的目標とする.
+
+
+開発版21 2024-06-01:
+- WebAPIの仕様変更.
+- hls to mp4変換URL /cache/<smid>[<quality>].hls.mp4 の[<quality>]は省略可になりました.
+  例: http://www.nicovideo.jp/cache/sm9.hls.mp4
+- hlsキャッシュに対する /cache/<smid>/auto/movie は以前(2024-03-29〜2024-05-31)は，hls to mp4変換URLにリダイレクトしていましたが，これからは hls のマスタープレイリストを返す内部APIにリダイレクトされます．
+  例4: ffplay -http_proxy http://localhost:8080/ -i 'http://www.nicovideo.jp/cache/sm9/auto/movie'
+- 単一ファイルが欲しい場合はhls to mp4変換URLを使って下さい(ffmpegが必要です)．
+
+
+開発版20 2024-05-31:
+- WebAPIにhls取得用のURL仕様を追加．
+- /cache/file/nicocachenl_refcache=<smid>[<quality>]//<path>
+  <path>は<smid>のhlsキャッシュディレクトリから相対参照するためのファイルパス表現です.
+- /cache/<smid>[<quality>].hls
+  アクセスすると /cache/file/nicocachenl_refcache=<smid>[<quality>]// へリダイレクトされます．
+- 上記2つのURL仕様はどちらも"[<quality>]"部分は省略可．なおかつ現時点の実装では，この部分は純粋に無視され，常に<smid>の最も高品質なhlsキャッシュを応答します．
+- 例えば，hls urlを扱える動画プレイヤーにこれらurlを与えることで動画を再生することが出来ます．
+  例1: ffplay -http_proxy http://localhost:8080/ -i 'http://www.nicovideo.jp/cache/file/nicocachenl_refcache=sm9[360p,128]//master.m3u8'
+  例2: ffplay -http_proxy http://localhost:8080/ -i 'http://www.nicovideo.jp/cache/file/nicocachenl_refcache=sm9//'
+  例3: ffplay -http_proxy http://localhost:8080/ -i 'http://www.nicovideo.jp/cache/sm9.hls'
+  (8080はNicocacheのポート番号に書き換えること)
+- hlsキャッシュがあるsmidに対して /cache/<smid>/auto/movie にアクセスした場合の挙動は変更なく，mp4への変換にリダイレクトします．上記URLにリダイレクトするように変更するかどうかは未定．
+
+
+開発版19 2024-05-11:
+- "-"を含む動画モード(例えば"360p-lowest")のキャッシュが利用出来ない問題を修正. キャッシュファイル正規表現の動画モード部を\w([a-zA-Z_0-9])でキャプチャしていたため失敗していた.
+
+
+開発版18 2024-04-10:
+- 動画ページ以外の動画で，NicoCache側に大量のエラーが出る問題を修正．
+
+
+開発版17 2024-04-09:
+- [開発版18参照]
+
+
+開発版16 2024-04-07:
+- java21で動くようにした．
+  - Workaround.javaの実装を変更(この実装もjava22以降では使えないのだとか)
+  - 起動スクリプトNicoCache_nl.{bat,sh}を変更．java起動引数を追加．
+
+
+開発版15 2024-04-XX:
+- "Connection reset by peer"判定に関するWorkaroundを削除(回避すべきバグがjava11で再現しないため)．
+
+
+開発版14 2024-04-02:
+- javascriptのRequestオブジェクトインジェクション用ラップを削除
+
+
+開発版13 2024-03-31:
+- 内部的な同時キャッシュ上限を動画30個から200個へ
+- /cache/ のキャッシュリスト処理が失敗していたのを修正．キャッシュファイルの
+  最終サイズがnullを返す場合があり，それで例外エラーしていた
+- 内部で使っていたURLの /eachcache/ を /cache/file/ へ移動
+- javascriptのRequestオブジェクトにインジェクション用ラップを追加
+
+
+開発版12 2024-03-29:
+- WebAPIを更新．/cache/<smid>/auto/movie アクセス時に，smidがhlsキャッシュ動画で
+  あった場合は，下記のmp4 URLへリダイレクトし，mp4が得られます．
+- /cache/sm9.mp4
+  /cache/sm9.hls.mp4
+  /cache/sm9[360p,128].mp4
+  などにアクセスした場合に，キャッシュがhlsであっても，mp4に変換して返します.
+- ffmpegがインストールされていない場合は失敗します．
+
+
+NicoCache_nl+150304mod+231111mod+240326mod
+
+・dms(domand)，2023年11月からの動画配信仕様に対応
+  ※開発部名: dms(Dwango Media Services).
+・プロキシ対象のサブドメイン，*.domand.nicovideo.jpが増えました．documents/Readme_TLS.txt の手順をもう一度行なってください(開発途中版を試していた方はそのcertsのコピーでいいです)．pacファイルは変更なしです．
+・キャッシュ拡張子はdmc時代と同じくhls
+・個別キャッシュフォルダにmaster.m3u8さえあれば，任意のフォルダ構造をキャッシュとして配信する機能を追加
+・文字コード変更．ソースコードやtxtファイルなど全て，Shift-JISだったのをUTF-8へ変換．半角カナなどは維持
+・他に開発が続いているNicoCacheは見つからないため，起動時に表示されるバージョンをシンプルにします. ChangeLogでは長いバージョンの表記を使います．
+・231111modのワークアラウンドを削除
+・showCachingオプションを追加．断片キャッシュを受信する度にログします．しばらくはデフォルトtrue．不要な方はconfig.propertiesにshowCaching=falseを追記してください
+
+
+----
+古いChangeLogヘッダー．
+役割を終えたためこの位置に沈めます．
+■+mod+mod 変更点
+dmc，いわゆる1.5GB再エンコード仕様の動画とHTML5プレイヤーに対応．
+----
+
+
+NicoCache_nl+150304mod+231111mod (Patch Release)
+
+不具合修正:
+・ニコニコの仕様変更で追加されたAmazonの配信システムを利用しないようにするワークアラウンドを追加
+・HLS動画で動画ページのIDと動画データのIDが異なる場合に追跡できなくなっていたのを修正
+
+
+NicoCache_nl+150304mod+230717mod (Patch Release)
+
+不具合修正:
+・HLSキャッシュを削除すると壊れたキャッシュが生成されるのを修正 (thx.NicoCache24>>80)
+  ・HLSを途中まであるいは最後までキャッシュした後、再起動せずにそのHLSキャッシュを削除して
+    再度キャッシュすると、一部のtsファイルが存在しない状態でキャッシュ完了として
+    処理されてしまうバグがありました。
+    1/ts/playlist.m3u8に書かれているtsファイルが1/ts/ディレクトリ内に存在しなければ、
+    このバグで生じた壊れたHLSキャッシュであると判定できます。
+・HLSキャッシュが壊れていたときにメッセージを表示
+・画質が自動になっているときのメッセージをわかりやすく修正
+・nd0159を一部マージ (thx.NicoCache24>>33)
+  ・キャッシュディレクトリ読み込み時のリソースリークを修正 (fdleak.patch)
+  ・JSONで\u005cが含まれているとエラーになる問題の修正 (unescapeJSON.patch)
+  ・popThumb.jsで公式動画のポップアップを許可 (popThumb-so.patch)
+
+
+NicoCache_nl+150304mod+230704mod (Patch Release)
+
+新機能:
+・ニコニコの仕様変更(HTTP方式廃止)に伴いHLSに対応
+  ・キャッシュは動画IDで始まり.hlsで終わる名前のディレクトリに記録されます
+
+nlFilter:
+・シリーズページで動作しなくなっていたのを修正
+・05_topBarFilter.txt でコンソールにエラーメッセージが出ていたのを修正
+
+開発者向け:
+・CACHE_SUSPENDEDイベントはHLSでは通知されません
+
+
+NicoCache_nl+150304mod+220417mod (Patch Release)
+
+機能追加:
+・動画のキャッシュ機能を無効化する設定を追加
+・フィルタの適用条件にStatusCodeを追加
+  ・指定可能なステータスコードは 200, 4xx, 5xxです
+  ・カンマ区切りで複数のステータスコードを指定可能です
+  ・指定しない場合は以前の仕様どおり200, 403, 404, 503が処理対象となります
+
+仕様変更:
+・フィルタの<a$$b$$c$$d>記法の制限緩和
+  ・a,b,c,d部分に<>以外の任意の文字を含められるようになりました
+・add-opensをマニフェスト属性に移動
+  ・起動スクリプト内でjavaの起動オプションに指定していた--add-opensが不要となりました
+・NicoCache_nl+150304mod+181021mod 以降導入していたTLSv1.3を無効化するワークアラウンドを削除
+  ・ERR_SSL_PROTOCOL_ERRORエラーが出る場合にはJavaを更新してください
+
+不具合修正:
+・PATCHメソッドのリクエストに対応
+・rewriterExtIgnoreが完全一致ではなく部分一致していたのを修正
+
+nlFilter:
+・アツマールをポップアップしないように修正
+・topBarの検知を改善
+・シリーズのリンク色が変わらなくなっていたのを修正
+
+
+NicoCache_nl+150304mod+210723mod (Patch Release)
+
+不具合修正:
+・NicoCacheCA 210723: 最新版のBouncy Castleに対応 (thx.NicoCache23>>914)
+  ・bcprov.jar, bcpkix.jar に加えて新たに bcutil.jar が必要となりました．
+
+nlFilter:
+・シリーズのリンク色が変わらなくなっていたのを修正
+
+
+NicoCache_nl+150304mod+210602mod2 (Patch Release)
+
+nlFilter:
+・キャッシュ済み動画のvisitedリンクの色を修正
+・不要なフィルタを削除
+
+
+NicoCache_nl+150304mod+210602mod (Patch Release)
+
+不具合修正:
+・コメントダウンローダーを動くようにしたつもり
+・NG削除が動作しない問題を修正 (thx.NicoCache23>>875)
+
+nlFilter:
+・マイリスト・クラス名の構造変更に対応
+
+
+NicoCache_nl+150304mod+210320mod (Patch Release)
+
+機能追加:
+・埋め込みプレイヤーを無視する設定ignoreEmbeddedPlayerを追加(デフォルト有効)
+  トップページを訪れるだけで自動再生された動画がキャッシュされて煩わしいので追加．
+
+仕様変更:
+・原宿・GINZA・旧埋め込みプレイヤーの処理を廃止
+・kulow廃止にむけて
+  ・kulow判定処理を全て削除
+  ・以前生成されてまま非公開になっていた31分以上60分未満の動画の高ビットレート版は
+    ついに公開されること無く削除されたので，31分以上60分未満の1000kbps_540pは
+    kulowを外して最高画質扱いします
+
+不具合修正:
+・watchページの仕様変更に対応(thx.NicoCache23>>817)
+
+nlFilter:
+・nllib.js: xsStorage.prepareはbodyが作られるまで待って実行(thx.NicoCache23>>783)
+・nllib_watch.js: watchページのAPI構造変更に対応
+・nllib_watch.js: BottomMainの構造変更に対応
+・05_topBarFilter がエラーを起こしているので無効化
+  ・キャッシュ削除ボタンと空き容量警告だけ最低限追加(ワークアラウンド)
+・06_topBarが2段になるのを解消.txt を廃止
+・旧形式のマイリスト・ニコレポ・GINZAなどのフィルタを削除
+・ポップアップリンク置換(検索系)でaタグの中にaタグを作らないように修正
+
+以下はnlFilters-rapidrelease201130に含まれる
+・nllib.js: 複数のxsStorageクエリを同時発行するとprepareが機能しないのを修正(thx.NicoCache23>>766)
+以下はnlFilters-rapidrelease-201129に含まれる
+・マイリスト・履歴でページ切り替えを追跡できていなかった(thx.NicoCache23>>724)
+・ページ構造の変更に対応
+・nllib.js: xsStorage
+以下はnlFilters-rapidrelease-200801に含まれる
+・マイリスト等でvisitedなキャッシュ済みリンクの色が変わらないのを修正
+以下はnlFilters-rapidrelease-200731に含まれる
+・新マイページ・ユーザーページに対応
+・nllib.js: Object.assignのpolyfillを追加
+
+
+NicoCache_nl+150304mod+200412mod (Patch Release)
+
+仕様変更:
+・nd0014をマージ: Windowsでキャッシュ探索の高速化 (thx.NicoCache23>>629)
+  Windowsではディレクトリ構造にファイルの一覧だけでなく属性情報が含まれるため，
+  それを利用してシステムコールの回数を減らす．
+・Windowsとそれ以外でキャッシュ探索の並列性を分けて調整
+
+
+NicoCache_nl+150304mod+200228mod (Patch Release)
+
+機能追加:
+・nd0009をマージ: 起動時にキャッシュのサイズを表示しない設定を追加(thx.NicoCache23>>617)
+  displayCacheSizeOnInitialize=false
+  で起動時に動画の合計サイズを計算しなくなります．
+
+仕様変更:
+・キャッシュ一覧の読み込みを並列化 (nd0008のコンセプトを再実装,thx.NicoCache23>>617)
+  ネットワークファイルシステム使用時に，ファイルの属性を取得する処理でレイテンシが
+  下がっている場合には並列化で高速化できる可能性あり．
+・NicoCacheCA 200228: CAのextended key usageを追加 (thx.NicoCache23>>622)
+・NicoCacheCA 200228: siteのextended key usageを修正
+  新たに作った証明書のセキュリティを改良するものです．
+  現在動作している証明書の再生成はしなくともかまいません．
+
+nlFilter:
+・nc0466をマージ: Nアニメの詳細ページ対応 (thx.NicoCache23>>565)
+
+
+NicoCache_nl+150304mod+191024mod (Patch Release)
+
+不具合修正:
+・JSONパーサが負の数を解釈できないバグを修正(thx.NicoCache23>>478-479)
+
+
+NicoCache_nl+150304mod+191002mod (Patch Release)
+
+不具合修正:
+・ランキング画面のカスタマイズでエラーになるのを修正
+  ・PUTとDELETEのmethodに対応
+
+nlFilter:
+以下はnlFilters-rapidrelease190614に含まれる
+・watchページの変更に暫定対応(WatchJsApiの消失，動画リスト)
+・シリーズ機能に対応
+以下はnlFilters-rapidrelease190602に含まれる
+・ニコレポの絞り込みボタンに対応
+以下はnlFilters-rapidrelease190531に含まれる
+・ニコレポの仕様変更に対応 (thx.NicoCache23>>343-344)
+
+
+NicoCache_nl+150304mod+190525mod (Patch Release)
+
+不具合修正:
+・サムネイル取得URL誤りを修正
+
+
+NicoCache_nl+150304mod+190523mod (Patch Release)
+
+不具合修正:
+・サムネイルのホスト変更でi=xxxからxxx.yyyを取得できなくなっていたのを修正
+・リダイレクト時などにHostヘッダが変更されないバグを修正
+
+
+NicoCache_nl+150304mod+190522mod (Patch Release)
+
+不具合修正:
+・サムネイルURL変更に対応
+
+
+NicoCache_nl+150304mod+190327mod (Patch Release)
+
+不具合修正:
+・「HTTPのCONNECTメソッドを最優先で処理するように変更」を元に戻した
+　不安定になったとの報告があったため(thx.NicoCache23>>306,308)
+
+
+NicoCache_nl+150304mod+190321mod (Patch Release)
+
+機能追加:
+・xxx.yyy形式のサムネイルにxxxでアクセスしたときにキャッシュ済みならxxx.yyyを参照
+  所詮キャッシュ済みでなければ機能しないので古いフィルタを動かすためのものと割り切って
+  新しく作るフィルタではこれに頼らないようにお願いします．
+
+仕様変更:
+・HTTPのCONNECTメソッドを最優先で処理するように変更
+
+不具合修正:
+・StoryBoardなど動画以外のdmcセッションを処理対象にしないように修正
+
+nlFilter:
+・nllib_watch.js: HLS時にinitializedイベントが正しく動作するように修正
+
+
+NicoCache_nl+150304mod+190309mod (Patch Release)
+
+機能追加:
+・エラーログ・CSPレポートをブロック
+
+不具合修正:
+・getflvが使えない動画でコメントダウンロードが動作するように修正(thx.NicoCache23>>261)
+・ストリーミング警告表示を暗号化HLSに対応
+
+nlFilter:
+・getthumbinfoの動画ID自動リンクを改良
+・ポップアップリンク置換: ニコニコ市場への自動リンクを廃止(ID規則変更)
+・ポップアップリンク置換: 生放送とチャンネルへの自動リンクをhttps化
+・ポップアップリンク置換: ニコニコモンズへの自動リンクURL修正
+・ポップアップリンク置換: ブロマガとRPGアツマールへの自動リンクを追加
+
+
+NicoCache_nl+150304mod+190127mod (Patch Release)
+
+機能追加:
+・古いAntとJDK11の組み合わせでAntのアップデートを促すメッセージを表示
+
+不具合修正:
+・古いAntとJDK8の組み合わせでビルドが機能するように修正
+
+
+NicoCache_nl+150304mod+190125mod (Patch Release)
+
+機能追加:
+・ant extensions コマンドで拡張をコンパイルできるように対応
+
+不具合修正:
+・動画の移動などの処理の修正漏れ(thx.NicoCache23>>161)
+・antとJDK11でビルドしたjarをJava8で実行できるように(thx.NicoCache23>>157)
+
+
+NicoCache_nl+150304mod+190123mod2 (Patch Release)
+
+不具合修正:
+・キャッシュ済み動画とどちらが画質が良いかの判定バグ(190123modで入ったもの)を修正
+
+
+NicoCache_nl+150304mod+190123mod (Patch Release)
+
+不具合修正:
+・新仕様に対応(thx.NicoCache23>>141-146)
+  2019/01/22以降新規にアップロードされた動画について動画データを識別するIDに
+  映像ビットレート情報が含まれなくなりました．
+  この仕様の動画に対応するdmcキャッシュのファイル名は次の形式です．
+    動画ID[画質,音声のビットレート]_タイトル.拡張子
+  モバイル向け低画質では画質の項目が 360p_low となります．
+
+
+NicoCache_nl+150304mod+190108mod2 (Patch Release)
+
+不具合修正:
+・2GBを超える動画に対応の修正漏れ(thx.NicoCache23>>107)
+
+
+NicoCache_nl+150304mod+190108mod (Patch Release)
+
+機能追加:
+・新サムネイルURL形式(xxxxx.xxxxx.M)のキャッシュに対応
+
+仕様変更:
+・サムネイル画像が404の場合にtn-skr*から探索する処理を削除
+
+不具合修正:
+・2GBを超える動画に対応(thx.NicoCache23>>97-101)
+
+
+NicoCache_nl+150304mod+181021mod (Patch Release)
+
+不具合修正:
+・ワークアラウンドでTLS 1.3を無効化 (NicoCache22>>780,785,819)
+  Chrome 70とMitM機能の間でTLS 1.3が選択されたときに
+  非互換性からERR_SSL_PROTOCOL_ERRORが出ていた．多分Javaのバグ．
+
+nlFilter:
+・video_topにキャッシュメニューが表示されていなかったのを修正(thx.NicoCache22>>808)
+
+
+NicoCache_nl+150304mod+181015mod (Patch Release)
+
+不具合修正:
+・TLS MitM時に通信先ホスト名とポート番号の処理が適切に行われていなかったのを修正
+
+
+NicoCache_nl+150304mod+181014mod (Patch Release)
+
+機能追加:
+・httpとhls以外のプロトコルがあればログに表示
+
+仕様変更:
+・TLS MitM対象ホストを追加・証明書のSANを適当に追加
+  新規対象ホスト名: *.nicoad.nicovideo.jp *.seiga.nicovideo.jp
+・enableMitm=true をデフォルトに変更
+
+不具合修正:
+・www.nicovideo.jpのhttps化に対応
+・エラーメッセージの出力制御を改善
+
+nlFilter:
+・aタグ中のmylist/xxxxなどが二重aタグにならないように修正
+・nlFilter: liveの埋め込みHTML修正(workaround)を除去
+・nllib_watch.js: spawn系イベントを追加
+  再生リスト・コンテンツツリー・ニコニ広告・ニコニコ市場のcontainerが
+  生成された後に呼び出されるイベントを追加．
+  内容がセットされておらず表示されていない段階でイベントが発生することに注意．
+  内容が更新されたときに呼ばれるイベントの実装は仕様や判定方法に課題があったため見送り．
+
+
+NicoCache_nl+150304mod+180728mod (Patch Release)
+
+機能追加:
+・dmcアクセス時にもsmileキャッシュからのflv2mp4を追加
+★dmcエコノミーかどうかにかかわらずsmileキャッシュを優先する設定を追加
+  useSmileCacheInsteadOfDmc設定．
+  古いmp4動画がdmcにインポートされていることに伴い発生している
+  reencoded判定されているsmileキャッシュとの優先度問題のため
+  解決されるまでtrueをデフォルト値とします．
+  smileキャッシュがないときの挙動は今までどおりなので，
+  dmcでキャッシュしたい場合は先にsmileキャッシュを削除してください．
+
+不具合修正:
+・RequestHeaderフィルタでhttpsのURLを書き換えたときに発生する問題を修正
+・cacerts2にCybertrust Japan Public CA G3 を追加(中間CA, dic用)
+・cvcache使用時のtouchCache漏れを修正
+
+nlFilter:
+・nllib_watch: もはやWatchJsApiはロードされないことがあるため仕様変更
+  プレイヤーの仕様変更によりWatchJsApiはページを下までスクロールしないと
+  読み込まれなくなったため，WatchJsApiを用いているスクリプトは修正が必要です．
+  WatchJsApiではなくNicoCache_nl.watchが提供する処理を用いることを推奨します．
+・watchページで再生リストとニコニ広告が遅延生成されるようになったので対処
+
+
+NicoCache_nl+150304mod+180715mod (Patch Release)
+
+仕様変更:
+・(く)以降のsmile動画はすべて再エンコード済みとして扱うように変更
+・dmcアクセス時にsmileキャッシュを無視する場合にはメッセージを表示(thx.NicoCache22>>409)
+
+不具合修正:
+・/cacheへのGET,POST以外のアクセスをサーバに素通ししていたのをブロックするように修正
+・/watch/sm9? などのURLでWatchRewriterが動作しないのを修正(thx.NicoCache22>>409)
+
+nlFilter:
+・Nアニメのキャッシュアイコン埋め込み・リンク色変更(thx.参考:nc0185)
+
+
+NicoCache_nl+150304mod+180628mod (Patch Release)
+
+仕様変更:
+・kulow判定の適用範囲をさらに縮小
+  ロックがかかっている動画がある時期のみを対象にする方向で．その2．
+  HTML5プレイヤーに対しても一部の動画以外では判定を行わなくなりました．
+・キャッシュからkulowマークを自動除去(現在もロックされたままの動画を除く)
+
+不具合修正:
+・cacerts2にGlobalSign Root CAを追加(secure-dcdn用)
+・(く)の新たな再エンコードルールに合わせて画質判定ルールを修正(thx.NicoCache22>>350)
+  解像度を最優先で判定に利用するようになりました．
+・上流へのTLS接続に失敗したときのエラー処理に漏れがあったので追加
+
+nlFilter:
+・キャッシュアイコン・リンク色・ポップアップを調整
+・空き容量警告を1GBから3GBに変更
+  標準的な動画のサイズが300MB程度になっているため
+
+
+NicoCache_nl+150304mod+180601mod2 (Patch Release)
+
+不具合修正:
+・先の変更が非互換だったのを修正
+
+
+NicoCache_nl+150304mod+180601mod (Patch Release)
+
+不具合修正:
+・ニコニコ動画の仕様変更に合わせて再エンコード判定を修正(thx.NicoCache22>>304-307)
+  これに伴いreencoded.csvに保存済みの判定結果の内，
+  so動画かつ判定がfalseのものがすべて削除されます．
+  不整合の解消を手動で行いたい場合は1行目を"version,-2"に変更してから起動してください．
+・reencoded.csvを再生成するときに順序が保存されていなかったのを修正
+
+nlFilter:
+・nllib_watch.js: NicoCache_nl.watch.isInitialized()を追加
+
+
+NicoCache_nl+150304mod+180512mod (Patch Release)
+
+機能追加:
+・NicoCacheが信頼する認証局を登録する機能を追加
+  ・data/tlsclient/cacerts2ファイルが証明書ストアです．
+  ・デフォルトでanime.nicovideo.jpのCA(Starfield)が登録されています．
+    ・openjdkには同梱されていないため
+  ・同梱の証明書は
+    keytool -list -keystore cacerts2 -storepass NicoCache
+    で確認できます．
+
+不具合修正:
+・watchページの処理でぬるぽが発生することがあるのを修正(thx.NicoCache22>>256)
+
+
+NicoCache_nl+150304mod+180420mod (Patch Release)
+
+機能追加:
+・swf,flvのsmileキャッシュを持っている場合にdmcをキャッシュしないワークアラウンド
+  この変更は一時的な対応で，適切な対応方法を検討した後に再度変更されます．
+  workaroundNoDisableDoubleCacheImported=trueを設定すると元の挙動に戻ります．
+・連続する同じ内容のログ表示を圧縮
+  連続して同じ内容のログが出力された場合，代わりに+を表示します．
+  dedupeLogMessage=falseにより無効化できます．
+
+不具合修正:
+・WatchVarsの処理を整理してswfからdmcに変換された動画やwatchapiへの対応を改善
+
+nlFilter:
+・nllib_watch.js: NicoCache_nl.watchのonInitialized起動タイミングを調整
+  (thx.NicoCache22>>189,204)
+・popThumb.js: すべての埋め込みページにhttpsで接続できるようになったので制限を解除
+・liveのhttps埋め込みページがまだhttpを参照しているので修正するワークアラウンド
+
+
+NicoCache_nl+150304mod+180407mod (Patch Release)
+
+機能追加:
+・CORS偽装機能にallow-headersを追加
+
+不具合修正:
+・埋め込みプレイヤーの呼び出すwatchapiのURL変更に対応(thx.NicoCache22>>174)
+・ThumbWatch APIの呼び出しURL変更に対応&バグ修正
+・旧配信システムのhttps用ドメインを追加(thx.NicoCache22>>178)
+・過剰なunescapeを削除(thx.NicoCache22>>174)
+
+nlFilter:
+・チャンネルの埋め込みURL変更に対応
+
+
+NicoCache_nl+150304mod+180406mod (Patch Release)
+
+不具合修正:
+・リダイレクトの処理が正しく行われていなかったのを修正(thx.NicoCache22>>171)
+
+
+NicoCache_nl+150304mod+180405mod (Patch Release)
+
+機能追加:
+★証明書の対象ドメインとMitM対象ドメインが一致しているかを検証してから起動
+  mitmHostPortRegex設定を廃止し，検証しやすいmitmHostPort設定が新たに追加されました．
+  この判定を追加するためにgenCerts時の処理が増えたので，
+  genCerts.bat(genCerts.sh)再実行が必要です．
+・TLS MitM設定が完了していない時のメッセージとドキュメントを改善
+・HLSを使わないようにするワークアラウンド追加(thx.NicoCache22>>157)
+  protocolsからhlsを除去します．ただしprotocolsにhttpが含まれていない場合は何もしません．
+  ・workaroundNoDisableHLS=trueでワークアラウンド無効化
+  ・workaroundWarnHLS=trueで書き換え時にメッセージ出力
+・RequireHeaderのキャプチャを$RequireHeader1で取れるように(thx.NicoCache22>>159)
+
+仕様変更:
+・enableMitm=true時にMitM機能の有効化に失敗すると起動しないようにした
+
+不具合修正:
+・TLS MitM時にポート番号が正しく解釈されないことがあったのを修正
+・リダイレクトを内部で処理する際にドメインが変わったらCookieを送信しないようにした
+
+
+NicoCache_nl+150304mod+180403mod (Patch Release)
+
+機能追加:
+・通信切断時のエラーメッセージ抑制を改善(thx.NicoCache22>>77,79,81)
+・ニコニコ動画でSecure属性が付いているCookieをhttpで送ろうとした時には消去する機能を追加
+
+nlFilter:
+・URLの自動リンクを改善(thx.NicoCache22>>38)
+・静画への自動リンクを追加
+
+
+NicoCache_nl+150304mod+180313mod (Patch Release)
+
+仕様変更:
+・kulow判定の適用範囲を縮小
+  ロックがかかっている動画がある時期のみを対象にする方向で．
+
+不具合修正:
+★*.cdn.nimg.jpをTLS MitM対象に追加
+  MitM機能を有効化している方はgenCerts.{bat,sh}を再実行してください．
+  ブラウザへの証明書のインポートをやり直す必要はありません．
+・外部サムネのメモリキャッシュをhttpとhttpsで分離
+・Flash版のlow判定を新しい中画質のビットレート上限に対応
+
+nlFilter:
+・popThumb.jsのHTTPS対応
+
+
+NicoCache_nl+150304mod+180207mod (Patch Release)
+
+機能追加:
+・watchapiホストに対応(ニコニ広告のサムネイル選択など)
+・flv以外の場合にもcvcacheにmp4ファイルがあれば使用するように修正
+・cvcacheディレクトリのサブディレクトリにあるmp4ファイルも使用するように修正
+・nlFilterにschemeを含めて指定できるFullURL設定項目を追加
+  URLではscheme部分は https?:// 固定だったのに対してFullURLでは
+  http:// (https://) を含めたURL全体を指定できます
+
+仕様変更:
+・readTimeout設定がブラウザだけではなくサーバとの通信にも適用されるようになった
+
+不具合修正:
+・https通信中継終了後もソケットが残ることがあるのを修正
+・HTML5版watchページで正確なdmcのeconomy判定結果を得た後に
+  Flash版watchページ等へのアクセス時に判定結果を不正確なもので上書きしないように修正
+・スタックトレース出力機能が全てのコールスタックを表示していなかったのを修正
+・httpsでのdmc通信時にconnection resetやbroken pipeが大量に表示されるのを抑制
+
+nlFilter:
+・httpsページに埋め込むスクリプト等のURLを修正
+  単に //domain/path 形式ではなくアクセスされたschemeを取得して設定するようになっています．
+  これは動画のthumbがbaseタグをhttp固定で指定しているためです．
+
+
+NicoCache_nl+150304mod+171221mod (Patch Release)
+
+機能追加:
+・idGroup=1,2形式時にthreadIDと動画IDの番号の対応関係を記憶してgetthumbinfoを減らす
+・$REENCODEDでキャッシュが存在しないときにも動画IDの番号だけから取得できるように修正
+・nllib_watchに動画切替後のapiDataを得る機能を追加
+
+不具合修正:
+・再生中に検索などを行うとidInfo is not foundになることがあるのを緩和
+・キャッシュ受信時のエラーハンドリングを改良して一時キャッシュを削除されにくくした
+・ポップアップせずに動画を切り替えた時に発生するエラーを修正(thx.NicoCache21>>821)
+
+nlFilter:
+・watchページ表示時のgetthumbinfoを減らす
+以下はnlFilters-rapidrelease171214に含まれる
+・サムネイルサーバのhttps化に対応(thx.NicoCache21>>786,789)
+・検索系の埋め込みニコニ広告の仕様変更に対応
+
+
+NicoCache_nl+150304mod+171213mod (Patch Release)
+
+仕様変更:
+・投稿時期を用いてkulow判定のヒューリスティックを改良
+  推定は次の基準に基づきます．日付のしきい値はおおよその動画番号によります．
+  ・-2017/04/24
+    ・全て標準画質
+  ・2017/04/25-2017/05/16
+    ・31分以上60分以下かつ600kbps なら 700kbps-1000kbpsが存在する可能性あり(未開放)
+  ・2017/05/17-2017/12/06
+    ・全て標準画質
+  ・2017/12/07-
+    ・今までどおり，今後増える可能性がありそうなもの全て
+  この基準で問題が生じないようであれば近いうちに，kulowキャッシュを
+  lowと通常のものに振り分けてリネームする処理に反映します．
+・映像が2000kbpsを超える動画のレポートを削除
+  temporaryFlag2000kbps=trueを設定していた方は除去してください
+
+不具合修正:
+・1080pに合わせてkulow判定を修正
+
+nlFilter:
+・i=xxxxxxxx.yyyyy.Mのような形式のサムネイルURLに対応
+・ランキングトップページで表示が崩れるのを簡易修正
+  (スクロール時の追加読み込み分については非対応)
+
+
+NicoCache_nl+150304mod+171127mod (Patch Release)
+
+機能追加:
+・Java 9に対応
+  起動時に表示される警告メッセージを抑制するために起動スクリプトに対する更新が含まれています．
+・キャッシュのタイトルをNFC正規化
+・デバッグ用にスタックトレースの出力機能を追加
+  http://NicoCacheのホスト:ポート/debug/dump-stack
+  にアクセスするとdebug-dump-stack.txtに全てのスレッドのスタックトレースが出力されます．
+
+不具合修正:
+・flv2mp4で44kHz未満の音声をaacに変換(Firefoxで22kHzのmp3を認識できないため)
+
+nlFilter:
+・topBarの仕様変更に対応(thx.NicoCache21>>709)
+
+
+NicoCache_nl+150304mod+170915mod (Patch Release)
+
+機能追加:
+・info/v2でvidでも対応するcidの情報を取得出来るように
+
+不具合修正:
+・新サムネイルホスト名tnに対応(thx.NicoCache21>>524)
+
+nlFilter:
+・watchページの処理の実行タイミングが不適切で正しく動作しないことがあるバグを修正
+  (watchのinitizlied時にWatchJsApiが存在しないことがあった)
+
+
+NicoCache_nl+150304mod+170809mod (Patch Release)
+
+不具合修正:
+・キャッシュに含まれるmp4ファイルによってはクラッシュするバグを修正(thx.NicoCache21>>445)
+
+
+NicoCache_nl+150304mod+170808mod (Patch Release)
+
+機能追加:
+・ビットレートが高い再エンコードされた非dmcキャッシュを利用
+  useHighBitrateReEncodedCache=trueのとき，利用可能なdmc動画よりも
+  非dmcキャッシュのビットレートが高い場合に非dmcキャッシュを利用します．
+  加えてremoveReEncodedCache=trueなら，そのような非dmcキャッシュよりも
+  ビットレートの低いdmcキャッシュを自動削除します．この機能は映像の解像度を考慮せず，
+  映像と音声のビットレートの合計でのみ評価を行います．
+・info/v2に非dmc動画のビットレートをcaches[cacheid].reEncodedBitrateとして追加
+・フィルタマクロに非dmc動画のビットレートを $REENCODED_BITRATE(smid) として追加
+・フィルタの<nlcase>に<when else>構文を追加
+  それまでの<when "...">と一致しなかった場合には<when else>の内容に置換されます．
+　使用例:
+　<nlcase "$REENCODED_BITRATE($1)">
+　<when "0">?kbps
+　<when else>$REENCODED_BITRATE($1)kbps
+　</nlcase>
+
+開発者向け:
+・ReEncodingInfo.check系APIの追加・廃止
+  上記ビットレート判定に伴い ReEncodingInfo.check に引数としてファイルサイズを
+  与える必要が生じたため，以前のAPIはdeprecatedとし，新たなAPIを追加しました．
+
+
+NicoCache_nl+150304mod+170716mod (Patch Release)
+
+不具合修正:
+・GUIモードでフリーズする問題を多分修正(thx.NicoCache21>>372)
+・/cache/rmtmpで失敗時にもOKが返るようになっていたのを修正
+・/cache/以下の不適切な呼び出しでクラッシュする可能性があるバグを修正
+
+
+NicoCache_nl+150304mod+170630mod (Patch Release)
+
+機能追加:
+・CORS書き換え機能を追加(thx.NicoCache21>>238)
+  data/cors/ フォルダに置かれた設定ファイルに従ってCORSの書き換えを行います．
+  詳細と設定例は data/cors/99_sample.conf を参照．
+・watchページの代わりにdmcInfoが返される場合に対応
+・dmcInfoからもvid2cidを記録する機能を追加
+
+不具合修正:
+・一時ファイルからlowマークを外す処理に失敗するバグを修正
+・一時ファイルの自動リセット時にクラッシュすることがあるのを修正
+・dmcで特定の場合にCORSヘッダが出力されず再生に失敗することがあるバグを修正
+
+nlFilter:
+・静画のコメントでポップアップ
+・ポップアップ内のキャッシュ済み動画のリンク色を修正
+・HTML5のwatchページのスクリプトを改良・ライブラリ化
+  NicoCache_nl.watch.addEventListener('initialized', function() {});
+  でプレイヤーの初期化後に処理を実行できるようになりました．
+・onload時に行っていたwatchページの各種処理を初期化完了後に行うように修正
+
+
+NicoCache_nl+150304mod+170612mod (Patch Release)
+
+仕様変更:
+・フィルタの[Script], [Style]を個別のタグに分けて構文エラーが全体に波及しにくくなるよう変更
+・行方不明のキャッシュファイル探索を逐次化(並行して行わないように)した
+・過去にJavaで発生していたプロキシ切り替えバグのワークアラウンドを削除
+・dareka.logfileで出力されるログファイルの行頭にタイムスタンプを追加
+
+機能追加:
+・nllib.jsにXHRでPOSTを行うNicoCache_nl.postを追加
+
+不具合修正:
+・POST時に通信エラーが発生するとタイムアウトまでデッドロックする問題を修正
+・Processorがnullを返した時にPOST以外でカスケードしなくなっていたのを修正
+
+nlFilter:
+・タグ検索のニコニ広告を全ての動画でポップアップするように修正
+・マイリストの作成ユーザにポップアップを追加
+・moHooksを利用した個々のフィルタのエラーが全体に波及しにくくなるよう修正
+・HTML5のwatchページで動画切替時に市場が更新されなかったのを修正
+・静画内のサムネイルでもポップアップするように修正
+・ニコニコ大百科にキャッシュ済みアイコンを追加
+以下はnlFilters-rapidrelease170602に含まれる
+・ニコレポ&タグレポでポップアップしないことがある複数のバグを修正(thx.NicoCache21>>46,48)
+・ニコレポのmoHooksのパフォーマンスの改善
+・動画・静画のタグでポップアップ
+
+
+NicoCache_nl+150304mod+170601mod (Patch Release)
+
+仕様変更:
+・★試験的に最低要件をJava 7からJava 8に変更
+・デバッグモード以外でも起動中に発生したエラーを表示
+
+機能追加:
+・flv2mp4のエンコード処理を別のホストに委託する機能を実装
+  ffmpegServerHost, ffmpegServerPort, ffmpegServerPasswordを設定して
+  enableFfmpegServer=true にすると有効になります．
+  エンコード処理をするホストで別途ffmpegServerを設定して起動してください．
+・info/v2 APIで常に再エンコード判定結果を得られるようになった
+  smileのキャッシュが存在しない場合でも判定済みの場合があるため，
+  直下にもreEncodedフィールドを追加しました．
+
+不具合修正:
+・フィルタのURLでグループ化せずに|を使うと予期せぬ結果を引き起こすのを修正(thx.NicoCache20>>992)
+・mapファイルが壊れている時に起動時に失敗する問題を修正(thx.NicoCache21>>29)
+・reencoded.csvの読み込みのエラーチェックを強化
+
+nlFilter:
+・res.nimg.jpのリソースがCDNに移動したのに対応
+・HTML5ページのニコニ広告にキャッシュアイコンを追加
+・ポップアップ追加(mylist説明文)が動作していなかったので修正
+・watchページ用メニューの更新スクリプト(HTML5)が動作していなかったのを修正
+・ニコレポの仕様変更に対応(thx.NicoCache21>>36)
+　Jartyなどを使わずJavaScriptのみでページが生成されるようになってしまいました．
+  MutationObserverベースのフレームワーク(08_MutationObserverHooks.txt)を実装して，
+  それぞれのフィルタからは比較的簡単に書き換えできるようにしてあります．
+・タグレポに対応
+
+
+NicoCache_nl+150304mod+170525mod (Patch Release)
+
+機能追加:
+・30分以下720p開放に対応
+  起動時に条件に一致するkulowキャッシュがlowにリネームされます．
+  ※lowになっている540pのdmcキャッシュがリネームされたキャッシュです
+
+不具合修正:
+・flv2mp4でサンプリングレートが非標準のmp3のときにエラーが生じる問題を修正
+・bulid.cmdをユーザの環境で動くように調整
+
+nlFilter:
+・06_topBarが2段になるのを解消.txt のロバスト性を向上
+
+
+NicoCache_nl+150304mod+170514mod (Patch Release)
+
+不具合修正:
+・公式動画をkulow判定の対象外に変更(thx.NicoCache20>>832)
+・recipe_idが取得できなかった時にdebugWatchVarsでクラッシュするのを修正
+
+
+NicoCache_nl+150304mod+170513mod (Patch Release)
+
+機能追加:
+・flv2mp4でFlashでも再生できるmp4を生成する機能を追加(thx.NicoCache20>>796)
+  flv2Mp4AdaptToFlash=true で有効になり，音声をaacに変換します．
+
+不具合修正:
+・GINZAのkulow判定に誤りがあったのを修正(thx.NicoCache20>>829)
+・音声を保存する際のファイル名のスペースが+になっていたのを修正
+・videoIdとdmcの実際の動画IDが一致しない場合に対応(削除時など)
+
+nlFilter:
+・マイページでキャッシュ済みのリンクの色が変わらないのを修正
+
+
+NicoCache_nl+150304mod+170509mod (Patch Release)
+
+機能追加:
+・nlFilterの個別デバッグログ機能を追加(thx.NicoCache20>>765)
+  個々のフィルタに Debug = TRUE を記述することで有効になります．
+・TLSへのMitM機能を実装
+  enableMitm=trueで有効になります．
+  まずBouncy Castleライブラリのbcprov-jdk15on-xxx.jarとbcpkix-jdk15on-xxx.jarを
+    https://www.bouncycastle.org/latest_releases.html
+  からダウンロードしてbcpkix.jarとbcprov.jarにリネームしてlibフォルダに配置します．
+  このライブラリは次の証明書生成の操作でのみ必要になります．
+  genCerts.{bat,sh}を用いてキーストアと証明書を生成し，certs/ca.cerをお使いの
+  ブラウザの証明書ストアにウェブサイトの識別をする認証局としてインポートしてください．
+  キーストアが存在しない場合にはエラーメッセージを出力し，機能が無効になります．
+・エラーページにエラーメッセージを追加
+
+不具合修正:
+・エコノミー時にFlashプレイヤーでflv通常キャッシュを参照しない問題を修正(thx.NicoCache20>>790)
+・巨大なPOSTリクエストがヒープ領域不足で処理できない問題を修正(thx.NicoCache20>>729)
+  この修正によりpostSizeMaxを超えるサイズのPOSTが行われた場合，フィルタによる
+  POSTデータの書き換えや，ProcessorのonRequestがnullを返した場合の次の
+  Processorの処理が行われなくなりました．
+
+
+NicoCache_nl+150304mod+170504mod (Patch Release)
+
+機能追加:
+・GINZAで(く)で高画質になる可能性がある動画をkulowとして扱う(thx.NicoCache20>>759)
+  NicoCache_nl+150304mod+170503mod2 まではGINZAでは通常動画として扱われていた．
+・(く)でビットレートが2000kbpsを超える動画を検出した時にはレポートを表示
+
+
+NicoCache_nl+150304mod+170503mod2 (Patch Release)
+
+不具合修正:
+・アクセス時にkulowだったときにlowキャッシュがマーク無しになるバグを修正
+
+
+NicoCache_nl+150304mod+170503mod (Patch Release)
+
+機能追加:
+・(く)で高画質になるであろうキャッシュは通常画質として扱う(thx.NicoCache20>>736,737)
+  ファイル名にはkulowをつけておき，(く)になったところでlowとして扱う予定
+・/cache/infoにキャッシュが未完了のthreadidを渡した時にも結果を返す(thx.NicoCache20>>708)
+
+不具合修正:
+・0byteのmp4ファイルを再エンコード判定時にクラッシュするのを修正(thx.NicoCache20>>702)
+・音声を保存する際のファイル名が文字化けするのを修正(thx.NicoCache20>>711)
+・自動でlowを外す処理が色々間違っていたのを修正
+  具体的には
+  ・lowが外れるときにcacheFolderのトップに移動されていた
+  ・内部状態がlowのままになっていてフィルタの表示などがエコノミーのままだった
+  あたり
+
+nlFilter:
+・動画IDのpopThumb2置換がJavaScript中の文字列を破壊するケースに暫定対処
+
+
+NicoCache_nl+150304mod+170425mod (Patch Release)
+
+機能追加:
+・非dmcの通常キャッシュを持っている場合にdmcのエコノミー時に使う機能を追加
+  (thx.NicoCache20>>663)
+  useSmileCacheInsteadOfDmcEconomy=true で有効になりますが，
+  dmcのエコノミーとどちらが画質が良いかなどを考慮しないので注意．
+・キャッシュフォルダのスキャン時に不要な一時キャッシュとmapfileを削除するようにした
+  (thx.NicoCache20>>696)
+
+不具合修正:
+・ログ表示ウィンドウでスクロールした際にStack Overflowが生じることがあるのを修正
+・ログ表示ウィンドウがバックログ中に大量のログが出力されると動作を停止するため
+  一定行数以上出力された分は強制的に消去するようにした．(thx.NicoCache20>>677)
+  NicoCacheGUI.propertyファイルのMaxLinesHardで設定可能．デフォルト値は30000行．
+・一時キャッシュを削除する際にmapfileが削除されないバグを修正
+
+nlFilter:
+・dmcキャッシュのアイコンと色を変えないやつを廃止
+・06_topBarが2段になるのを解消.txt を現在のtopBarに適応(thx.NicoCache20>>697)
+
+
+NicoCache_nl+150304mod+170414mod (Patch Release)
+
+機能追加:
+・キャッシュの置き換え時に最終更新日時を維持する機能を追加
+  keepCacheLastModified=trueにすると，エコノミーキャッシュを通常キャッシュで
+  置き換えるときに通常キャッシュの最終更新日時をエコノミーキャッシュのものに設定する．
+・フィルタのリロード時に時刻を表示(thx.NicoCache20>>567)
+
+不具合修正:
+・deleteTmp中にクラッシュすることがあるのを修正
+
+nlFilter:
+・GINZAでキャッシュの進捗がプレイリストに表示されないのを修正(thx.NicoCache20>>608)
+・GINZAでキャッシュ中にプレイリストから動画を切り替えると進捗表示が増殖するのを修正
+・GINZAのVideoExplorerで誤ってキャッシュアイコンが表示されていたのを修正
+・GINZAのVideoExplorerのニコニ広告にキャッシュアイコンを追加
+・HTML5でプレイリストにキャッシュの進捗を表示
+・HTML5でプレイリストのおかわり時にもキャッシュアイコン追加
+・HTML5で動画切替時に上部メニュー内のsmidも更新
+・ランキングでキャッシュアイコンが広告枠の後ろに行くのを修正
+
+
+NicoCache_nl+150304mod+170326mod (Patch Release)
+
+不具合修正:
+・コメント保存機能を現在の仕様に対応(thx.NicoCache20>>532-543)
+・flv2mp4でデッドロックすることがあるのを修正
+・行方不明のキャッシュファイル探索での競合状態を修正
+
+
+NicoCache_nl+150304mod+170322mod (Patch Release)
+
+機能追加:
+・大サイズ(.Mと.L)のサムネイルのキャッシュ機能を追加
+  設定のthcacheLargeSizeで有効・無効を設定できます．デフォルトは有効になっています．
+・flv2mp4変換結果をキャッシュ
+  NicoCache_nlを終了してもflv2mp4の変換結果が削除されなくなりました．
+  変換結果のキャッシュ先のディレクトリはconvertedCacheFolderで設定可能です．
+  通常のキャッシュフォルダとは異なるフォルダを指定してください．
+  デフォルトでは [NicoCache_nlのディレクトリ]/cvcache になっています．
+  これに伴いflv2mp4TmpDir設定は廃止されました．
+  なお，現在のところconvertedCacheFolder内でサブディレクトリへの分類などは出来ません．
+・flv2mp4の変換後にかかった時間を表示
+
+不具合修正:
+・動画データがISPの内部キャッシュらしきURLに転送されることがあるのに対応
+  (thx.NicoCache20>>476,491)
+
+nlFilter:
+・adsサブドメインをポップアップ追加フィルタの処理対象から除外
+
+
+NicoCache_nl+150304mod+170320mod (Patch Release)
+
+機能追加:
+・処理に時間がかかったnlFilterを表示する機能を追加
+  設定のslowFilterで時間のしきい値をミリ秒単位で設定する．
+  デフォルトは2000ミリ秒と大きく設定してありますが，
+  フィルタを触る人は100ミリ秒くらいにすると良いかも．
+・nlFilterのプロファイル機能を追加
+  設定のenableFilterProfiler=trueで有効になります．
+  有効にすると時間のかかったフィルタ上位10件を表示します．
+  注) これらの時間はマッチングにかかった時間のみならず
+      該当するキャッシュの存在チェックなど関連する処理を全て含めた時間です．
+      初回は最初に処理したフィルタだけ時間がかかると言った事態が発生しますので
+      正確には2回以上アクセスした時の結果を参照してください．
+
+
+NicoCache_nl+150304mod+170318mod (Patch Release)
+
+不具合修正:
+・GetThumbInfoUtilにid=nullが渡された時にクラッシュするのを修正(thx.NicoCache20>>492)
+・動画接続時にリダイレクトが発生した場合の処理を追加
+
+nlFilter:
+・キャッシュ済み動画へのアイコン等の追加をタグ検索のニコニ広告に対応
+・dmcキャッシュのアイコンと色を変えない奴が変わってしまっていたのを修正
+
+
+NicoCache_nl+150304mod+170315mod2 (Patch Release)
+
+不具合修正:
+・不適切なエラーメッセージを除去してエラー発生箇所に適切なエラーメッセージを追加
+
+
+NicoCache_nl+150304mod+170315mod (Patch Release)
+
+機能追加:
+・GetThumbInfoに対してAPI経由で不正なリクエストが発生しないようにチェックを追加
+
+不具合修正:
+・★HTML5プレイヤーでdmc動画のエコノミー判定に失敗していたのを修正
+　(NicoCache_nl+150304mod+170226mod以降すべて非エコノミーとして扱われていた)
+　音声のビットレート([a,b,c]のc)が64kbpsになっているものはエコノミーの可能性があります．
+・再エンコードされた非dmc動画を不必要にキャッシュしないように(thx.NicoCache20>>435)
+
+
+NicoCache_nl+150304mod+170226mod (Patch Release)
+
+機能追加:
+・data-api-data構造変更によりdmc動画のエコノミー判定が正確に行えるようになった
+
+不具合修正:
+・smidと動画サーバ上のIDが違う場合の処理がHTML5版のwatchページで
+　動作していなかったのを修正(thx.NicoCache20>>424)
+・2017/2/23のdata-api-data構造変更に対応
+・eco=1が動作していなかったのを修正
+
+
+NicoCache_nl+150304mod+170218mod (Patch Release)
+
+機能追加:
+・行方不明のキャッシュファイル探索を高速化
+・仕様変更に備えてreencoded.csvにバージョンを追加
+
+不具合修正:
+・タイトルが長い動画でファイル名の切り詰めが機能していなかったのを修正
+・info/v2 APIでキャッシュファイルが消えていた時に不整合な結果を返さないように修正
+
+
+NicoCache_nl+150304mod+170212mod (Patch Release)
+
+不具合修正:
+・info/v2 APIがクラッシュすることがあるのを修正(まだあった)
+
+
+NicoCache_nl+150304mod+170210mod (Patch Release)
+
+不具合修正:
+・info/v2 APIがクラッシュすることがあるのを修正
+・一時ファイル削除時に内部情報から削除し忘れていたのを修正
+・WatchVarsが原宿でタイトル取得に失敗していたのを修正
+
+開発者向け
+・WatchVarsから取れる情報を追加
+
+
+NicoCache_nl+150304mod+170207mod (Patch Release)
+
+機能追加:
+・nlFilterに判定済みの再エンコード判定結果を取得する $REENCODED(smid) を追加しました．
+　結果はtrue/false/nullのいずれかの文字列になります．不明時はnullとなります．
+　使用例: $REENCODED($1)
+・nlFilterに文字列一致判定と分岐を行うnlcase構文を追加しました．
+　構文:<nlcase "対象文字列"><when "比較文字列1">出力文字列1<when "...">...</nlcase>
+　対象文字列の部分には$REENCODEDや<nlVar:>を入れると事前に置換されます．
+　対象文字列に">が含まれないようにご注意ください．
+　使用例:
+　<nlcase "$REENCODED($1)">
+　<when "true">reencoded
+　<when "false">RAW
+　<when "null"><a href="#"...></a>
+　</nlcase>
+
+不具合修正:
+・getDLFlagなどに不正なidが渡された時の非互換を修正(thx.NicoCache20>>316)
+・Flash版のwatchページでdmcInfoが処理できていなかったのを修正
+　Flash版ではdmcに対してlow判定が機能していなかったかも
+・dmcのwatchページを開いたあとに再起動すると再生時にクラッシュすることがあったのを修正
+
+開発者向け:
+・JSONライブラリが拡張からも利用できるようになりました．
+　もともとWatchVarsにあったものに手を入れてdareka.common.json以下に移動したものです．
+
+
+NicoCache_nl+150304mod+170202mod (Patch Release)
+
+不具合修正:
+・キャッシュ済み分を送信した後にゴミがつくのを修正 (thx.NicoCache20>>220,221)
+・dataフォルダがないときは作るようにした
+
+nlFilter:
+・209氏のおまけフィルタを元にIE対応等をしたものをマージ
+　・209氏の nl_watchCacheIcon.{txt,js} は 20_watchFilter.txt に統合
+　・既存の local/cache*.gif は削除可能
+・デフォルトはdmcの色を変えるやつになりました
+
+
+NicoCache_nl+150304mod+170120mod (Patch Release)
+
+機能追加:
+・再エンコード判定結果をdata/reencoded.csvに記録して再判定を避ける
+・非dmc動画をキャッシュした際に一時ファイルでも積極的に再エンコード判定
+・一時ファイルの取得済み領域情報(MappedRanges)を全スレッドで共有
+・Partial downloadメッセージの数値にカンマを入れた(NicoCache20>>165)
+・キャッシュ再開時・中断時にキャッシュ済みの割合を表示(NicoCache20>>165)
+　reportCachingProgress設定で非表示にできます
+・/cache/infoをdmcに対応(thx.NicoCache20>>120)
+　dmc: dmcキャッシュか否か
+　dmcMovieType: videoMode, videoBitrate, audioBitrateを含む
+　非dmcキャッシュを持っている時にdmc動画のキャッシュが進行している場合，
+　そのdmc動画が高画質か否かで書き込むフィールドが分岐
+　・高画質時: dmcNormalCacheId, dmcNormalSize, dmcNormalCachingSize, dmcNormalMovieType
+　・低画質時: dmcLowCacheId, dmcLowSize, dmcLowCachingSize, dmcLowMovieType
+　キャッシュが進行している場合にnormal, dmcNormal, dmcLowと三種類に
+　振り分けられてしまうため，それらの内もっとも良いものを統一的に提示する項目として
+　  superiorCacheId, superiorSize, superiorCachingSize, superiorIsDmc,
+　  superiorIsEconomy, superiorDmcMovieType
+　を設けました．
+・/cache/info/v2を新規追加
+　/cache/infoが複雑化し過ぎなので新たにデザインしたAPIです．
+　同様にクエリ文字列かPOSTでsmidを与えると次のフィールドが返ってきます．
+　preferred: nlFilterで判定に利用されているキャッシュ
+　preferredHTML5: HTML5プレイヤーで再生されるキャッシュ(より良い物が取得できなければ)
+　preferredFlash: GINZAプレイヤーで再生されるキャッシュ(以下同)
+　preferredSmile: dmcが再生できないプレイヤーで再生されるキャッシュ
+　preferredDmc: dmcかつmp4(flvが再生できない環境用)の中で最も良いキャッシュ
+　preferredDmcFlv: dmcの中で最も良いキャッシュ
+　cacheIds: 動画に関連するcacheIdをソートした一覧
+　cachings: キャッシュが進行中のcacheId一覧
+　completes: キャッシュ済みのcacheId一覧
+　caches: cacheIdをkeyに詳細をvalueとして持つ
+　  videoId, cacheId, complete, economy, dmc, caching, movieType,
+　  size, title, subFolder, filename, ts
+    dmcMovieType (dmcに対して)
+　  cachingSize (一時ファイルに対して)
+　  reEncoded (非dmcの通常キャッシュに対して, 不明時はnull)
+
+不具合修正:
+・touchCache=true時にHTML5プレイヤーがキャッシュを読まないのを修正(thx.NicoCache20>>101,123)
+　touchCache=true時にはLast-Modifiedを固定値で返すようにした．
+・dmc動画でtouchCacheが機能していなかったのを修正
+・ajax_infoの挙動が変化していたので元に戻した
+　拡張性が足りずにdmcには対応できないので/cache/info(/v2) APIを利用してください
+・キャッシュ一覧ページがソートされなくなっていたのを修正(thx.NicoCache20>>164)
+
+nlFilter:
+・06_topBarが2段になるのを解消.txt を追加
+・my/mylistとrecommendationsのキャッシュアイコン追加が動作していなかったのを修正
+・dmc色変え版のrecommendationsのリンク色変更が動作していなかったのを修正
+
+
+NicoCache_nl+150304mod+170115mod2 (Patch Release)
+
+機能追加:
+・dmc動画がキャッシュ済みなら非dmcのエコノミーが要求された時にキャッシュしない．
+　ニコニ広告で非dmcエコノミーが要求されるため．
+・WatchVarsを原宿に再度対応
+　wrapperの動作確認は出来ていないので動くかは不明
+
+不具合修正:
+・170115modの修正が壊れていたのを修正(thx.NicoCache20>>96)
+
+
+NicoCache_nl+150304mod+170115mod (Patch Release)
+
+不具合修正:
+・キャッシュ済み動画から応答する際に全部メモリに読み込んでメモリ不足に
+　陥っていたのを修正(thx.NicoCache20>>91-92)
+
+
+NicoCache_nl+150304mod+170114mod (Patch Release)
+
+機能追加:
+・ストリーミングに対して警告を表示(thx.NicoCache20>>47)
+　disableStreamingWarning設定で無効化できます．
+
+不具合修正:
+・flv形式のdmcキャッシュがnlFilter等で無視されていたのを修正(thx.NicoCache20>>69)
+　disableCacheDmcFlv=true時は引き続き無視します．
+・低画質の非dmcキャッシュがあるときに誤ってエコノミーではないURLに
+　接続しに行くようになっていたのを修正
+・一時ファイル削除時にデバッグメッセージが残っていたのを削除
+
+
+NicoCache_nl+150304mod+170111mod (Patch Release)
+
+機能追加:
+・非dmcキャッシュが再エンコードされているかの判定機能を追加
+　次のヒューリスティクスにより再エンコードを判定します．
+　  video streamについて
+　    handler_name = "VideoHandler" ∧ creation_time = 1970-01-01 00:00:00
+・再エンコードされていない非dmcキャッシュを持っている場合に
+　dmcキャッシュの代わりとして利用(useNotReEncodedCache設定)
+・高画質なdmc動画をキャッシュした時に非dmcキャッシュが
+　再エンコードされたものなら削除．同様に，再エンコードされていない
+　非dmc動画をキャッシュした時にdmc動画を削除．(removeReEncodedCache設定)
+
+不具合修正:
+・Deprecatedなメソッドを使用している部分を修正&警告抑制(thx.NicoCache20>>33)
+・ConcurrentModificationExceptionが出るのを(多分)修正(thx.NicoCache20>>40)
+・公式動画のsmidを抽出できていなかったのを修正(thx.NicoCache20>>41)
+・SearchRewriter.searchに後方互換性をもたせた(thx.NicoCache20>>42)
+・全体をキャッシュ済みの一時ファイルが残っている場合に対処
+
+
+NicoCache_nl+150304mod+170108mod (Patch Release, 人柱版)
+
+機能追加:
+・nlFilterでdmc/economyの4通りに分岐
+　記法は次の2種類
+　 <非dmc通常$$非dmcエコノミー$$dmc通常$$dmcエコノミー>
+　 非dmc通常<$>非dmcエコノミー<$>dmc通常<$>dmcエコノミー
+・watchやthumbinfoに新しいキャッシュIDでリクエストしてしまった場合に
+　正しそうなURLへリダイレクトするワークアラウンドを追加 (thx.NicoCache20>>28)
+・cachemanagerが概ね動作するようにCacheDirProcessorにワークアラウンドを追加
+
+不具合修正:
+・キャッシュ移動WebAPIが非dmcキャッシュに対して動作していなかったのを修正
+　(thx.NicoCache20>>27)
+
+
+NicoCache_nl+150304mod+170106mod (Patch Release, 人柱版)
+
+機能追加:
+・dmcサーバの動画に対応した．
+　これに伴いdmc拡張を廃止します．
+　dmcキャッシュのファイル名は次の形式です．
+　  動画ID[解像度,映像のビットレート,音声のビットレート]_タイトル.拡張子
+　dmcキャッシュの一時ファイルのファイル名は次の形式です．
+　  nltmp_動画ID[解像度,映像のビットレート,音声のビットレート]動画データ識別子の先頭8文字_タイトル.拡張子
+・(dmc拡張 v161226 との差分) エコノミーらしき動画ファイル名にlowを付加する．
+　現在dmcサーバの動画の正しいエコノミー判定方法が不明です．
+　暫定的に次のようなヒューリスティクスにより判定しています．
+      ¬プレミアム会員 ∧ 混雑時間帯 ∧
+           映像ビットレート ≦ 600kbps ∧ 音声ビットレート ≦ 64kbps
+　誤ってエコノミーと判定された動画はエコノミーではない時間帯にアクセスすると
+　自動でlowマークが外れます．
+・通信切断時にdisconnectedメッセージを表示するようにした．
+・リクエスト処理中の予期しない例外についてスタックトレースを表示した．
+
+★仕様変更:
+・キャッシュ管理構造を大きく変更した．
+　既存のAPIはできるだけ非dmc動画のみサポートして互換性を保つ形で提供しているので
+　ある程度，既存の拡張は動作すると思います．
+　dmcの動画については拡張子が混在できるようになっています．
+　GINZAプレイヤー(flv)とHTML5プレイヤー(mp4)で異なる形式の動画が配信されています．
+　GINZAプレイヤーはmp4を解釈できるため，同画質・同音質のflvとmp4がある場合には
+　flvを自動で削除します．画質・音質が異なる場合はそれぞれ最も画質が良い
+　キャッシュを保持します．
+・/cache/以下のWebAPIがdmc動画の情報を新しい形式のIDで返すようになった．
+　既存のキャッシュ情報に加えてdmc動画の情報を返すようになった関係で，
+　今までと違う形式のID(smXXXXXXXX[720p,2000,192].mp4など)が混ざります．
+　これにより拡張やnlFilter, JavaScriptなどが動作しなくなる可能性があります．
+・WebAPI /cache/rm?<smid> の挙動を変更しました．
+　これまで<smid>にlowがついていない場合は，関連するキャッシュを全て削除して
+　いましたが，lowがついていない非dmc動画のみが削除されるようになりました．
+　全てのキャッシュを削除するための新しいWebAPIは /cache/rmall?<smid> です．
+・WebAPI /cache/<smid>/{movie,audio} の挙動を変更しました．
+　これまで<smid>にlowがついていない場合は，(非dmcの)通常キャッシュとエコノミー
+　キャッシュから自動で選択して結果を返していましたが，非dmcの通常キャッシュから
+　結果を返すようになりました．
+　dmcキャッシュを含めたキャッシュから自動で選択して結果を返す新しいWebAPIは
+　/cache/<smid>/auto/{movie,auto} です．
+
+不具合修正:
+・一時ファイルの削除時にmapファイルが削除されなかったのを修正
+
+
+NicoCache_nl+150304mod+161226mod (Patch Release)
+
+機能追加:
+・flvキャッシュからmp4に変換して応答する機能を実装した(要ffmpeg)
+　convertFlv2Mp4=trueにすると有効になります．
+　リクエストされてから変換して応答するので多少時間がかかります．
+
+不具合修正:
+・JDK7でビルドできるようにした (thx.NicoCache19>>963)
+・WatchVarsに失敗した時にクラッシュしないようにした (thx.NicoCache19>>962)
+・mp4を要求された時，flvキャッシュを持っている場合にflvを返すせいで
+　動画が再生できなくなっていたのを修正
+・キャッシュ済み動画のリンクの色が変わらなくなっていたのを修正
+　(thx.NicoCache19>>508,516)
+・動画の種類ごとに適切なcontent-typeを返すようになった(?)
+
+
+NicoCache_nl+150304mod+161224mod (Patch Release)
+
+機能追加:
+・HTML5版に暫定対応
+
+★仕様変更:
+・ファイルの途中からキャッシュできるようになりました．
+　HTML5プレイヤーは最初からの再生であっても，ファイルの途中や末尾を要求して
+　ブラウザ上にキャッシュするようになりました．そのため，NicoCache側で
+　受信した部分はキャッシュに保存しておかないと，ファイルの末尾だけ
+　受信要求が届かずキャッシュが完成しないと言った事態が生じます．
+　キャッシュ済みの範囲は，拡張子の最後の文字が_になっているnltmpファイル
+　(mapファイル)に格納されています．
+・これに伴いキャッシュ済みサイズを管理する構造が変更されています．
+　CacheManager.getDLSize/setDLFlag周りを利用している拡張が動作しなくなるかもしれません．
+・同時ダウンロード時に2番目以降のセッションではキャッシュを保存しない処理は削除．
+　HTML5プレイヤーは複数同時接続を行うことがあり，有効にしておくと，
+　後から接続したセッションが多くのデータを受信した場合に
+　保存されないという事態になると判断しました．
+
+不具合修正:
+・HTTPのOPTIONSメソッドが通らなかったのを修正
+　それに伴い設定項目allowRestrictedHeadersは廃止されました．今後は常に有効になります．
+
+
+■+mod 変更点
+
+基本的にソースのリファクタリング中心なので機能追加はあまりありません。
+とりあえず、ベースとなるバージョンのパッケージに対して上書きすれば多分動きます。
+大きな問題が無ければいつもの人にパッケージングしてもらって個々の+modは終了です。
+…のつもりだったけど、機能追加実験＆単体で最低限動作するパッケージにしました。
+
+※行頭に★が付いているものは、影響の大きそうな変更なので注意してください
+
+あと、JavaDocを付けていないpublicメソッドは将来的に変更される可能性があるので、
+Extensionから呼び出さないで下さい(本体更新で動かなくなる可能性があります)。
+
+[Java7]が付いている項目はJava7の機能を使うのでそれ以前のバージョンでは使えません
+※NicoCache_nl+mod自体がJava7以外で動作しない、という意味ではありません
+
+
+NicoCache_nl+150304mod (Patch Release)
+
+不具合修正:
+・ReplaceDelay=TRUEなフィルタをEachLine数分だけ実行する不具合を修正(thx>>200)
+・exewrap等でexe化した際の不具合を一部修正(起動確認程度です…)
+
+
+NicoCache_nl+150302mod (Patch Release)
+
+★仕様変更:
+・/cache/infoが返す情報をCSV形式(ajax_info同等)からKeyValue形式に変更
+　　videoId:     動画ID(smid)
+　　cacheId:     キャッシュID(エコノミーの場合は末尾がlow)
+　　economy:     エコノミーキャッシュならtrue(通常キャッシュの場合は無し)
+　　size:        最終的なキャッシュファイルのサイズ(bytes)
+　　caching:     キャッシュ中の場合のみtrueを返す
+　　cachingSize: キャッシュ中の現在サイズ(bytes)
+　　movieType:   動画タイプ(flv/swf/mp4) ※キャッシュ拡張子の'.'以降
+　　title:       動画のタイトル          ※キャッシュファイルのもの
+　　subFolder:   サブフォルダのパス(キャッシュフォルダ直下の場合は無し)
+　　ts:          キャッシュファイルのタイムスタンプ(UNIXTIME)
+　以下はエコノミーキャッシュが存在して、かつ通常キャッシュ中の場合のみ返す
+　　normalSize:  最終的な通常キャッシュのサイズ(この値があれば通常キャッシュ中)
+　　normalCachingSize: 通常キャッシュ中の現在サイズ
+　※各キャッシュ情報はキャッシュ無し＆キャッシュ中も無しの場合のみnullを返す
+・nlFilter.txtに記述した[Replace]を[Style][Script]より後で処理するように変更
+　→[Style][Script]に対しても置換処理可能になります
+
+nlFilter:
+・置換処理をnlFilter.txt段階まで遅延するオプションを追加(ReplaceDelay)
+　→TRUEを指定するとnlFilter.txtの最初に記述したように振る舞います
+・「キャッシュアイコン位置(共通)」でmarginとpaddingの指定を追加(thx>>36)
+
+不具合修正:
+・/cache/infoで動画タイプが常にflvになってしまう不具合を修正(thx>>33)
+・ant extractした時はclassファイルを削除するように修正(thx>>66-67)
+・Java8でビルド時の警告を出さないように修正(thx>>68-81)
+　→Java9以降は1.5対応が無くなるのでエラーで止まるかも
+・最近のMP4Box(0.5以降？)で固まる不具合を修正(thx>>172)
+・ブラウザキャッシュ側だけにサムネがある状態で更新すると404を返す不具合を修正
+
+
+NicoCache_nl+150201mod (Patch Release)
+
+機能追加:
+・キャッシュ情報一括取得API(/cache/info)を追加(GET/POST両対応)
+　→GETの場合はパラメータとして'?'の後に<id>を','で区切って指定します
+　　POSTの場合は<id>をカンマ/タブ/空白/改行のいずれかで区切って指定します
+　　戻り値はJSONで"<id>":"<info>"のペアが指定順に返ります
+　　　<id>   smid/videoId/threadIdのいずれか
+　　　     ※threadIdを指定した場合の初回はgetthumbinfoを発行するので遅いです
+　　　<info> 最初がsmidである以外は/cache/ajax_infoと同じ
+　　　       キャッシュが存在しない場合はnull
+・threadIdとsmidの対応保持数を無制限にした(getthumbinfoの発行を減らすため)
+　→今のところファイル保存はしていないので再起動するまで有効です
+
+nlFilter:
+・ブラウザ等からコピペした「行末に空白が付いているフィルタ」に対応
+　→セクション開始行の行末が空白文字の場合はセクション全体をtrimします
+・キャッシュフォルダの空き容量が1GBを下回るとアラートを表示するようにした
+・1/27の仕様変更に対応(thx.NicoCache18>>959-960)
+
+
+NicoCache_nl+141221mod (Patch Release)
+
+nlFilter:
+・アニメトップページの「人気のアニメランキング」に対応(thx>>758)
+・watchページのプレイリスト処理を大幅変更(DOMNodeInsertedを使うようにした)
+　→非推奨なんだけど代替のMutationObserverはIE11以降対応らしいので…
+
+その他:
+・FFmpegがあれば優先的に使うようにした(thx>>762)
+　→古いFFmpegだとCompressed SWFに対応していないっぽいです
+　　もし問題が出るようなら useFFmpeg=false/noflv を設定して下さい
+・起動時のキャッシュフォルダ空き容量を単位付き(MB/GB/TB)で表示するようにした
+・watchページを検索状態のままリロードした時もRewriterを通るようにした
+・getflvを発行しない仕様変更に対応(flvInfoにgetflvの置換を適用)
+　→もし問題が出るようなら disableWatchRewriter=true を設定して下さい
+
+
+NicoCache_nl+141201mod (Patch Release)
+
+機能追加:
+・nlFilterに[Style]と[Script]を追加
+　→[Style]は</head>の直前に、[Script]は</body>の直前にまとめて追加します
+　　[Style]はtype="text/css"、[Script]はtype="text/javascript"固定です
+　　構文は[Replace]と同じですがMatchは記述せずReplaceの代わりにAppendを使います
+　　内部処理的にはReplaceOnly=TRUEを指定した[Replace]とほぼ同様です
+　　出力は全ての[Replace]処理後に[Style]→[Script]の順番で一括処理されます
+　　よってフィルタで追加した内容に対してRequire等を使う場合は注意が必要です
+・リロード時にフィルタファイルが更新されていなければ再パースしないようにした
+・ユーザーフィルタのロード時間を表示するようにした
+
+nlFilter:
+・watchページの仕様変更(RequireJS導入)に対応
+・watchページのキャッシュアイコンを出すまでバッファ率を表示するようにした
+・「キャッシュ済動画のリンク色変更(チャンネル)」を追加
+・Jarty系ページの仕様変更に対応(thx>>727)
+
+不具合修正:
+・一部の環境でキャッシュフォルダの空き容量取得がおかしかったので修正
+
+開発環境:
+・ant jarを実行した時にバックアップ(NicoCache_nl.jar.old)を作るようにした
+・javadocのAPIリンク先をjava.sun.comからdocs.oracle.comに変更
+
+
+NicoCache_nl+140914mod (Patch Release)
+
+・「キャッシュアイコン追加」を特定のサムネURLに対応(15_thumbInfoFilter)
+・とりあえずビルドしたい向けに HowToBuild.txt を添付
+・build.xmlがGUILauncherIcon.gifを展開していなかったので修正(thx>>584)
+
+
+NicoCache_nl+140908mod (Patch Release)
+
+nlFilter:
+・「キャッシュアイコン追加」を大きいサムネ(.M)に対応(15_thumbInfoFilter)
+・8月の仕様変更で色々と機能しなくなったので修正(20_watchFilter)
+
+不具合修正:
+・smidが8桁以上なら逆引き検索対象をsm/so/nmに限定して効率化した
+・一部の動画ページで再生出来ない場合がある不具合を修正(thx>>396-398)
+・特定のサムネURLを動画URLと誤判断してしまう不具合を修正(thx>>491)
+・知らない形式の場合はキャッシュしないように修正
+
+
+NicoCache_nl+140509mod (Patch Release)
+
+nlFilter:
+・Replace内の置換処理を一切行わないオプションを追加(ReplaceOnly)
+　→CSS/JavaScript追加のみといったフィルタで指定すると効率が良くなります
+　　「$」をエスケープせずに記述できるようになります（自動でエスケープします）
+　　既に「\」でエスケープしているフィルタは特に修正する必要はありません
+・同一ページ内における$TS()の値を一意にした(NicoCache17>>115)
+・idGroupでReplace内の<$>前後が空文字列だとエラーになる不具合を修正
+・idGroup=!nがサムネIDだと常にマッチしない不具合を修正(NicoCache18>>335)
+
+不具合修正:
+・JSON内に空arrayがあるとパースに失敗する不具合を修正(ZeroWatch)
+・特定のwatchページの右上コメントでエラーになる不具合を修正(NicoCache17>>109)
+・TrackIDが格納順じゃないと音声抽出に失敗する不具合を修正(NicoCache18>>120)
+
+
+NicoCache_nl+120609mod
+
+機能追加:
+・ニコニコ動画:Zero(ZeroWatch)になんとなく対応
+　→ZeroWatchはまた色々と変わるらしいのでそのうち不具合出ると思います
+　※将来的に強制移行があるだろうから嫌々でも今から対応する必要がある訳で…
+
+・watchAPI(およびwatchAPIDataContainer内)のJSONに対してnlFilterが効くようにした
+　→通常のnlFilterとは異なりエスケープ解除後の文字列に対してフィルタが効きます
+　　現状はvideoDetail>descriptionの値のみが対象です(要望があれば追加します)
+　★エスケープ解除前でもマッチする場合は2重置換を考慮する必要があります
+　　User-Agentにバージョン文字列を設定するのでRequireHeaderを使って回避できます
+　　ex) RequireHeader = !User-Agent: NicoCache_nl
+　※不具合が出る場合は disableWatchRewriter=true を設定すれば禁止できます
+
+・ZeroWatchで検索結果等の通信に失敗する不具合に対応(thx>>689)
+　→CORS(Cross-Origin Resource Sharing)対策を2種類追加（詳細はdefaults参照）
+・Nsenで対象動画のキャッシュがある場合に再生されない不具合を修正(thx>>748,840)
+　→Nsenのニコ生プレイヤーはRTMPEでlow動画を取得するのでキャッシュは出来ません
+　※ニコ生クルーズとか他のニコ生も同様だと思うけど全く見てないので…
+
+nlFilter:
+・★トップバー(ナビゲーションバー)の仕様変更に対応(05_topBarFilter.txt)
+　→watchページ以外でもキャッシュメニューをプルダウン形式に変更しました
+　　構造が変わっているので誤爆を避けるために以前との互換性を無くしてあります
+　　フィルタでアイテムを追加する場合は新たに以下の置換ターゲットを使って下さい
+　　<!--li_cachemenu_item_start-->
+　　<!--li_cachemenu_item_end-->
+・nlFilters/01_globalFilter.txt, local/nllib.js を追加
+　→グローバル空間に NicoCache_nl オブジェクトを追加します
+　　Prototype.js/jQuery に依存しない基本的な処理を定義しています
+　※このオブジェクトの有無をチェックすることでnlを通したかどうか分かります
+・scriptタグのsrc属性をドメイン付き(http://www.nicovideo.jp/〜)にした
+・99_3列Filter+mod.txtにNGtitleを追加（あくまでサンプルです）
+
+その他:
+・201204の削除動画に対応 sm173920(?:25|40|55)
+・デバッグウィンドウの保持行数を MaxLines の10倍に増やした(今までは2倍)
+
+開発環境:
+・開発環境を Eclipse Indigo SR2 (3.7.2) に更新
+・開発環境の参照ライブラリを JDK7 Update 4 に更新
+
+開発者向け:
+・dareka.processor.impl.WatchVarsクラスを追加
+　→watchページから情報を取得するためのクラス(原宿/Zero両方に対応)
+　※今まで自前で正規表現とか使って取得していたのが多少は楽になるかも
+・dareka.processor.impl.EasyRewriter.replace()を追加
+　→文字列に対して直接nlFilterを適用できます
+　※専用のURLを用意すればそのExtensionのみで使うnlFilterも可能
+・dareka.common.TextUtil.{escapeHTML,unescapeHTML,escapeJSON,unescapeJSON}を追加
+・デバッグ用にRewriterが処理した内容をログに出力する機能を追加(debugRewriter)
+　→debugRewriter            trueなら処理した内容をログに出力
+　　debugRewriterOriginal    trueなら書き換え前の内容もログに出力
+　　debugRewriterMaxLength   ログに出力する内容の最大文字数
+　　debugRewriterURLPattern  出力対象URLに部分一致する正規表現
+
+
+NicoCache_nl+111225mod
+
+機能追加:
+・[Java7]フォルダの更新を監視して即座に変更を反映するようにした
+　→対象はconfig.properties,nlFilter.txt,nlFilter_sys.txt,nlFiltersフォルダ以下
+　　これまではリクエストの度に更新チェックをしていたのでレスポンスが悪かった
+　　更新があった場合は変更を反映してから処理するので更にレスポンスが悪かった
+　　Java7以降では即座に変更を反映するのでリクエスト毎の更新チェックを行わない
+　※Java7より前(or disableDirectoryWatcher=true)の場合はこれまで通りです
+
+・[Java7]JARが更新されたら終了するようにした(exitStatusIfJarModified)
+　→NicoCache_nl.jarが上書きされるような場合は以降の正常動作ができないので
+　※添付のスクリプトから起動した場合は終了コードを検知して再起動します
+・Unix系OS用の起動スクリプトを追加(NicoCache_nl.sh)
+　→Windows用のバッチファイルも修正があります(詳しくはReadme参照)
+
+nlFilter:
+・12/13の仕様変更に対応(動画トップ/カテゴリ合算ランキング/オススメ動画)
+・チャンネル動画一覧でキャッシュアイコンが付かなくなっていたので対応
+
+その他:
+・local/vid2cid.jsonが読み込まれなくなっていた不具合を修正
+・開発環境の参照ライブラリを JDK7 Update 2 に更新
+
+
+NicoCache_nl+111130mod
+
+・★イベント通知インターフェース(SystemEventListener)の仕様を変更
+　→使用しているExtensionは互換性が無いので修正して再コンパイルが必要です
+
+開発者向け:
+・★SystemEventListener.EventIdを廃止してintに変更
+　→EclipseとSun(Oracle)のjavacでenumのswitch文に対してコンパイラが生成する
+　　コードが異なるので(javacはinner classを作るのでclassファイルが複数になる)
+・build.cmdに-Xlint:-pathを追加(追加ライブラリは無いことがあるので)
+・NicoApiUtil.getURLResource の中でリクエストヘッダにsetURLするようにした
+
+
+NicoCache_nl+111124mod
+
+・ローカルファイルサーバーが機能しなくなっていたので修正(thx>>961)
+・ローカルファイルサーバーでルート("/")にアクセスした時の挙動を変更
+　→"index.html"が有ればそちらを送信、無ければnl本体のバージョン文字列を送信
+
+開発者向け:
+・NLConfig.getPattern(String) を追加
+
+
+NicoCache_nl+111123mod
+
+・httpsが通らなくなっていたので修正(thx>>865-868,871)
+・mime.types.defaultにWebM(video/webm)を追加
+
+開発者向け:
+・NLMain.getExtLoggerにプレフィックスをタブ名としてのみ扱う仕組みを追加
+・SystemEventListenerにキャッシュ中断イベントを追加(CACHE_SUSPENDED)
+　→サンプルソース(eventListenerSample)も更新
+・SystemEventListenerにコンフィグ再読込イベントを追加(CONFIG_RELOADED)
+　→ConfigObserverと被るけどExtension的にはこちらの方が使い易いかな？
+　※ただし、再読込イベントなので初期化処理には使えません
+
+
+NicoCache_nl+111111mod
+
+機能追加:
+・Extensionにイベントを通知するインターフェース(SystemEventListener)を追加
+　→詳細は下記の開発者向け、およびJavaDoc参照のこと
+・ローカルファイル(LocalFileResource)でgzip圧縮をサポート
+　→foo.txtというアクセスに対してfoo.txt.gzがあればgzip圧縮のまま転送します
+・起動時にVMのアーキテクチャ(os.arch)を表示するようにした
+　→64ビットOS上で32ビットVMから起動した場合はx86になるので注意
+・/cache/<id>.xml にパラメータを指定した場合に新プレ方式で取得するようにした
+　→現状で有効な値はhas_owner_threadのみ、無効なパラメータは単に無視します
+　※パラメータ無しの場合は従来通りに旧プレ方式で取得します
+・NicoCacheフォルダ直下にdataフォルダを追加
+　→HTTPアクセスする必要が無い、各種データを置くためのフォルダです
+
+NicoCacheGUI:
+・64bit環境用のDLLを同梱(NicoCacheGUI_native64.dll) ※動作確認はXP(x64)のみ
+　→前にも書いたけどWindows環境で使っていないので不具合あるかも(パスは通してね)
+・GUI起動時のデバッグモードの値はコマンドラインを優先するようにした
+・終了時にログウィンドウを最後(finalized)まで表示するようにした
+
+nlFilter:
+・[Replace]以外のフィルタでURLを省略できるようにした
+　→今までは省略できないので www.dummy.com とか書いて誤魔化していた
+・[RequestHeader]でステータスコードを返せるようにした
+　→現状でサポートしているのはNotModified,Redirect/Location,BadRequest,NotFound
+・watchページにある「コメントを保存」を新プレ方式に対応した
+　→毎分100コメ＆投コメ込み＆NG共有スコアあり
+・getthumbinfo用のポップアップリンク化フィルタを追加(thx>>287)
+　→パラメータに「?nlFilter」を付加した場合のみ有効です
+・watchURLtoLinkが共有の貼り付けURLに誤爆するので修正(thx>>595,608,610)
+・ニコニコTOPの仕様変更に対応(相当前のものですが…)
+・ボーカロイド専門ページのリニューアルに暫定対応(111020)
+・タイムシフトの「視聴する」ボタンをポップアップ対象から外した
+・idGroupに数字以外の文字列を記述できるようにした(主にExtension用途です)
+
+不具合修正:
+・/cache/title?<smid>- で'%'文字を含むとエラーになる不具合を修正(thx>>267)
+　→ついでに実際にタイトルを変更できた場合のみOKを返すようにしました
+・不要なエントリをタイトルキャッシュに追加していた不具合を修正
+・Refererを付加するブラウザでnoLiveCache=trueが効かなくなっていたので修正
+・Windows環境でJNI用のパスが通っていない事があるのでReadmeに記述を追加(thx>>416)
+・watchページのvideo_titleがclass→idに変更されたので対応(thx>>658,699)
+
+その他:
+・mimeTypesで指定したファイルが存在しない場合".default"を付加して見るようにした
+　→config.propertiesと同様に編集する時は".default"を削るだけで良いです
+・外部サムネのメモリキャッシュ条件を緩和してキャッシュ範囲を広げた
+　→パラメータ指定を今までは"\?\d+$"だったのを"\?\w+$"に変更(?pop_FAとか)
+　※今まで通り、パラメータ自体はリクエストに含めずに取得します
+・ニコニコ動画として扱うドメインに simg.jp を追加
+・ファイル名にゼロ幅文字(ZERO WIDTH SPACE等)が入らないようにした
+・localFlvの説明文が誤解しやすいので文言を修正(thx>>465)
+・キャッシュフォルダ検索時のメモリ使用効率を改善(thx>>497)
+
+開発環境:
+・開発環境を Eclipse 3.7.1 Indigo SR1 に変更(JDK7readyになったはず)
+・NicoCache_nl.jarの作成にAntを使用するようにした
+・参照ライブラリを JDK6 Update 29 に更新
+・開発関連のファイルをdevelopment.zipにまとめた(詳しくはReadme参照のこと)
+　→今までextensions以下にあったサンプルソース等もこちら
+
+開発者向け:
+・MANIFESTのClass-Pathに igo.jar (Java形態素解析器)を追加
+　→詳細は http://igo.sourceforge.jp/ 参照のこと(MeCabより導入が楽っぽい)
+・MANIFESTのClass-Pathに library.jar を追加
+　→暫定でjarを追加したい時に使用します(恒久的に必要ならスレで報告願います)
+
+・システム終了時にExtensionを呼び出す仕組みを追加
+　→SystemEventListenerを実装していればSYSTEM_EXITを、実装していない場合は
+　　public void onSystemExit() というインスタンスメソッドがあれば呼び出します
+　※終了時に何か処理したいだけならSystemEventListenerを実装する必要は無いです
+
+・nlFilter拡張用のインターフェースをNLFilterからNLFilterListenerに仕様変更
+　→EventListenerと設計を合わせるため(暫定仕様だったので影響は無いはず)
+　※もう一回見直すかも知れないので使う場合は自己責任でどうぞ
+
+・Cache周りに色々と追加(詳細はJavaDoc参照のこと)
+　→CacheManager.{isSmid,isLowSmid,stripLow,parseSmid,parseSmidInt,
+　　getSmidComparator}, Cache#{getVideoId,isLow}
+
+・CommentDownloaderに色々と追加(詳細はJavaDoc参照のこと)
+　→CommentDownloader.{getURLResource,store,download,getTheBeginning,find,load}
+　※JavaDoc付きですが暫定仕様かも(cacheCommentExtensionで使えますかね？)
+
+・EasyRewriter.LST.remove() を追加(LST読み直しになるので効率は悪いです)
+・HttpUtil.getDecodedInputStream(InputStream,String) を追加
+・HttpRequestHeader#isGzipAccepted() を追加
+・NLConfig.getFile() を追加
+・URLResource#getResponseBody(boolean) を追加
+・dareka.common.TextUtilクラスを追加(暫定仕様なので変更あるかも)
+
+
+NicoCache_nl+110706mod
+
+NicoCacheGUI:
+・Windows環境でシャットダウン/サスペンド絡みの諸問題に対応
+　1) ログウィンドウを一度も出さずにシャットダウンすると終了処理が呼ばれない
+　→HideWindow=trueを指定した時も起動時に一瞬ログウィンドウを表示するようにした
+　2) シャットダウン時に「応答無し」となりシャットダウン処理が中断する
+　→JNI(NicoCacheGUI_native.dll/32bitのみ)を使ってWM_ENDSESSIONを処理するように
+　　64bitは環境を作るのが面倒＆VMの判定方法がよく分からないので未対応
+　※DLLは無くても動作するのでGUIを使わない人は削除しても構いません
+　3) 通信中にサスペンドすると復帰後に無反応になる事がある
+　→JNIを使ってサスペンド時に「プロキシ接続を全切断」するようにしてみた(thx>>208)
+　※NicoCacheGUI.propertyにDisableSuspend=trueと書けばサスペンド移行を禁止
+・トレイメニューに「プロキシ接続を全切断」を追加
+　→あくまでプロキシ接続を強制的に閉じるだけ、Extension等の独自通信は対象外
+・nlが完全に終了するまでログウィンドウを閉じないようにした
+
+nlFilter:
+・キャッシュメニューの項目開始位置に<!--cachemenu_item_start-->を追加
+　→最後に追加すると間違えて「キャッシュ削除」を選択することがあると思うので
+・「コピー 〜 」「Copy of 」で始まるフィルタファイルを無視するようにした
+・nlFiltersフォルダにサイズ0のtxtファイルがあるとロードできない不具合を修正
+・$URLgの動作を改善(コンパイル結果を保持するようにした)
+・Replaceで"<TAB>"をハードタブ(\t)に置換するようにした
+・[Debug]モードでフィルタ名をファイルパス付きで表示するようにした
+・静画(sg|im|mg)のポップアップに対応(popThumb_FAを使っている人は対応待ち)
+・ポップアップリンク置換の対象smidの数字部分を8桁までに制限した
+　→getthumbinfo等で改行が無い場合の誤爆が軽減されるかも
+・公式がサポート終了したのでニコニコ動画(9)対応を削除
+
+その他:
+・生放送と静画の外部サムネもメモリにキャッシュするようにした
+・コンパイラをJDK 6 Update 26に更新(…と今更ながら書くようにした)
+
+開発者向け:
+・MANIFESTのClass-Pathにsqlite-jdbc.jarを追加
+　→NicoCacheフォルダにsqlite-jdbc.jarを置けばExtensionからSQLiteが使えます
+　　http://code.google.com/p/sqlite-jdbc/からjarを取得してリネームしてください
+　　ex) sqlite-jdbc-3.7.2.jar → sqlite-jdbc.jar
+　※ググるとhttp://www.zentus.com/sqlitejdbc/の方が上位に出てくるけど、
+　　更新が止まっている＆しばらく使った感じバグ持ちっぽいので…
+・NLConfig.getMatcher()を追加(今までprivateだったのをpublicにしただけ)
+・{GetThumbInfoUtil|URLResourceCache}.isCached()を追加
+・JNIのソースをjarのnative/以下に同梱(Visual C++ 2008 Express用)
+　→VC++ 2010でも大丈夫だと思うけど、インストールするのが面倒なので…
+　　あと、64bitでもコンパイルが通るように書いたつもりだけど未確認
+
+
+NicoCache_nl+110604mod
+
+・nlFilterにタイムスタンプ置換($TS)を追加
+　→[Replace]フィルタのみ有効です([RequestHeader]で使えても意味が無いので)
+　- 引数にローカルファイル(NicoCacheフォルダからの相対パス)を指定すると、
+　　引数にファイル更新時刻文字列(='?'+UNIXTIME)を付加して置換します
+　　　$TS(local/popThumb.js)        → local/popThumb.js?1298081651
+　　　$TS(local/nicoplayer.swf?ts=) → local/nicoplayer.swf?ts=1239336522
+　- 引数のローカルファイルが存在しない場合、引数そのものに置換します
+　　　$TS(local/nonexistent.json)   → local/nonexistent.json
+　- 引数を指定しない場合、現在時刻文字列(=UNIXTIME)に置換します
+　　　var replacedTime = "$TS()";   → var replacedTime = "1306132319";
+　※基本はsrc指定におけるブラウザキャッシュ避け用途を想定していますが、
+　　JavaScript内に置けば通信せずにファイルの有無と更新時刻を取得できます
+
+・watchページのトップバーにあるキャッシュメニューをプルダウンメニューに変更
+　→使えなくなったフィルタがあったらごめんなさい(いちおう旧版も残してあります)
+　　<span id="nlbar">を置換するフィルタなら今まで通りに使えると思いますが…
+　　メニューに項目を追加する場合は<!--cachemenu_item_end-->を置換してください
+・添付フィルタの細かな修正($TS対応、仕様変更対応、etc.)
+
+・idGroupで1番目の引数がマッチしない場合も2番目の引数を見るようにした
+　→あくまでグループ参照した結果がnullだった場合です(存在しないグループでは無い)
+・$URLgでグループ参照した結果がnullだった場合に空文字列で置換するようにした
+・書き換え可能なローカルファイルに対するIf-Modified-Sinceの不具合を修正
+　→nlFilterの対象か否かに関わらず、必ず200を返していた
+・ソースコードの整理(コメントアウトした修正前のコードを削除)
+
+開発者向け:
+・★RewriterProcessor#getPostStringをテスト版から仕様変更
+　→引数で文字セットを指定するようにした(nullなら"ISO-8859-1"でデコード有り)
+
+
+NicoCache_nl+110522mod テスト版
+
+・vid2cidFileのID対応情報をキャッシュの検索にも反映するようにした
+　→簡単に言えば、あるsmidに対して異なるsmidのキャッシュを返すことができます
+　※ただし、IDタイプを変更することはできません(sm→so等は駄目)
+・Extensionで選択的にProcessor処理できるようにした(詳しくは開発者向け参照)
+・kakorokuRecorderが誤パースするのでwatch/lv〜をポップアップ書き換えURLから外した
+
+nlFilter:
+・Match以外の正規表現が記述できる場所(Requireとか)でも$LSTを使えるようにした
+　→共通処理として括り出したので、今後更に対象が増えても同様に使えます
+　※$INC/$SETはMatch内でしか意味を持たないので無視しています
+　　$NESTも使えるはずですが(意味があるかは分かりませんけど…)テストしていません
+・ContentType(というかMatch以外)でも否定条件(行頭の'!')を使えるようにした
+・フィルタファイルの更新チェック間隔を指定できるようにした(nlFilterCheckInterval)
+　→デフォルト5秒(今まで1秒だったけど処理を変更したので間隔を長くした)
+・複数リクエスト(=スレッド)が同時に更新チェックした場合の動作を改善(したはず)
+・フィルタの正規表現に記述ミスがあるとそこでロードが止まっていた不具合を修正
+　→記述ミスのあるフィルタをスキップして処理を継続するように(>>37はこれかも？)
+
+RequestFilter:
+・適用順序をRewriterと同じにした(nlFilter_sys→nl内蔵→Extension→nlFilter)
+・★全ての[RequestHeader]フィルタを処理するようにした
+　→今までは最初にマッチした[RequestHeader]のみ処理して打ち切っていた
+　※書き換えた後に更にマッチするフィルタがある場合の挙動が今までと異なります
+　　また、Matchを分割するとループ回数が増えるのでまとめた方が速度的に有利です
+・[RequestHeader]フィルタ処理時にnlFilterの更新チェックをするようにした
+　→今まではいずれかの[Replace]対象URLを処理しないと更新が反映されなかった
+
+開発者向け:
+・EasyRequestFilter.javaを削除してEasyRewriter.javaに機能をまとめた
+　→機能的にクラスを分ける必然性が無い(=むしろ不利になる)ので
+　　RequestFilterを2つ(sys/usr)に分けたことで見通しも良くなった
+・Processor#onRequestでnullを返した時は次のProcessorで処理を継続するようにした
+　→Extensionで選択的にProcessor処理することができるようになります
+・POST文字列を取得するメソッドを追加(RewriterProcessor#getPostString)
+　→nl本体側で入力をバッファリングするのでProcessor#onRequest内から使えます
+　　そのため、POSTの内容を選択処理の判断に使うことができます
+　※UTF-8文字列以外で取得したい場合は自前で処理して下さい(ただし取得長に注意)
+・CacheManager#id2Smidでidが10桁以上の場合はスレッドIDとして扱うようにした
+　→既にsmidを取得していればそちらを、取得していなければgetthumbinfoから取得
+　※getthumbinfoの場合は取得できないケース(DELETEDとか)があるので注意
+
+
+NicoCache_nl+110424mod
+
+・特定のケースでjava.lang.ArrayIndexOutOfBoundsException: -1が出る不具合を修正
+・vid2cidFileにdeletedVideoIdにマッチするvideoIdが含まれるとまずいので対策
+・vid2cidFileのバックアップを作成するようにした
+
+開発者向け:
+・クラスを跨ぐ共有情報をパッケージスコープなクラスにまとめた(NLShared)
+　→不必要なpublicメソッドは危険＆Extensionから使われると変更できなくなるので
+・NicoCache_nl+101219mod以降に追加した幾つかのpublicメソッドの可視性を下げた
+　→新規Extensionも公開されていないので外部からは使われていないはず
+・各パッケージのpackage-info.javaのJavaDocが本家をコピペしただけだったので修正
+
+
+NicoCache_nl+110411mod テスト版(差分のみ)
+
+・★チャンネル動画等でsmidと動画鯖へリクエストするIDが異なる場合に対応(thx>>854)
+　→対応内容の詳細は基本的に>>856に書いた通りです(watchページのvideoIdで保存)
+　　IDの対応情報はデフォルトでlocal/vid2cid.jsonに保存します(vid2cidFile)
+　　削除動画の問題はdeletedVideoIdでID指定することで対応します(ただし未テスト)
+　※副作用で一度動画を視聴(getflv)すればキャッシュアイコンも付くようになります
+　※外部ツール等もgetflvをnlに通せば機能します(対応版のnlMovieFetcherを同梱)
+
+・サムネキャッシュのブラウザ保持期間を指定できるようにした(thcacheExpires)
+　→デフォルト150日、ニコ動のサムネ鯖が返す値と同じです
+・thcacheMode=folderの時に全てのサムネ鯖が404を返して来た場合の挙動を修正
+　→thcacheReplace404が"http://〜"の時も0バイトファイルを作成するように
+　※削除された動画でも無いのに全てのサムネ鯖が404を返す動画があるっぽいです
+　　一度0バイトファイルを削除して再度サムネを取得しても駄目なら諦めてください
+
+・★ローカルファイルに対するIf-Modified-Sinceの挙動を修正
+　→今までは過去のバージョンに戻すことを考慮して一致した場合のみ304を返していた
+　　今後は本来の仕様通りにIf-Modified-Sinceの値以前なら304を返す(今までが特殊)
+　※過去のバージョンに戻す時は素直にブラウザキャッシュをクリアして下さい
+
+・検索ページの仕様変更に対応(99_3列Filter+mod >>587)
+・ログウィンドウの位置を保存し忘れていたので対応(起動時から移動した時のみ保存)
+・(今更ながら)旧バージョンのwatchページでもタイトルを取得するようにした
+・チャンネルトップ等でキャッシュアイコンが付かなくなったのでなるべく対応
+　→いくらHTMLの仕様上は問題無くても</a(改行)>とか止めて欲しい…
+
+nlFilter:
+・[RequestHeader]でもidGroupを使えるようにした
+・ExtensionからidGroupとnlVarを拡張できるようにした(暫定仕様)
+
+開発者向け:
+・ExtensionでnlFilterを拡張するインターフェースを追加(NLFilter)
+　→暫定仕様なので変更するかも知れません(その場合はExtension互換が無くなります)
+・CompleteCache#getPriority()の値が0より大きい場合は0とみなすようにした(thx>>586)
+・GetThumbInfoUtil.getを実行した時にIDキャッシュを更新するようにした
+・Cache.id2Smid()を継承元のCacheManager.id2Smid()に移動した
+
+
+NicoCache_nl+110219mod
+
+・ログウィンドウで最大行数を超えた場合の挙動を変更
+　→バックログの時は表示位置が更新されて不便なので削除しないように
+　　通常ログ(最後までスクロールした状態)の時にまとめて削除します
+　※常時バックログ状態だとログが増え続けてメモリを圧迫するので注意
+・ログウィンドウの細かな挙動を色々と修正(ほぼ全面書き換え)
+　→これで自分的には常用できるレベルになったかなー、と
+・ログウィンドウの右クリックメニューに「起動時に隠す」を追加
+・設定値に変更が無い場合 NicoCacheGUI.property を上書きしないようにした
+
+・Rewriterのデフォルト文字セットを指定できるようにした(rewriterDefaultCharset)
+　→デフォルトISO-8859-1、指定しない場合はこれまで通りの動作です
+・キャッシュのタイトル文字列に含まれる実体参照を置換するようにした
+・Extensionの初期化に失敗した場合もスキップして起動するようにした
+・ニコニコチャンネルで特定のページが正しく動作しない不具合を修正
+　→jqueryオンリーのページで「prototype.js埋め込み」が機能していたため
+・公式動画のポップアップは連続アクセス規制になることがあるので廃止(popThumb.js)
+・ソースコードの整理
+
+開発者向け:
+・Configの更新を通知するインターフェースを追加(ConfigObserver)
+　→Config.addObserver()で追加(多重追加しないように注意！)
+・LocalFileResourceでRangeヘッダをサポートした
+・Cache#getSanitizedDescription()の可視性をpublicにした
+・Broken pipeも頻繁に出るのでスタックトレースを出さないようにした
+
+
+NicoCache_nl+110125mod
+
+・Extension用の拡張ロガーを実装した(NLMain#getExtLogger)
+　→対応ExtensionではGUI起動の場合に専用タブにもログを出力します
+・ログウィンドウの「閉じる」ボタンで終了できるようにした
+　→mainタブ＞右クリックメニュー＞「閉じる」で終了
+・ログウィンドウのフォント名とサイズを指定できるようにした(FontName/Size)
+・ログウィンドウの前景色と背景色を反転できるようにした(FlipColor)
+
+開発者向け:
+・ExtLoggerHandlerを実装したのでDefaultLoggerHandlerの修正を元に戻した
+・サンプルソースを追加(extLoggerSample.java)、および修正(addTabSample.java)
+
+
+NicoCache_nl+110122mod
+
+・nlFilterでバージョン文字列を取得できるようにした(<nlVar:VERSION>)
+・ログウィンドウをタブ化してデバッグログを別タブ表示にした(thx>>251)
+　→mainタブに通常ログ、デバッグモードの時はdebugタブにデバッグログ
+・ログウィンドウの右クリックメニュー「クリア」→「全選択」に変更
+　→ログを取得する目的で「クリア」は危険なので
+・起動時の初期化順によってはdebug.logに追記するようになっていたので修正
+
+開発者向け:
+・外部(Extension等)からタブを追加できるようにした
+　→NLMain#addTab(String, Icon, Component, String) で追加できるのでお好きなように
+　　追加処理が重い場合は NLMain#isLaunchGUI() で事前にGUI起動か確認するべし
+・Extension のサンプルソースを追加
+　→addTabSample.java, completeCacheSample.java (by いつもの人)
+
+
+NicoCache_nl+110118mod
+
+・★NicoCacheGUI相当の機能を実装 (GUI起動対応)
+　→NicoCacheGUI ver0.09 fix20090925 を参考にしていますが、ソースは８割以上
+　　書き直しています。仕様面では NicoCacheGUI と互換性があります
+
+・検索でエコノミーキャッシュに2件以上ヒットするとエラーになる不具合を修正(thx>>190)
+・キャッシュ操作時に内部テーブルへのフォルダ登録が間違っていたので修正(thx>>197)
+・Java 1.5で動かなくなっていたので気が付いた部分を修正
+　→AppleもJavaのサポートを止める事だし、いい加減1.5の考慮を止めてもいい？
+　※不具合報告があれば善処したいとは思います(今まで報告無かったけど…)
+・「watchページトップのリンク表記短縮」にtitle属性を付けた(topBarFilter)
+
+開発者向け:
+・GUI起動対応に伴い Main-Class: dareka.NLMain に変更
+　→daraka.Main は弄っていないので特に問題にならないと思うけど
+・紛らわしいので CacheManager#id2path→id2dir に名前変更
+
+
+NicoCache_nl+110113mod
+
+デバッグログのファイル出力機能を付けたので、次回からnl本体の障害報告をする場合、
+debug.log を短期うｐろだに上げてからURLを添えて報告をお願いします。m(__)m
+
+・storeFilterIgnoreのコードを弄ったらエンバグしていたので修正(thx>>155)
+　→すいません、デバッグログがあれば直ぐに分かる問題でしたorz
+　　やっぱりちゃんとテストしないと駄目だな(使ってない機能のテストはやりづらい…)
+・dirListに完了したキャッシュのパス名が追加される不具合を修正(thx>>156)
+　→これまたかなり以前(+100820mod)から存在した不具合ですねぇ…
+　　/cache/dirlist.jsonで取得した場合は読み直しになるので発覚しなかったっぽい
+・ログをファイルに出力する機能を追加(dareka.logfile)
+　→起動オプションで-Ddareka.logfile=<path>と書くと<path>にもログを出力します
+　　起動用バッチファイルのデバッグモードには上記オプションを追加してあります
+　※主にデバッグ目的なのでオプションは動的に反映されません(dareka.debugと同じ)
+
+
+NicoCache_nl+110112mod
+
+・Content-Encoding: identity を返す鯖でRewriter処理されない不具合を修正
+　→本来返してはいけない値だけどチェックするのを忘れていた…
+・localRewriter=trueの時に/local/以下のアクセスが"ぬるぽ"になる事がある不具合を修正
+　→If-Modified-Sinceがある場合に発生するのでブラウザキャッシュが影響します
+　　エラーになってもブラウザキャッシュが使われるので表面上問題が露呈しません
+　　(+101221modから存在していた不具合、問題自体は+101219modから存在するけど…)
+・今更ながらthcacheMode=folderの時にwrapper(旧プレイヤー)のオススメに対応
+　→今のところ許可するオプションは &.jpg のみです
+・リンク色変更とポップアップを「過去のニコレポを見る」に対応
+・READMEの構成を変更(必ず目を通しておいてください)
+
+開発者向け:
+・JavaDocで警告が出る部分を修正
+・JavaDoc生成用バッチファイルを追加(extensions\makedoc.cmd)
+　→Windows版のみでごめん(Un*xyな人は自分で作れるよね？)
+・RewriterProcessor.stringRewriter(String, String)を@Deprecatedにした
+	 * こちらはnlFilter拡張(RequestHeader, ContentType 等)に対応できないので
+	 * HttpRequestHeader, HttpResponseHeader 引数のある版を使ってください。
+　※現状使っている事が分かっているのはcacheCommentExtensionくらい
+　　cacheCommentExtensionはConfig.getStringも直した方が…
+
+
+NicoCache_nl+110110mod
+
+機能追加:
+・キャッシュ検索APIを追加(/cache/r?search/<string>{\?order=[ad]})
+　→キャッシュを検索した結果をJSON(内容はcachelist.jsonと同じ)で返します
+　- /cache/search/検索文字列   ファイル名を単語OR検索(SearchRewriterと同じ)
+　- /cache/rsearch/検索文字列  パス名を正規表現検索(?を含む場合は%3Fで指定)
+　　オプション(?order=[ad])で昇順・降順を指定できます(デフォルトは昇順)
+　ex1) /cache/search/vocaloid+-ランキング
+　　　"vocaloid"(大小文字無視)を含み"ランキング"を含まないものを取得
+　ex2) /cache/rsearch/%5Edeleted/?order=d
+　　　キャッシュフォルダ直下のdeletedフォルダ以下を降順で取得
+　ex3) /cache/rsearch/[%23%E7%AC%AC]%5Cd%2B
+　　　ナンバリング([#第]\d+)されているものを取得(#\+?等の文字は要エスケープ)
+・LST重複除去APIを追加(/cache/trimlist/<filename>{\?type=smid})
+　→LSTの重複文字列と前後の空白を省いて辞書昇順でソートして書き出します
+　　オプション(?type=smid)を指定した場合は動画IDとみなしてソートします
+・★LST追加APIの仕様を変更(/cache/addlist/<filename>\?<string>)
+　→重複チェックを行うようにしました(LSTのパターンマッチで判定)
+　※LSTに正規表現のメタ文字を含む場合は正確な判定ができないので注意
+
+nlFilter:
+・★$LSTで'!'を指定した時の挙動を逆にした('!'を付けなければエスケープ無し)
+　→デフォルトでエスケープ無しの方が色々と都合が良いので(メモリ使用効率とか)
+　※LSTに正規表現のメタ文字を含まない場合はどちらでも結果は同じです
+・nlFilterでマッチした回数を参照できる機能を追加($INC)
+　→Match内に"$INC(NGCount)"と書くとReplaceで"<nlVar:NGCount>"として参照できます
+　　$INCはマッチした場合に指定した変数の値をインクリメントします
+　　変数が存在しない場合は0で初期化してからインクリメントします
+　　変数が既に存在してかつ数値として評価できない場合はエラーになります
+　　$INC自体は除去してからマッチングを行うのでMatch内の任意の位置に記述できます
+　※実際の使用例は 99_3列Filter+mod.txt を参照してください
+・nlFilterでマッチした時に変数を設定できる機能を追加($SET)
+　→Match内に"$SET(name=value)"と書くとマッチした時に変数に値を設定できます
+　※現状、オミトロンと異なりvalue部分は固定値しか書くことはできません
+・nlFilterでconfig.propertiesの値を参照できる機能を追加
+　→Replaceに"<nlVar:config!name>"と書くとconfigのnameという値を参照できます
+　　$SETと組み合わせることで、nlFilterにあらかじめデフォルト値を書いておき、
+　　config.propertiesに値がある場合はそちらを優先する、という使い方ができます
+　ex) Match<
+　　　$SET(config!nlFilterA.useFunction=false)
+　　　</head>
+　　　>
+　　　Replace<
+　　　<script type="text/javascript"><!--
+　　　var nlFilterA = { useFunction: <nlVar:config!nlFilterA.useFunction> };
+　　　//--></script>
+　　　</head>
+　　　>
+　※$SETを書かないとconfigに値が存在しない場合は置換処理されないので注意
+・<nlVar:〜>で参照する変数が存在しない場合は置換処理をスキップするようにした
+・デバッグログで重複メッセージの表示を抑制するようにした
+・複数のnlFilterが同じLSTを参照する場合の更新に関する不具合を修正
+　→LSTの更新が最初にマッチしたフィルタにしか反映されていませんでした
+
+その他:
+・niconicoMode=trueの場合もローカルファイルサーバ機能が効くようにした(thx>>23)
+　→[RequestHeader]が効くようにコードの位置を移動したのが原因ですね…orz
+・RewriterProcessor(nlFilter)でZLIBヘッダ無しdeflateに対応(thx>>59)
+　→ZLIBヘッダが有効な時だけnowrap=falseでInflaterを生成するようにしたけど、
+　　ぶっちゃけZLIBヘッダ有りdeflateを返す鯖でテストしていないので問題あるかも
+　※問題があれば問題の出る鯖のURLをNicoCacheスレにて報告してください
+・popThumb.jsでユーザー生放送(watch/co〜)に対応(thx>>67)
+　→コミュニティのサムネをポップアップするようにしました
+・thcacheMode=folderの時に対象とする動画IDの桁数を9桁以下とした
+　→スレッドIDでリクエストしてくるケース(当然サムネは存在しない)があるので
+・rewriterIgnoreExt→rewriterExtIgnoreに名前を変更(命名則を合わせるため)
+・3列Filter+modでNG登録時にキャッシュも削除するようにした
+・storeFilterIgnoreのコードを弄った(使っている人は確認よろしく)
+
+開発者向け:
+・nlFilterが管理するLSTをExtensionから扱うAPIを追加(EasyRewriter.LST)
+　→API化にあたってまたコードを書き直したので不具合出るかも
+　- EasyRewriter.LST.getPattern()  LSTのパターンを取得
+　- EasyRewriter.LST.append()      LSTに文字列を追加(重複チェックあり)
+　- EasyRewriter.LST.trim()        LSTの重複削除＆ソートして書き出し
+　※詳しくはJavaDocを参照のこと
+・コメントアウトしたコードが多数残っているので次回にでも整理予定
+
+
+NicoCache_nl+101221mod
+
+・LocalFLVでspeedLimitがデフォルト値のままだと転送が異常に遅くなる不具合を修正
+　→本家Configマージ時のエンバグでした(0に律速されて実質転送が終わらない…)
+・LocalFLVの場合もブラウザにキャッシュさせるようにした
+・動画鯖が200以外を返してきた場合はブラウザにキャッシュさせないようにした
+　→もしかしたら動画の読み込みに失敗するケースが改善されるかも
+
+
+NicoCache_nl+101219mod
+
+nicolist.netが無くなってしまったのと、ベースのNicoCache_nl (9).12が古くなったので、
+NicoCache_nl+mod として単体動作するパッケージをリリースしてみるテスト。
+
+パッケージ:
+・★本家NicoCache 0.45をマージ
+　→Configを本家コードに、あとヘッダ周りで問題が出るかも(特にIEとwrapper)
+　※ヘッダ全体のエンコード指定メソッドを廃止したので、それらを使っている
+　　Extensionがもしあれば、代替手段を使うように修正してください
+・★以下は同梱していませんので必要な人は個別に導入してください
+　　NicoCacheGUI、cacheManager、新プレイヤーコントローラ、サンプルフィルタ
+　　Readme.html および documents/html/ 以下(メンテできません、ごめんなさい)
+・★同梱していないものを参照するデフォルト設定を参照しないように変更
+　　ついでに、幾つかのデフォルト値を変更予定(変更後の値をNEWに記述しています)
+　※以下は変更前のデフォルト値なので必要な人はconfig.propertiesに追加してください
+　　templateFile=/local/listCacheManager.html
+　　thcacheReplace404=local/thumb404.jpg
+　　touchCache=false
+　　checkRealCache=false
+　　cacheThumbnail=false
+　　thcacheMode=file
+・NicoCache_nl.bat の引数にdebugを指定した場合はデバッグモードで起動するように
+・proxy_sample.pac を現状に合うように修正
+・defaults/00_NicoCache.properties を追加(本家の設定ファイルそのまま)
+・defaults/11_NicoCache_nl_BASIC.properties は重複記述なので廃止
+・extensions/build.cmd を追加(Extensionビルド用バッチファイル)
+・local/popThumb.js を修正(Prototype.jsを使わないように＆エラー処理追加)
+・nlFilters/99_3列Filter.txt を追加
+　→必要無い人はconfigに nlFilterIgnore=99_3列Filter\.txt を追加してください
+・その他、細々とした修正多数
+
+機能追加:
+・ローカルファイルサーバ機能を追加(localFileServer)
+　→nlProxyPacをより汎用的にしたようなもの、実験なのでデフォルトON
+　　http://localhost:8080/Readme.txt とか表示できるようになります
+　　内部的に http://LOCAL/〜 なアドレスとして扱います
+　　nlFilterを適用する場合は URL = LOCAL/documents/ とか書きます
+・/local/以下にもnlFilterが効くようにした(localRewriter)
+　→現状、nlFilterのみ有効です(Rewriter全般は抑制)、実験なのでデフォルトON
+　　jsファイル内の設定項目をnlFilterで書き換えたりできます
+　　文字コードはHTMLの場合はmeta指定優先、それ以外はUTF-8で処理します
+　※既存のnlFilterに関しては MatchLocal = TRUE を記述しない限りマッチしません
+・localDirAddLastModifiedを廃止して常にLast-Modifiedヘッダを付けるようにした
+・Rewriter(nlFilter)で書き換えた場合はLast-Modifiedヘッダを削除するようにした
+　→jsを書き換えた場合等でブラウザが積極的にはキャッシュしなくなるはず
+・/local/以下のファイルにContent-Typeヘッダを付けるようにした(mimeTypes)
+　→デフォルト設定は mimeTypes=local/mime.types.default
+　　Apacheのmime.types形式なのでApacheのものを直接指定することもできます
+・thcacheReplace404にURLを書けるようにした(302を返します)
+・Rewriter処理するContent-Typeを指定できるようにした(rewriterContentType)
+・Rewriter処理させない拡張子を指定できるようにした(rewriterIgnoreExt)
+　→内部的に画像系を拡張子で弾いていたものをconfigで外部指定できるように
+　　処理の冒頭で弾くので明らかに書き換えない拡張子を指定すると効率が良くなります
+・フィルタとかローカルファイルとかの処理効率を改善
+　→全体的に細かな改善を色々と入れています(個別に書くのは面倒なので省略)
+・thcacheMode=folderの場合にタイムアウトを指定できるようにした(thcacheTimeout)
+　→指定時間で別鯖に繋ぎ直します(混雑時間帯にサムネ鯖の反応が悪い事があるので…)
+　　Chromeは全ての画像をロードし終わるまでpopThumbが動かないので有効かと
+・LST追加APIをテスト実装(/cache/addlist/<filename>?<string>)
+　→現状は単純にファイルの末尾に追加のみ、重複チェックはありません
+　　ex) /cache/addlist/NGuserId.txt?12345678
+　　APIからの追加はlistフォルダ以下に限定、文字列はエンコードしたUTF-8です
+　　ファイルが存在して、かつ文字コード判定用文字列がある場合はコード変換します
+
+nlFilter拡張:
+・RequireHeader オプションを追加
+　→特定のUser-Agentやuser_sessionに限定できます(Requireのリクエストヘッダ版)
+　　ex) RequireHeader = user_session_12345678_\d+
+　　上手く記述すればログインユーザー毎にnlFilterを切り換えることができるかも
+・ContentType オプションを追加
+　→特定のContent-Typeに限定できます(部分一致する正規表現を記述)
+　　ex) ContentType = text/(?:html|xml)
+　※指定した場合、Conetnt-Typeが無い場合にマッチしなくなるので注意
+・MatchLocal オプションを追加
+　→URL = www\.nicovideo\.jp/ と記述した場合に、このオプションをTRUEにすると
+　　/local/以下にもマッチするようになります(FALSEならマッチしません)
+　※よって、MatchLocalオプションの記述が無い既存フィルタはマッチしません
+　　URL = www\.nicovideo\.jp/local/ と/local/以下まで記述した場合は、
+　　MatchLocalの値に関わらず常にマッチします
+・AddList オプションを追加
+　→nlFilterからLSTファイルにReplaceの内容を追加できます(動作仕様はAPIと同じ)
+　　ex) AddList = list/NGUserId.txt
+　※このオプションを指定した場合、コンテンツの内容は書き換えません
+・AddVariable オプションを追加
+　→URL固有の変数にReplaceの内容を保存して、他のフィルタから参照できます
+　　ex) AddVariable = foo
+　　同じ変数に対して複数追加する場合は文字列が連結されます
+　　他のフィルタから参照するにはReplaceに"<nlVar:foo>"と書きます
+　※このオプションを指定した場合、コンテンツの内容は書き換えません
+・idGroup指定時のReplaceの記述を拡張
+　→以下のように文字列中に埋め込む事ができます(従来の記述も有効です)
+　　Replace<
+　　$0<div style="position:relative;">
+　　<img src="http://www.nicovideo.jp/local/cache<icon$economy>.gif" 〜>
+　　</div>
+　　>
+　　$の左右に\w+が存在した場合は<>前後の文字列と連結します
+　　片方が空白文字の場合も有効、\w以外の文字があると認識しません
+　　また、同一Replace中に複数の記述はできません
+・Replaceで"<CRLF>"を改行コード(\r\n)に置換するようにした
+　→EachLine = TRUE の時でも改行できるようになります
+・★Replaceの改行コードをLFからCRLFに変更した
+・Replaceで"$URL0"も置換するようにした
+・Replaceで"<freeSpace>"をいつでも使えるようにした
+・disableLSTmodを廃止して$LSTの動作仕様を+101017modのものとした
+　→若干内部動作が変わって$LSTが空の時は"(?!)"に置換します
+・$LSTのファイル名指定で""(ダブルクォート)を省略できるようにした
+・$LSTで重複文字列を除外してパターンを作るようにした
+・$LSTで!を指定しない場合が実質機能していなかった不具合を修正
+
+nlFilters:
+・05_topBarFilter でキャッシュ容量表示をtitle属性で行うように変更
+　→トップバーに限らず土地問題は深刻です…
+・10_thumbInfoFilter のポップアップリンク置換を2種類に分けた
+　−ポップアップリンク置換(<smid>等の文字列をポップアップリンク化)
+　−ポップアップ追加(<a href="watch/<smid>">リンクにポップアップを追加)
+　※ポップアップリンク置換(検索系)は複雑なので弄らないことにしました
+・15_thumbInfoFilter のキャッシュアイコンHTML構成を変更(thx>>560)
+　→<div position:relative;><div cacheIcon><img></div></div> から
+　　<div position:relative;><img cacheIcon></div> に一階層減らしました
+・検索等でtitle属性に<>が含まれるケースを考慮していなかったので対応
+
+その他:
+・★NicoCache_nl (9).07 で変更されていた終了時の待ち時間を本家に戻した
+　→不都合ある人は useWorkaroundFastFinalize=true を試してみれば良いかと
+・使い勝手がイマイチなのでnlContentTypeConfを廃止
+　→今後はconfigのrewriterContentTypeを使ってください
+・文字セットを判定して読み込む処理が多数重複していたのでまとめた
+・e.getMessage()がnullを返す場合を考慮していなかったので修正(thx>>572)
+・タイトルが長過ぎてファイルシステム制限を超えるとキャッシュできない不具合を修正
+　→タイトルを1文字ずつ切り詰めてリトライするようにしました
+
+開発者向け:
+・dareka.processor.LocalFileResourceを実装
+　→URLResource(file.toURI().toString())より効率が良いはずです
+　　Last-ModifiedやContent-Typeをサポートしています
+・RewriterProcessor#localRewriter()を実装
+　→ローカルファイルの(必要なら書き換えた)リソースを返します
+・RewriterProcessor#rewriteContent()→contentRewriter()に名称変更
+　→RewriterProcessor#stringRewriter()と命名則を合わせました
+・RewriterProcessor#stringRewriter()にヘッダを渡せるバージョンを追加
+　→RequireHeader,ContentTypeを適用する場合はこちらを使ってください
+・URLResource#setTransferTimeout()を実装
+　→指定した時間(ミリ秒)以内に転送が終わらない場合に強制クローズします
+　　転送用のスレッドを別途起動するので若干オーバーヘッドがあります
+　※URLResource#getResponseHeader()には効きません(transferToを使わないので)
+・FileUtil.getInputStreamReader()を実装
+　→開始文字列を指定して文字セットを判定して読み込む処理を汎用化
+　　サポートしている文字セットは今のところ以下の通り
+　　　MS932,Unicode(UTF-8/UTF-16BE/UTF-16LE/BOM),EUC-JP
+　※BMO付きUTF-8が一番効率良く判定できます
+・nl周りの設定をdareka.NLConfigに実装(本家のBasicConfigを継承)
+　→大きなところではconfigの文字コード判別読み込みかな
+・★HttpHeader#getHeaderEncode,HttpHeader#setHeaderEncodeを廃止
+　→メソッド本体は警告メッセージを出すだけになっています
+　※該当メソッドを使っているExtensionは、HttpHeader#setMessageHeaderOnCharsetを
+　　使ってヘッダ個別にエンコードを指定してください
+・★Resource#getHeaderEncode,Resource#setHeaderEncodeを廃止(同上)
+・Resource#setResponseHeaderOnCharsetを追加
+　→本家で追加されていなかったので(変更される可能性があります)
+　※add〜は未対応(今回は最低限必要なものしか追加していません)
+・本家のsetXxxOnCharsetでcharsetNameにnullを許容するようにした
+　→単純にOnCharsetに置き換えた時にnullを許容していないと都合が悪いので
+・CommentDownloader.getResourceでURLResource#getResponseHeaderを使うように修正
+　→ヘッダを書き換えるだけで内部変換無しにコメント鯖から直接取得するように
+　　ところで誰かが追加した投コメ取得ってちゃんと機能していたの？
+　　fork=="1"はおかしいので"1".equals(fork)に変更しましたが試してません
+・EasyRewriter(nlFilter)をRewriterProcessor内で個別処理するようにした
+　→リクエストヘッダを処理するのに必要、処理効率も若干良くなっているはず
+・その他、色々と変更(詳しく知りたい人はdiff取ってください)
+　→上記に無いpublicメソッドについては仕様が変更される可能性があります
+
+
+NicoCache_nl (9).12 +101103mod
+・ExtThumbProcessorを実装して外部サムネをメモリにキャッシュするようにした
+　→/api/getthumbinfoメモリキャッシュと仕組みは同じです
+・/api/getthumbinfoの書き換えを?nlFilterパラメータ付き限定にした
+　→XML文書内にHTMLが含まれるのはイリーガル＆想定していないアプリがあるため
+　※書き換えが必要な場合は/api/getthumbinfo/<id>?nlFilterで呼び出してください
+・/api/getthumbinfo/<id>?<数字>の場合はキャッシュを破棄して再取得するようにした
+　→鯖に対してはパラメータ無しで取得します(?nlFilterも同様)
+　※?nlFilterと併用可能です(?nlFilter&<数字>とすれば書き換え有で再取得)
+・チャンネルのポップアップに対応(popThumb)
+nlFilters:
+・キャッシュアイコン位置の調整をCSSで行うようにした(cacheIcon)
+　→サンプルも兼ねてニコニ広告に対応してみました(IEでは多少ずれるけど)
+・nlFilterが属性(style,onMounseOver等)を追加する場合は末尾に追加するようにした
+　→なるべくオリジナルの属性並びを維持するように(ただしJarty等の複雑なのは除く)
+・フィルタを全体的に見直して不要と思われるものを削除する等の整理をした
+・原宿対応で視聴履歴の対応を忘れていたので追加
+開発者向け:
+・RewriterProcessor#rewriteContent()を実装
+　→Extension等でContent-body(byte配列)に対してRewriter処理できます
+　　RewriterProcessor#stringRewriter()と異なり一度文字列にする必要がありません
+・URLResourceCache#cacheAndRewrite()を実装
+　→Rewriter処理した結果を取得できます(ただし内容チェックはしていません)
+・dareka.debug=trueで頻繁に発生するExceptionの一部のスタックトレースを抑制した
+　→これで少しはデバッグログが見易くなるんじゃないかと
+
+フィルタを大幅に弄ったので、おかしなところがあれば報告願います。
+報告ついでに修正して貰えるとありがたい。
+
+
+NicoCache_nl (9).12 +101029mod
+・ニコニコ動画(原宿)にとりあえず対応
+　→旧バージョンの積極的な対応は致命的な不具合が出ない限り行いません
+・/cacheを/local同様にwwwドメイン以外でも処理するようにした
+・nlFilterの変数置換でnineドメインのwatchページも対象とするようにした
+
+
+NicoCache_nl (9).12 +101017mod
+・10/14の仕様変更でwatchページからのタイトル取得が機能しなくなったので対応
+　→NicoCachingTitleRetriever.getTitleFromResponse()の修正です
+　　念のため <p class="video_title"→Video.title→H1 の順に取得するように
+　※今後の仕様変更で<p class="video_title"にマッチしなくなったら警告が出ます
+・$LSTの動作を変更(期待しない全マッチ対策)
+　→#startの記述を不要に＆一つでも空$LSTが含まれる場合は置換処理をスキップ
+　　副作用で行頭が'#'の正規表現を書く場合は'\'でエスケープする必要があります
+　※disableLSTmod=trueで従来の動作になります
+・正式版パッケージに付属のファイルで弄ったものを添付してみた
+
+watchページの仕様変更に対応した本家 NicoCache 0.44 が出ていますが、
+nlへのマージは一度正式版にパッケージングされてからにしたいと思います。
+ざっと確認したところnlからの取り込みも結構ありますが(Configの動的読込とか)、
+変更点や追加修正も多数あるので現時点でのマージはちょっと危険っぽいです。
+
+nlの場合、Extensionが本体の機能を使っている事があるので、大きな構成変更を
+やることが難しいのよね(まあ、その多くは自分の作ったExtensionなんですけど…)。
+nl独自機能(↓NicoApiUtilへの機能追加とか)はnl独自クラスを作って実装した方が
+良い気がしてきたのですが、Extensionへの影響が大きすぎるからなぁ。例えば
+nlApiUtil extends NicoApiUtilとして本家機能を継承した上で独自機能を実装とか。
+まあ、それでも本家側にも継承を意識した修正を入れる必要はあるでしょうけど。
+
+
+NicoCache_nl (9).12 +101011mod
+・/cache/<id>.xmlで公式動画等のthreadkeyが必要なコメントの取得に対応
+・NicoApiUtilに以下のメソッドを追加した
+　- query2map  クエリ文字列をマップにして返す
+　- map2query  マップをクエリ文字列にして返す
+　- makePath   API名とパラメータマップからpath文字列を生成する
+　- getURLResource    URLにアクセスするためのURLResourceを返す
+　- getResourceContent URLにアクセスして内容を文字列にして返す
+　- getFlapiContent  flapiにアクセスして内容を文字列にして返す
+　※flapi以外も上記メソッドの組み合わせで対応出来ます
+
+
+NicoCache_nl (9).12 +100926mod
+・特定条件で内部的に一時ファイルが残ったままになる不具合を修正
+　→キャッシュのDL中削除やnoLiveCache=trueでキャッシュをスキップした時など
+・noLiveCache=trueの時は一時ファイルを無視してそのまま返すようにした
+　→"no cache found: 〜 live Movie. skip."の表示も冗長なので抑制しました
+・thcacheMode=folder時のメモリ使用効率等を改善した…つもり
+　→最近実装した処理を使うように書き換えたので効率は良くなっているはずだけど、
+　　実測してみたら体感できるほどの違いが感じられない…
+　※一旦メモリに読み込むのを止めたからメモリ使用効率は良くなっているはずです
+・thcacheMode=folder時の代替サムネに関する挙動を変更
+　→代替サムネのコピーを止めてゼロバイトのファイルを作成するようにしました
+　　この変更により代替サムネを動的に切り換えることができるようになります
+　※今まで通りの挙動が良い人はthcacheReplace404Mode=copyを指定してください
+・$NESTで','を含む条件を記述できなかった不具合を修正(thx>>905)
+　→条件に','を含む場合は'\'でエスケープしてください
+
+
+NicoCache_nl (9).12 +100918mod
+・マイリスト連続再生で公式動画を再生すると正しくキャッシュされない不具合を修正
+　→外部プレイヤーと同じ理由です(watchページを介さないため)
+　　http://flapi.nicovideo.jp/watch/〜の内容を見て動画IDとタイトルを取得します
+　　公式動画以外でも最初からタイトル付きでキャッシュするようになります
+　※Rewriterで取得するのでnlFilter_sysにContentType(.+/json)の追加が必要です
+
+
+NicoCache_nl (9).12 +100914_2mod
+・一度ダウンロード中削除を行うと同じ動画はずっと削除される不具合を修正
+　→ダウンロード終了後の削除処理にremoveAll()を使っていたのを忘れていた…orz
+
+NicoCache_nl (9).12 +100914mod
+・SwfConvertResource#swfHeaderに9バイト目以降の情報も保持するようにした
+　→今までは先頭8バイトのみで圧縮部分に掛かる部分は保持していませんでした
+　　また、#swfHeaderInfoにヘッダの解析結果を以下のCSV形式で保持します
+　　　signature,version,length,width,height,fps,count
+　※ついでにswfHeader内のFrameSizeが可変しても大丈夫なようにしましたが、
+　　今まで特に問題は出ていなかったので今後も9バイト固定だと思います
+・swfDebug=trueの時にログに出ていたZLIB〜は勘違いだったので削除orz
+・dareka.common.LRUMap(容量上限付きLinkedHashMap)を追加した
+　→URLResourceCacheで使っていたものをExtensionから使えるように切り出しただけです
+　※ExtensionでLRUMapを実装するとクラスファイルが複数になって美しくないので…
+・dareka.common.NullOutputStreamを追加した
+　→純粋に何もしないOutputStreamなのでnlMovieFetcherの方法より効率良いです
+・Cache.removeAll()でダウンロード中のキャッシュも削除予約できるようにした
+　→Extensionから削除予約できるようになります(totalRenameは次版で対応)
+
+
+NicoCache_nl (9).12 +100903mod
+・ファイルシステム跨ぎ移動の場合はI/Oを直列化して競合状態を防ぐようにした
+　→100MBクラスのファイルコピーが並列に複数走るとシステム的によろしくないので
+　※リネームの場合はメタデータの操作だけなので並列のままです
+・外部プレーヤーから通常キャッシュが使われないケースがあったので対応
+　→?eco=1対応の影響でエコノミー時間帯に?eco=1アクセスだと判断していた
+・ソースの整理(コメントアウト部分を削除)
+
+
+NicoCache_nl (9).12 +100820mod
+・Cache実装周りの排他制御を更に真面目にやってみた
+　→Cache#cacheFileを無くして(これが元凶)、常にid2Fileを参照するように
+　　CacheManager.id2FileLock(ReentrantReadWriteLock)を使って排他制御
+　※通常はアクセサメソッド(id2File_get/id2File_put)を介して使います
+　　排他制御コストは更に増えていますが、Cache#moveTo()は直列化が無くなったので
+　　/cache/move?等のレスポンスは今までよりも速くなっています
+・意味的におかしいのでCacheManager.dir2Path→dir2Fileに名前を変更
+　→dir=pathなので混乱の元(Fileならファイルシステム上であることが自明なので)
+　　valueもString→Fileに変更(必ずnew FileしているのでStringの必要が無い)
+　※Cache/CacheManagerを継承してdir2Pathを参照するExtensionは動作しなくなります
+　　現状で把握しているものはcacheMoveExtensionのみ(同時に修正版出します)
+
+CacheManager内の用語整理:
+  id   - 動画ID(=Cache#cacheId or smid)
+  path - cacheFolderをルートとするnlから見た相対path(フォルダ名)
+  dir  - pathと同じ
+  dirList - nlが認識しているpathの集合(ソート済)
+
+機能追加:
+・簡易振り分けで無視するフォルダを指定できるようにした
+　→storeFilterIgnoreに無視するフォルダにマッチする正規表現を記述する
+　　ex) storeFilterIgnore=(対象外|フォルダ|正規表現)
+・StringResource.getBadRequest()を追加
+　→パラメータのおかしなAPIリクエストへの返答用
+
+不具合修正:
+・/cache/ajaxのContent-Typeにcharset=UTF-8を追加(ブラウザの自動検出対策)
+　→今後は"application/x-javascript; charset=UTF-8"になります
+・/cache/*.jsonのContent-Typeをapplication/jsonに変更
+　→今まで"application/x-javascript"だったのでJSONとして認識しなかったはず
+　※でも、ニコ動のPrototype.jsは1.5系なのでresponseJSONは使えません…
+・/cache/ajax等でキャッシュの更新日時が初回しか反映されない不具合を修正
+　→touchCache=trueの場合に動画の視聴による更新が反映されていませんでした
+　※getxmlの場合はXMLキャッシュの影響でreload=trueじゃないと反映されません
+・/cache/getxmlがパラメータによっては"ぬるぽ"になる不具合を修正
+・ExtensionのCompleteCacheで発生した例外を捉えて処理を続行するように修正
+・speedLimitを一度設定した後にコメントアウトすると値が残る不具合を修正
+
+・外部プレーヤーから公式動画を再生すると正しくキャッシュされない不具合を修正
+　→外部プレーヤーの場合は動画情報を取得してからキャッシュするように変更
+　　今まではsmXXXXでキャッシュ後に存在しない動画情報を取得して失敗していた
+
+…なんだけど、プレ垢以外だと殆ど外部プレーヤーで再生できない(数回再生できただけ)
+なんかアクセスパターンを見るとプレーヤーが動画の取得まで行かないみたい。
+一般・ゲスト共に殆どテストできないので、デバッグ表示を残したままにしてあります。
+また、一週間ほど様子を見てからコード整理等の修正を入れた版を出します。
+
+
+NicoCache_nl (9).11 +100807mod
+・Cache.removeAll()で通常IDの場合にエコノミーキャッシュが消えない不具合を修正
+　→片方のケースしか考慮していませんでした…(thx>>168)
+
+
+NicoCache_nl (9).11 +100805mod
+★不具合修正のみで機能追加は無し(タイミング問題絡みなのでテスト不十分です)
+・キャッシュDL中フラグを降ろすのをwrapup()の後に移動した
+　→nlMovieFetcherで稀にDL成功したのにリトライするのは多分これが原因
+　　CompleteCache等で時間のかかる処理をすると発生確率が上がる(から気付いた)
+　※尤も次版ではリトライするケースを減らすのでfailedにならないだけですが…
+・Cache実装周りを見直して結構真面目に排他制御するようにした
+　→cacheFile.renameTo()が成功した瞬間にCache#exists()が失敗するのはまずいので
+　※真面目にやった副作用で排他制御コストが結構かかっていると思います
+・Cache.removeAll(String id)を追加した(cache/rm?から切り出しただけ)
+　→通常キャッシュ、エコノミーキャッシュ、それらの一時ファイル、を一括削除
+・キャッシュ削除周りを見直して実際に削除できたかどうかチェックするようにした
+・キャッシュ中削除でもCache.removeAll()で関連ファイルを削除するようにした
+
+
+NicoCache_nl (9).11 +100801mod
+・SwfConvertResourceでストリーム処理できそうな気がしたのでやってみた
+　→受信しながら逐次変換するので全てオンメモリ処理になります
+　　メモリ消費量も従来より格段に少ないはずですが効率は若干悪いかも知れません
+　※これに伴いswfConvertMemoryLimitは廃止となります
+・swfHeaderのサイズ拡張分を完全に満たしていなかったので残りを0で埋めるようにした
+　→今まで特に不具合も出なかったので殆ど影響無いと思いますが…
+・出力側もバッファリングしてクライアントがまとまった単位で受信するようにした
+　→これでwrapperを自動再生許可にしても大丈夫になるかも？
+・非圧縮SWFは非圧縮のまま返すようにした
+　→SWF的に問題無いはずですがユーザーニコ割の再生に失敗する事があるので
+　　同じSWFなのに再生出来たり出来なかったりってのが質悪い…
+・swfDebug=trueの時のログ内容をちょっとだけ見易くした
+・deletedMoviePlayMode,useSearchExtensionを動的反映するようにした
+・ローカルFLVサーバ機能をlocalFlvの値を見て動作するようにした
+　→これまでlocalFlvの値に関わらず常に動作していました(常にONで良い気も…)
+
+
+NicoCache_nl (9).10a +100715mod
+・[RequestHeader]で/cache以下にリダイレクトするとおかしくなる不具合を修正
+　→HttpRequestHeader#setURI()した時にhost,port,pathも更新するようにしました
+・getthumbinfoキャッシュでstatusCodeが200以外の時は30秒以内に破棄するようにした
+・リロードのタイミングによっては[Config]が存在しない事がある可能性を無くした
+・NicoCachingTitleRetrieverでぬるぽが出る可能性があったので修正
+・cacheGetThumbInfoDebug周りを削除
+・書き換えた部分のコメントアウトを削除した
+※いちおうdefaults推奨値はこのあたりで(あまり少ないと意味無いので…)
+　　cacheGetThumbInfo=true
+　　cacheGetThumbInfoMax=100
+　　cacheGetThumbInfoExpire=1800
+
+
+NicoCache_nl (9).10a +100708mod
+・URLResource#getResponseBodyを実装してそれを使うように書き換えた
+　→似たようなコードが複数(本体はもちろんExtensionにも)あったので纏めてみた
+　　URLResource#transferToの代わりに使えばデコード処理まで行います
+　※メモリ内に受信するのであまり大きな物には使わないでください
+・URLResourceCacheを実装してメモリキャッシュを簡単に使えるようにしてみた
+　→URLResourceをメモリ内にキャッシュします(MaxおよびExpire付き)
+　　URLResource#getResponseBodyを使うと受信したBodyをメモリ内に保持するので
+　　一度受信した内容をResourceのまま使い回すことが出来ます
+・GetThumbInfoProcessorを実装してgetthumbinfoをキャッシュするようにした
+　→cacheGetThumbInfo=true で有効になります(デフォルト無効、有効で良い？)
+　　cacheGetThumbInfoMax=10 は保持する最大数
+　　cacheGetThumbInfoExpire=600 はレスポンスが生成されてから有効な時間(秒)
+　　cacheGetThumbInfoDebug=true でキャッシュの動作確認(問題無ければ削除)
+　※まだdefaultsを書いていないので各自config.propertiesに追加で
+・GetThumbInfoUtilをURLResourceCacheを使うように書き換えた
+・NicoCachingTitleRetrieverからGetThumbInfoUtilを使うように書き換えた
+・[Config]リロード周りの不具合を修正
+　→システムフィルタとユーザーフィルタで別々に管理するようにしました
+・コンパイル/Javadocで警告が出る部分を修正＆古いコメントアウトを削除
+・書き換えた部分の元コードはコメントアウトのまま残しています(問題無ければ削除)
+
+
+NicoCache_nl (9).06 +091225mod
+・キャッシュフォルダ直下の'#'から始まるフォルダをサブフォルダの対象から外した
+・フォルダリストをソートして格納するようにした(+StringBuilderを使うようにした)
+・キャッシュからの検索結果でタグのネストがおかしかったので修正(</span></p>の順)
+
+
+NicoCache_nl (9).04 +091114mod
+・Main.javaのコメントアウトがバッサリ削除されていたので、整合性を取るために
+　Configの@Deprecated関係も削除して本家とのdiffを取り易い状態に戻した
+・Eclipseで警告が出る部分を修正(主に未使用importのコメントアウト)
+
+
+NicoCache_nl (9).03 +091110mod
+・StringBuffer/Builderの初期容量を指定するようにした
+　→AbstractStringBuilderのソースを見ると、常時配列を操作して足りなければ
+　　拡張するという、お世辞にも効率的とは言えない実装だったので…
+・StringBufferを扱うループ内で文字列連結操作をしている部分を修正
+　→可能ならStringBuilderに置き換え＆元のBuilderにappendするようにした
+　　まあ、キャッシュ2万ファイルを処理しても10ms程度しか速くなりませんが…
+・メンテナンス中(503)もRewriterの書換対象にした
+・idGroupに'!'を許容して「キャッシュが存在しない場合のみ置換」出来るようにした
+・EasyRewriter#onMatchが長かったので置換処理を別メソッドに分離した
+
+以下はいつもの人と被ったので中止(実装内容も向こうの方が安全っぽいし)
+・生放送から呼ばれた時はキャッシュしない機能を追加(disableCacheOnLive=true)
+　→なんとなく思い付いたのでやってみた(コード量も大したこと無いし)
+　　キャッシュが有る場合はキャッシュを利用、無い場合はキャッシュ処理をスキップします
+　　判定方法は直前のgetflvに"&ckey="が含まれるかどうか、なので並列して同時に複数
+　　呼び出すと誤判定すると思いますし、この方法で正しいかどうかも正直分かりません…

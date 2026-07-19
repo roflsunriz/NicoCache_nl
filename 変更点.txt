@@ -1,0 +1,185 @@
+dmc動画もキャッシュして後で見るよ。
+
+230716 o_O
+・HLSに対応して、HTTP方式の対応を廃止した
+・nd0148をマージした
+　・個人的に弄ったnlMovieFetcher (movieFetcherFilter.txt) [nd0148]
+
+210320 o_O
+・data-apiの仕様が変わったのに対応した
+　・smileにはアクセス不能になった
+　・設定項目movieFetchCheckReEncodingを廃止した
+・fetch開始時にURLではなく動画の識別名を表示するようにした
+・nd0087をマージして微調整した
+　・個人的に弄ったnlMovieFetcher (movieFetcherFilter.txt) [nd0087]
+　・マイリストでfetchリンクのダブルクリックによるキャンセルが効くように直した
+
+
+201215 o_O
+・Flash版動画視聴ページ廃止に対応した
+　・Flash版動画視聴ページ廃止によってflvとswfにアクセスする方法はなくなった
+・nd0061をマージした
+　・個人的に弄ったnlMovieFetcher (movieFetcherFilter.txt) [nd0061]
+
+
+190125 o_O
+・movieFetchAllowGuest=true のとき非ログイン状態でもfetchできるようにした
+・HTML5版のストリーミング(暗号化)を検知してエラー表示するようにした
+・nc0347をマージした
+　・個人的に弄ったnlMovieFetcher (movieFetcherFilter.txt) [nc0347]
+
+
+190125 o_O
+・新エンコード方式の動画でupdatelowが機能していないのを修正した(23スレ161)
+
+
+190123 o_O
+・新エンコード方式に対応した
+・nc0294をマージした
+　・個人的に弄ったnlMovieFetcher (movieFetcherFilter.txt) [nc0294]
+
+
+180906 o_O
+・dmcセッション開始時に400エラーになるバグを修正した(22スレ568-592, nc0218)
+　・nlMovieFetcherを個人的に修正 (nlMovieFetcher.java) [nc0218] の修正をマージして微修正
+　・大変すまんかった
+・事故防止のために再パッケージして180903 o_Oは削除
+
+
+180903 o_O
+・fetch中に切断された場合に直ちに再接続するようにした
+　ここ最近のfailed地獄はこれで概ね解決すると思う。
+・dmcのprotocolをhttpに固定してhlsを除外した
+・smileへのオリジナル動画廃止に伴い新しい動画では再エンコード判定を廃止した
+・dmcセッション生成時のリクエストを現行の公式プレイヤーに合わせた
+・動画サーバのhttps化に対応した(再：前回の修正は不完全だったため)
+・ステータス表示更新の停止タイミングを調整した
+・nc0136, nc0155, nc0209をマージした
+　・個人的に弄ったnlMovieFetcher (nlMovieFetcher.java) [nc0136]
+　・個人的に弄ったnlMovieFetcher (nlMovieFetcher.js) [nc0155]
+　・個人的に弄ったnlMovieFetcher (movieFetcherFilter.txt) [nc0209]
+
+
+180324 o_O
+・dmcのhttps化に対応した
+・タイトルに「投稿」が含まれる場合に挿入位置が狂う問題を修正した(21スレ756)
+
+
+171208 o_O
+・動画の再生時間に合わせて取得速度を調整する機能を追加した
+・getthumbinfoでタグにfetchリンクを埋め込まないようにした
+・ニコレポでfetch後にtarget="_blank"になるように修正した(21スレ751)
+
+
+170809 o_O
+・movieFetchCheckReEncoding=true かつ useHighBitrateReEncodedCache=trueのとき
+　smileとdmcのうちビットレートが高い方をキャッシュするようにした
+
+
+170716 o_O
+・HTML5版のwatchページを主に利用するように変更した
+　movieTypeがmp4ではない時のみFlash版のwatchページに追加アクセスを行う。
+　それに伴いmovieFetchUseHtml5WatchPageを廃止した。
+
+
+170713 o_O
+・HTML5プレイヤー正式版に伴う変更に対応した
+・already requestedが表示されている間に再度クリックするとキャンセルするようにした
+
+
+170617 o_O
+・通信エラーが頻発していたため連続アクセス防止機構やリトライなどの調整を行った
+・設定でwell-knownポートのdmc session APIを利用可能にした
+
+
+170615 o_O
+・dmcのfetch中に切断されにくくした
+　heartbeatが失敗した時にリトライすることでdmcセッションがタイムアウトしにくくなった。
+・fetchが終わった後もdmcのheartbeatがしばらく行われることがあったのを修正した
+・updatelow時に削除された動画のキャッシュには自動で[削除]をつけるようにした
+・削除マークのついた一時ファイルをupdatelowの処理対象から除外した
+・すでにキャッシュが存在する場合にエラーメッセージが表示されなかったのを修正した
+・already requested時に状態表示を引き継ぐようにした
+・動画の削除判定に失敗することがあったのを修正した
+・デバッグモードにおけるFETCHEDファイルへの記録を廃止した
+・getthumbinfoへの埋め込みを修正した
+・ニコレポ&タグレポに対応した(21スレ35,48)
+
+
+170522 o_O
+
+・起動中にmovieFetchMaxを変更できるようにした
+・連続アクセス時のステータスコードが503になっていたのに対応した
+・動画データへのアクセス時に404以外のエラーが生じた時にもリトライするようにした
+・updatelowでタイトルが"削除]"で終わるものを対象外にする機能が動作していなかったのを修正した
+・updatelowで回復不能な理由でfetchに失敗したものはリトライしないように変更した
+・updatelowでdmcの一時ファイルが対象になっていないのを修正した(20スレ930)
+・オススメの動画でフィルタが動いていなかったのを修正した
+・トップページのフィルタはまともに動いていないので無効化した
+
+
+170506 o_O
+・fetchに失敗することがあるためGINZAのwatchページを使うように戻した
+　flvなどHTML5でlowになる動画にアクセスするためには、直前に
+　HTML5ではなくGINZAにアクセスする必要があるようだ。
+　movieFetchUseHtml5WatchPage を有効にするとdmcにアクセスする前に
+　再度HTML5版のwatchページにアクセスしてqualityを本体に学習させる。
+・movieFetchRejectGinzaDmc を廃止した
+　NicoCache_nl+150304mod+170504mod 以降なら余計にkulowになるだけで
+　大した問題にはならないため。
+
+
+170504 o_O
+・WatchVars.getに失敗した時にクラッシュするのを修正した(20スレ768)
+
+
+170503 o_O (修正版)
+・HTML5版のwatchページを使うように変更した(kulow対応のため)
+　デフォルトではGINZAのwatchページが返された時にそれを受け入れる。
+　movieFetchRejectGinzaDmc を有効にするとGINZAのwatchページは失敗扱いにする。
+・(修正版) 公式動画でgetflvに失敗するのを修正した
+・(修正版) movieFetchRejectGinzaDmc=2 で公式動画をGINZAページ使用禁止の対象外にする機能を追加
+
+
+170407 o_O
+★再エンコード判定時にlowが返ってきた時に誤った判定結果を記録する問題を修正した
+　影響範囲: movieFetchCheckReEncoding=true かつ movieFetchNoEconomy=false かつ一般会員の場合
+　smile版がエコノミーだった時に本来は判定できないにもかかわらず、
+　誤って判定結果をtrueとしてdata/reencoded.csvに記録していた。
+　これによりsmile版のほうが画質が良いのにもかかわらずdmc版を参照してしまう。
+・動画データURLからリダイレクトされる場合に再エンコード判定に失敗する問題を修正した
+・dmc動画の予約時に余計なセッション開始をしないようにした
+・dmc動画に対してvid2cidを処理していない問題を修正した
+
+
+170405 o_O
+・dmc動画のほうが画質が良いのにsmile版をキャッシュしてしまうことがあったのを修正した
+　影響範囲: fetch前にHTML5プレーヤー版のwatchページを取得した場合(ZenzaWatchでの再生を含む)
+・同時ダウンロード数のデフォルト値は1にした(デフォルト値が最大値はまずいでしょ)
+・連続アクセス規制対策として予約時にウェイトを入れるようにした
+・dmcセッションの開始に失敗した時にリトライするようにした
+・より確実にwatch_html5=0になるように修正した
+
+
+170318 o_O
+・2個目以降のキャッシュが始まらないことがあるのを修正した(20スレ425,489,498)
+・低画質版のキャッシュを持っている時にも高画質版をfetchできるようにした
+・状態取得をまとめて行うようにして負荷を軽減した
+・非公開設定・メンバー限定の動画のエラーページ変更に対応した
+・削除済みの判定が機能していなかったのを修正した
+
+
+170214 o_O
+★NicoCache_nl+150304mod+170212mod HTML5+dmc 以降が必要
+・dmc動画に対応した
+・非プレミアム会員は同時に開けるタブの数に基づき同時ダウンロード数を上限2に制限した
+・HTML5プレイヤーからflvを取得するとエラーになるのを修正(19スレ966)
+・video.arrayのURLを修正した
+・予約時にリトライしなくなる問題を修正
+・movieFetchAutoWatchedが動作していなかったのを修正した
+・ステータスのポーリングで200以外が返ってきたらポーリングを中止するようにした(不意のDoS防止)
+
+Based on
+・nlMovieFetcher_110411(v0.6) w/ 20131111 mod (121016 FIX + 20131111 mod) [up169]
+・個人的に弄ったmovieFetcherFilter : 18スレの307 (nlMovieFetcher.js) [up254]
+・個人的に弄ったmovieFetcherFilter : 18スレの144 (movieFetcherFilter.txt) [up288]

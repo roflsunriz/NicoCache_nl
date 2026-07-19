@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Main-Class: dareka.NLMain
+Class-Path: sqlite-jdbc.jar igo.jar library.jar
+Add-Opens: java.base/sun.net java.base/sun.net.www.protocol.http java.base/java.net java.base/java.lang java.base/java.lang.reflect
