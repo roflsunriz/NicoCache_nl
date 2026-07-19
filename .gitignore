@@ -17,6 +17,7 @@ list/
 # Local configuration, caches, generated data, and secrets
 /config.properties
 proxy.pac
+NicoCacheGUI.property
 Uninstall.exe
 /cache/**
 /cvcache/**
@@ -75,4 +76,5 @@ Uninstall.exe
 /local/images
 /local/list.js
 /local/mime.types
+COMMON-AGENTS.md
 
