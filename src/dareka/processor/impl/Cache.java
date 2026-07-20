@@ -45,6 +45,11 @@ public class Cache extends CacheManager {
     public static final String MP4 = ".mp4";
     public static final String HLS = ".hls"; // dmcとdms(domand).
 
+    // Windows では直前の配信で開かれていたファイルが閉じるまで削除できない
+    // ことがあるため、短時間だけ再試行してから削除失敗と判定する。
+    private static final int DELETE_RETRY_COUNT = 20;
+    private static final long DELETE_RETRY_DELAY_MILLIS = 50L;
+
     private VideoDescriptor video;
     private String desc;
     private File cacheFileNew; // [nl] 新規に作成する場合のキャッシュファイル
@@ -129,8 +134,26 @@ public class Cache extends CacheManager {
         if (video.isDir()) {
             return deleteDirectoryRecursively(cacheFile);
         } else {
-            return cacheFile.delete();
+            return deleteFileWithRetry(cacheFile);
         }
+    }
+
+    private static boolean deleteFileWithRetry(File file) {
+        if (!file.exists()) {
+            return false;
+        }
+        for (int attempt = 0; attempt < DELETE_RETRY_COUNT; attempt++) {
+            if (file.delete() || !file.exists()) {
+                return true;
+            }
+            try {
+                Thread.sleep(DELETE_RETRY_DELAY_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
     }
 
     private boolean copyDirectoryRecursively(File src, File dst) {
@@ -160,7 +183,7 @@ public class Cache extends CacheManager {
                 deleteDirectoryRecursively(file);
             }
         }
-        return dir.delete();
+        return deleteFileWithRetry(dir);
     }
 
     // [nl] キャッシュファイルを指定パスにコピー

@@ -57,7 +57,15 @@ jobs:
 
       - name: Run functional and Extension ABI tests
         shell: pwsh
-        run: .\test-functional.ps1
+        run: .\test-functional.ps1 -KeepWorkDir
+
+      - name: Upload functional test diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: functional-test-diagnostics
+          if-no-files-found: ignore
+          path: .test-work/functional
 
       - name: Create release checksum
         shell: pwsh
