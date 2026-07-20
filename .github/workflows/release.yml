@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 既存のリリースタグ
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.release-tag.outputs.tag }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Validate release tag
+        id: release-tag
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:RELEASE_TAG)) {
+            throw "リリースタグが指定されていません"
+          }
+          if ($env:RELEASE_TAG -notmatch '^v[A-Za-z0-9][A-Za-z0-9._-]*$') {
+            throw "リリースタグは v で始まる英数字・ドット・アンダースコア・ハイフンだけで指定してください: $env:RELEASE_TAG"
+          }
+          "tag=$env:RELEASE_TAG" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Build NicoCache_nl.jar
+        shell: pwsh
+        run: .\build-javac.ps1
+
+      - name: Run functional and Extension ABI tests
+        shell: pwsh
+        run: .\test-functional.ps1
+
+      - name: Create release checksum
+        shell: pwsh
+        run: |
+          $jarPath = Join-Path $env:GITHUB_WORKSPACE 'NicoCache_nl.jar'
+          if (-not (Test-Path -LiteralPath $jarPath -PathType Leaf)) {
+            throw "ビルド成果物がありません: $jarPath"
+          }
+          $hash = (Get-FileHash -LiteralPath $jarPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  NicoCache_nl.jar" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'NicoCache_nl.jar.sha256') -Encoding ascii
+
+      - name: Create distribution archive
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
+        run: |
+          $workspace = (Resolve-Path -LiteralPath $env:GITHUB_WORKSPACE).Path
+          $staging = Join-Path $env:RUNNER_TEMP 'nicocache-release'
+          $archivePath = Join-Path $workspace ("NicoCache_nl-$env:RELEASE_TAG.zip")
+
+          if (Test-Path -LiteralPath $staging) {
+            Remove-Item -LiteralPath $staging -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $staging | Out-Null
+
+          $paths = @(git -c core.quotePath=false ls-files --cached --others --exclude-standard)
+          $paths += 'NicoCache_nl.jar'
+          foreach ($relativePath in $paths) {
+            if ([string]::IsNullOrWhiteSpace($relativePath)) {
+              continue
+            }
+            $sourcePath = Join-Path $workspace ($relativePath -replace '/', '\')
+            $sourceItem = Get-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue
+            if (-not $sourceItem) {
+              throw "アーカイブ対象が見つかりません: $relativePath"
+            }
+            if ($sourceItem.LinkType) {
+              Write-Output "シンボリックリンクを除外: $relativePath"
+              continue
+            }
+            if ($sourceItem.PSIsContainer) {
+              throw "ファイルではないアーカイブ対象です: $relativePath"
+            }
+
+            $destinationPath = Join-Path $staging ($relativePath -replace '/', '\')
+            $destinationDirectory = Split-Path -Parent $destinationPath
+            New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
+            Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
+          }
+
+          $archiveInputs = @(Get-ChildItem -LiteralPath $staging -Force | Select-Object -ExpandProperty FullName)
+          if ($archiveInputs.Count -eq 0) {
+            throw 'アーカイブ対象がありません'
+          }
+          Compress-Archive -LiteralPath $archiveInputs -DestinationPath $archivePath -CompressionLevel Optimal -Force
+          Write-Output "作成したアーカイブ: $archivePath"
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          if-no-files-found: error
+          path: |
+            NicoCache_nl-${{ steps.release-tag.outputs.tag }}.zip
+            NicoCache_nl.jar
+            NicoCache_nl.jar.sha256
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
+
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: release-assets
+
+      - name: Create GitHub release
+        shell: bash
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "release-assets/NicoCache_nl-$RELEASE_TAG.zip" \
+            "release-assets/NicoCache_nl.jar" \
+            "release-assets/NicoCache_nl.jar.sha256" \
+            --verify-tag \
+            --generate-notes \
+            --title "$RELEASE_TAG"

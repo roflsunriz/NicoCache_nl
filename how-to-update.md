@@ -34,6 +34,25 @@
 必要な検証が終わったら `git status --short --branch` で生成物や無関係な差分が
 混入していないことを確認する。
 
+## GitHub Actions とリリース
+
+`main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
+JDK 11 で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
+
+リリースは `v` で始まるタグを push すると開始する。例えば次のようにタグを
+作成・pushする。
+
+```powershell
+git tag v2026.07.20
+git push origin v2026.07.20
+```
+
+テストに合格すると、GitHub Release に `.gitignore` で除外されていないファイルを
+まとめた `NicoCache_nl-<タグ名>.zip` が添付される。例外指定で残る配布ファイルも
+含まれるが、シンボリックリンクは含まれない。ビルドした `NicoCache_nl.jar` と
+`NicoCache_nl.jar.sha256` もアーカイブおよび個別アセットとして添付される。
+既存タグから再実行する場合は、Release workflow の手動実行でタグ名を指定する。
+
 ## Extension API を変更する場合
 
 公開・protected API は未知の外部 Extension も利用しているものとして扱う。
