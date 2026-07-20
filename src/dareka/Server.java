@@ -181,6 +181,10 @@ public class Server {
     public synchronized void stop() {
         stopped = true;
 
+        if (periodicalCaller != null) {
+            periodicalCaller.interrupt();
+        }
+
         if (!serverSocket.isClosed()) {
             CloseUtil.close(serverSocket);
         }
@@ -265,8 +269,6 @@ public class Server {
                         prepareObservation(worker);
 
                         executor.execute(worker);
-                        // for debug
-                        //new Thread(worker).start();
                     }
                 } catch (Exception e) {
                     Logger.error(e);
@@ -413,11 +415,11 @@ public class Server {
     private List<Extension> filtExtensions = new ArrayList<>();
 
     private final Extension.Type supportedProcType = Extension.Type.Processor1;
-    //private final Extension.Type supportedReWrType = Extension.Type.Rewriter1;
     private final Extension.Type supportedFiltType = Extension.Type.RequestFilter1;
 
     //[nl] Extension2
     private List<Extension2> newExtensions = new ArrayList<>();
+    private PeriodicalCaller periodicalCaller;
 
     private void initClassLoader() {
         URL[] urls = new URL[1];
@@ -518,7 +520,8 @@ public class Server {
         }
 
         if (NLMain.SHARED.countSystemEventListeners() > 0) {
-            new PeriodicalCaller().start();
+            periodicalCaller = new PeriodicalCaller();
+            periodicalCaller.start();
         }
     }
 
@@ -535,11 +538,8 @@ public class Server {
             long epoch = System.currentTimeMillis() / 1000L * 1000L;
             while (!stopped) {
                 try {
-//long start = System.currentTimeMillis();
                     NLMain.SHARED.notifySystemEvent(
                             SystemEventListener.PERIODIC_CALL, null, false);
-//Logger.debugWithThread(String.format("%d called in %,dms",
-//      start, System.currentTimeMillis() - start));
                     long diff = (System.currentTimeMillis() - epoch) % INTERVAL;
                     Thread.sleep(INTERVAL - diff);
                 } catch (Exception e) {

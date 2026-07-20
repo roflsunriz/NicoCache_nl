@@ -13,6 +13,7 @@ link/
 others/
 list/
 .agents/
+/.test-work/
 
 # Local configuration, caches, generated data, and secrets
 /config.properties
@@ -77,4 +78,3 @@ Uninstall.exe
 /local/list.js
 /local/mime.types
 COMMON-AGENTS.md
-

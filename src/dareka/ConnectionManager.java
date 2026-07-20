@@ -136,10 +136,6 @@ public class ConnectionManager implements Runnable {
     }
 
     private void printWarning(Exception e) {
-//        // [nl]
-//        if (e.getMessage() == null || !e.getMessage().startsWith("Connection timed out")) {
-//          e.printStackTrace();
-//        }
         Throwable cause = e.getCause();
         Logger.warning("failed to process: " + processingURI + "\n\t"
                 + e.toString()

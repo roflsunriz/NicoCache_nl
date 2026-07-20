@@ -43,10 +43,6 @@ public class URLResource extends Resource {
         if (Boolean.getBoolean("useWorkaroundForEncoding")) {
             Workarounds.dirtyChangeHttpURLConnectionImplEncoding();
         }
-        if (Boolean.getBoolean("useWorkaroundForAllowedMethods")) {
-            Workarounds.dirtyChangeHttpURLConnectionImplAllowedMethods();
-        }
-
         // See http://stackoverflow.com/questions/8335501/
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
     }

@@ -17,13 +17,4 @@ public class HttpIOException extends IOException {
         super(message);
     }
 
-    // These methods comes from JDK6.0
-//    public HttpIOException(Throwable cause) {
-//        super(cause);
-//    }
-//
-//    public HttpIOException(String message, Throwable cause) {
-//        super(message, cause);
-//    }
-
 }

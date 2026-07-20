@@ -195,7 +195,6 @@ public class Main {
 
         Cache.init();
         Cache.cleanup();
-//        Logger.info("total cache size = %,dbytes", Long.valueOf(Cache.size()));
         if (Boolean.getBoolean("displayCacheSizeOnInitialize"))
             Logger.info("total cache size = %s", TextUtil.bytesToString(Cache.size()));
 
@@ -203,8 +202,6 @@ public class Main {
         long freeSize = DiskFreeSpace.get(cacheFolder);
         if (freeSize != Long.MAX_VALUE) {
             int neededSize = Integer.getInteger("needFreeSpace");
-//          Logger.info("cache folder free space = %,d bytes (at least %,dMB)",
-//                  freeSize, neededSize);
             Logger.info("cache folder free space = %s (at least %,d MB)",
                     TextUtil.bytesToString(freeSize), neededSize);
         } else {
