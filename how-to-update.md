@@ -48,8 +48,9 @@ git push origin v2026.07.20
 ```
 
 テストに合格すると、GitHub Release に `.gitignore` で除外されていないファイルを
-まとめた `NicoCache_nl-<タグ名>.zip` が添付される。例外指定で残る配布ファイルも
-含まれるが、シンボリックリンクは含まれない。ビルドした `NicoCache_nl.jar` と
+まとめた `NicoCache_nl-<タグ名>.zip` が添付される。例外指定で残る配布ファイルと、
+別リポジトリの `nlFilters` にある `01`〜`20` 番台の `.txt` も含まれるが、
+シンボリックリンクは含まれない。ビルドした `NicoCache_nl.jar` と
 `NicoCache_nl.jar.sha256` もアーカイブおよび個別アセットとして添付される。
 既存タグから再実行する場合は、Release workflow の手動実行でタグ名を指定する。
 

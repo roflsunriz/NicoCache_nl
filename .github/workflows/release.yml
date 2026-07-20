@@ -37,6 +37,14 @@ jobs:
           distribution: temurin
           java-version: '11'
 
+      - name: Check out nlFilters 01-20 source files
+        uses: actions/checkout@v4
+        with:
+          repository: roflsunriz/nlFilters
+          ref: main
+          path: nlFilters
+          persist-credentials: false
+
       - name: Validate release tag
         id: release-tag
         shell: pwsh
@@ -114,6 +122,22 @@ jobs:
             $destinationDirectory = Split-Path -Parent $destinationPath
             New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
             Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
+          }
+
+          $filterRoot = Join-Path $workspace 'nlFilters'
+          $filterCandidates = @(Get-ChildItem -LiteralPath $filterRoot -File -Filter '*.txt' |
+            Where-Object { $_.Name -match '^(0[1-9]|1[0-9]|20)(?:\D|$)' })
+          $filterCandidates | Where-Object LinkType | ForEach-Object {
+            Write-Output "シンボリックリンクを除外: nlFilters/$($_.Name)"
+          }
+          $filterFiles = @($filterCandidates | Where-Object { -not $_.LinkType })
+          if ($filterFiles.Count -eq 0) {
+            throw 'nlFilters の 01-20 番台 .txt がありません'
+          }
+          foreach ($filterFile in $filterFiles) {
+            $filterDestination = Join-Path $staging (Join-Path 'nlFilters' $filterFile.Name)
+            New-Item -ItemType Directory -Path (Split-Path -Parent $filterDestination) -Force | Out-Null
+            Copy-Item -LiteralPath $filterFile.FullName -Destination $filterDestination -Force
           }
 
           $archiveInputs = @(Get-ChildItem -LiteralPath $staging -Force | Select-Object -ExpandProperty FullName)
