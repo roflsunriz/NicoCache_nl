@@ -39,6 +39,6 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 ## 起動・終了・デバッグ
 
 - 起動には `RunNicoCache.ps1` または `NicoCache_nl Starter.bat` を使い、実行前に対象ファイルの存在を確認する。
-- 終了時に `Stop-Process -Name java`、`taskkill /IM java.exe` など、名前だけで全 Java プロセスを終了しない。コマンドラインの `-jar ...\NicoCache_nl.jar` を確認して対象 PID を限定し、通常終了を優先する。
+- 終了時に `Stop-Process -Name java`、`taskkill /IM java.exe` など、名前だけで全 Java プロセスを終了しない。`stop-nicocache.ps1` を利用して安全にプロセスを終了する。
 - 再起動は旧プロセスの終了を確認してから行い、起動後は新しい PID と対象 JAR を確認する。
 - デバッグでは `NicoCacheGUI.property` の変更前の値を記録する。検証後は、継続指定がない限り元へ戻す。ログには秘密情報や個人情報が含まれ得るため、無制限に表示・コミットしない。
