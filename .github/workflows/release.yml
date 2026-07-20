@@ -156,6 +156,7 @@ jobs:
             "release-assets/NicoCache_nl-$RELEASE_TAG.zip" \
             "release-assets/NicoCache_nl.jar" \
             "release-assets/NicoCache_nl.jar.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \
             --title "$RELEASE_TAG"
