@@ -17,16 +17,18 @@ HTTP サーバーを利用する。
 隔離ファイルの生成・削除結果を検証する。
 
 - HTTP プロキシーの GET・HEAD・POST、ヘッダー・本文・ステータス、Range、
-  ETag による条件付き取得、上流接続不能時の切断
+  ETag による条件付き取得、上流接続不能時の切断、CONNECTからTLS
+  ループバックしたHTTPSローカル配信
 - `/local/` の本文・MIME・Range・許可メソッドと、Extension Rewriter による
   本文・レスポンスヘッダー書換え
 - サムネイルの上流取得・ファイル保存・再利用
 - nvcomment 応答の動画別 JSON 保存（外部 TLS 接続を避けるため、テスト
   Extension が同じ `CommentSavingProcessor` をローカル HTTP fixture に登録する）
 - DOMAND/CMAF の access-rights、master/sub playlist、AES key、初期化 chunk、
-  暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生
+  暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生と、
+  アニメ公式動画で使われる `hlsext` 経路
 - `/cache/*` の情報取得、配信、Range、削除、不正入力と既存エラー形式
-- 単一 MP4・FLV、旧 DMC MP4・HLS の検索、配信、削除
+- 単一 MP4・FLV・SWF、旧 DMC MP4・HLS の検索、配信、削除
 - Extension と Extension2 のロード、および Processor、stopper Processor、
   Rewriter、RequestFilter、CompleteCache、イベント、終了通知
 

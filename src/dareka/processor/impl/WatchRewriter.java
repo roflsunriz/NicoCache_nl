@@ -20,8 +20,6 @@ public class WatchRewriter implements Rewriter {
             "^https?://www\\.nicovideo\\.jp/(?:watch|api/watch/v3(?:_guest)?)/([a-z]{2})?(\\d+)" +
             "(|\\?.*)$");
 
-    private static final String EMBEDDED_PLAYER_ORIGIN = "https://embed.nicovideo.jp";
-
     // 処理するURLの正規表現
     @Override
     public Pattern getRewriterSupportedURLAsPattern() {
@@ -45,20 +43,7 @@ public class WatchRewriter implements Rewriter {
             NLShared.INSTANCE.putThread2Smid(id, vars.getVideoId());
         }
 
-        if (Boolean.getBoolean("disableWatchRewriter")) {
-            return content;
-        }
-
-        if (Boolean.getBoolean("ignoreEmbeddedPlayer") &&
-                EMBEDDED_PLAYER_ORIGIN.equals(
-                        responseHeader.getMessageHeader("Access-Control-Allow-Origin"))) {
-            return content;
-        }
-
-        // HTML5
-        vars.replaceDataApiData(match.group());
-
-        return vars.getReplacedContent();
+        return content;
     }
 
 }

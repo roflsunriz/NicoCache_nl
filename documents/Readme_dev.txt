@@ -61,7 +61,7 @@ TransferListenerの実装クラスを作ってResourceに登録します。
 0.20時点だともっといろいろとコーディングする必要があります。
 そういうデータの受け渡しをするResourceの具象クラスが必要でしょう。
 
-0.20時点で、標準で次の3つのProcessor実装クラスがあります。
+現在、標準の主なProcessor実装クラスには次のものがあります。
 
 GetPostProcessor: GETとPOSTリクエストを素通しする。
   大部分の処理はフレームワークがやってくれるので
@@ -70,11 +70,17 @@ GetPostProcessor: GETとPOSTリクエストを素通しする。
 ConnectProcessor: CONNECTリクエストを素通しする。
   こちらも30行ほどです。
 
-NicoCachingProcessor: ニコニコの動画をキャッシュする。
-  ニコニコに依存した処理はこれとこれのヘルパークラス
-  (NicoCaching*)のみに局所化されています。
-  動画の転送に割り込んでキャッシュするために
-  TransferListenerを使っています。
+LocalDirProcessor: /local/ 以下のローカル配信用ファイルを返す。
+
+CacheDirProcessor: /cache/ APIと既存のFLV、SWF、MP4、HLS、CMAF
+  キャッシュの検索、配信、削除を扱う。
+
+CmafCachingProcessor: 現行DOMAND/CMAFのaccess-rights、M3U8、AES key、
+  CMFV/CMFAを処理し、暗号化セグメントを復号してキャッシュする。
+
+旧Smile、DMC単一ファイル、DMC-HLSの新規取得Processorは本体へ登録しない。
+配布済みExtensionとのバイナリ互換性を維持するため、それらの公開クラス名と
+メソッドは互換shimとして残している。
 
 細かい説明はソースのコメントを参照してください。
 

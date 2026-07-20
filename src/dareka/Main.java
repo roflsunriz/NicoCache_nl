@@ -237,11 +237,6 @@ public class Main {
             Logger.info("ExtThumb Memory Cache: On");
         }
 
-        // [nl] SWFキャッシュ関係
-        if (Boolean.getBoolean("swfConvert")) {
-            Logger.info("SWFCache Convert: On");
-        }
-
         Logger.info("----------");
 
         CorsLiarManager.getInstance().load();

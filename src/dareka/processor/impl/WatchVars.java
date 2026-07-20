@@ -44,9 +44,6 @@ public class WatchVars {
 
     private static final Pattern WATCH_ID_PATTERN = Pattern.compile(
             "([a-z]{2})?(\\d+)");
-    private static final Pattern WATCH_ECONOMY_MODE_PATTERN = Pattern.compile(
-            "\\?(eco|lo)=1");
-
     private static final Pattern MAJOR_ERROR_PAGE_PATTERN = Pattern.compile(
             "<span>ログイン</span>|<h1>お探しの動画は(?:再生|視聴)できません</h1>|<h1>お探しの動画は視聴可能期間が終了しています</h1>|<h1>短時間での連続アクセスはご遠慮ください</h1>");
 
@@ -348,6 +345,10 @@ public class WatchVars {
             }
         }
     }
+
+    private static final Pattern SM_FLV_PATTERN = Pattern.compile(
+            "^https?://(?!tn(?:-skr|\\.))[^/]+(?:smilevideo|nicovideo)\\.jp/"
+                    + "smile\\?(\\w)=([^.]+)\\.\\d+(as3)?(low)?$");
 
     private void analyzeDomand() {
         if (!(isDomand
@@ -689,80 +690,6 @@ public class WatchVars {
     private String addCacheIcon(String data) {
         return EasyRewriter.replace(null, data,
                 REQUEST_HEADER_RIAPI, RESPONSE_HEADER_JSON);
-    }
-
-    void replaceDataApiData(String watch_url) {
-        if (type != Type.Html5 || json == null || json.get("video") == null) {
-            return;
-        }
-
-        String smid = getVideoId();
-
-        replaceSmileInfo(smid, WATCH_ECONOMY_MODE_PATTERN.matcher(watch_url).find());
-        replaceDmcInfo(smid);
-    }
-
-    private static final Pattern SM_FLV_PATTERN =
-            Pattern.compile("^https?://(?!tn(?:-skr|\\.))[^/]+(?:smilevideo|nicovideo)\\.jp/smile\\?(\\w)=([^.]+)\\.\\d+(as3)?(low)?$");
-
-    private void replaceSmileInfo(String smid, boolean eco) {
-        String videoSource = null;
-        if (type == Type.Html5) {
-            // 実例は見つけられないがwatch_appではdeliveryLegacy.urlで参照している
-            videoSource = json.getString("media", "deliveryLegacy", "url");
-        }
-        if (videoSource == null) {
-            return;
-        }
-
-        if (deleted) {
-            if (type == Type.Html5) {
-                if (json.get("video", "isDeleted") != null &&
-                        !json.getBoolean("video", "isDeleted")) {
-                    // 以降は削除された動画として処理
-                    json.getObject("video").put("isDeleted", new JsonTrue());
-                }
-            }
-        }
-
-        String postfix = ".unknown";
-        Matcher m_url = SM_FLV_PATTERN.matcher(videoSource);
-        if (m_url.matches()) {
-            String format = m_url.group(1);
-            switch (format) {
-                case "v":
-                    postfix = ".flv";
-                    break;
-                case "m":
-                    postfix = ".mp4";
-                    break;
-                case "s":
-                    postfix = ".swf";
-                    break;
-            }
-        }
-
-        // lowのキャッシュがブラウザに残ってた時の対策
-        // eco=1で通常キャッシュがあるときはそのままにして、後で利用する
-        if (!eco) {
-            VideoDescriptor cachedVideo = Cache.getPreferredCachedVideo(smid, false, null);
-            if (cachedVideo != null) {
-                Cache cache = new Cache(cachedVideo);
-                if (videoSource.endsWith("low") && !cache.isLow()
-                        && (Boolean.getBoolean("convertFlv2Mp4") || postfix.equals(cache.getPostfix()))) {
-                    String newSource = videoSource.substring(0, videoSource.length() - 3);
-                    if (type == Type.Html5) {
-                        Json.putString(newSource, json, "media", "deliveryLegacy", "url");
-                    }
-                }
-            }
-        }
-    }
-
-    private void replaceDmcInfo(String smid) {
-        if (dmcInfo == null) {
-            return;
-        }
     }
 
     /**

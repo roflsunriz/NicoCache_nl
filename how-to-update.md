@@ -41,6 +41,27 @@
 シグネチャと根拠を `tests/compat/allowed-api-removals.txt` に記録してから ABI
 基準を更新する。
 
+## 旧取得設定からの移行
+
+Smile、DMC単一ファイル、DMC-HLSの新規取得経路は廃止した。利用者の
+`config.properties` に次の設定が残っていても参照されないため、更新時に削除して
+よい。
+
+- `disableStreamingWarning`
+- `useSmileCacheInsteadOfDmcEconomy`
+- `useSmileCacheInsteadOfDmc`
+- `ignoreEmbeddedPlayer`
+- `noLiveCache`
+- `deletedMoviePlayMode`
+- `mapFileUpdatingInterval`
+- `swfConvert`
+- `swfCacheV3`
+- `swfConvertAll`
+
+既存のFLV、SWF、MP4、旧HLSキャッシュは削除しない。更新後も `/cache/` APIと
+ローカルキャッシュ配信から利用できる。ここで廃止する `swfConvert*` は上流から
+取得中にSWFを書き換える設定であり、保存済みSWFの読取りには影響しない。
+
 ## 復旧
 
 機能テストが失敗した場合は `.\test-functional.ps1 -KeepWorkDir` を実行し、

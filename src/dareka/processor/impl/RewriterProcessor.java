@@ -37,7 +37,6 @@ public class RewriterProcessor implements Processor {
 
     protected Config config;
     protected ArrayList<Rewriter> rewriterList = new ArrayList<>();
-    private Rewriter getFlvRewriter;
     private EasyRewriter easyRewriter;
 
     public RewriterProcessor(Config config) {
@@ -49,7 +48,6 @@ public class RewriterProcessor implements Processor {
         // デフォルトのRewriterを登録
         addRewriter(new WatchRewriter());
         addRewriter(new SearchRewriter());
-        addRewriter(getFlvRewriter = new GetFlvRewriter());
         addRewriter(new ThumbWatchRewriter());
     }
 
@@ -121,16 +119,6 @@ public class RewriterProcessor implements Processor {
                 }
                 debugOutputBody(uri, "RequestBody", replaced);
             }
-        }
-
-// getflvだけは、postの内容がRewriterに必要なので特別扱い
-// getflvの帰ってこないIDだとcontentだけでIDがわからないので、
-// Rewriterにパラメータを与える為にURIを捏造
-// (鯖へのアクセスはRequestHeaderからなので元のまま)
-        if (getFlvRewriter != null &&
-                postString != null &&
-                getFlvRewriter.getRewriterSupportedURLAsPattern().matcher(uri).lookingAt()) {
-            uri += "&" + postString;
         }
 
         ArrayList<Pair<Rewriter, Matcher>> rewriters = getMatchedRewriter(uri);

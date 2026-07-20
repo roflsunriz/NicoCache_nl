@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.KeyStore;
 import java.security.GeneralSecurityException;
+import java.security.cert.X509Certificate;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -29,6 +30,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
@@ -75,6 +80,7 @@ public final class FunctionalTestMain {
 
             run("forward proxy GET/POST/HEAD and upstream status", this::testForwardProxy);
             run("forward proxy byte range", this::testForwardProxyRange);
+            run("HTTPS CONNECT and TLS loopback", this::testHttpsMitmLocalFile);
             run("conditional retrieval and upstream connection failure",
                     this::testConditionalAndUpstreamFailure);
             run("local file GET/range/method handling", this::testLocalFiles);
@@ -82,6 +88,8 @@ public final class FunctionalTestMain {
                     this::testResponseRewriteAndRequestFilter);
             run("thumbnail fetch and cache reuse", this::testThumbnailCache);
             run("nvcomment response saving", this::testCommentSaving);
+            run("hlsext encrypted CMAF completion and playback",
+                    this::testHlsextEncryptedCmafFlow);
             run("DOMAND/CMAF completion and offline playback", this::testCmafMasterFlow);
             run("cache info and legacy cache playback", this::testCacheInfoAndPlayback);
             run("cache removal API and validation", this::testCacheRemoval);
@@ -112,7 +120,7 @@ public final class FunctionalTestMain {
             }
             throw new AssertionError("functional tests failed");
         }
-        System.out.println("Functional tests passed: 12");
+        System.out.println("Functional tests passed: 14");
     }
 
     private void prepareSandbox() throws Exception {
@@ -122,6 +130,7 @@ public final class FunctionalTestMain {
         Files.createDirectories(sandbox.resolve("cvcache"));
         Files.createDirectories(sandbox.resolve("thcache"));
         Files.createDirectories(sandbox.resolve("data/tlsclient"));
+        Files.createDirectories(sandbox.resolve("certs"));
 
         try (var stream = Files.list(repository.resolve("defaults"))) {
             stream.filter(path -> path.getFileName().toString().endsWith(".properties"))
@@ -139,6 +148,8 @@ public final class FunctionalTestMain {
                 "dmc-mp4-content".getBytes(StandardCharsets.UTF_8));
         Files.write(sandbox.resolve("cache/sm900004_Functional.flv"),
                 "legacy-flv-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900005_Functional.swf"),
+                "legacy-swf-content".getBytes(StandardCharsets.UTF_8));
         Path hls = sandbox.resolve("cache/sm900003[720p,128]_Functional.hls");
         Files.createDirectories(hls);
         Files.writeString(hls.resolve("master.m3u8"),
@@ -151,6 +162,30 @@ public final class FunctionalTestMain {
         try (OutputStream output = Files.newOutputStream(sandbox.resolve("data/tlsclient/cacerts2"))) {
             keyStore.store(output, "NicoCache".toCharArray());
         }
+        prepareMitmKeyStore();
+    }
+
+    private void prepareMitmKeyStore() throws Exception {
+        Path keytool = Path.of(System.getProperty("java.home"), "bin",
+                isWindows() ? "keytool.exe" : "keytool");
+        Path keyStore = sandbox.resolve("certs/site.jks");
+        Process process = new ProcessBuilder(
+                keytool.toString(), "-genkeypair", "-alias", "site",
+                "-keyalg", "RSA", "-keysize", "2048",
+                "-keystore", keyStore.toString(), "-storetype", "JKS",
+                "-storepass", "NicoCache", "-keypass", "NicoCache",
+                "-dname", "CN=www.nicovideo.jp",
+                "-ext", "SAN=dns:www.nicovideo.jp",
+                "-validity", "2", "-noprompt")
+                .redirectErrorStream(true)
+                .start();
+        byte[] output = readAll(process.getInputStream());
+        if (process.waitFor() != 0) {
+            throw new IOException("keytool failed: "
+                    + new String(output, StandardCharsets.UTF_8));
+        }
+        Files.writeString(sandbox.resolve("certs/site.targets"),
+                "www.nicovideo.jp\n", StandardCharsets.UTF_8);
     }
 
     private static void copy(Path source, Path target) {
@@ -249,8 +284,9 @@ public final class FunctionalTestMain {
                 exchange.getResponseBody().write(body);
                 return;
             }
-            if ("/watch/9000100001".equals(path)) {
-                byte[] body = ("{\"video\":{\"id\":\"sm900010\","
+            if ("/watch/9000100001".equals(path) || "/watch/9000110001".equals(path)) {
+                String smid = path.contains("900011") ? "sm900011" : "sm900010";
+                byte[] body = ("{\"video\":{\"id\":\"" + smid + "\","
                         + "\"title\":\"Functional CMAF\",\"duration\":1,"
                         + "\"isDeleted\":false},\"media\":{\"domand\":{"
                         + "\"videos\":[],\"audios\":[]}},\"system\":{"
@@ -266,8 +302,10 @@ public final class FunctionalTestMain {
                 return;
             }
             if (path.endsWith("/access-rights/hls")) {
+                String masterUrl = path.contains("sm900011")
+                        ? hlsextMasterUrl() : cmafMasterUrl();
                 byte[] body = ("{\"data\":{\"contentUrl\":\""
-                        + cmafMasterUrl() + "?session=functional\"}}")
+                        + masterUrl + "?session=functional\"}}")
                         .getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, body.length);
@@ -275,8 +313,7 @@ public final class FunctionalTestMain {
                 return;
             }
             if (path.contains("/playlists/variants/")) {
-                String base = "http://delivery.domand.nicovideo.jp/hlsbid/"
-                        + "aaaaaaaaaaaaaaaaaaaaaaaa";
+                String base = cmafBase(path.contains("/hlsext/") ? "hlsext" : "hlsbid");
                 String playlist = "#EXTM3U\n"
                         + "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio-aac-128kbps\",NAME=\"128kbps\",URI=\""
                         + base + "/playlists/media/audio-aac-128kbps.m3u8?token=a\"\n"
@@ -293,8 +330,7 @@ public final class FunctionalTestMain {
                 String mediaType = audio ? "audio" : "video";
                 String sourceId = audio ? "audio-aac-128kbps" : "video-h264-720p";
                 String extension = audio ? "cmfa" : "cmfv";
-                String base = "http://delivery.domand.nicovideo.jp/hlsbid/"
-                        + "aaaaaaaaaaaaaaaaaaaaaaaa";
+                String base = cmafBase(path.contains("/hlsext/") ? "hlsext" : "hlsbid");
                 String playlist = "#EXTM3U\n"
                         + "#EXT-X-KEY:METHOD=AES-128,URI=\"" + base + "/keys/"
                         + sourceId + ".key?token=k\",IV=0x00000000000000000000000000000001\n"
@@ -401,7 +437,8 @@ public final class FunctionalTestMain {
                 "cacheAllocateFirst=false",
                 "disableDirectoryWatcher=true",
                 "disableVideoCacheSystem=false",
-                "enableMitm=false",
+                "enableMitm=true",
+                "mitmHostPort=www.nicovideo.jp",
                 "cacheThumbnail=true",
                 "thcacheMode=folder",
                 "thcacheFolder=thcache",
@@ -471,6 +508,63 @@ public final class FunctionalTestMain {
         assertEquals(206, response.status, "range status");
         assertEquals("bytes 2-5/10", response.header("content-range"), "content range");
         assertEquals("2345", response.bodyText(), "range body");
+    }
+
+    private void testHttpsMitmLocalFile() throws Exception {
+        try (Socket proxy = new Socket()) {
+            proxy.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), nicocachePort), 2000);
+            proxy.setSoTimeout(8000);
+            proxy.getOutputStream().write(("CONNECT www.nicovideo.jp:443 HTTP/1.1\r\n"
+                    + "Host: www.nicovideo.jp:443\r\n\r\n")
+                    .getBytes(StandardCharsets.ISO_8859_1));
+            proxy.getOutputStream().flush();
+            String connectResponse = readHeader(proxy.getInputStream());
+            assertContains(connectResponse, " 200 ", "CONNECT status");
+
+            TrustManager[] trustAll = new TrustManager[] { new X509TrustManager() {
+                @Override
+                public X509Certificate[] getAcceptedIssuers() {
+                    return new X509Certificate[0];
+                }
+
+                @Override
+                public void checkClientTrusted(X509Certificate[] chain, String authType) {
+                }
+
+                @Override
+                public void checkServerTrusted(X509Certificate[] chain, String authType) {
+                }
+            } };
+            SSLContext context = SSLContext.getInstance("TLS");
+            context.init(null, trustAll, null);
+            try (SSLSocket tls = (SSLSocket) context.getSocketFactory().createSocket(
+                    proxy, "www.nicovideo.jp", 443, true)) {
+                tls.setUseClientMode(true);
+                tls.startHandshake();
+                tls.getOutputStream().write(("GET /local/fixture.txt HTTP/1.1\r\n"
+                        + "Host: www.nicovideo.jp\r\nConnection: close\r\n\r\n")
+                        .getBytes(StandardCharsets.ISO_8859_1));
+                tls.getOutputStream().flush();
+                Response response = Response.parse(readHttpResponse(tls.getInputStream(), false));
+                assertEquals(200, response.status, "HTTPS local status");
+                assertEquals("local-functional-content", response.bodyText(), "HTTPS local body");
+            }
+        }
+    }
+
+    private static String readHeader(InputStream input) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        int matched = 0;
+        while (matched < 4) {
+            int value = input.read();
+            if (value < 0) {
+                throw new IOException("connection closed before header completed");
+            }
+            output.write(value);
+            byte expected = new byte[] {'\r', '\n', '\r', '\n'}[matched];
+            matched = value == expected ? matched + 1 : value == '\r' ? 1 : 0;
+        }
+        return output.toString(StandardCharsets.ISO_8859_1);
     }
 
     private void testConditionalAndUpstreamFailure() throws Exception {
@@ -569,12 +663,13 @@ public final class FunctionalTestMain {
 
     private void testCacheInfoAndPlayback() throws Exception {
         Response info = request(nicoRequest("GET",
-                "/cache/info/v2?sm900001,sm900002,sm900003,sm900004", ""));
+                "/cache/info/v2?sm900001,sm900002,sm900003,sm900004,sm900005", ""));
         assertEquals(200, info.status, "cache info status");
         assertContains(info.bodyText(), "sm900001_Functional.mp4", "legacy cache info");
         assertContains(info.bodyText(), "sm900002[720p,128]_Functional.mp4", "DMC cache info");
         assertContains(info.bodyText(), "sm900003[720p,128]_Functional.hls", "HLS cache info");
         assertContains(info.bodyText(), "sm900004_Functional.flv", "FLV cache info");
+        assertContains(info.bodyText(), "sm900005_Functional.swf", "SWF cache info");
 
         Response playback = request(nicoRequest("GET", "/cache/sm900001.mp4", ""));
         assertEquals(200, playback.status, "cache playback status");
@@ -592,6 +687,10 @@ public final class FunctionalTestMain {
         Response flv = request(nicoRequest("GET", "/cache/sm900004.flv", ""));
         assertEquals(200, flv.status, "FLV playback status");
         assertEquals("legacy-flv-content", flv.bodyText(), "FLV playback body");
+
+        Response swf = request(nicoRequest("GET", "/cache/sm900005.swf", ""));
+        assertEquals(200, swf.status, "SWF playback status");
+        assertEquals("legacy-swf-content", swf.bodyText(), "SWF playback body");
 
         String hlsBase = "/cache/file/nicocachenl_refcache=sm900003//";
         Response hlsMaster = request(nicoRequest("GET", hlsBase + "master.m3u8", ""));
@@ -616,10 +715,10 @@ public final class FunctionalTestMain {
         assertContains(master.bodyText(), "video-h264-720p.m3u8", "CMAF video playlist");
         assertContains(master.bodyText(), "audio-aac-128kbps.m3u8", "CMAF audio playlist");
 
-        exerciseCmafMedia("audio", "audio-aac-128kbps", "cmfa");
-        exerciseCmafMedia("video", "video-h264-720p", "cmfv");
+        exerciseCmafMedia("sm900010", "hlsbid", "audio", "audio-aac-128kbps", "cmfa");
+        exerciseCmafMedia("sm900010", "hlsbid", "video", "video-h264-720p", "cmfv");
 
-        Path completed = waitForCompletedCmafCache(Duration.ofSeconds(8));
+        Path completed = waitForCompletedCmafCache("sm900010", Duration.ofSeconds(8));
         assertFileContains(sandbox.resolve("extension-complete-cache.txt"), "sm900010");
         assertFileContains(sandbox.resolve("extension-event-6.txt"), "6");
 
@@ -640,13 +739,43 @@ public final class FunctionalTestMain {
                 "completed CMAF cache directory");
     }
 
-    private Path waitForCompletedCmafCache(Duration timeout) throws Exception {
+    private void testHlsextEncryptedCmafFlow() throws Exception {
+        Response watch = request("GET http://www.nicovideo.jp/watch/9000110001 HTTP/1.1\r\n"
+                + "Host: www.nicovideo.jp\r\nConnection: close\r\n\r\n");
+        assertEquals(200, watch.status, "hlsext watch status");
+        assertContains(watch.bodyText(), "sm900011", "hlsext watch body");
+
+        Response accessRights = request("GET http://nvapi.nicovideo.jp/v1/watch/sm900011/access-rights/hls"
+                + "?actionTrackId=hlsext HTTP/1.1\r\n"
+                + "Host: nvapi.nicovideo.jp\r\nConnection: close\r\n\r\n");
+        assertEquals(200, accessRights.status, "hlsext access-rights status");
+        assertContains(accessRights.bodyText(), hlsextMasterUrl(), "hlsext contentUrl");
+
+        Response master = request(absoluteRequest(
+                hlsextMasterUrl() + "?session=hlsext", "delivery.domand.nicovideo.jp"));
+        assertEquals(200, master.status, "hlsext master status");
+        assertContains(master.bodyText(), "nicocachenl_domandcvikey=", "hlsext rewritten key");
+
+        exerciseCmafMedia("sm900011", "hlsext", "audio", "audio-aac-128kbps", "cmfa");
+        exerciseCmafMedia("sm900011", "hlsext", "video", "video-h264-720p", "cmfv");
+        waitForCompletedCmafCache("sm900011", Duration.ofSeconds(8));
+
+        String localBase = "/cache/file/nicocachenl_refcache=sm900011//";
+        Response video = request(nicoRequest("GET", localBase + "video/01.cmfv", ""));
+        assertEquals(200, video.status, "hlsext decrypted video status");
+        assertEquals("video-segment", video.bodyText(), "hlsext decrypted video body");
+        Response audio = request(nicoRequest("GET", localBase + "audio/01.cmfa", ""));
+        assertEquals(200, audio.status, "hlsext decrypted audio status");
+        assertEquals("audio-segment", audio.bodyText(), "hlsext decrypted audio body");
+    }
+
+    private Path waitForCompletedCmafCache(String smid, Duration timeout) throws Exception {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < deadline) {
             try (var caches = Files.list(sandbox.resolve("cache"))) {
                 Path completed = caches
                         .filter(Files::isDirectory)
-                        .filter(path -> path.getFileName().toString().startsWith("sm900010"))
+                        .filter(path -> path.getFileName().toString().startsWith(smid))
                         .filter(path -> path.getFileName().toString().endsWith(".hls"))
                         .findFirst().orElse(null);
                 if (completed != null) {
@@ -655,14 +784,14 @@ public final class FunctionalTestMain {
             }
             Thread.sleep(50L);
         }
-        throw new AssertionError("CMAF cache was not completed after all encrypted segments");
+        throw new AssertionError(smid + " CMAF cache was not completed after all encrypted segments");
     }
 
-    private void exerciseCmafMedia(String mediaType, String sourceId, String extension)
+    private void exerciseCmafMedia(String smid, String route, String mediaType,
+            String sourceId, String extension)
             throws Exception {
-        String key = "sm900010" + sourceId;
-        String base = "http://delivery.domand.nicovideo.jp/hlsbid/"
-                + "aaaaaaaaaaaaaaaaaaaaaaaa";
+        String key = smid + sourceId;
+        String base = cmafBase(route);
         String query = "?token=functional&nicocachenl_domandcvikey=" + key;
 
         Response playlist = request(absoluteRequest(base + "/playlists/media/"
@@ -696,8 +825,17 @@ public final class FunctionalTestMain {
     }
 
     private static String cmafMasterUrl() {
-        return "http://delivery.domand.nicovideo.jp/hlsbid/"
-                + "aaaaaaaaaaaaaaaaaaaaaaaa/playlists/variants/bbbbbbbbbbbbbbbb.m3u8";
+        return cmafBase("hlsbid") + "/playlists/variants/bbbbbbbbbbbbbbbb.m3u8";
+    }
+
+    private static String hlsextMasterUrl() {
+        return cmafBase("hlsext") + "/playlists/variants/cccccccccccccccc.m3u8";
+    }
+
+    private static String cmafBase(String route) {
+        return "http://delivery.domand.nicovideo.jp/" + route + "/"
+                + ("hlsext".equals(route)
+                        ? "dddddddddddddddddddddddd" : "aaaaaaaaaaaaaaaaaaaaaaaa");
     }
 
     private void testCacheRemoval() throws Exception {
@@ -711,7 +849,7 @@ public final class FunctionalTestMain {
         assertFalse(Files.exists(sandbox.resolve("cache/sm900001_Functional.mp4")),
                 "cache file must be removed only inside sandbox");
 
-        for (String id : List.of("sm900002", "sm900003", "sm900004")) {
+        for (String id : List.of("sm900002", "sm900003", "sm900004", "sm900005")) {
             Response legacyRemoved = request(nicoRequest("GET", "/cache/ajax_rmall?" + id, ""));
             assertEquals(200, legacyRemoved.status, id + " removal status");
             assertEquals("OK", legacyRemoved.bodyText(), id + " removal response");
@@ -722,6 +860,8 @@ public final class FunctionalTestMain {
                 "legacy HLS cache must be removed");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900004_Functional.flv")),
                 "FLV cache must be removed");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900005_Functional.swf")),
+                "SWF cache must be removed");
         assertFileContains(sandbox.resolve("extension-event-8.txt"), "8");
         assertFileContains(sandbox.resolve("extension-event-9.txt"), "9");
     }

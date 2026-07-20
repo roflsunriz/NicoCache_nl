@@ -39,15 +39,11 @@ import dareka.processor.impl.CmafCachingProcessor;
 import dareka.processor.impl.CommentSavingProcessor;
 import dareka.processor.impl.ConnectProcessor;
 import dareka.processor.impl.DefaultRequestFilter;
-import dareka.processor.impl.DmcApiProcessor;
-import dareka.processor.impl.DmcCachingProcessor;
 import dareka.processor.impl.EasyRewriter;
 import dareka.processor.impl.ExtThumbProcessor;
 import dareka.processor.impl.GetPostProcessor;
 import dareka.processor.impl.GetThumbInfoProcessor;
-import dareka.processor.impl.HlsCachingProcessor;
 import dareka.processor.impl.LocalDirProcessor;
-import dareka.processor.impl.NicoCachingProcessor;
 import dareka.processor.impl.RewriterProcessor;
 import dareka.processor.impl.ThumbProcessor2;
 import dareka.processor.impl.ThumbProcessor;
@@ -289,11 +285,6 @@ public class Server {
 
         boolean videoCacheEnabled = !Boolean.getBoolean("disableVideoCacheSystem");
 
-        if (videoCacheEnabled) {
-            registerProcessor(new NicoCachingProcessor(executor),
-                worker);
-        }
-
         // [nl] デフォルトフィルタの登録
         worker.addRequestFilter(EasyRewriter.getInstance_sys());
         worker.addRequestFilter(new DefaultRequestFilter());
@@ -326,9 +317,6 @@ public class Server {
             registerProcessor(new ExtThumbProcessor(), worker);
         }
         if (videoCacheEnabled) {
-            registerProcessor(new DmcApiProcessor(), worker);
-            registerProcessor(new DmcCachingProcessor(executor), worker);
-            registerProcessor(new HlsCachingProcessor(executor), worker);
             registerProcessor(new CmafCachingProcessor(executor), worker);
         }
         registerProcessor(new CommentSavingProcessor(executor), worker);
