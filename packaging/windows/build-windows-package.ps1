@@ -276,9 +276,19 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') `
     -Destination (Join-Path $inputRoot 'THIRD-PARTY-NOTICES.txt')
 $setupScriptDestination = Join-Path $inputRoot 'setup\windows'
 New-Item -ItemType Directory -Path $setupScriptDestination -Force | Out-Null
-Copy-Item -LiteralPath (
+$setupScriptSource =
     Join-Path $PSScriptRoot 'runtime\first-run-setup.ps1'
-) -Destination (Join-Path $setupScriptDestination 'first-run-setup.ps1')
+$setupScriptTarget =
+    Join-Path $setupScriptDestination 'first-run-setup.ps1'
+$setupScriptContent = [System.IO.File]::ReadAllText(
+    $setupScriptSource,
+    [System.Text.UTF8Encoding]::new($false, $true)
+)
+[System.IO.File]::WriteAllText(
+    $setupScriptTarget,
+    $setupScriptContent,
+    [System.Text.UTF8Encoding]::new($true)
+)
 
 $sharedJavaOptions = @(
     '-Xmx128m',

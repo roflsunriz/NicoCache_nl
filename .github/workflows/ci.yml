@@ -49,6 +49,10 @@ jobs:
         shell: pwsh
         run: .\test-first-run-setup.ps1
 
+      - name: Run safe Windows setup script failure test
+        shell: pwsh
+        run: .\packaging\windows\test-windows-setup-script.ps1
+
       - name: Check the working tree
         shell: pwsh
         run: |

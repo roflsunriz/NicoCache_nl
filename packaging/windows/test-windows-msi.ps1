@@ -142,7 +142,7 @@ try {
     if (-not (Test-Path -LiteralPath $installRoot -PathType Container)) {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
-    Assert-AppVersion -ExpectedVersion '0.1.1'
+    Assert-AppVersion -ExpectedVersion '0.1.2'
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -183,7 +183,7 @@ try {
         "INSTALLDIR=`"$installRoot`""
     ) -FailureMessage '新版MSIへの無人更新に失敗しました'
     $upgraded = $true
-    Assert-AppVersion -ExpectedVersion '0.1.2'
+    Assert-AppVersion -ExpectedVersion '0.1.3'
     Assert-NoInstalledProcess
     if ((Get-Content -Raw -LiteralPath $userStatePath).Trim() -ne
             'preserve-user-state-across-repair-and-upgrade') {

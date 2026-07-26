@@ -371,11 +371,17 @@ final class FirstRunSetupService {
         private static final long TIMEOUT_SECONDS = 60L;
         private final Path appDirectory;
         private final Path statePath;
+        private final Path errorPath;
+        private final Path rollbackErrorPath;
 
         private WindowsSetupIntegration(Path appDirectory) {
             this.appDirectory = appDirectory.toAbsolutePath().normalize();
             this.statePath = this.appDirectory.resolve(
                     "data/setup-system-state.json");
+            this.errorPath = this.appDirectory.resolve(
+                    "data/setup-windows-error.txt");
+            this.rollbackErrorPath = this.appDirectory.resolve(
+                    "data/setup-windows-rollback-error.txt");
         }
 
         @Override
@@ -403,6 +409,8 @@ final class FirstRunSetupService {
             command.add("Apply");
             command.add("-StatePath");
             command.add(statePath.toString());
+            command.add("-ErrorPath");
+            command.add(errorPath.toString());
             command.add("-CaCertificatePath");
             command.add(appDirectory.resolve("certs/ca.cer").toString());
             command.add("-AutoConfigUrl");
@@ -418,7 +426,7 @@ final class FirstRunSetupService {
             if (options.isAutoStartEnabled()) {
                 command.add("-EnableAutoStart");
             }
-            run(command);
+            run(command, errorPath);
         }
 
         @Override
@@ -441,10 +449,15 @@ final class FirstRunSetupService {
                     "-Action",
                     "Rollback",
                     "-StatePath",
-                    statePath.toString()));
+                    statePath.toString(),
+                    "-ErrorPath",
+                    rollbackErrorPath.toString()),
+                    rollbackErrorPath);
         }
 
-        private void run(List<String> command) throws Exception {
+        private void run(List<String> command, Path processErrorPath)
+                throws Exception {
+            Files.deleteIfExists(processErrorPath);
             Process process = new ProcessBuilder(command)
                     .directory(appDirectory.toFile())
                     .redirectOutput(ProcessBuilder.Redirect.DISCARD)
@@ -453,12 +466,43 @@ final class FirstRunSetupService {
             if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 process.destroyForcibly();
                 process.waitFor(5L, TimeUnit.SECONDS);
-                throw new IOException("Windows設定処理が時間内に完了しませんでした");
+                throw failure(
+                        "Windows設定処理が時間内に完了しませんでした",
+                        processErrorPath);
             }
             if (process.exitValue() != 0) {
-                throw new IOException("Windows設定処理に失敗しました (ExitCode: "
-                        + process.exitValue() + ")");
+                throw failure(
+                        "Windows設定処理に失敗しました (ExitCode: "
+                                + process.exitValue() + ")",
+                        processErrorPath);
             }
+            Files.deleteIfExists(processErrorPath);
+        }
+
+        private static IOException failure(String message, Path errorPath) {
+            String detail = "";
+            try {
+                if (Files.isRegularFile(errorPath)) {
+                    detail = Files.readString(
+                            errorPath,
+                            StandardCharsets.UTF_8).trim();
+                    if (detail.startsWith("\uFEFF")) {
+                        detail = detail.substring(1);
+                    }
+                }
+            } catch (IOException readError) {
+                return new IOException(
+                        message + System.lineSeparator()
+                                + "診断ファイルを読み取れません: " + errorPath,
+                        readError);
+            }
+            if (detail.isEmpty()) {
+                return new IOException(message);
+            }
+            return new IOException(
+                    message + System.lineSeparator()
+                            + detail + System.lineSeparator()
+                            + "診断ファイル: " + errorPath);
         }
     }
 }

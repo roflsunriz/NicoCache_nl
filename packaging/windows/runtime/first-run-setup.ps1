@@ -7,6 +7,7 @@ param(
     [Parameter(Mandatory)]
     [string]$StatePath,
 
+    [string]$ErrorPath,
     [string]$CaCertificatePath,
     [string]$AutoConfigUrl = 'http://localhost:8080/proxy.pac',
     [string]$LauncherPath,
@@ -18,6 +19,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$script:CurrentStage = 'Windows設定処理を初期化'
+$script:RollbackFailure = $null
 
 $proxyRegistryPath =
     'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
@@ -31,6 +34,38 @@ $proxyValueNames = @(
     'ProxyServer',
     'ProxyOverride'
 )
+
+function Write-SetupError {
+    param([Parameter(Mandatory)]$ErrorRecord)
+
+    if ([string]::IsNullOrWhiteSpace($ErrorPath)) {
+        return
+    }
+    try {
+        $fullErrorPath = [System.IO.Path]::GetFullPath($ErrorPath)
+        $errorDirectory = Split-Path -Parent $fullErrorPath
+        if (-not (Test-Path -LiteralPath $errorDirectory -PathType Container)) {
+            return
+        }
+        $details = @(
+            "失敗箇所: $script:CurrentStage"
+            "内容: $($ErrorRecord.Exception.Message)"
+            "エラーID: $($ErrorRecord.FullyQualifiedErrorId)"
+        )
+        if ($script:RollbackFailure) {
+            $details += "ロールバック失敗: $script:RollbackFailure"
+        }
+        $details | Set-Content -LiteralPath $fullErrorPath -Encoding UTF8
+    } catch {
+        # 診断ファイルの書き込み失敗で元のエラーを隠さない。
+    }
+}
+
+trap {
+    Write-SetupError -ErrorRecord $_
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
 
 function Get-RegistryValueState {
     param(
@@ -104,24 +139,36 @@ namespace NicoCache {
 function Restore-State {
     param([Parameter(Mandatory)]$State)
 
-    foreach ($name in $proxyValueNames) {
-        Restore-RegistryValue `
-            -Path $proxyRegistryPath `
-            -Name $name `
-            -State $State.Proxy.$name
+    $changesProperty = $State.PSObject.Properties['Changes']
+    $restoreAll = $null -eq $changesProperty
+    $restoreProxy = $restoreAll -or $State.Changes.Proxy
+    $restoreAutoStart = $restoreAll -or $State.Changes.AutoStart
+    $restoreCertificate = $restoreAll -or $State.Changes.Certificate
+
+    if ($restoreProxy) {
+        foreach ($name in $proxyValueNames) {
+            Restore-RegistryValue `
+                -Path $proxyRegistryPath `
+                -Name $name `
+                -State $State.Proxy.$name
+        }
+        Notify-ProxyChanged
     }
-    Restore-RegistryValue `
-        -Path $runRegistryPath `
-        -Name $runValueName `
-        -State $State.AutoStart
-    if ($State.Certificate.ImportedNew -and $State.Certificate.Thumbprint) {
+    if ($restoreAutoStart) {
+        Restore-RegistryValue `
+            -Path $runRegistryPath `
+            -Name $runValueName `
+            -State $State.AutoStart
+    }
+    if ($restoreCertificate -and $State.Certificate.ImportedNew -and
+            $State.Certificate.Thumbprint) {
         $certificatePath =
             "Cert:\CurrentUser\Root\$($State.Certificate.Thumbprint)"
         Remove-Item -LiteralPath $certificatePath -ErrorAction SilentlyContinue
     }
-    Notify-ProxyChanged
 }
 
+$script:CurrentStage = 'Windows設定の保存先を確認'
 $fullStatePath = [System.IO.Path]::GetFullPath($StatePath)
 $stateDirectory = Split-Path -Parent $fullStatePath
 if (-not (Test-Path -LiteralPath $stateDirectory -PathType Container)) {
@@ -129,6 +176,7 @@ if (-not (Test-Path -LiteralPath $stateDirectory -PathType Container)) {
 }
 
 if ($Action -eq 'Rollback') {
+    $script:CurrentStage = 'Windows設定をロールバック'
     if (-not (Test-Path -LiteralPath $fullStatePath -PathType Leaf)) {
         return
     }
@@ -143,6 +191,7 @@ if (Test-Path -LiteralPath $fullStatePath) {
     throw "Windows設定状態が既に存在します: $fullStatePath"
 }
 
+$script:CurrentStage = 'Windows設定の変更前状態を読み取り'
 $proxyState = [ordered]@{}
 foreach ($name in $proxyValueNames) {
     $proxyState[$name] = Get-RegistryValueState `
@@ -163,8 +212,13 @@ if ($EnableCertificate) {
 }
 
 $state = [ordered]@{
-    Version = 1
+    Version = 2
     Status = 'Applying'
+    Changes = [ordered]@{
+        Certificate = $false
+        Proxy = $false
+        AutoStart = $false
+    }
     Proxy = $proxyState
     AutoStart = Get-RegistryValueState `
         -Path $runRegistryPath `
@@ -174,17 +228,37 @@ $state = [ordered]@{
         ImportedNew = $EnableCertificate -and -not $certificateWasPresent
     }
 }
+$script:CurrentStage = 'Windows設定状態を保存'
 $state | ConvertTo-Json -Depth 6 |
     Set-Content -LiteralPath $fullStatePath -Encoding UTF8
 
 try {
     if ($EnableCertificate -and -not $certificateWasPresent) {
-        Import-Certificate `
-            -FilePath $resolvedCertificate `
-            -CertStoreLocation 'Cert:\CurrentUser\Root' | Out-Null
+        $script:CurrentStage = 'CA証明書を現在のユーザーへ登録'
+        $state.Changes.Certificate = $true
+        $certificateStore =
+            [System.Security.Cryptography.X509Certificates.X509Store]::new(
+                [System.Security.Cryptography.X509Certificates.StoreName]::Root,
+                [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+            )
+        try {
+            $certificateStore.Open(
+                [System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite
+            )
+            $certificateStore.Add($certificate)
+        } finally {
+            $certificateStore.Close()
+        }
+        if (-not (Test-Path -LiteralPath (
+                "Cert:\CurrentUser\Root\$certificateThumbprint"
+            ))) {
+            throw 'CA証明書を登録できませんでした'
+        }
     }
 
     if ($EnableProxy) {
+        $script:CurrentStage = 'Windows自動プロキシーを設定'
+        $state.Changes.Proxy = $true
         if (-not (Test-Path -LiteralPath $proxyRegistryPath)) {
             New-Item -Path $proxyRegistryPath -Force | Out-Null
         }
@@ -206,11 +280,15 @@ try {
                 -Value $entry.Value.Value `
                 -Force | Out-Null
         }
+        $script:CurrentStage = 'Windowsプロキシー変更を通知'
         Notify-ProxyChanged
     }
 
     if ($EnableAutoStart) {
+        $script:CurrentStage = 'ログオン時自動起動の実行ファイルを確認'
         $resolvedLauncher = (Resolve-Path -LiteralPath $LauncherPath).Path
+        $script:CurrentStage = 'ログオン時自動起動を登録'
+        $state.Changes.AutoStart = $true
         if (-not (Test-Path -LiteralPath $runRegistryPath)) {
             New-Item -Path $runRegistryPath -Force | Out-Null
         }
@@ -222,14 +300,35 @@ try {
             -Force | Out-Null
     }
 
+    $script:CurrentStage = 'Windows設定状態を確定'
     $state.Status = 'Applied'
     $state | ConvertTo-Json -Depth 6 |
         Set-Content -LiteralPath $fullStatePath -Encoding UTF8
 } catch {
+    $originalError = $_
+    $failureStage = $script:CurrentStage
     $rollbackState = $state | ConvertTo-Json -Depth 6 | ConvertFrom-Json
-    Restore-State -State $rollbackState
+    $rollbackCompleted = $false
+    try {
+        Restore-State -State $rollbackState
+        $rollbackCompleted = $true
+    } catch {
+        $script:RollbackFailure = $_.Exception.Message
+    }
+    if ($rollbackCompleted) {
+        $state.Changes.Certificate = $false
+        $state.Changes.Proxy = $false
+        $state.Changes.AutoStart = $false
+    }
     $state.Status = 'RolledBackAfterFailure'
-    $state | ConvertTo-Json -Depth 6 |
-        Set-Content -LiteralPath $fullStatePath -Encoding UTF8
-    throw
+    try {
+        $state | ConvertTo-Json -Depth 6 |
+            Set-Content -LiteralPath $fullStatePath -Encoding UTF8
+    } catch {
+        if (-not $script:RollbackFailure) {
+            $script:RollbackFailure = $_.Exception.Message
+        }
+    }
+    $script:CurrentStage = $failureStage
+    throw $originalError
 }
