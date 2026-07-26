@@ -173,6 +173,7 @@ jobs:
         with:
           name: msi-lifecycle-diagnostics
           if-no-files-found: ignore
+          include-hidden-files: true
           path: .test-work/msi-*.log
 
       - name: Create MSI checksum
