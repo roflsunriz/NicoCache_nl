@@ -21,7 +21,7 @@ if (-not $appImage.StartsWith(
     throw "実環境の誤操作を防ぐため.test-work外のイメージは検証できません: $appImage"
 }
 
-$appDirectory = Join-Path $appImage 'app'
+$appDirectory = $appImage
 $setupScript = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
 $launcher = Join-Path $appImage 'NicoCache_nl.exe'
 $configPath = Join-Path $appDirectory 'config.properties'

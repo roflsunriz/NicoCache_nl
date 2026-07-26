@@ -84,7 +84,8 @@ public class NLMain {
         if (launchOptions.isHeadless()) {
             System.setProperty("dareka.gui", "false");
         }
-        Path appDirectory = Path.of("").toAbsolutePath();
+        Path appDirectory = applicationDirectory();
+        System.setProperty("user.dir", appDirectory.toString());
         if (launchOptions.isSetup()) {
             int exitCode = FirstRunSetup.runHeadless(
                     appDirectory,
@@ -126,6 +127,20 @@ public class NLMain {
                 System.exit(0);
             }
         }
+    }
+
+    private static Path applicationDirectory() {
+        String packagedLauncher = System.getProperty("jpackage.app-path");
+        if (packagedLauncher != null && !packagedLauncher.isBlank()) {
+            Path parent = Path.of(packagedLauncher)
+                    .toAbsolutePath()
+                    .normalize()
+                    .getParent();
+            if (parent != null) {
+                return parent;
+            }
+        }
+        return Path.of("").toAbsolutePath().normalize();
     }
 
     static boolean isStartGUI() {

@@ -52,8 +52,8 @@ import org.bouncycastle.util.io.pem.PemWriter;
 /**
  * NicoCache_nl+mod+mod用の認証局と証明書を作るよ
  *
- * 外部ライブラリに依存しているのでNicoCache_nl本体へ
- * 組み込むのを避けて別アプリケーションにしてあります．
+ * 外部ライブラリに依存しているのでNicoCache_nl本体とは
+ * 別の内部JARにしてあります．
  *
  * Required libraries:
  *  - Bouncy Castle
@@ -67,14 +67,30 @@ public class NicoCacheCA {
     final static String VER_STRING = "NicoCacheCA 210723+240314";
 
     final static String CA_DN = "CN=NicoCache_nl CA";
-    final static File CERTS_DIR = new File("certs/");
-    final static File CA_KEYSTORE_FILE = new File("certs/ca.jks");
-    final static File CA_CERT_FILE = new File("certs/ca.cer");
-    final static File CA_PEM_FILE = new File("certs/ca.pem");
-    final static File SITE_KEYSTORE_FILE = new File("certs/site.jks");
-    final static File SITE_CERT_FILE = new File("certs/site.cer");
-    final static File SITE_TARGETS_FILE = new File("certs/site.targets");
+    final static String CERTS_DIRECTORY_PROPERTY =
+            "nicocacheca.certsDirectory";
+    final static File CERTS_DIR = getCertsDirectory();
+    final static File CA_KEYSTORE_FILE =
+            new File(CERTS_DIR, "ca.jks");
+    final static File CA_CERT_FILE =
+            new File(CERTS_DIR, "ca.cer");
+    final static File CA_PEM_FILE =
+            new File(CERTS_DIR, "ca.pem");
+    final static File SITE_KEYSTORE_FILE =
+            new File(CERTS_DIR, "site.jks");
+    final static File SITE_CERT_FILE =
+            new File(CERTS_DIR, "site.cer");
+    final static File SITE_TARGETS_FILE =
+            new File(CERTS_DIR, "site.targets");
     final static String KEYSTORE_PASSPHRASE = "NicoCache";
+
+    private static File getCertsDirectory() {
+        String configured = System.getProperty(CERTS_DIRECTORY_PROPERTY);
+        if (configured == null || configured.isBlank()) {
+            return new File("certs");
+        }
+        return new File(configured).getAbsoluteFile();
+    }
 
     public static boolean generateCA() {
         try {

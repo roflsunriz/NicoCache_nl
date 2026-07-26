@@ -253,6 +253,8 @@ final class FirstRunSetupService {
 
     private static final class PackagedCertificateGenerator
             implements CertificateGenerator {
+        private static final String CERTS_DIRECTORY_PROPERTY =
+                "nicocacheca.certsDirectory";
         private final Path appDirectory;
         private final Set<Path> generatedFiles = new HashSet<>();
 
@@ -286,6 +288,11 @@ final class FirstRunSetupService {
             if (targets.isEmpty()) {
                 throw new IOException("証明書対象一覧が空です: " + targetsFile);
             }
+            String previousCertificateDirectory =
+                    System.getProperty(CERTS_DIRECTORY_PROPERTY);
+            System.setProperty(
+                    CERTS_DIRECTORY_PROPERTY,
+                    certificateDirectory.toString());
             try {
                 Class<?> generator = Class.forName("nicocacheca.NicoCacheCA");
                 generator.getMethod("main", String[].class).invoke(
@@ -298,6 +305,13 @@ final class FirstRunSetupService {
                 }
                 throw error;
             } finally {
+                if (previousCertificateDirectory == null) {
+                    System.clearProperty(CERTS_DIRECTORY_PROPERTY);
+                } else {
+                    System.setProperty(
+                            CERTS_DIRECTORY_PROPERTY,
+                            previousCertificateDirectory);
+                }
                 recordGeneratedFiles(certificateDirectory, existing);
             }
             for (String required : new String[] {
@@ -373,7 +387,7 @@ final class FirstRunSetupService {
             }
             String appPath = System.getProperty("jpackage.app-path");
             Path launcher = appPath == null || appPath.isBlank()
-                    ? appDirectory.getParent().resolve("NicoCache_nl.exe")
+                    ? appDirectory.resolve("NicoCache_nl.exe")
                     : Path.of(appPath);
             List<String> command = new ArrayList<>();
             command.add("powershell.exe");

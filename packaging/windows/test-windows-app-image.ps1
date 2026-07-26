@@ -21,7 +21,8 @@ if (-not $appImage.StartsWith(
         [System.StringComparison]::OrdinalIgnoreCase)) {
     throw "実環境の誤操作を防ぐため.test-work外のイメージは検証できません: $appImage"
 }
-$appDirectory = Join-Path $appImage 'app'
+$appDirectory = $appImage
+$internalAppDirectory = Join-Path $appImage 'app'
 $launcherPath = Join-Path $appImage 'NicoCache_nl.exe'
 $separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
 $configPath = Join-Path $appDirectory 'config.properties'
@@ -39,12 +40,12 @@ $setupStderrPath = Join-Path $logRoot 'setup-stderr.log'
 
 foreach ($requiredPath in @(
         $launcherPath,
-        (Join-Path $appDirectory 'NicoCache_nl.jar'),
-        (Join-Path $appDirectory 'NicoCacheCA.jar'),
+        (Join-Path $internalAppDirectory 'NicoCache_nl.jar'),
+        (Join-Path $internalAppDirectory 'NicoCacheCA.jar'),
         $certificateTargetsPath,
-        (Join-Path $appDirectory 'lib\bcprov.jar'),
-        (Join-Path $appDirectory 'lib\bcpkix.jar'),
-        (Join-Path $appDirectory 'lib\bcutil.jar'),
+        (Join-Path $internalAppDirectory 'lib\bcprov.jar'),
+        (Join-Path $internalAppDirectory 'lib\bcpkix.jar'),
+        (Join-Path $internalAppDirectory 'lib\bcutil.jar'),
         (Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'),
         (Join-Path $appDirectory 'defaults\00_NicoCache.properties'),
         (Join-Path $appDirectory 'local\mime.types.default')
@@ -53,7 +54,7 @@ foreach ($requiredPath in @(
         throw "アプリイメージに必要なファイルがありません: $requiredPath"
     }
 }
-$jarPath = Join-Path $appDirectory 'NicoCache_nl.jar'
+$jarPath = Join-Path $internalAppDirectory 'NicoCache_nl.jar'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($jarPath)
 try {
@@ -140,7 +141,7 @@ try {
             '--proxy=false',
             '--autostart=false'
         ) `
-        -WorkingDirectory $appDirectory `
+        -WorkingDirectory $appImage `
         -RedirectStandardOutput $setupStdoutPath `
         -RedirectStandardError $setupStderrPath `
         -Wait `
@@ -198,7 +199,7 @@ try {
 
     $process = Start-Process -FilePath $launcherPath `
         -ArgumentList '--headless' `
-        -WorkingDirectory $appDirectory `
+        -WorkingDirectory $appImage `
         -RedirectStandardOutput $stdoutPath `
         -RedirectStandardError $stderrPath `
         -PassThru

@@ -127,7 +127,7 @@ function Assert-AppVersion {
 $osStateBefore = Get-OsIntegrationState
 $installed = $false
 $upgraded = $false
-$userStatePath = Join-Path $installRoot 'app\data\installer-lifecycle-user.txt'
+$userStatePath = Join-Path $installRoot 'data\installer-lifecycle-user.txt'
 
 try {
     Invoke-MsiExec -ArgumentList @(
@@ -142,7 +142,7 @@ try {
     if (-not (Test-Path -LiteralPath $installRoot -PathType Container)) {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
-    Assert-AppVersion -ExpectedVersion '0.1.0'
+    Assert-AppVersion -ExpectedVersion '0.1.1'
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -155,7 +155,7 @@ try {
         -Value 'preserve-user-state-across-repair-and-upgrade' `
         -Encoding ascii
 
-    $repairTarget = Join-Path $installRoot 'app\nlFilter_sys.txt'
+    $repairTarget = Join-Path $installRoot 'nlFilter_sys.txt'
     if (-not (Test-Path -LiteralPath $repairTarget -PathType Leaf)) {
         throw "修復対象ファイルがありません: $repairTarget"
     }
@@ -183,7 +183,7 @@ try {
         "INSTALLDIR=`"$installRoot`""
     ) -FailureMessage '新版MSIへの無人更新に失敗しました'
     $upgraded = $true
-    Assert-AppVersion -ExpectedVersion '0.1.1'
+    Assert-AppVersion -ExpectedVersion '0.1.2'
     Assert-NoInstalledProcess
     if ((Get-Content -Raw -LiteralPath $userStatePath).Trim() -ne
             'preserve-user-state-across-repair-and-upgrade') {

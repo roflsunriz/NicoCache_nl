@@ -234,8 +234,10 @@ $distributionDirectories = @('defaults', 'extensions', 'local')
 foreach ($relativePath in $distributionDirectories) {
     Copy-DistributionDirectory -RelativePath $relativePath
 }
-foreach ($relativePath in @('cache', 'certs', 'cvcache', 'data', 'list',
-        'nlFilters', 'thcache')) {
+$writableDirectories = @(
+    'cache', 'certs', 'cvcache', 'data', 'list', 'nlFilters', 'thcache'
+)
+foreach ($relativePath in $writableDirectories) {
     New-Item -ItemType Directory -Path (Join-Path $inputRoot $relativePath) `
         -Force | Out-Null
 }
@@ -280,7 +282,6 @@ Copy-Item -LiteralPath (
 
 $sharedJavaOptions = @(
     '-Xmx128m',
-    '-Duser.dir=$APPDIR',
     '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED',
     '--add-exports=java.base/java.lang.invoke=ALL-UNNAMED',
     '--add-exports=java.base/jdk.internal.access=ALL-UNNAMED',
@@ -307,6 +308,25 @@ foreach ($javaOption in $sharedJavaOptions) {
 }
 Invoke-NativeCommand -FilePath $jpackage -ArgumentList $jpackageArguments `
     -FailureMessage 'Windowsアプリイメージの作成に失敗しました'
+
+$runtimeLayoutPaths = @(
+    $distributionFiles
+    $distributionDirectories
+    $writableDirectories
+    'setup'
+    'THIRD-PARTY-NOTICES.txt'
+)
+foreach ($relativePath in $runtimeLayoutPaths) {
+    $source = Join-Path (Join-Path $appImagePath 'app') $relativePath
+    if (-not (Test-Path -LiteralPath $source)) {
+        continue
+    }
+    $destination = Join-Path $appImagePath $relativePath
+    if (Test-Path -LiteralPath $destination) {
+        throw "アプリ実行時配置先が既に存在します: $destination"
+    }
+    Move-Item -LiteralPath $source -Destination $destination
+}
 
 if ($PackageType -in @('Msi', 'All')) {
     $msiArguments = @(
