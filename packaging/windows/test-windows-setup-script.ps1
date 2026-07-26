@@ -44,8 +44,8 @@ if ($providerCertificateRemovals.Count -ne 0) {
 }
 if ($scriptContentForValidation = Get-Content -Raw -LiteralPath $scriptSource) {
     if ($scriptContentForValidation -notmatch
-            '(?s)-user\s+`\s*-f\s+`\s*-silent\s+`\s*-addstore') {
-        throw '信頼済みルートCAがcertutilの無人モードで登録されません'
+            '(?s)-user\s+`\s*-f\s+`\s*-addstore') {
+        throw '信頼済みルートCAがcertutilの強制モードで登録されません'
     }
     if ($scriptContentForValidation -notmatch
             '\$certificateStore\.Remove\(\$certificateToRemove\)') {

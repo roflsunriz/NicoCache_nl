@@ -272,16 +272,21 @@ try {
         if (-not (Test-Path -LiteralPath $certutilPath -PathType Leaf)) {
             throw "certutil.exeが見つかりません: $certutilPath"
         }
-        & $certutilPath `
+        $certutilOutput = @(
+            & $certutilPath `
             -user `
             -f `
-            -silent `
             -addstore `
             Root `
-            $resolvedCertificate |
-            Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "CA証明書を登録できませんでした (ExitCode: $LASTEXITCODE)"
+            $resolvedCertificate 2>&1
+        )
+        $certutilExitCode = $LASTEXITCODE
+        if ($certutilExitCode -ne 0) {
+            $certutilDetail = ($certutilOutput | Out-String).Trim()
+            throw (
+                "CA証明書を登録できませんでした " +
+                "(ExitCode: $certutilExitCode)`n$certutilDetail"
+            )
         }
         if (-not (Test-Path -LiteralPath (
                 "Cert:\CurrentUser\Root\$certificateThumbprint"
