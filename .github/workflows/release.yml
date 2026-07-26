@@ -19,17 +19,22 @@ concurrency:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
     permissions:
       contents: read
     outputs:
       tag: ${{ steps.release-tag.outputs.tag }}
+      app_version: ${{ steps.release-tag.outputs.app_version }}
 
     steps:
       - name: Check out release tag
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Show release source revision
+        shell: pwsh
+        run: git show -s --format="commit=%H%ncommitted=%cI%nsubject=%s" HEAD
 
       - name: Set up JDK 11
         uses: actions/setup-java@v4
@@ -45,6 +50,10 @@ jobs:
           path: nlFilters
           persist-credentials: false
 
+      - name: Show nlFilters source revision
+        shell: pwsh
+        run: git -C nlFilters show -s --format="commit=%H%ncommitted=%cI%nsubject=%s" HEAD
+
       - name: Validate release tag
         id: release-tag
         shell: pwsh
@@ -54,10 +63,17 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($env:RELEASE_TAG)) {
             throw "リリースタグが指定されていません"
           }
-          if ($env:RELEASE_TAG -notmatch '^v[A-Za-z0-9][A-Za-z0-9._-]*$') {
-            throw "リリースタグは v で始まる英数字・ドット・アンダースコア・ハイフンだけで指定してください: $env:RELEASE_TAG"
+          if ($env:RELEASE_TAG -notmatch '^v(?<major>\d+)\.(?<minor>\d+)\.(?<build>\d+)$') {
+            throw "リリースタグは v<major>.<minor>.<build> 形式で指定してください: $env:RELEASE_TAG"
+          }
+          if ([int]$Matches.major -gt 255 -or
+              [int]$Matches.minor -gt 255 -or
+              [int]$Matches.build -gt 65535) {
+            throw "MSIで利用できる版の範囲を超えています: $env:RELEASE_TAG"
           }
           "tag=$env:RELEASE_TAG" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "app_version=$($env:RELEASE_TAG.Substring(1))" |
+            Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Build NicoCache_nl.jar
         shell: pwsh
@@ -73,6 +89,7 @@ jobs:
         with:
           name: functional-test-diagnostics
           if-no-files-found: ignore
+          include-hidden-files: true
           path: .test-work/functional
 
       - name: Create release checksum
@@ -147,6 +164,73 @@ jobs:
           Compress-Archive -LiteralPath $archiveInputs -DestinationPath $archivePath -CompressionLevel Optimal -Force
           Write-Output "作成したアーカイブ: $archivePath"
 
+      - name: Set up JDK 17 for Windows installer
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Show Windows packaging tool versions
+        shell: pwsh
+        run: |
+          java --version
+          jpackage --version
+          Get-Command candle, light | Select-Object Name, Source
+
+      - name: Test Windows setup script
+        shell: pwsh
+        run: .\packaging\windows\test-windows-setup-script.ps1
+
+      - name: Build release app image and MSI
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.release-tag.outputs.app_version }}
+        run: |
+          .\packaging\windows\build-windows-package.ps1 `
+            -PackageType All `
+            -AppVersion $env:APP_VERSION `
+            -NlFiltersSource .\nlFilters
+
+      - name: Test release MSI structure
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.release-tag.outputs.app_version }}
+        run: |
+          .\packaging\windows\test-windows-msi-structure.ps1 `
+            -MsiPath (
+              ".\.test-work\windows-package\output\NicoCache_nl-$env:APP_VERSION.msi"
+            )
+
+      - name: Test release app image
+        shell: pwsh
+        run: |
+          .\packaging\windows\test-windows-app-image.ps1 `
+            -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
+
+      - name: Test release Windows integration and rollback
+        shell: pwsh
+        run: |
+          .\packaging\windows\test-windows-first-run.ps1 `
+            -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
+
+      - name: Create MSI checksum
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.release-tag.outputs.app_version }}
+        run: |
+          $msi = Join-Path $env:GITHUB_WORKSPACE (
+            ".test-work\windows-package\output\NicoCache_nl-$env:APP_VERSION.msi"
+          )
+          if (-not (Test-Path -LiteralPath $msi -PathType Leaf)) {
+            throw "MSI成果物がありません: $msi"
+          }
+          $releaseMsi = Join-Path $env:GITHUB_WORKSPACE (Split-Path -Leaf $msi)
+          Copy-Item -LiteralPath $msi -Destination $releaseMsi -Force
+          $hash = (Get-FileHash -LiteralPath $releaseMsi -Algorithm SHA256).
+            Hash.ToLowerInvariant()
+          "$hash  $(Split-Path -Leaf $releaseMsi)" |
+            Out-File -LiteralPath "$releaseMsi.sha256" -Encoding ascii
+
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
@@ -156,6 +240,8 @@ jobs:
             NicoCache_nl-${{ steps.release-tag.outputs.tag }}.zip
             NicoCache_nl.jar
             NicoCache_nl.jar.sha256
+            NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi
+            NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi.sha256
 
   publish:
     needs: build
@@ -165,6 +251,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
+      APP_VERSION: ${{ needs.build.outputs.app_version }}
 
     steps:
       - name: Download release assets
@@ -180,6 +267,8 @@ jobs:
             "release-assets/NicoCache_nl-$RELEASE_TAG.zip" \
             "release-assets/NicoCache_nl.jar" \
             "release-assets/NicoCache_nl.jar.sha256" \
+            "release-assets/NicoCache_nl-$APP_VERSION.msi" \
+            "release-assets/NicoCache_nl-$APP_VERSION.msi.sha256" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \

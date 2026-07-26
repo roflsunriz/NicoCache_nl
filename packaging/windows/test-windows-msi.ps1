@@ -6,6 +6,14 @@ param(
     [Parameter(Mandatory)]
     [string]$PreviousMsiPath,
 
+    [Parameter(Mandatory)]
+    [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
+    [string]$ExpectedPreviousVersion,
+
+    [Parameter(Mandatory)]
+    [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
+    [string]$ExpectedCurrentVersion,
+
     [ValidateRange(5, 120)]
     [int]$StartupTimeoutSeconds = 30
 )
@@ -162,7 +170,7 @@ try {
     if (-not (Test-Path -LiteralPath $installRoot -PathType Container)) {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
-    Assert-AppVersion -ExpectedVersion '0.1.7'
+    Assert-AppVersion -ExpectedVersion $ExpectedPreviousVersion
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -209,7 +217,7 @@ try {
         "INSTALLDIR=`"$installRoot`""
     ) -FailureMessage '新版MSIへの無人更新に失敗しました'
     $upgraded = $true
-    Assert-AppVersion -ExpectedVersion '0.1.8'
+    Assert-AppVersion -ExpectedVersion $ExpectedCurrentVersion
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
         throw 'MSI更新後にデスクトップのショートカットがありません'

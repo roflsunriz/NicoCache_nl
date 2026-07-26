@@ -54,22 +54,24 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 `main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
 JDK 11 で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
 
-リリースは `v` で始まるタグを push すると開始する。例えば次のようにタグを
-作成・pushする。
+リリースは `v<major>.<minor>.<build>` 形式のタグをpushすると開始する。MSIの
+版番号制約に合わせ、majorとminorは0〜255、buildは0〜65535にする。例えば次の
+ようにタグを作成・pushする。
 
 ```powershell
-git tag v2026.07.20
-git push origin v2026.07.20
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
 テストに合格すると、GitHub Release に `.gitignore` で除外されていないファイルを
 まとめた `NicoCache_nl-<タグ名>.zip` が添付される。例外指定で残る配布ファイルと、
 別リポジトリの `nlFilters` にある `01`〜`20` 番台の `.txt` も含まれるが、
 シンボリックリンクは含まれない。ビルドした `NicoCache_nl.jar` と
-`NicoCache_nl.jar.sha256` もアーカイブおよび個別アセットとして添付される。
+`NicoCache_nl.jar.sha256`、タグのソースからJDK 17で生成・検証した
+`NicoCache_nl-<版番号>.msi` とそのSHA-256も個別アセットとして添付される。
 既存タグから再実行する場合は、Release workflow の手動実行でタグ名を指定する。
 
-## Windows インストーラー試作
+## Windows インストーラー
 
 JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチャーを含む
 アプリイメージを生成する。隔離テストでは同じ製品ランチャーへ内部用の
@@ -148,7 +150,7 @@ Smile、DMC単一ファイル、DMC-HLSの新規取得経路は廃止した。�
 本体ビルド前の JAR が必要な場合は `NicoCache_nl.jar` を別名で退避してから
 ビルドする。ユーザーのキャッシュや設定をロールバック手段として削除しない。
 
-Windowsパッケージ試作の生成に失敗した場合は、既存のNicoCache_nlやOS設定を
+Windowsパッケージの生成に失敗した場合は、既存のNicoCache_nlやOS設定を
 変更せず、Git管理外の `.test-work/windows-package/` だけを削除して再生成する。
 証明書ストア、Windowsプロキシー設定、タスクスケジューラーを復旧操作として
 変更する必要はない。

@@ -363,4 +363,4 @@ if ($PackageType -in @('Msi', 'All')) {
 $artifacts = @(Get-ChildItem -LiteralPath $outputRoot -Force |
     Select-Object Name, FullName, Length)
 $artifacts | Format-Table -AutoSize
-Write-Output "Windowsパッケージ試作を作成しました: $outputRoot"
+Write-Output "Windowsパッケージを作成しました: $outputRoot"
