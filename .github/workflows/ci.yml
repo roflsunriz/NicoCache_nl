@@ -45,6 +45,10 @@ jobs:
         shell: pwsh
         run: .\test-functional.ps1
 
+      - name: Run first-run setup tests
+        shell: pwsh
+        run: .\test-first-run-setup.ps1
+
       - name: Check the working tree
         shell: pwsh
         run: |

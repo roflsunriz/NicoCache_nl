@@ -12,6 +12,7 @@ on:
       - 'extensions/**'
       - 'local/**'
       - 'manifest-nl.mf'
+      - 'certificate-targets.txt'
       - 'config.properties.default'
       - 'NicoCacheGUI_native*.dll'
       - 'niconico-0.ico'
@@ -28,6 +29,7 @@ on:
       - 'extensions/**'
       - 'local/**'
       - 'manifest-nl.mf'
+      - 'certificate-targets.txt'
       - 'config.properties.default'
       - 'NicoCacheGUI_native*.dll'
       - 'niconico-0.ico'
@@ -106,6 +108,12 @@ jobs:
         shell: pwsh
         run: |
           .\packaging\windows\test-windows-app-image.ps1 `
+            -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
+
+      - name: Test first-run Windows integration and rollback
+        shell: pwsh
+        run: |
+          .\packaging\windows\test-windows-first-run.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
 
       - name: Test MSI install repair upgrade and uninstall

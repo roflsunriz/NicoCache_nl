@@ -165,6 +165,9 @@ Invoke-NativeCommand -FilePath $javac -ArgumentList (@(
     -FailureMessage 'NicoCache_nl本体のコンパイルに失敗しました'
 Copy-Item -LiteralPath (Join-Path $root 'src\dareka\GUILauncherIcon.gif') `
     -Destination (Join-Path $mainClasses 'dareka\GUILauncherIcon.gif')
+Get-ChildItem -LiteralPath (Join-Path $root 'src\dareka') `
+        -File -Filter 'setup_messages*.properties' |
+    Copy-Item -Destination (Join-Path $mainClasses 'dareka')
 
 $mainJar = Join-Path $inputRoot 'NicoCache_nl.jar'
 Invoke-NativeCommand -FilePath $jar -ArgumentList @(
@@ -204,6 +207,7 @@ Invoke-NativeCommand -FilePath $jar -ArgumentList @(
 ) -FailureMessage 'NicoCacheCA.jarの作成に失敗しました'
 
 $distributionFiles = @(
+    'certificate-targets.txt',
     'config.properties.default',
     'NicoCacheGUI_native.dll',
     'NicoCacheGUI_native64.dll',
@@ -261,6 +265,11 @@ foreach ($artifact in $dependencyLock.Artifacts) {
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') `
     -Destination (Join-Path $inputRoot 'THIRD-PARTY-NOTICES.txt')
+$setupScriptDestination = Join-Path $inputRoot 'setup\windows'
+New-Item -ItemType Directory -Path $setupScriptDestination -Force | Out-Null
+Copy-Item -LiteralPath (
+    Join-Path $PSScriptRoot 'runtime\first-run-setup.ps1'
+) -Destination (Join-Path $setupScriptDestination 'first-run-setup.ps1')
 
 $sharedJavaOptions = @(
     '-Xmx128m',

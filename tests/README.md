@@ -81,3 +81,21 @@ MSIはGitHub Actionsの一時Windowsランナーへ旧版を `msiexec /qn` で
 試験前後で証明書・Windowsプロキシー・製品登録が一致することも確認する。
 ローカル環境の製品登録を汚染しないため、MSI試験スクリプトは一時GitHub
 Actionsランナー以外での実行を拒否する。
+
+## 初回起動ウィザード
+
+次のコマンドはOS設定を変更せず、初回セットアップの判定、設定作成、
+既存ファイル保全、失敗ロールバック、日本語と英語の辞書キー、3画面の全ボタンと
+チェック項目、選択連動、戻る・次へ・キャンセル・適用、処理中の操作無効化を
+検証する。
+
+```powershell
+.\test-first-run-setup.ps1
+```
+
+`-KeepWorkDir` を指定すると、標準幅と最小幅の画面プレビューを
+`.test-work/first-run-setup/preview/` に保持する。OS連携の実処理は
+`packaging/windows/test-windows-first-run.ps1` が一時GitHub Actionsランナーで
+CA登録、Windows自動プロキシー、ログオン時起動を適用し、保存した変更前状態へ
+完全に復元できることを確認する。現行環境の汚染を防ぐため、この実連携試験は
+GitHub Actions以外での実行を拒否する。

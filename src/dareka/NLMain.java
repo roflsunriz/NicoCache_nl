@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -75,7 +76,12 @@ public class NLMain {
 
     public static void main(String[] args) {
         args = configureLaunchMode(args);
-        if (isStartGUI()) {
+        boolean startGUI = isStartGUI();
+        if (startGUI && !FirstRunSetup.runIfRequired(
+                Path.of("").toAbsolutePath())) {
+            return;
+        }
+        if (startGUI) {
             try {
                 guiLauncher = new GUILauncher();
             } catch (Throwable t) {

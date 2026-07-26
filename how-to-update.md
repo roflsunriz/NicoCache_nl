@@ -30,6 +30,21 @@
 .\build-ant.ps1
 ```
 
+初回起動ウィザードを変更した場合は、OS設定を変更しない専用テストも実行する。
+
+```powershell
+.\test-first-run-setup.ps1
+```
+
+画面を確認する場合は `-KeepWorkDir` を指定し、
+`.test-work/first-run-setup/preview/` の3画面を確認する。証明書ストア、
+Windowsプロキシー、ログオン時起動の実適用試験はローカルで実行せず、
+一時GitHub Actionsランナーへ限定する。
+
+証明書の対象ドメインを更新する場合は `certificate-targets.txt` だけを変更する。
+従来の `genCerts.bat` と初回起動ウィザードは同じ一覧を参照するため、別々の
+ドメイン一覧を追加しない。
+
 ビルドスクリプトは `src/` の `.class` と `NicoCache_nl.jar` を更新するため、
 必要な検証が終わったら `git status --short --branch` で生成物や無関係な差分が
 混入していないことを確認する。
@@ -117,3 +132,9 @@ Windowsパッケージ試作の生成に失敗した場合は、既存のNicoCac
 変更せず、Git管理外の `.test-work/windows-package/` だけを削除して再生成する。
 証明書ストア、Windowsプロキシー設定、タスクスケジューラーを復旧操作として
 変更する必要はない。
+
+初回セットアップの適用に失敗した場合は、同じ試行で作成した設定とOS変更が
+自動復元される。復元にも失敗した場合は
+`data/setup-system-state.json` を削除せず保持し、記録された変更前状態を確認して
+から `packaging/windows/runtime/first-run-setup.ps1 -Action Rollback` 相当の
+復元処理を行う。ユーザーの既存設定を推測で削除しない。

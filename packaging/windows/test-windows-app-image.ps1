@@ -27,6 +27,7 @@ $separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
 $certificateLauncherPath = Join-Path $appImage 'NicoCacheCA.exe'
 $configPath = Join-Path $appDirectory 'config.properties'
 $certificateDirectory = Join-Path $appDirectory 'certs'
+$certificateTargetsPath = Join-Path $appDirectory 'certificate-targets.txt'
 $logRoot = Join-Path $appImage 'smoke-test-logs'
 $stdoutPath = Join-Path $logRoot 'stdout.log'
 $stderrPath = Join-Path $logRoot 'stderr.log'
@@ -38,9 +39,11 @@ foreach ($requiredPath in @(
         $certificateLauncherPath,
         (Join-Path $appDirectory 'NicoCache_nl.jar'),
         (Join-Path $appDirectory 'NicoCacheCA.jar'),
+        $certificateTargetsPath,
         (Join-Path $appDirectory 'lib\bcprov.jar'),
         (Join-Path $appDirectory 'lib\bcpkix.jar'),
         (Join-Path $appDirectory 'lib\bcutil.jar'),
+        (Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'),
         (Join-Path $appDirectory 'defaults\00_NicoCache.properties'),
         (Join-Path $appDirectory 'local\mime.types.default')
     )) {
@@ -48,11 +51,38 @@ foreach ($requiredPath in @(
         throw "アプリイメージに必要なファイルがありません: $requiredPath"
     }
 }
+$jarPath = Join-Path $appDirectory 'NicoCache_nl.jar'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$archive = [System.IO.Compression.ZipFile]::OpenRead($jarPath)
+try {
+    $jarEntries = @($archive.Entries | Select-Object -ExpandProperty FullName)
+    foreach ($requiredEntry in @(
+            'dareka/FirstRunSetup.class',
+            'dareka/FirstRunWizard.class',
+            'dareka/FirstRunWizardPanel.class',
+            'dareka/setup_messages.properties',
+            'dareka/setup_messages_ja.properties'
+        )) {
+        if ($requiredEntry -notin $jarEntries) {
+            throw "パッケージJARに初回ウィザード要素がありません: $requiredEntry"
+        }
+    }
+} finally {
+    $archive.Dispose()
+}
 if (Test-Path -LiteralPath $separateHeadlessLauncherPath) {
     throw "GUI用とヘッドレス用の製品ランチャーが分離されています: $separateHeadlessLauncherPath"
 }
 if (Test-Path -LiteralPath $configPath) {
     throw "既存設定を上書きしないためテストを中止します: $configPath"
+}
+$certificateTargets = @(
+    Get-Content -LiteralPath $certificateTargetsPath |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -and -not $_.StartsWith('#') }
+)
+if ($certificateTargets.Count -eq 0) {
+    throw "証明書対象一覧が空です: $certificateTargetsPath"
 }
 
 function Get-OsIntegrationState {
@@ -103,7 +133,7 @@ $process = $null
 $testSucceeded = $false
 try {
     $certificateProcess = Start-Process -FilePath $certificateLauncherPath `
-        -ArgumentList 'localhost' `
+        -ArgumentList $certificateTargets `
         -WorkingDirectory $appDirectory `
         -RedirectStandardOutput $certificateStdoutPath `
         -RedirectStandardError $certificateStderrPath `
@@ -119,7 +149,17 @@ try {
             throw "隔離証明書生成物がありません: $generatedPath"
         }
     }
-    Write-Output 'PASS OSへ登録しない隔離証明書生成'
+    $actualCertificateTargets = @(
+        Get-Content -LiteralPath (
+            Join-Path $certificateDirectory 'site.targets'
+        ) |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ }
+    )
+    if (Compare-Object $certificateTargets $actualCertificateTargets) {
+        throw '生成したサイト証明書の対象が配布一覧と一致しません'
+    }
+    Write-Output 'PASS 本番対象を使ったOSへ登録しない隔離証明書生成'
 
     $process = Start-Process -FilePath $launcherPath `
         -ArgumentList '--headless' `
