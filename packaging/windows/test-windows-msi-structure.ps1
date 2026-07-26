@@ -225,7 +225,7 @@ try {
         throw "導入先復元アクションが1件ではありません: $($restoreInstallDirActions.Count)"
     }
     $restoreInstallDirAction = $restoreInstallDirActions[0]
-    if ([int]$restoreInstallDirAction.Values[1] -ne 51 -or
+    if ([int]$restoreInstallDirAction.Values[1] -ne 307 -or
             $restoreInstallDirAction.Values[2] -ne 'INSTALLDIR' -or
             $restoreInstallDirAction.Values[3] -ne '[NICOCACHE_INSTALLDIR]') {
         throw "導入先復元アクションが不正です: $($restoreInstallDirAction.Values -join ', ')"
