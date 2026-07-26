@@ -300,22 +300,27 @@ try {
     Remove-Item -LiteralPath $repairTarget -Force
     $repairLogPath = Join-Path $testRoot 'msi-repair.log'
     Invoke-MsiExec -ArgumentList @(
-        '/fa',
-        $previousProductCode,
+        '/i',
+        "`"$resolvedPreviousMsi`"",
         '/qn',
         '/norestart',
+        'REINSTALL=ALL',
+        'REINSTALLMODE=amus',
         "INSTALLDIR=`"$installRoot`""
     ) `
         -FailureMessage 'MSI修復に失敗しました' `
         -LogPath $repairLogPath
     if (-not (Test-Path -LiteralPath $repairTarget -PathType Leaf)) {
-        $repairLogTail = (
-            Get-Content -LiteralPath $repairLogPath -Tail 80 `
-                -ErrorAction SilentlyContinue
+        $repairLogDetails = @(
+            Select-String -LiteralPath $repairLogPath `
+                -Pattern 'nlFilter_sys|REINSTALL|INSTALLDIR|File:|Component:' `
+                -ErrorAction SilentlyContinue |
+                Select-Object -Last 120 |
+                ForEach-Object { $_.Line }
         ) -join "`n"
         throw (
             "MSI修復で配布ファイルが復元されませんでした`n" +
-            "MSIログ: $repairLogPath`n$repairLogTail"
+            "MSIログ: $repairLogPath`n$repairLogDetails"
         )
     }
     if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
