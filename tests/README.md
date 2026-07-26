@@ -59,3 +59,19 @@ HTTP サーバーを利用する。
 .\tests\compat\get-extension-api-hash.ps1 -JarPath .\NicoCache_nl.jar -Detailed
 .\tests\compat\get-extension-api.ps1 -JarPath .\NicoCache_nl.jar
 ```
+
+## Windows パッケージの隔離スモークテスト
+
+`packaging/windows/test-windows-app-image.ps1` は自己完結アプリイメージの
+`NicoCache_nl-Headless.exe` を専用の空きループバックポートで起動し、ルートの
+HTTP応答とバージョン文字列を確認する。テスト設定、ログ、キャッシュは
+`.test-work/windows-package/` 内に限定し、TLS MitM、証明書登録、Windows
+プロキシー設定、タスク登録は行わない。終了時は起動した実行ファイルのパスと
+PIDを照合し、そのPIDだけを終了する。証明書生成ランチャーについてはテスト領域
+だけにCAとサイト証明書を生成できることを確認し、新規生成ファイルを削除する。
+証明書ストアとWindowsプロキシー設定はテスト前後のスナップショットが一致する
+ことも検証する。
+
+MSIはGitHub Actionsの一時Windowsランナーへ `msiexec /qn` でインストールし、
+同じスモークテストに合格した後、`msiexec /x /qn` でアンインストールして残存
+ファイルがないことを確認する。

@@ -54,6 +54,23 @@ git push origin v2026.07.20
 `NicoCache_nl.jar.sha256` もアーカイブおよび個別アセットとして添付される。
 既存タグから再実行する場合は、Release workflow の手動実行でタグ名を指定する。
 
+## Windows インストーラー試作
+
+JDK 17 の `jpackage` を使い、JavaランタイムとGUI・ヘッドレスランチャーを含む
+アプリイメージを生成する。
+
+```powershell
+.\packaging\windows\build-windows-package.ps1 -PackageType AppImage
+.\packaging\windows\test-windows-app-image.ps1 `
+  -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
+```
+
+ローカルではOSへインストールせず、`.test-work/windows-package/` 内の
+アプリイメージだけを検証する。MSIの生成と `msiexec /qn` による無人
+インストール・アンインストールは、一時的なGitHub Actionsランナーで実行する。
+具体的なテスト境界、依存関係更新、現在の試作範囲は
+`packaging/windows/README.md` を参照する。
+
 ## Extension API を変更する場合
 
 公開・protected API は未知の外部 Extension も利用しているものとして扱う。
@@ -91,3 +108,8 @@ Smile、DMC単一ファイル、DMC-HLSの新規取得経路は廃止した。�
 
 本体ビルド前の JAR が必要な場合は `NicoCache_nl.jar` を別名で退避してから
 ビルドする。ユーザーのキャッシュや設定をロールバック手段として削除しない。
+
+Windowsパッケージ試作の生成に失敗した場合は、既存のNicoCache_nlやOS設定を
+変更せず、Git管理外の `.test-work/windows-package/` だけを削除して再生成する。
+証明書ストア、Windowsプロキシー設定、タスクスケジューラーを復旧操作として
+変更する必要はない。
