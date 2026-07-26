@@ -75,10 +75,29 @@ public class NLMain {
     private static Thread mainThread;
 
     public static void main(String[] args) {
-        args = configureLaunchMode(args);
+        LaunchOptions launchOptions = LaunchOptions.parse(args);
+        if (launchOptions.getError() != null) {
+            System.err.println(launchOptions.getError());
+            System.exit(2);
+            return;
+        }
+        if (launchOptions.isHeadless()) {
+            System.setProperty("dareka.gui", "false");
+        }
+        Path appDirectory = Path.of("").toAbsolutePath();
+        if (launchOptions.isSetup()) {
+            int exitCode = FirstRunSetup.runHeadless(
+                    appDirectory,
+                    launchOptions.getSetupOptions());
+            if (exitCode != 0) {
+                System.exit(exitCode);
+            }
+            return;
+        }
+        args = launchOptions.getForwardedArgs();
         boolean startGUI = isStartGUI();
         if (startGUI && !FirstRunSetup.runIfRequired(
-                Path.of("").toAbsolutePath())) {
+                appDirectory)) {
             return;
         }
         if (startGUI) {
@@ -107,28 +126,6 @@ public class NLMain {
                 System.exit(0);
             }
         }
-    }
-
-    private static String[] configureLaunchMode(String[] args) {
-        int forwardedCount = 0;
-        for (String arg : args) {
-            if (!"--headless".equals(arg)) {
-                forwardedCount++;
-            }
-        }
-        if (forwardedCount == args.length) {
-            return args;
-        }
-
-        System.setProperty("dareka.gui", "false");
-        String[] forwardedArgs = new String[forwardedCount];
-        int forwardedIndex = 0;
-        for (String arg : args) {
-            if (!"--headless".equals(arg)) {
-                forwardedArgs[forwardedIndex++] = arg;
-            }
-        }
-        return forwardedArgs;
     }
 
     static boolean isStartGUI() {

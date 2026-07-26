@@ -323,6 +323,7 @@ final class FirstRunWizardPanel extends JPanel {
     private SetupOptions options() {
         return new SetupOptions(
                 httpsCheckBox.isSelected(),
+                httpsCheckBox.isSelected(),
                 proxyCheckBox.isSelected(),
                 autoStartCheckBox.isSelected());
     }

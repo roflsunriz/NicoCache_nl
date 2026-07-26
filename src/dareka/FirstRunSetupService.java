@@ -1,6 +1,7 @@
 package dareka;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.DirectoryStream;
@@ -56,8 +57,10 @@ final class FirstRunSetupService {
                 certificateStarted = true;
                 certificates.generate();
             }
-            integrationStarted = true;
-            systemIntegration.apply(options);
+            if (options.needsSystemIntegration()) {
+                integrationStarted = true;
+                systemIntegration.apply(options);
+            }
             files.complete(options);
         } catch (Exception error) {
             if (integrationStarted) {
@@ -110,6 +113,8 @@ final class FirstRunSetupService {
             state.setProperty("completedAt", Instant.now().toString());
             state.setProperty("enableHttps",
                     Boolean.toString(options.isHttpsEnabled()));
+            state.setProperty("trustCertificate",
+                    Boolean.toString(options.isCertificateTrusted()));
             state.setProperty("configureProxy",
                     Boolean.toString(options.isProxyConfigured()));
             state.setProperty("enableAutoStart",
@@ -248,7 +253,6 @@ final class FirstRunSetupService {
 
     private static final class PackagedCertificateGenerator
             implements CertificateGenerator {
-        private static final long TIMEOUT_SECONDS = 60L;
         private final Path appDirectory;
         private final Set<Path> generatedFiles = new HashSet<>();
 
@@ -267,41 +271,34 @@ final class FirstRunSetupService {
                 return;
             }
 
-            Path launcher = appDirectory.getParent().resolve("NicoCacheCA.exe");
-            if (!Files.isRegularFile(launcher)) {
-                throw new IOException("証明書生成ツールがありません: " + launcher);
-            }
             Path targetsFile = appDirectory.resolve("certificate-targets.txt");
             if (!Files.isRegularFile(targetsFile)) {
                 throw new IOException("証明書対象一覧がありません: " + targetsFile);
             }
-            List<String> command = new ArrayList<>();
-            command.add(launcher.toString());
+            List<String> targets = new ArrayList<>();
             for (String line : Files.readAllLines(
                     targetsFile, StandardCharsets.US_ASCII)) {
                 String target = line.trim();
                 if (!target.isEmpty() && !target.startsWith("#")) {
-                    command.add(target);
+                    targets.add(target);
                 }
             }
-            if (command.size() == 1) {
+            if (targets.isEmpty()) {
                 throw new IOException("証明書対象一覧が空です: " + targetsFile);
             }
-            Process process = new ProcessBuilder(command)
-                    .directory(appDirectory.toFile())
-                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-                    .redirectError(ProcessBuilder.Redirect.DISCARD)
-                    .start();
-            if (!process.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                process.destroyForcibly();
-                process.waitFor(5L, TimeUnit.SECONDS);
+            try {
+                Class<?> generator = Class.forName("nicocacheca.NicoCacheCA");
+                generator.getMethod("main", String[].class).invoke(
+                        null,
+                        (Object) targets.toArray(new String[0]));
+            } catch (InvocationTargetException error) {
+                Throwable cause = error.getCause();
+                if (cause instanceof Exception) {
+                    throw (Exception) cause;
+                }
+                throw error;
+            } finally {
                 recordGeneratedFiles(certificateDirectory, existing);
-                throw new IOException("証明書生成が時間内に完了しませんでした");
-            }
-            recordGeneratedFiles(certificateDirectory, existing);
-            if (process.exitValue() != 0) {
-                throw new IOException("証明書生成に失敗しました (ExitCode: "
-                        + process.exitValue() + ")");
             }
             for (String required : new String[] {
                     "ca.cer", "ca.jks", "site.jks", "site.targets" }) {
@@ -398,7 +395,7 @@ final class FirstRunSetupService {
             command.add("http://localhost:8080/proxy.pac");
             command.add("-LauncherPath");
             command.add(launcher.toAbsolutePath().normalize().toString());
-            if (options.isHttpsEnabled()) {
+            if (options.isCertificateTrusted()) {
                 command.add("-EnableCertificate");
             }
             if (options.isProxyConfigured()) {

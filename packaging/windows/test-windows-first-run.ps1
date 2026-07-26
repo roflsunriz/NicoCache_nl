@@ -23,8 +23,11 @@ if (-not $appImage.StartsWith(
 
 $appDirectory = Join-Path $appImage 'app'
 $setupScript = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
-$certificateLauncher = Join-Path $appImage 'NicoCacheCA.exe'
 $launcher = Join-Path $appImage 'NicoCache_nl.exe'
+$configPath = Join-Path $appDirectory 'config.properties'
+$guiPropertiesPath = Join-Path $appDirectory 'NicoCacheGUI.property'
+$completionStatePath =
+    Join-Path $appDirectory 'data\first-run-setup.properties'
 $certificateDirectory = Join-Path $appDirectory 'certs'
 $certificatePath = Join-Path $certificateDirectory 'ca.cer'
 $certificateTargetsPath = Join-Path $appDirectory 'certificate-targets.txt'
@@ -35,7 +38,6 @@ $runValueName = 'NicoCache_nl'
 
 foreach ($requiredPath in @(
         $setupScript,
-        $certificateLauncher,
         $launcher,
         $certificateTargetsPath
     )) {
@@ -92,15 +94,22 @@ try {
     if ($certificateTargets.Count -eq 0) {
         throw '証明書対象一覧が空です'
     }
-    Push-Location -LiteralPath $appDirectory
-    try {
-        & $certificateLauncher @certificateTargets
-        if ($LASTEXITCODE -ne 0) {
-            throw "証明書生成に失敗しました (ExitCode: $LASTEXITCODE)"
-        }
-    } finally {
-        Pop-Location
+    $setupProcess = Start-Process -FilePath $launcher `
+        -ArgumentList @(
+            '--setup',
+            '--headless',
+            '--https=true',
+            '--trust-certificate=true',
+            '--proxy=true',
+            '--autostart=true'
+        ) `
+        -WorkingDirectory $appDirectory `
+        -Wait `
+        -PassThru
+    if ($setupProcess.ExitCode -ne 0) {
+        throw "ヘッドレス初回セットアップに失敗しました (ExitCode: $($setupProcess.ExitCode))"
     }
+    $applied = $true
     if (-not (Test-Path -LiteralPath $certificatePath -PathType Leaf)) {
         throw "生成したCA証明書がありません: $certificatePath"
     }
@@ -118,23 +127,15 @@ try {
         $certificatePath
     )
 
-    & powershell.exe `
-        -NoProfile `
-        -NonInteractive `
-        -ExecutionPolicy Bypass `
-        -File $setupScript `
-        -Action Apply `
-        -StatePath $statePath `
-        -CaCertificatePath $certificatePath `
-        -AutoConfigUrl 'http://localhost:8080/proxy.pac' `
-        -LauncherPath $launcher `
-        -EnableCertificate `
-        -EnableProxy `
-        -EnableAutoStart
-    if ($LASTEXITCODE -ne 0) {
-        throw "初回Windows連携の適用に失敗しました (ExitCode: $LASTEXITCODE)"
+    foreach ($createdPath in @(
+            $configPath,
+            $guiPropertiesPath,
+            $completionStatePath
+        )) {
+        if (-not (Test-Path -LiteralPath $createdPath -PathType Leaf)) {
+            throw "ヘッドレス初回セットアップの生成物がありません: $createdPath"
+        }
     }
-    $applied = $true
 
     $savedState = Get-Content -Raw -LiteralPath $statePath -Encoding UTF8 |
         ConvertFrom-Json
@@ -157,7 +158,7 @@ try {
         ))) {
         throw '現在ユーザーのルート証明書ストアへCAが登録されていません'
     }
-    Write-Output 'PASS 初回Windows連携の適用'
+    Write-Output 'PASS 単一EXEのヘッドレス初回セットアップとWindows連携の適用'
 } finally {
     if ($applied -or (Test-Path -LiteralPath $statePath)) {
         & powershell.exe `
@@ -179,6 +180,16 @@ if ($stateAfter -ne $stateBefore) {
 }
 if (Test-Path -LiteralPath $statePath) {
     Remove-Item -LiteralPath $statePath -Force
+}
+foreach ($createdPath in @(
+        $configPath,
+        $guiPropertiesPath,
+        $completionStatePath,
+        (Join-Path $appDirectory 'proxy.pac')
+    )) {
+    if (Test-Path -LiteralPath $createdPath) {
+        Remove-Item -LiteralPath $createdPath -Force
+    }
 }
 $generatedFiles = @(
     Get-ChildItem -LiteralPath $certificateDirectory -File `

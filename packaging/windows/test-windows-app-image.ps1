@@ -24,19 +24,21 @@ if (-not $appImage.StartsWith(
 $appDirectory = Join-Path $appImage 'app'
 $launcherPath = Join-Path $appImage 'NicoCache_nl.exe'
 $separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
-$certificateLauncherPath = Join-Path $appImage 'NicoCacheCA.exe'
 $configPath = Join-Path $appDirectory 'config.properties'
+$guiPropertiesPath = Join-Path $appDirectory 'NicoCacheGUI.property'
+$setupStatePath = Join-Path $appDirectory 'data\first-run-setup.properties'
+$systemStatePath = Join-Path $appDirectory 'data\setup-system-state.json'
+$setupScriptPath = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
 $certificateDirectory = Join-Path $appDirectory 'certs'
 $certificateTargetsPath = Join-Path $appDirectory 'certificate-targets.txt'
 $logRoot = Join-Path $appImage 'smoke-test-logs'
 $stdoutPath = Join-Path $logRoot 'stdout.log'
 $stderrPath = Join-Path $logRoot 'stderr.log'
-$certificateStdoutPath = Join-Path $logRoot 'certificate-stdout.log'
-$certificateStderrPath = Join-Path $logRoot 'certificate-stderr.log'
+$setupStdoutPath = Join-Path $logRoot 'setup-stdout.log'
+$setupStderrPath = Join-Path $logRoot 'setup-stderr.log'
 
 foreach ($requiredPath in @(
         $launcherPath,
-        $certificateLauncherPath,
         (Join-Path $appDirectory 'NicoCache_nl.jar'),
         (Join-Path $appDirectory 'NicoCacheCA.jar'),
         $certificateTargetsPath,
@@ -72,6 +74,13 @@ try {
 }
 if (Test-Path -LiteralPath $separateHeadlessLauncherPath) {
     throw "GUI用とヘッドレス用の製品ランチャーが分離されています: $separateHeadlessLauncherPath"
+}
+$rootLaunchers = @(
+    Get-ChildItem -LiteralPath $appImage -File -Filter '*.exe' |
+        Select-Object -ExpandProperty Name
+)
+if ($rootLaunchers.Count -ne 1 -or $rootLaunchers[0] -ne 'NicoCache_nl.exe') {
+    throw "アプリのランチャーが1本ではありません: $($rootLaunchers -join ', ')"
 }
 if (Test-Path -LiteralPath $configPath) {
     throw "既存設定を上書きしないためテストを中止します: $configPath"
@@ -118,29 +127,35 @@ $listenPort = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
 $listener.Stop()
 
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
-@(
-    '# NicoCache_nl パッケージ隔離スモークテスト用設定'
-    "listenPort=$listenPort"
-    'proxyHost='
-    'allowFrom=local'
-    'localFileServer=true'
-    'enableMitm=false'
-    'title=false'
-    ''
-) | Set-Content -LiteralPath $configPath -Encoding utf8
 
 $process = $null
 $testSucceeded = $false
 try {
-    $certificateProcess = Start-Process -FilePath $certificateLauncherPath `
-        -ArgumentList $certificateTargets `
+    $setupProcess = Start-Process -FilePath $launcherPath `
+        -ArgumentList @(
+            '--setup',
+            '--headless',
+            '--https=true',
+            '--trust-certificate=false',
+            '--proxy=false',
+            '--autostart=false'
+        ) `
         -WorkingDirectory $appDirectory `
-        -RedirectStandardOutput $certificateStdoutPath `
-        -RedirectStandardError $certificateStderrPath `
+        -RedirectStandardOutput $setupStdoutPath `
+        -RedirectStandardError $setupStderrPath `
         -Wait `
         -PassThru
-    if ($certificateProcess.ExitCode -ne 0) {
-        throw "隔離証明書生成に失敗しました (ExitCode: $($certificateProcess.ExitCode))"
+    if ($setupProcess.ExitCode -ne 0) {
+        throw "ヘッドレス初回セットアップに失敗しました (ExitCode: $($setupProcess.ExitCode))"
+    }
+    foreach ($createdPath in @(
+            $configPath,
+            $guiPropertiesPath,
+            $setupStatePath
+        )) {
+        if (-not (Test-Path -LiteralPath $createdPath -PathType Leaf)) {
+            throw "ヘッドレス初回セットアップの生成物がありません: $createdPath"
+        }
     }
     foreach ($generatedCertificate in @('ca.cer', 'ca.jks', 'ca.pem',
             'site.cer', 'site.jks', 'site.targets')) {
@@ -159,7 +174,27 @@ try {
     if (Compare-Object $certificateTargets $actualCertificateTargets) {
         throw '生成したサイト証明書の対象が配布一覧と一致しません'
     }
-    Write-Output 'PASS 本番対象を使ったOSへ登録しない隔離証明書生成'
+    $setupState = Get-Content -Raw -LiteralPath $setupStatePath |
+        ConvertFrom-StringData
+    if ($setupState.trustCertificate -ne 'false') {
+        throw 'ヘッドレス初回セットアップでCA登録無効が保存されていません'
+    }
+    if (Test-Path -LiteralPath $systemStatePath) {
+        throw 'OS連携を全項目無効にしたのにシステム状態が作成されました'
+    }
+    Write-Output 'PASS 単一EXEによるOSへ登録しないヘッドレス初回セットアップ'
+    Write-Output 'PASS 本番対象を使った隔離証明書生成'
+
+    @(
+        '# NicoCache_nl パッケージ隔離スモークテスト用設定'
+        "listenPort=$listenPort"
+        'proxyHost='
+        'allowFrom=local'
+        'localFileServer=true'
+        'enableMitm=false'
+        'title=false'
+        ''
+    ) | Set-Content -LiteralPath $configPath -Encoding utf8
 
     $process = Start-Process -FilePath $launcherPath `
         -ArgumentList '--headless' `
@@ -208,8 +243,25 @@ try {
         Stop-Process -Id $process.Id -Force
         $process.WaitForExit(10000) | Out-Null
     }
+    if (Test-Path -LiteralPath $systemStatePath) {
+        & powershell.exe `
+            -NoProfile `
+            -NonInteractive `
+            -ExecutionPolicy Bypass `
+            -File $setupScriptPath `
+            -Action Rollback `
+            -StatePath $systemStatePath
+        if ($LASTEXITCODE -ne 0) {
+            throw "隔離初回セットアップの復元に失敗しました (ExitCode: $LASTEXITCODE)"
+        }
+    }
     if (Test-Path -LiteralPath $configPath) {
         Remove-Item -LiteralPath $configPath -Force
+    }
+    foreach ($createdPath in @($guiPropertiesPath, $setupStatePath)) {
+        if (Test-Path -LiteralPath $createdPath) {
+            Remove-Item -LiteralPath $createdPath -Force
+        }
     }
     $generatedFiles = @(
         Get-ChildItem -LiteralPath $certificateDirectory -File `

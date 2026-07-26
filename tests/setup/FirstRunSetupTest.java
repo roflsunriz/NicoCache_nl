@@ -51,14 +51,86 @@ public final class FirstRunSetupTest {
         Files.createDirectories(sandbox);
         Files.createDirectories(previewDirectory);
         testRequirementDetection();
+        testHeadlessLaunchOptions();
         testSuccessfulFileSetup();
+        testSetupWithoutSystemIntegration();
         testExistingFilesArePreserved();
         testRollbackAfterCertificateFailure();
         testRollbackAfterIntegrationFailure();
         testCertificateTargets();
         testLocalizedKeysMatch();
         testWizardControlsAndRender();
-        System.out.println("First-run setup tests passed: 8");
+        System.out.println("First-run setup tests passed: 10");
+    }
+
+    private void testHeadlessLaunchOptions() {
+        LaunchOptions valid = LaunchOptions.parse(new String[] {
+                "--setup",
+                "--headless",
+                "--https=true",
+                "--trust-certificate=false",
+                "--proxy=false",
+                "--autostart=true"
+        });
+        assertEquals(null, valid.getError(), "valid headless setup");
+        assertTrue(valid.isSetup(), "setup mode");
+        assertTrue(valid.isHeadless(), "headless mode");
+        assertTrue(valid.getSetupOptions().isHttpsEnabled(),
+                "headless HTTPS option");
+        assertFalse(valid.getSetupOptions().isCertificateTrusted(),
+                "headless certificate trust option");
+        assertTrue(valid.getSetupOptions().isAutoStartEnabled(),
+                "headless auto-start option");
+
+        LaunchOptions missing = LaunchOptions.parse(new String[] {
+                "--setup",
+                "--headless",
+                "--https=false",
+                "--trust-certificate=false",
+                "--proxy=false"
+        });
+        assertContains(missing.getError(), "--autostart",
+                "missing option must fail");
+
+        LaunchOptions invalid = LaunchOptions.parse(new String[] {
+                "--setup",
+                "--headless",
+                "--https=yes",
+                "--trust-certificate=false",
+                "--proxy=false",
+                "--autostart=false"
+        });
+        assertContains(invalid.getError(), "true または false",
+                "invalid boolean must fail");
+
+        LaunchOptions contradiction = LaunchOptions.parse(new String[] {
+                "--setup",
+                "--headless",
+                "--https=false",
+                "--trust-certificate=true",
+                "--proxy=false",
+                "--autostart=false"
+        });
+        assertContains(contradiction.getError(), "--https=true",
+                "certificate trust without HTTPS must fail");
+
+        LaunchOptions guiSetup = LaunchOptions.parse(new String[] {
+                "--setup"
+        });
+        assertContains(guiSetup.getError(), "--headless",
+                "explicit setup must be headless");
+
+        LaunchOptions ordinary = LaunchOptions.parse(new String[] {
+                "--headless",
+                "legacy-option"
+        });
+        assertEquals(null, ordinary.getError(), "ordinary headless launch");
+        assertFalse(ordinary.isSetup(), "ordinary launch is not setup");
+        assertEquals(1, ordinary.getForwardedArgs().length,
+                "ordinary forwarded argument count");
+        assertEquals("legacy-option", ordinary.getForwardedArgs()[0],
+                "ordinary forwarded argument");
+        System.out.println("PASS unified headless setup launch options");
     }
 
     private void testRequirementDetection() throws Exception {
@@ -110,7 +182,7 @@ public final class FirstRunSetupTest {
                 new FirstRunSetupService.SetupFiles(directory),
                 certificates,
                 integration);
-        SetupOptions options = new SetupOptions(true, true, true);
+        SetupOptions options = new SetupOptions(true, true, true, true);
         service.apply(options);
 
         assertContains(
@@ -132,6 +204,8 @@ public final class FirstRunSetupTest {
                 "integration apply count");
         assertTrue(integration.options.isAutoStartEnabled(),
                 "auto-start option must be forwarded");
+        assertTrue(integration.options.isCertificateTrusted(),
+                "certificate trust option must be forwarded");
         System.out.println("PASS setup file creation and option forwarding");
     }
 
@@ -150,7 +224,7 @@ public final class FirstRunSetupTest {
                 new FirstRunSetupService.SetupFiles(directory),
                 new FakeCertificateGenerator(directory, false),
                 new FakeSystemIntegration(false));
-        service.apply(new SetupOptions(false, true, false));
+        service.apply(new SetupOptions(false, false, true, false));
 
         assertEquals(
                 "custom-proxy",
@@ -167,6 +241,28 @@ public final class FirstRunSetupTest {
         System.out.println("PASS existing user files are preserved");
     }
 
+    private void testSetupWithoutSystemIntegration() throws Exception {
+        Path directory = freshSandbox("no-system-integration");
+        copyTemplateFiles(directory);
+        FakeCertificateGenerator certificates =
+                new FakeCertificateGenerator(directory, false);
+        FakeSystemIntegration integration = new FakeSystemIntegration(false);
+        FirstRunSetupService service = new FirstRunSetupService(
+                new FirstRunSetupService.SetupFiles(directory),
+                certificates,
+                integration);
+        service.apply(new SetupOptions(true, false, false, false));
+
+        assertEquals(1, certificates.generateCount,
+                "HTTPS certificate files must still be generated");
+        assertEquals(0, integration.applyCount,
+                "disabled OS options must skip system integration");
+        assertTrue(Files.isRegularFile(
+                directory.resolve("data/first-run-setup.properties")),
+                "setup must complete without system integration");
+        System.out.println("PASS setup without OS integration");
+    }
+
     private void testRollbackAfterIntegrationFailure() throws Exception {
         Path directory = freshSandbox("rollback");
         copyTemplateFiles(directory);
@@ -179,7 +275,7 @@ public final class FirstRunSetupTest {
                 integration);
         boolean failed = false;
         try {
-            service.apply(new SetupOptions(true, true, true));
+            service.apply(new SetupOptions(true, true, true, true));
         } catch (IOException expected) {
             failed = true;
         }
@@ -214,7 +310,7 @@ public final class FirstRunSetupTest {
                 integration);
         boolean failed = false;
         try {
-            service.apply(new SetupOptions(true, true, true));
+            service.apply(new SetupOptions(true, true, true, true));
         } catch (IOException expected) {
             failed = true;
         }
@@ -361,6 +457,8 @@ public final class FirstRunSetupTest {
         SetupOptions options = applied.get();
         assertTrue(options != null, "Apply callback must run");
         assertTrue(options.isHttpsEnabled(), "applied HTTPS option");
+        assertTrue(options.isCertificateTrusted(),
+                "applied certificate trust option");
         assertTrue(options.isProxyConfigured(), "applied proxy option");
         assertFalse(options.isAutoStartEnabled(),
                 "applied auto-start option");
