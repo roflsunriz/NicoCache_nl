@@ -44,8 +44,8 @@ if ($providerCertificateRemovals.Count -ne 0) {
 }
 if ($scriptContentForValidation = Get-Content -Raw -LiteralPath $scriptSource) {
     if ($scriptContentForValidation -notmatch
-            '(?s)Import-Certificate.*Cert:\\CurrentUser\\Root.*-Confirm:\$false') {
-        throw '信頼済みルートCAが確認なしで現在ユーザーへ登録されません'
+            'CertAddEncodedCertificateToSystemStore') {
+        throw '信頼済みルートCAが無人対応のWindows APIで登録されません'
     }
     if ($scriptContentForValidation -notmatch
             '\$certificateStore\.Remove\(\$certificateToRemove\)') {

@@ -135,6 +135,39 @@ namespace NicoCache {
         [IntPtr]::Zero, 37, [IntPtr]::Zero, 0) | Out-Null
 }
 
+function Add-CurrentUserRootCertificate {
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not ('NicoCache.CertificateStore' -as [type])) {
+        Add-Type @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+namespace NicoCache {
+    public static class CertificateStore {
+        [DllImport(
+            "crypt32.dll",
+            CharSet = CharSet.Unicode,
+            SetLastError = true)]
+        private static extern bool CertAddEncodedCertificateToSystemStore(
+            string storeName,
+            byte[] certificate,
+            int certificateLength);
+
+        public static void AddToCurrentUserRoot(byte[] certificate) {
+            if (!CertAddEncodedCertificateToSystemStore(
+                    "ROOT", certificate, certificate.Length)) {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+        }
+    }
+}
+'@
+    }
+    $certificateBytes = [System.IO.File]::ReadAllBytes($Path)
+    [NicoCache.CertificateStore]::AddToCurrentUserRoot($certificateBytes)
+}
+
 function Restore-State {
     param([Parameter(Mandatory)]$State)
 
@@ -268,17 +301,7 @@ try {
     if ($EnableCertificate -and -not $certificateWasPresent) {
         $script:CurrentStage = 'CA証明書を現在のユーザーへ登録'
         $state.Changes.Certificate = $true
-        $importedCertificates = @(
-            Import-Certificate `
-                -FilePath $resolvedCertificate `
-                -CertStoreLocation 'Cert:\CurrentUser\Root' `
-                -Confirm:$false
-        )
-        if ($importedCertificates.Count -eq 0 -or
-                $certificateThumbprint -notin
-                $importedCertificates.Thumbprint) {
-            throw 'CA証明書を登録できませんでした'
-        }
+        Add-CurrentUserRootCertificate -Path $resolvedCertificate
         if (-not (Test-Path -LiteralPath (
                 "Cert:\CurrentUser\Root\$certificateThumbprint"
             ))) {
