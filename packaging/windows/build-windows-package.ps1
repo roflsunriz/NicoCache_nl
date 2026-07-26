@@ -342,6 +342,8 @@ foreach ($relativePath in $runtimeLayoutPaths) {
 if ($PackageType -in @('Msi', 'All')) {
     $msiDescription = 'Local HTTP/HTTPS proxy and cache server for NicoNico'
     $msiArguments = @(
+        '-J-Duser.language=ja',
+        '-J-Duser.country=JP',
         '--type', 'msi',
         '--name', 'NicoCache_nl',
         '--app-version', $AppVersion,
