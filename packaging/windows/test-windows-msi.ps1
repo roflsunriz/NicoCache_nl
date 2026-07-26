@@ -246,7 +246,7 @@ try {
             '--setup',
             '--headless',
             '--https=true',
-            '--trust-certificate=true',
+            '--trust-certificate=false',
             '--proxy=true',
             '--autostart=true'
         ) `
@@ -275,12 +275,12 @@ try {
     $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
         (Join-Path $certificateDirectory 'ca.cer')
     )
-    if (-not (Test-Path -LiteralPath (
+    if (Test-Path -LiteralPath (
             "Cert:\CurrentUser\Root\$($certificate.Thumbprint)"
-        ))) {
-        throw 'MSI上の初回セットアップでCA証明書が登録されませんでした'
+        )) {
+        throw 'MSIの非対話試験でCAが信頼済みルートへ登録されました'
     }
-    Write-Output 'PASS アンインストール前のWindows連携適用'
+    Write-Output 'PASS アンインストール前のWindows連携適用（CA未登録）'
 } finally {
     if (Test-Path -LiteralPath $userStatePath) {
         Remove-Item -LiteralPath $userStatePath -Force

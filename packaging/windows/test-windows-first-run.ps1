@@ -104,7 +104,7 @@ try {
             '--setup',
             '--headless',
             '--https=true',
-            '--trust-certificate=true',
+            '--trust-certificate=false',
             '--proxy=true',
             '--autostart=true'
         ) `
@@ -185,12 +185,15 @@ try {
     if ($runValue -notmatch [regex]::Escape($launcher)) {
         throw 'ログオン時起動へ製品ランチャーが登録されていません'
     }
-    if (-not (Test-Path -LiteralPath (
+    if (Test-Path -LiteralPath (
             "Cert:\CurrentUser\Root\$($certificate.Thumbprint)"
-        ))) {
-        throw '現在ユーザーのルート証明書ストアへCAが登録されていません'
+        )) {
+        throw '非対話試験でCAが信頼済みルートへ登録されました'
     }
-    Write-Output 'PASS 単一EXEのヘッドレス初回セットアップとWindows連携の適用'
+    Write-Output (
+        'PASS 単一EXEのヘッドレス初回セットアップ、CA生成、' +
+        'プロキシー、自動起動の適用'
+    )
 } finally {
     if ($applied -or (Test-Path -LiteralPath $statePath)) {
         & powershell.exe `

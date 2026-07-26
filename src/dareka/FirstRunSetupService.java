@@ -368,7 +368,7 @@ final class FirstRunSetupService {
 
     private static final class WindowsSetupIntegration
             implements SystemIntegration {
-        private static final long TIMEOUT_SECONDS = 60L;
+        private static final long TIMEOUT_SECONDS = 300L;
         private final Path appDirectory;
         private final Path statePath;
         private final Path errorPath;

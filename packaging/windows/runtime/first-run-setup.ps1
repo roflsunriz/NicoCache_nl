@@ -154,83 +154,33 @@ namespace NicoCache {
 function Add-CurrentUserRootCertificate {
     param([Parameter(Mandatory)][string]$Path)
 
-    if (-not ('NicoCache.CertificateStore' -as [type])) {
-        Add-Type @'
-using System;
-using System.ComponentModel;
-using System.Runtime.InteropServices;
-namespace NicoCache {
-    public static class CertificateStore {
-        private const uint X509_ASN_ENCODING = 0x00000001;
-        private const uint CERT_STORE_ADD_REPLACE_EXISTING = 3;
-        private const uint CERT_STORE_OPEN_EXISTING_FLAG = 0x00004000;
-        private const uint CERT_SYSTEM_STORE_CURRENT_USER = 0x00010000;
-        private const uint CERT_SYSTEM_STORE_UNPROTECTED_FLAG = 0x40000000;
-        private static readonly IntPtr CERT_STORE_PROV_SYSTEM_W =
-            new IntPtr(10);
+    $certutilPath = Join-Path $env:SystemRoot 'System32\certutil.exe'
+    if (-not (Test-Path -LiteralPath $certutilPath -PathType Leaf)) {
+        throw "Windows証明書登録コマンドがありません: $certutilPath"
+    }
 
-        [DllImport(
-            "crypt32.dll",
-            CharSet = CharSet.Unicode,
-            SetLastError = true)]
-        private static extern IntPtr CertOpenStore(
-            IntPtr storeProvider,
-            uint encodingType,
-            IntPtr cryptProvider,
-            uint flags,
-            string storeName);
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        # -silent は指定しない。信頼済みルートへの登録はWindowsの確認画面で
+        # 利用者が明示的に許可した場合だけ完了させる。
+        $ErrorActionPreference = 'Continue'
+        $certutilOutput = @(
+            & $certutilPath -user -f -addstore Root $Path 2>&1
+        )
+        $certutilExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
 
-        [DllImport("crypt32.dll", SetLastError = true)]
-        private static extern bool CertAddEncodedCertificateToStore(
-            IntPtr store,
-            uint encodingType,
-            byte[] certificate,
-            int certificateLength,
-            uint addDisposition,
-            IntPtr storedContext);
-
-        [DllImport("crypt32.dll", SetLastError = true)]
-        private static extern bool CertCloseStore(
-            IntPtr store,
-            uint flags);
-
-        public static void AddToCurrentUserRoot(byte[] certificate) {
-            uint flags = CERT_STORE_OPEN_EXISTING_FLAG |
-                CERT_SYSTEM_STORE_CURRENT_USER |
-                CERT_SYSTEM_STORE_UNPROTECTED_FLAG;
-            IntPtr store = CertOpenStore(
-                CERT_STORE_PROV_SYSTEM_W,
-                0,
-                IntPtr.Zero,
-                flags,
-                "ROOT");
-            if (store == IntPtr.Zero) {
-                throw new Win32Exception(
-                    Marshal.GetLastWin32Error(),
-                    "CurrentUser ROOT証明書ストアを開けませんでした");
-            }
-            try {
-                if (!CertAddEncodedCertificateToStore(
-                        store,
-                        X509_ASN_ENCODING,
-                        certificate,
-                        certificate.Length,
-                        CERT_STORE_ADD_REPLACE_EXISTING,
-                        IntPtr.Zero)) {
-                    throw new Win32Exception(
-                        Marshal.GetLastWin32Error(),
-                        "CA証明書をCurrentUser ROOTへ登録できませんでした");
-                }
-            } finally {
-                CertCloseStore(store, 0);
-            }
+    if ($certutilExitCode -ne 0) {
+        $details = ($certutilOutput | Out-String).Trim()
+        $message =
+            "CA証明書の登録が許可されませんでした (ExitCode: $certutilExitCode)"
+        if (-not [string]::IsNullOrWhiteSpace($details)) {
+            $message += "`n$details"
         }
+        throw $message
     }
-}
-'@
-    }
-    $certificateBytes = [System.IO.File]::ReadAllBytes($Path)
-    [NicoCache.CertificateStore]::AddToCurrentUserRoot($certificateBytes)
 }
 
 function Restore-State {

@@ -44,8 +44,12 @@ if ($providerCertificateRemovals.Count -ne 0) {
 }
 if ($scriptContentForValidation = Get-Content -Raw -LiteralPath $scriptSource) {
     if ($scriptContentForValidation -notmatch
-            'CERT_SYSTEM_STORE_UNPROTECTED_FLAG') {
-        throw '信頼済みルートCAが無人対応のWindows APIで登録されません'
+            '& \$certutilPath -user -f -addstore Root \$Path') {
+        throw '信頼済みルートCAの登録でWindows標準の許可画面が起動されません'
+    }
+    if ($scriptContentForValidation -match
+            '& \$certutilPath[^\r\n]*-silent') {
+        throw '信頼済みルートCAが利用者の許可なしで登録されます'
     }
     if ($scriptContentForValidation -notmatch
             '\$certificateStore\.Remove\(\$certificateToRemove\)') {
