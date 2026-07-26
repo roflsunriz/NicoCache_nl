@@ -74,6 +74,7 @@ public class NLMain {
     private static Thread mainThread;
 
     public static void main(String[] args) {
+        args = configureLaunchMode(args);
         if (isStartGUI()) {
             try {
                 guiLauncher = new GUILauncher();
@@ -100,6 +101,28 @@ public class NLMain {
                 System.exit(0);
             }
         }
+    }
+
+    private static String[] configureLaunchMode(String[] args) {
+        int forwardedCount = 0;
+        for (String arg : args) {
+            if (!"--headless".equals(arg)) {
+                forwardedCount++;
+            }
+        }
+        if (forwardedCount == args.length) {
+            return args;
+        }
+
+        System.setProperty("dareka.gui", "false");
+        String[] forwardedArgs = new String[forwardedCount];
+        int forwardedIndex = 0;
+        for (String arg : args) {
+            if (!"--headless".equals(arg)) {
+                forwardedArgs[forwardedIndex++] = arg;
+            }
+        }
+        return forwardedArgs;
     }
 
     static boolean isStartGUI() {

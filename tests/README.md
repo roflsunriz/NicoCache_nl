@@ -63,8 +63,10 @@ HTTP サーバーを利用する。
 ## Windows パッケージの隔離スモークテスト
 
 `packaging/windows/test-windows-app-image.ps1` は自己完結アプリイメージの
-`NicoCache_nl-Headless.exe` を専用の空きループバックポートで起動し、ルートの
-HTTP応答とバージョン文字列を確認する。テスト設定、ログ、キャッシュは
+単一製品ランチャー `NicoCache_nl.exe` を内部用の `--headless` 指定で専用の
+空きループバックポートへ起動し、ルートのHTTP応答とバージョン文字列を確認する。
+GUI用とヘッドレス用の製品EXEが分離されていないことも検証する。テスト設定、
+ログ、キャッシュは
 `.test-work/windows-package/` 内に限定し、TLS MitM、証明書登録、Windows
 プロキシー設定、タスク登録は行わない。終了時は起動した実行ファイルのパスと
 PIDを照合し、そのPIDだけを終了する。証明書生成ランチャーについてはテスト領域

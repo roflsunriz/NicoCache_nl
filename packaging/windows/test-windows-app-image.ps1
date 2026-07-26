@@ -22,7 +22,8 @@ if (-not $appImage.StartsWith(
     throw "実環境の誤操作を防ぐため.test-work外のイメージは検証できません: $appImage"
 }
 $appDirectory = Join-Path $appImage 'app'
-$launcherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
+$launcherPath = Join-Path $appImage 'NicoCache_nl.exe'
+$separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
 $certificateLauncherPath = Join-Path $appImage 'NicoCacheCA.exe'
 $configPath = Join-Path $appDirectory 'config.properties'
 $certificateDirectory = Join-Path $appDirectory 'certs'
@@ -46,6 +47,9 @@ foreach ($requiredPath in @(
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "アプリイメージに必要なファイルがありません: $requiredPath"
     }
+}
+if (Test-Path -LiteralPath $separateHeadlessLauncherPath) {
+    throw "GUI用とヘッドレス用の製品ランチャーが分離されています: $separateHeadlessLauncherPath"
 }
 if (Test-Path -LiteralPath $configPath) {
     throw "既存設定を上書きしないためテストを中止します: $configPath"
@@ -118,6 +122,7 @@ try {
     Write-Output 'PASS OSへ登録しない隔離証明書生成'
 
     $process = Start-Process -FilePath $launcherPath `
+        -ArgumentList '--headless' `
         -WorkingDirectory $appDirectory `
         -RedirectStandardOutput $stdoutPath `
         -RedirectStandardError $stderrPath `
@@ -127,7 +132,7 @@ try {
     $response = $null
     do {
         if ($process.HasExited) {
-            throw "ヘッドレスランチャーが起動直後に終了しました (ExitCode: $($process.ExitCode))"
+            throw "単一ランチャーが起動直後に終了しました (ExitCode: $($process.ExitCode))"
         }
         try {
             $response = Invoke-WebRequest -Uri "http://127.0.0.1:$listenPort/" `
@@ -138,7 +143,7 @@ try {
     } until ($response -or [DateTime]::UtcNow -ge $deadline)
 
     if (-not $response) {
-        throw "ヘッドレスランチャーが${StartupTimeoutSeconds}秒以内に応答しませんでした"
+        throw "単一ランチャーが${StartupTimeoutSeconds}秒以内に応答しませんでした"
     }
     if ($response.StatusCode -ne 200) {
         throw "予期しないHTTPステータスです: $($response.StatusCode)"
@@ -147,7 +152,7 @@ try {
         throw 'ルート応答にNicoCache_nlのバージョン文字列がありません'
     }
 
-    Write-Output "PASS 自己完結ランタイムのヘッドレス起動"
+    Write-Output "PASS 単一製品ランチャーの内部ヘッドレス起動"
     Write-Output "PASS HTTPループバック応答 (port=$listenPort)"
     $testSucceeded = $true
 } finally {

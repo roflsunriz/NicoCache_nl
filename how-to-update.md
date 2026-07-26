@@ -56,8 +56,9 @@ git push origin v2026.07.20
 
 ## Windows インストーラー試作
 
-JDK 17 の `jpackage` を使い、JavaランタイムとGUI・ヘッドレスランチャーを含む
-アプリイメージを生成する。
+JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチャーを含む
+アプリイメージを生成する。隔離テストでは同じ製品ランチャーへ内部用の
+`--headless` を指定する。
 
 ```powershell
 .\packaging\windows\build-windows-package.ps1 -PackageType AppImage

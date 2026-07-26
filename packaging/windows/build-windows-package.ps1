@@ -252,7 +252,6 @@ Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'THIRD-PARTY-NOTICES.txt') `
 $sharedJavaOptions = @(
     '-Xmx128m',
     '-Duser.dir=$APPDIR',
-    '-Ddareka.gui=true',
     '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED',
     '--add-exports=java.base/java.lang.invoke=ALL-UNNAMED',
     '--add-exports=java.base/jdk.internal.access=ALL-UNNAMED',
@@ -273,7 +272,6 @@ $jpackageArguments = @(
     '--main-jar', 'NicoCache_nl.jar',
     '--main-class', 'dareka.NLMain',
     '--icon', (Join-Path $root 'niconico-0.ico'),
-    '--add-launcher', "NicoCache_nl-Headless=$(Join-Path $PSScriptRoot 'headless-launcher.properties')",
     '--add-launcher', "NicoCacheCA=$(Join-Path $PSScriptRoot 'certificate-generator.properties')"
 )
 foreach ($javaOption in $sharedJavaOptions) {
