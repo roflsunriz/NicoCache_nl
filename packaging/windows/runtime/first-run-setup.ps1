@@ -268,18 +268,20 @@ try {
     if ($EnableCertificate -and -not $certificateWasPresent) {
         $script:CurrentStage = 'CA証明書を現在のユーザーへ登録'
         $state.Changes.Certificate = $true
-        $certificateStore =
-            [System.Security.Cryptography.X509Certificates.X509Store]::new(
-                [System.Security.Cryptography.X509Certificates.StoreName]::Root,
-                [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
-            )
-        try {
-            $certificateStore.Open(
-                [System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite
-            )
-            $certificateStore.Add($certificate)
-        } finally {
-            $certificateStore.Close()
+        $certutilPath = Join-Path $env:SystemRoot 'System32\certutil.exe'
+        if (-not (Test-Path -LiteralPath $certutilPath -PathType Leaf)) {
+            throw "certutil.exeが見つかりません: $certutilPath"
+        }
+        & $certutilPath `
+            -user `
+            -f `
+            -silent `
+            -addstore `
+            Root `
+            $resolvedCertificate |
+            Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "CA証明書を登録できませんでした (ExitCode: $LASTEXITCODE)"
         }
         if (-not (Test-Path -LiteralPath (
                 "Cert:\CurrentUser\Root\$certificateThumbprint"

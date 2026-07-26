@@ -32,6 +32,11 @@ $certificateDirectory = Join-Path $appDirectory 'certs'
 $certificatePath = Join-Path $certificateDirectory 'ca.cer'
 $certificateTargetsPath = Join-Path $appDirectory 'certificate-targets.txt'
 $statePath = Join-Path $appDirectory 'data\setup-system-state.json'
+$setupErrorPath = Join-Path $appDirectory 'data\setup-windows-error.txt'
+$setupStandardOutputPath =
+    Join-Path $testRoot 'windows-first-run-stdout.txt'
+$setupStandardErrorPath =
+    Join-Path $testRoot 'windows-first-run-stderr.txt'
 $runRegistryPath =
     'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValueName = 'NicoCache_nl'
@@ -105,9 +110,36 @@ try {
         ) `
         -WorkingDirectory $appDirectory `
         -Wait `
-        -PassThru
+        -PassThru `
+        -RedirectStandardOutput $setupStandardOutputPath `
+        -RedirectStandardError $setupStandardErrorPath
     if ($setupProcess.ExitCode -ne 0) {
-        throw "ヘッドレス初回セットアップに失敗しました (ExitCode: $($setupProcess.ExitCode))"
+        $diagnostics = @()
+        foreach ($diagnosticPath in @(
+                $setupStandardOutputPath,
+                $setupStandardErrorPath,
+                $setupErrorPath
+            )) {
+            if (Test-Path -LiteralPath $diagnosticPath -PathType Leaf) {
+                $diagnosticText =
+                    Get-Content -Raw -LiteralPath $diagnosticPath
+                if (-not [string]::IsNullOrWhiteSpace($diagnosticText)) {
+                    $diagnostics += (
+                        "$([System.IO.Path]::GetFileName($diagnosticPath)):`n" +
+                        $diagnosticText.Trim()
+                    )
+                }
+            }
+        }
+        $diagnosticSuffix = if ($diagnostics.Count -gt 0) {
+            "`n" + ($diagnostics -join "`n")
+        } else {
+            ''
+        }
+        throw (
+            "ヘッドレス初回セットアップに失敗しました " +
+            "(ExitCode: $($setupProcess.ExitCode))$diagnosticSuffix"
+        )
     }
     $applied = $true
     if (-not (Test-Path -LiteralPath $certificatePath -PathType Leaf)) {
