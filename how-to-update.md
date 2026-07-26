@@ -68,9 +68,12 @@ JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチ
 
 ローカルではOSへインストールせず、`.test-work/windows-package/` 内の
 アプリイメージだけを検証する。MSIの生成と `msiexec /qn` による無人
-インストール・アンインストールは、一時的なGitHub Actionsランナーで実行する。
-具体的なテスト境界、依存関係更新、現在の試作範囲は
-`packaging/windows/README.md` を参照する。
+インストール・修復・更新・アンインストールは、一時的なGitHub Actions
+ランナーで実行する。MSIの版を上げても
+`packaging/windows/package-identity.psd1` の `UpgradeUuid` は変更しない。
+変更すると既存版を更新できなくなる。具体的なテスト境界、依存関係更新、
+完成条件は `packaging/windows/README.md` と
+`packaging/windows/requirements.md` を参照する。
 
 ## Extension API を変更する場合
 

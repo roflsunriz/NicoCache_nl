@@ -20,6 +20,19 @@ $dependencyRoot = Join-Path $workRoot 'dependencies'
 $inputRoot = Join-Path $workRoot 'input'
 $outputRoot = Join-Path $workRoot 'output'
 $appImagePath = Join-Path $outputRoot 'NicoCache_nl'
+$packageIdentity = Import-PowerShellDataFile -LiteralPath (
+    Join-Path $PSScriptRoot 'package-identity.psd1'
+)
+$upgradeUuid = [Guid]::Empty
+if (-not [Guid]::TryParse(
+        $packageIdentity.UpgradeUuid,
+        [ref]$upgradeUuid
+    ) -or $upgradeUuid -eq [Guid]::Empty) {
+    throw 'package-identity.psd1 の UpgradeUuid が有効なUUIDではありません'
+}
+if ([string]::IsNullOrWhiteSpace($packageIdentity.MenuGroup)) {
+    throw 'package-identity.psd1 の MenuGroup が空です'
+}
 
 function Assert-ChildPath {
     param(
@@ -291,6 +304,9 @@ if ($PackageType -in @('Msi', 'All')) {
         '--dest', $outputRoot,
         '--win-per-user-install',
         '--win-menu',
+        '--win-menu-group', $packageIdentity.MenuGroup,
+        '--win-shortcut-prompt',
+        '--win-upgrade-uuid', $upgradeUuid.ToString(),
         '--win-dir-chooser'
     )
     Invoke-NativeCommand -FilePath $jpackage -ArgumentList $msiArguments `

@@ -72,12 +72,34 @@ jobs:
           jpackage --version
           Get-Command candle, light | Select-Object Name, Source
 
-      - name: Build app image and MSI
+      - name: Build previous MSI
         shell: pwsh
         run: |
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
             -AppVersion 0.1.0 `
+            -NlFiltersSource .\nlFilters
+          $lifecycle = New-Item `
+            -ItemType Directory `
+            -Path .\.test-work\installer-lifecycle `
+            -Force
+          $previousMsi = Get-ChildItem `
+            -LiteralPath .\.test-work\windows-package\output `
+            -File `
+            -Filter '*.msi' |
+            Select-Object -First 1
+          if (-not $previousMsi) {
+            throw '旧版MSI成果物がありません'
+          }
+          Copy-Item -LiteralPath $previousMsi.FullName `
+            -Destination (Join-Path $lifecycle 'NicoCache_nl-0.1.0.msi')
+
+      - name: Build current app image and MSI
+        shell: pwsh
+        run: |
+          .\packaging\windows\build-windows-package.ps1 `
+            -PackageType All `
+            -AppVersion 0.1.1 `
             -NlFiltersSource .\nlFilters
 
       - name: Test isolated app image
@@ -86,7 +108,7 @@ jobs:
           .\packaging\windows\test-windows-app-image.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
 
-      - name: Test silent MSI install and uninstall
+      - name: Test MSI install repair upgrade and uninstall
         shell: pwsh
         run: |
           $msi = Get-ChildItem `
@@ -95,9 +117,12 @@ jobs:
             -Filter '*.msi' |
             Select-Object -First 1
           if (-not $msi) {
-            throw 'MSI成果物がありません'
+            throw '新版MSI成果物がありません'
           }
-          .\packaging\windows\test-windows-msi.ps1 -MsiPath $msi.FullName
+          .\packaging\windows\test-windows-msi.ps1 `
+            -PreviousMsiPath `
+              .\.test-work\installer-lifecycle\NicoCache_nl-0.1.0.msi `
+            -MsiPath $msi.FullName
 
       - name: Create MSI checksum
         shell: pwsh
