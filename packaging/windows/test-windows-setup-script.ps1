@@ -44,8 +44,8 @@ if ($providerCertificateRemovals.Count -ne 0) {
 }
 if ($scriptContentForValidation = Get-Content -Raw -LiteralPath $scriptSource) {
     if ($scriptContentForValidation -notmatch
-            '(?s)-user\s+`\s*-f\s+`\s*-addstore') {
-        throw '信頼済みルートCAがcertutilの強制モードで登録されません'
+            '(?s)Import-Certificate.*Cert:\\CurrentUser\\Root.*-Confirm:\$false') {
+        throw '信頼済みルートCAが確認なしで現在ユーザーへ登録されません'
     }
     if ($scriptContentForValidation -notmatch
             '\$certificateStore\.Remove\(\$certificateToRemove\)') {

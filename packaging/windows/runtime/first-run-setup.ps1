@@ -268,25 +268,16 @@ try {
     if ($EnableCertificate -and -not $certificateWasPresent) {
         $script:CurrentStage = 'CA証明書を現在のユーザーへ登録'
         $state.Changes.Certificate = $true
-        $certutilPath = Join-Path $env:SystemRoot 'System32\certutil.exe'
-        if (-not (Test-Path -LiteralPath $certutilPath -PathType Leaf)) {
-            throw "certutil.exeが見つかりません: $certutilPath"
-        }
-        $certutilOutput = @(
-            & $certutilPath `
-            -user `
-            -f `
-            -addstore `
-            Root `
-            $resolvedCertificate 2>&1
+        $importedCertificates = @(
+            Import-Certificate `
+                -FilePath $resolvedCertificate `
+                -CertStoreLocation 'Cert:\CurrentUser\Root' `
+                -Confirm:$false
         )
-        $certutilExitCode = $LASTEXITCODE
-        if ($certutilExitCode -ne 0) {
-            $certutilDetail = ($certutilOutput | Out-String).Trim()
-            throw (
-                "CA証明書を登録できませんでした " +
-                "(ExitCode: $certutilExitCode)`n$certutilDetail"
-            )
+        if ($importedCertificates.Count -eq 0 -or
+                $certificateThumbprint -notin
+                $importedCertificates.Thumbprint) {
+            throw 'CA証明書を登録できませんでした'
         }
         if (-not (Test-Path -LiteralPath (
                 "Cert:\CurrentUser\Root\$certificateThumbprint"
