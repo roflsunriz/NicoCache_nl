@@ -116,4 +116,26 @@ if (Test-Path -LiteralPath $statePath) {
     throw "ロールバック後も状態ファイルが残っています: $statePath"
 }
 
-Write-Output 'PASS Windows設定の段階別診断と未変更項目を触らないロールバック'
+$missingStatePath = Join-Path $testRoot (
+    'missing-data\setup-system-state.json'
+)
+$missingStateRollback = Start-Process `
+    -FilePath 'powershell.exe' `
+    -ArgumentList @(
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $scriptPath,
+        '-Action', 'Rollback',
+        '-StatePath', $missingStatePath
+    ) `
+    -Wait `
+    -PassThru `
+    -RedirectStandardOutput $standardOutputPath `
+    -RedirectStandardError $standardErrorPath
+
+if ($missingStateRollback.ExitCode -ne 0) {
+    throw "状態保存先がないロールバックに失敗しました (ExitCode: $($missingStateRollback.ExitCode))"
+}
+
+Write-Output 'PASS Windows設定の段階別診断と安全なロールバック'

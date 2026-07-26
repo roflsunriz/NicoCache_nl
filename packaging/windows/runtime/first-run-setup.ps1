@@ -170,6 +170,10 @@ function Restore-State {
 
 $script:CurrentStage = 'Windows設定の保存先を確認'
 $fullStatePath = [System.IO.Path]::GetFullPath($StatePath)
+if ($Action -eq 'Rollback' -and
+        -not (Test-Path -LiteralPath $fullStatePath -PathType Leaf)) {
+    return
+}
 $stateDirectory = Split-Path -Parent $fullStatePath
 if (-not (Test-Path -LiteralPath $stateDirectory -PathType Container)) {
     throw "状態保存先のディレクトリがありません: $stateDirectory"
@@ -177,9 +181,6 @@ if (-not (Test-Path -LiteralPath $stateDirectory -PathType Container)) {
 
 if ($Action -eq 'Rollback') {
     $script:CurrentStage = 'Windows設定をロールバック'
-    if (-not (Test-Path -LiteralPath $fullStatePath -PathType Leaf)) {
-        return
-    }
     $state = Get-Content -Raw -LiteralPath $fullStatePath -Encoding UTF8 |
         ConvertFrom-Json
     Restore-State -State $state

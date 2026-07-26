@@ -36,6 +36,9 @@ $desktopShortcut = Join-Path (
         [Environment+SpecialFolder]::DesktopDirectory
     )
 ) 'NicoCache_nl.lnk'
+$runRegistryPath =
+    'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$runValueName = 'NicoCache_nl'
 
 if (-not $installRoot.StartsWith(
         $testRoot + [System.IO.Path]::DirectorySeparatorChar,
@@ -89,8 +92,17 @@ function Get-OsIntegrationState {
             Select-Object DisplayName, DisplayVersion, UninstallString |
             Sort-Object DisplayVersion, UninstallString
     )
+    $run = Get-ItemProperty -LiteralPath $runRegistryPath `
+        -Name $runValueName `
+        -ErrorAction SilentlyContinue
+    $runProperty = if ($run) {
+        $run.PSObject.Properties[$runValueName]
+    } else {
+        $null
+    }
     return [PSCustomObject]@{
         Proxy = $proxyState
+        RunValue = if ($runProperty) { $runProperty.Value } else { $null }
         CertificateThumbprints = $certificateThumbprints
         UninstallEntries = $uninstallEntries
         StartMenuShortcutExists = Test-Path -LiteralPath $startMenuShortcut
@@ -134,6 +146,8 @@ $osStateBefore = Get-OsIntegrationState
 $installed = $false
 $upgraded = $false
 $userStatePath = Join-Path $installRoot 'data\installer-lifecycle-user.txt'
+$setupStatePath = Join-Path $installRoot 'data\setup-system-state.json'
+$initialCertificateFiles = @()
 
 try {
     Invoke-MsiExec -ArgumentList @(
@@ -148,7 +162,7 @@ try {
     if (-not (Test-Path -LiteralPath $installRoot -PathType Container)) {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
-    Assert-AppVersion -ExpectedVersion '0.1.4'
+    Assert-AppVersion -ExpectedVersion '0.1.5'
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -195,7 +209,7 @@ try {
         "INSTALLDIR=`"$installRoot`""
     ) -FailureMessage '新版MSIへの無人更新に失敗しました'
     $upgraded = $true
-    Assert-AppVersion -ExpectedVersion '0.1.5'
+    Assert-AppVersion -ExpectedVersion '0.1.6'
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
         throw 'MSI更新後にデスクトップのショートカットがありません'
@@ -210,9 +224,73 @@ try {
         -AppImagePath $installRoot `
         -StartupTimeoutSeconds $StartupTimeoutSeconds
     Write-Output 'PASS 更新後MSIの隔離起動'
+
+    $certificateDirectory = Join-Path $installRoot 'certs'
+    $initialCertificateFiles = @(
+        Get-ChildItem -LiteralPath $certificateDirectory -File `
+            -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+    )
+    $launcher = Join-Path $installRoot 'NicoCache_nl.exe'
+    $setupProcess = Start-Process `
+        -FilePath $launcher `
+        -ArgumentList @(
+            '--setup',
+            '--headless',
+            '--https=true',
+            '--trust-certificate=true',
+            '--proxy=true',
+            '--autostart=true'
+        ) `
+        -WorkingDirectory $installRoot `
+        -Wait `
+        -PassThru
+    if ($setupProcess.ExitCode -ne 0) {
+        throw "MSI上の初回セットアップに失敗しました (ExitCode: $($setupProcess.ExitCode))"
+    }
+    $savedState = Get-Content -Raw -LiteralPath $setupStatePath -Encoding UTF8 |
+        ConvertFrom-Json
+    if ($savedState.Status -ne 'Applied') {
+        throw "Windows連携状態がAppliedではありません: $($savedState.Status)"
+    }
+    $proxy = Get-ItemProperty -LiteralPath (
+        'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+    )
+    if ($proxy.AutoConfigURL -ne 'http://localhost:8080/proxy.pac') {
+        throw 'MSI上の初回セットアップで自動プロキシーが設定されませんでした'
+    }
+    $runValue = (Get-ItemProperty -LiteralPath $runRegistryPath `
+            -Name $runValueName).$runValueName
+    if ($runValue -notmatch [regex]::Escape($launcher)) {
+        throw 'MSI上の初回セットアップで自動起動が設定されませんでした'
+    }
+    $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
+        (Join-Path $certificateDirectory 'ca.cer')
+    )
+    if (-not (Test-Path -LiteralPath (
+            "Cert:\CurrentUser\Root\$($certificate.Thumbprint)"
+        ))) {
+        throw 'MSI上の初回セットアップでCA証明書が登録されませんでした'
+    }
+    Write-Output 'PASS アンインストール前のWindows連携適用'
 } finally {
     if (Test-Path -LiteralPath $userStatePath) {
         Remove-Item -LiteralPath $userStatePath -Force
+    }
+    foreach ($generatedPath in @(
+            (Join-Path $installRoot 'config.properties'),
+            (Join-Path $installRoot 'NicoCacheGUI.property'),
+            (Join-Path $installRoot 'data\first-run-setup.properties'),
+            (Join-Path $installRoot 'proxy.pac')
+        )) {
+        if (Test-Path -LiteralPath $generatedPath -PathType Leaf) {
+            Remove-Item -LiteralPath $generatedPath -Force
+        }
+    }
+    if (Test-Path -LiteralPath (Join-Path $installRoot 'certs')) {
+        Get-ChildItem -LiteralPath (Join-Path $installRoot 'certs') -File |
+            Where-Object { $_.FullName -notin $initialCertificateFiles } |
+            Remove-Item -Force
     }
     if ($installed) {
         $uninstallMsi = if ($upgraded) { $resolvedMsi } else { $resolvedPreviousMsi }

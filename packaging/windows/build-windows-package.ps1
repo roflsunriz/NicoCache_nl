@@ -347,6 +347,7 @@ if ($PackageType -in @('Msi', 'All')) {
         '--description', 'ニコニコ動画向けローカルプロキシー兼キャッシュサーバー',
         '--app-image', $appImagePath,
         '--dest', $outputRoot,
+        '--resource-dir', (Join-Path $PSScriptRoot 'resources'),
         '--win-per-user-install',
         '--win-menu',
         '--win-menu-group', $packageIdentity.MenuGroup,

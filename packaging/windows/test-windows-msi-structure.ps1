@@ -130,6 +130,14 @@ try {
             -FieldCount 2)) {
         $properties[$row.Values[0]] = $row.Values[1]
     }
+    $customActions = @(Get-MsiRows `
+        -Database $database `
+        -Query 'SELECT `Action`, `Type`, `Source`, `Target` FROM `CustomAction`' `
+        -FieldCount 4)
+    $executeSequence = @(Get-MsiRows `
+        -Database $database `
+        -Query 'SELECT `Action`, `Condition`, `Sequence` FROM `InstallExecuteSequence`' `
+        -FieldCount 3)
 
     $desktopShortcuts = @(
         $shortcuts |
@@ -189,6 +197,55 @@ try {
         }
     }
     Write-Output 'PASS MSI内のデスクトップ・スタートメニューショートカット定義'
+
+    $rollbackActions = @(
+        $customActions |
+            Where-Object { $_.Values[0] -eq 'NicoCacheRollbackWindowsSetup' }
+    )
+    if ($rollbackActions.Count -ne 1) {
+        throw "Windows設定復元アクションが1件ではありません: $($rollbackActions.Count)"
+    }
+    $rollbackAction = $rollbackActions[0]
+    if ([int]$rollbackAction.Values[1] -ne 34) {
+        throw "Windows設定復元アクションが同期・失敗検出型ではありません: $($rollbackAction.Values[1])"
+    }
+    if ($rollbackAction.Values[2] -ne 'INSTALLDIR') {
+        throw "Windows設定復元アクションの実行場所が不正です: $($rollbackAction.Values[2])"
+    }
+    foreach ($requiredArgument in @(
+            'setup\windows\first-run-setup.ps1',
+            '-Action Rollback',
+            'data\setup-system-state.json',
+            'data\uninstall-windows-error.txt'
+        )) {
+        if ($rollbackAction.Values[3] -notmatch
+                [regex]::Escape($requiredArgument)) {
+            throw "Windows設定復元アクションに必要な引数がありません: $requiredArgument"
+        }
+    }
+
+    $rollbackSequenceRows = @(
+        $executeSequence |
+            Where-Object { $_.Values[0] -eq 'NicoCacheRollbackWindowsSetup' }
+    )
+    if ($rollbackSequenceRows.Count -ne 1) {
+        throw "Windows設定復元の実行順序が1件ではありません: $($rollbackSequenceRows.Count)"
+    }
+    $rollbackSequence = $rollbackSequenceRows[0]
+    if (($rollbackSequence.Values[1] -replace '\s+', ' ').Trim() -ne
+            'REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE') {
+        throw "Windows設定復元の実行条件が不正です: $($rollbackSequence.Values[1])"
+    }
+    $removeFilesRows = @(
+        $executeSequence |
+            Where-Object { $_.Values[0] -eq 'RemoveFiles' }
+    )
+    if ($removeFilesRows.Count -ne 1 -or
+            [int]$rollbackSequence.Values[2] -ge
+            [int]$removeFilesRows[0].Values[2]) {
+        throw 'Windows設定復元が製品ファイル削除より前に実行されません'
+    }
+    Write-Output 'PASS MSI内のアンインストール前Windows設定復元定義'
 } finally {
     if ($database) {
         [Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) |

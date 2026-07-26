@@ -82,7 +82,9 @@ JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチ
 ```
 
 MSIを生成した場合は、インストールせずに内部テーブルを読み取り、デスクトップと
-スタートメニューのショートカットが各1件定義されていることを確認する。
+スタートメニューのショートカットが各1件定義されていること、および明示的な
+アンインストール時にWindows設定復元が製品ファイル削除より前に実行されることを
+確認する。
 
 ```powershell
 .\packaging\windows\test-windows-msi-structure.ps1 `
@@ -92,6 +94,12 @@ MSIを生成した場合は、インストールせずに内部テーブルを�
 この隔離テストはログオン時起動を再現するため、製品ルートとは異なる作業
 ディレクトリから単一ランチャーを起動し、製品ルートからの自己再起動後も
 HTTP応答を継続することを確認する。
+
+MSIの `packaging/windows/resources/main.wxs` はJDK 17の `jpackage` が内蔵する
+WiXテンプレートへ、アンインストール前のWindows設定復元だけを追加したもので
+ある。JDKを更新する場合は、そのJDKの `jdk.jpackage.jmod` に含まれる
+`jdk/jpackage/internal/resources/main.wxs` と比較し、上流テンプレートの変更を
+取り込んでからMSI構造試験を実行する。
 
 ローカルではOSへインストールせず、`.test-work/windows-package/` 内の
 アプリイメージだけを検証する。MSIの生成と `msiexec /qn` による無人
