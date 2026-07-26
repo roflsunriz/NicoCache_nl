@@ -298,16 +298,25 @@ try {
         throw "修復対象ファイルがありません: $repairTarget"
     }
     Remove-Item -LiteralPath $repairTarget -Force
+    $repairLogPath = Join-Path $testRoot 'msi-repair.log'
     Invoke-MsiExec -ArgumentList @(
         '/fa',
         $previousProductCode,
         '/qn',
-        '/norestart'
+        '/norestart',
+        "INSTALLDIR=`"$installRoot`""
     ) `
         -FailureMessage 'MSI修復に失敗しました' `
-        -LogPath (Join-Path $testRoot 'msi-repair.log')
+        -LogPath $repairLogPath
     if (-not (Test-Path -LiteralPath $repairTarget -PathType Leaf)) {
-        throw 'MSI修復で配布ファイルが復元されませんでした'
+        $repairLogTail = (
+            Get-Content -LiteralPath $repairLogPath -Tail 80 `
+                -ErrorAction SilentlyContinue
+        ) -join "`n"
+        throw (
+            "MSI修復で配布ファイルが復元されませんでした`n" +
+            "MSIログ: $repairLogPath`n$repairLogTail"
+        )
     }
     if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
         throw 'MSI修復後にデスクトップのショートカットがありません'
