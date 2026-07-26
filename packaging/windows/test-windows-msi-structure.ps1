@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $resolvedMsi = (Resolve-Path -LiteralPath $MsiPath).Path
 $installer = $null
 $database = $null
+$summaryInformation = $null
 
 function Get-MsiRows {
     param(
@@ -98,6 +99,13 @@ try {
         $installer,
         @($resolvedMsi, 0)
     )
+    $summaryInformation = $installer.SummaryInformation($resolvedMsi, 0)
+    $summaryCodepage = $summaryInformation.Property(1)
+    if ([int]$summaryCodepage -ne 932) {
+        throw "MSIサマリーのコードページが日本語対応ではありません: $summaryCodepage"
+    }
+    Write-Output 'PASS MSIサマリーのコードページ932'
+
     $parents = @{}
     foreach ($row in @(Get-MsiRows `
             -Database $database `
@@ -248,6 +256,11 @@ try {
     }
     Write-Output 'PASS MSI内のアンインストール前Windows設定復元定義'
 } finally {
+    if ($summaryInformation) {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+            $summaryInformation
+        ) | Out-Null
+    }
     if ($database) {
         [Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) |
             Out-Null

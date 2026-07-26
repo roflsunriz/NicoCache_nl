@@ -29,6 +29,7 @@
     Id="$(var.JpProductCode)"
     Name="$(var.JpAppName)"
     Language="$(var.JpProductLanguage)"
+    Codepage="932"
     Version="$(var.JpAppVersion)"
     Manufacturer="$(var.JpAppVendor)"
     UpgradeCode="$(var.JpProductUpgradeCode)">
@@ -38,6 +39,7 @@
       Manufacturer="$(var.JpAppVendor)"
       InstallerVersion="$(var.JpInstallerVersion)"
       Compressed="$(var.JpCompressedMsi)"
+      SummaryCodepage="932"
       InstallScope="$(var.JpInstallScope)" Platform="x64"
     />
 
