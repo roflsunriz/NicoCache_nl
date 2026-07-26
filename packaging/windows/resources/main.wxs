@@ -81,7 +81,7 @@
     <CustomAction
       Id="NicoCacheRollbackWindowsSetup"
       Directory="INSTALLDIR"
-      ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback -StatePath &quot;[INSTALLDIR]data\setup-system-state.json&quot; -ErrorPath &quot;[INSTALLDIR]data\uninstall-windows-error.txt&quot;"
+      ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback"
       Execute="immediate"
       Return="check" />
 

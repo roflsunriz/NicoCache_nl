@@ -4,7 +4,6 @@ param(
     [ValidateSet('Apply', 'Rollback')]
     [string]$Action,
 
-    [Parameter(Mandatory)]
     [string]$StatePath,
 
     [string]$ErrorPath,
@@ -186,6 +185,21 @@ function Restore-State {
 }
 
 $script:CurrentStage = 'Windows設定の保存先を確認'
+if ([string]::IsNullOrWhiteSpace($StatePath)) {
+    if ($Action -ne 'Rollback') {
+        throw '適用時はWindows設定の状態保存先が必要です'
+    }
+    $installRoot = [System.IO.Path]::GetFullPath(
+        (Join-Path $PSScriptRoot '..\..')
+    )
+    $StatePath = Join-Path $installRoot 'data\setup-system-state.json'
+}
+if ($Action -eq 'Rollback' -and
+        [string]::IsNullOrWhiteSpace($ErrorPath)) {
+    $ErrorPath = Join-Path (
+        Split-Path -Parent ([System.IO.Path]::GetFullPath($StatePath))
+    ) 'uninstall-windows-error.txt'
+}
 $fullStatePath = [System.IO.Path]::GetFullPath($StatePath)
 if ($Action -eq 'Rollback' -and
         -not (Test-Path -LiteralPath $fullStatePath -PathType Leaf)) {

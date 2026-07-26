@@ -13,6 +13,8 @@ $errorPath = Join-Path $testRoot 'data\setup-windows-error.txt'
 $standardOutputPath = Join-Path $testRoot 'powershell.stdout.txt'
 $standardErrorPath = Join-Path $testRoot 'powershell.stderr.txt'
 $missingLauncher = Join-Path $testRoot 'missing-launcher.exe'
+$defaultLayoutScriptPath =
+    Join-Path $testRoot 'product\setup\windows\first-run-setup.ps1'
 
 if (-not (Test-Path -LiteralPath $scriptSource -PathType Leaf)) {
     throw "Windows設定スクリプトがありません: $scriptSource"
@@ -63,6 +65,14 @@ $scriptContent = [System.IO.File]::ReadAllText(
 )
 [System.IO.File]::WriteAllText(
     $scriptPath,
+    $scriptContent,
+    [System.Text.UTF8Encoding]::new($true)
+)
+New-Item -ItemType Directory -Path (
+    Split-Path -Parent $defaultLayoutScriptPath
+) -Force | Out-Null
+[System.IO.File]::WriteAllText(
+    $defaultLayoutScriptPath,
     $scriptContent,
     [System.Text.UTF8Encoding]::new($true)
 )
@@ -165,6 +175,24 @@ $missingStateRollback = Start-Process `
 
 if ($missingStateRollback.ExitCode -ne 0) {
     throw "状態保存先がないロールバックに失敗しました (ExitCode: $($missingStateRollback.ExitCode))"
+}
+
+$defaultRollback = Start-Process `
+    -FilePath 'powershell.exe' `
+    -ArgumentList @(
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $defaultLayoutScriptPath,
+        '-Action', 'Rollback'
+    ) `
+    -Wait `
+    -PassThru `
+    -RedirectStandardOutput $standardOutputPath `
+    -RedirectStandardError $standardErrorPath
+
+if ($defaultRollback.ExitCode -ne 0) {
+    throw "既定パスによるロールバックに失敗しました (ExitCode: $($defaultRollback.ExitCode))"
 }
 
 Write-Output 'PASS Windows設定の段階別診断とX509Storeによる無人ロールバック'

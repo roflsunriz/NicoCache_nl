@@ -214,14 +214,15 @@ try {
     }
     foreach ($requiredArgument in @(
             'setup\windows\first-run-setup.ps1',
-            '-Action Rollback',
-            'data\setup-system-state.json',
-            'data\uninstall-windows-error.txt'
+            '-Action Rollback'
         )) {
         if ($rollbackAction.Values[3] -notmatch
                 [regex]::Escape($requiredArgument)) {
             throw "Windows設定復元アクションに必要な引数がありません: $requiredArgument"
         }
+    }
+    if ($rollbackAction.Values[3].Length -gt 255) {
+        throw "Windows設定復元アクションがMSIの255文字上限を超えています: $($rollbackAction.Values[3].Length)"
     }
 
     $rollbackSequenceRows = @(

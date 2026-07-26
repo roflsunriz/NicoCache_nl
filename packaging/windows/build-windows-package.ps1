@@ -19,6 +19,7 @@ $buildRoot = Join-Path $workRoot 'build'
 $dependencyRoot = Join-Path $workRoot 'dependencies'
 $inputRoot = Join-Path $workRoot 'input'
 $outputRoot = Join-Path $workRoot 'output'
+$msiTempRoot = Join-Path $workRoot 'jpackage-msi'
 $appImagePath = Join-Path $outputRoot 'NicoCache_nl'
 $packageIdentity = Import-PowerShellDataFile -LiteralPath (
     Join-Path $PSScriptRoot 'package-identity.psd1'
@@ -339,14 +340,17 @@ foreach ($relativePath in $runtimeLayoutPaths) {
 }
 
 if ($PackageType -in @('Msi', 'All')) {
+    $msiDescription = 'Local HTTP/HTTPS proxy and cache server for NicoNico'
     $msiArguments = @(
         '--type', 'msi',
         '--name', 'NicoCache_nl',
         '--app-version', $AppVersion,
         '--vendor', 'NicoCache_nl',
-        '--description', 'ニコニコ動画向けローカルプロキシー兼キャッシュサーバー',
+        '--description', $msiDescription,
         '--app-image', $appImagePath,
         '--dest', $outputRoot,
+        '--temp', $msiTempRoot,
+        '--verbose',
         '--resource-dir', (Join-Path $PSScriptRoot 'resources'),
         '--win-per-user-install',
         '--win-menu',
