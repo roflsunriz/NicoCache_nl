@@ -150,6 +150,34 @@ function Assert-AppVersion {
     }
 }
 
+function Get-InstalledProductCode {
+    param([Parameter(Mandatory)][string]$ExpectedVersion)
+
+    $entries = @(
+        Get-ChildItem -LiteralPath (
+            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
+        ) -ErrorAction SilentlyContinue |
+            Where-Object {
+                $properties = Get-ItemProperty -LiteralPath $_.PSPath `
+                    -ErrorAction SilentlyContinue
+                $properties.DisplayName -eq 'NicoCache_nl' -and
+                    $properties.DisplayVersion -eq $ExpectedVersion
+            }
+    )
+    if ($entries.Count -ne 1) {
+        throw (
+            "インストール済みMSIの製品コードを一意に特定できません " +
+            "(version=$ExpectedVersion, count=$($entries.Count))"
+        )
+    }
+    $productCode = $entries[0].PSChildName
+    if ($productCode -notmatch
+            '^\{[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}$') {
+        throw "MSIの製品コードがGUIDではありません: $productCode"
+    }
+    return $productCode
+}
+
 $osStateBefore = Get-OsIntegrationState
 $installed = $false
 $upgraded = $false
@@ -171,6 +199,8 @@ try {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
     Assert-AppVersion -ExpectedVersion $ExpectedPreviousVersion
+    $previousProductCode =
+        Get-InstalledProductCode -ExpectedVersion $ExpectedPreviousVersion
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -193,7 +223,7 @@ try {
     Remove-Item -LiteralPath $repairTarget -Force
     Invoke-MsiExec -ArgumentList @(
         '/fa',
-        "`"$resolvedPreviousMsi`"",
+        $previousProductCode,
         '/qn',
         '/norestart'
     ) -FailureMessage 'MSI修復に失敗しました'
