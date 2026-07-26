@@ -27,28 +27,24 @@ $scriptAst = [System.Management.Automation.Language.Parser]::ParseFile(
 if ($parseErrors.Count -gt 0) {
     throw "Windows設定スクリプトを解析できません: $($parseErrors[0].Message)"
 }
-$certificateRemovals = @(
+$providerCertificateRemovals = @(
     $scriptAst.FindAll({
             param($node)
 
-            if ($node -isnot
-                    [System.Management.Automation.Language.CommandAst] -or
-                    $node.GetCommandName() -ne 'Remove-Item' -or
-                    $node.Extent.Text -notmatch '\$certificatePath') {
-                return $false
-            }
-            return @(
-                $node.CommandElements |
-                    Where-Object {
-                        $_ -is
-                            [System.Management.Automation.Language.CommandParameterAst] -and
-                        $_.ParameterName -eq 'Force'
-                    }
-            ).Count -eq 1
+            return $node -is
+                [System.Management.Automation.Language.CommandAst] -and
+                $node.GetCommandName() -eq 'Remove-Item' -and
+                $node.Extent.Text -match 'Cert:|certificatePath'
         }, $true)
 )
-if ($certificateRemovals.Count -ne 1) {
-    throw '信頼済みルートCAの無人削除に必要な -Force がありません'
+if ($providerCertificateRemovals.Count -ne 0) {
+    throw '信頼済みルートCAを非対話削除できないCert:プロバイダーが使われています'
+}
+if ($scriptContentForValidation = Get-Content -Raw -LiteralPath $scriptSource) {
+    if ($scriptContentForValidation -notmatch
+            '\$certificateStore\.Remove\(\$certificateToRemove\)') {
+        throw '信頼済みルートCAがX509Store APIで削除されません'
+    }
 }
 if (Test-Path -LiteralPath $testRoot) {
     $resolvedTestRoot = (Resolve-Path -LiteralPath $testRoot).Path
@@ -171,4 +167,4 @@ if ($missingStateRollback.ExitCode -ne 0) {
     throw "状態保存先がないロールバックに失敗しました (ExitCode: $($missingStateRollback.ExitCode))"
 }
 
-Write-Output 'PASS Windows設定の段階別診断と信頼済みルートCAの無人ロールバック'
+Write-Output 'PASS Windows設定の段階別診断とX509Storeによる無人ロールバック'

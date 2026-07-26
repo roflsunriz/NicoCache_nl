@@ -162,12 +162,26 @@ function Restore-State {
     }
     if ($restoreCertificate -and $State.Certificate.ImportedNew -and
             $State.Certificate.Thumbprint) {
-        $certificatePath =
-            "Cert:\CurrentUser\Root\$($State.Certificate.Thumbprint)"
-        Remove-Item `
-            -LiteralPath $certificatePath `
-            -Force `
-            -ErrorAction SilentlyContinue
+        $certificateStore =
+            [System.Security.Cryptography.X509Certificates.X509Store]::new(
+                [System.Security.Cryptography.X509Certificates.StoreName]::Root,
+                [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+            )
+        try {
+            $certificateStore.Open(
+                [System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite
+            )
+            $certificatesToRemove = $certificateStore.Certificates.Find(
+                [System.Security.Cryptography.X509Certificates.X509FindType]::FindByThumbprint,
+                $State.Certificate.Thumbprint,
+                $false
+            )
+            foreach ($certificateToRemove in $certificatesToRemove) {
+                $certificateStore.Remove($certificateToRemove)
+            }
+        } finally {
+            $certificateStore.Close()
+        }
     }
 }
 

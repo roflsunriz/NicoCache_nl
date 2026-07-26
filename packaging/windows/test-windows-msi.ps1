@@ -162,7 +162,7 @@ try {
     if (-not (Test-Path -LiteralPath $installRoot -PathType Container)) {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
-    Assert-AppVersion -ExpectedVersion '0.1.6'
+    Assert-AppVersion -ExpectedVersion '0.1.7'
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -209,7 +209,7 @@ try {
         "INSTALLDIR=`"$installRoot`""
     ) -FailureMessage '新版MSIへの無人更新に失敗しました'
     $upgraded = $true
-    Assert-AppVersion -ExpectedVersion '0.1.7'
+    Assert-AppVersion -ExpectedVersion '0.1.8'
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
         throw 'MSI更新後にデスクトップのショートカットがありません'
