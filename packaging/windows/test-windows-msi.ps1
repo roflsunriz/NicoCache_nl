@@ -79,16 +79,28 @@ function Invoke-MsiExec {
         -Wait `
         -PassThru
     if ($process.ExitCode -ne 0) {
-        $logTail = if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
-            (
-                Get-Content -LiteralPath $LogPath -Tail 80 -ErrorAction SilentlyContinue
-            ) -join "`n"
+        $logDetails = if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
+            $importantLines = @(
+                Select-String -LiteralPath $LogPath `
+                    -Pattern (
+                        'Return value 3|NicoCacheRollbackWindowsSetup|' +
+                        'CustomAction|Error |Exception|failed|Product:'
+                    ) `
+                    -ErrorAction SilentlyContinue |
+                    Select-Object -Last 120 |
+                    ForEach-Object { $_.Line }
+            )
+            $tailLines = @(
+                Get-Content -LiteralPath $LogPath -Tail 20 `
+                    -ErrorAction SilentlyContinue
+            )
+            (@($importantLines) + @($tailLines)) -join "`n"
         } else {
             'MSIログは作成されませんでした'
         }
         throw (
             "$FailureMessage (ExitCode: $($process.ExitCode))`n" +
-            "MSIログ: $LogPath`n$logTail"
+            "MSIログ: $LogPath`n$logDetails"
         )
     }
 }
@@ -256,6 +268,7 @@ $upgraded = $false
 $userStatePath = Join-Path $installRoot 'data\installer-lifecycle-user.txt'
 $setupStatePath = Join-Path $installRoot 'data\setup-system-state.json'
 $initialCertificateFiles = @()
+$primaryFailure = $null
 
 try {
     Invoke-MsiExec -ArgumentList @(
@@ -401,6 +414,8 @@ try {
         throw 'MSIの非対話試験でCAが信頼済みルートへ登録されました'
     }
     Write-Output 'PASS アンインストール前のWindows連携適用（CA未登録）'
+} catch {
+    $primaryFailure = $_
 } finally {
     if (Test-Path -LiteralPath $userStatePath) {
         Remove-Item -LiteralPath $userStatePath -Force
@@ -426,15 +441,30 @@ try {
         } else {
             $previousProductCode
         }
-        Invoke-MsiExec -ArgumentList @(
-            '/x',
-            $uninstallProductCode,
-            '/qn',
-            '/norestart'
-        ) `
-            -FailureMessage 'MSIの無人アンインストールに失敗しました' `
-            -LogPath (Join-Path $testRoot 'msi-uninstall.log')
+        try {
+            Invoke-MsiExec -ArgumentList @(
+                '/x',
+                $uninstallProductCode,
+                '/qn',
+                '/norestart'
+            ) `
+                -FailureMessage 'MSIの無人アンインストールに失敗しました' `
+                -LogPath (Join-Path $testRoot 'msi-uninstall.log')
+        } catch {
+            if ($primaryFailure) {
+                throw (
+                    "MSIライフサイクルの最初の失敗:`n" +
+                    "$($primaryFailure.Exception.Message)`n" +
+                    "後始末の失敗:`n$($_.Exception.Message)"
+                )
+            }
+            throw
+        }
     }
+}
+
+if ($primaryFailure) {
+    throw $primaryFailure
 }
 
 Assert-NoInstalledProcess

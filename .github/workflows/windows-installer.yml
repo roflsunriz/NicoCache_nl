@@ -167,6 +167,14 @@ jobs:
             -ExpectedPreviousVersion $env:TEST_PREVIOUS_VERSION `
             -ExpectedCurrentVersion $env:TEST_CURRENT_VERSION
 
+      - name: Upload MSI lifecycle diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: msi-lifecycle-diagnostics
+          if-no-files-found: ignore
+          path: .test-work/msi-*.log
+
       - name: Create MSI checksum
         shell: pwsh
         run: |
