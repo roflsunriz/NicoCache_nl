@@ -37,6 +37,7 @@ $stdoutPath = Join-Path $logRoot 'stdout.log'
 $stderrPath = Join-Path $logRoot 'stderr.log'
 $setupStdoutPath = Join-Path $logRoot 'setup-stdout.log'
 $setupStderrPath = Join-Path $logRoot 'setup-stderr.log'
+$foreignWorkingDirectory = Join-Path $logRoot 'foreign-working-directory'
 
 foreach ($requiredPath in @(
         $launcherPath,
@@ -113,6 +114,23 @@ function Get-OsIntegrationState {
     } | ConvertTo-Json -Depth 4 -Compress
 }
 
+function Get-ProductProcesses {
+    return @(
+        Get-Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                try {
+                    $_.Path -and [string]::Equals(
+                        $_.Path,
+                        $launcherPath,
+                        [System.StringComparison]::OrdinalIgnoreCase
+                    )
+                } catch {
+                    $false
+                }
+            }
+    )
+}
+
 $osStateBefore = Get-OsIntegrationState
 $initialCertificateFiles = @(
     Get-ChildItem -LiteralPath $certificateDirectory -File -ErrorAction SilentlyContinue |
@@ -127,9 +145,11 @@ $listener.Start()
 $listenPort = ([System.Net.IPEndPoint]$listener.LocalEndpoint).Port
 $listener.Stop()
 
-New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
+New-Item -ItemType Directory -Path $logRoot, $foreignWorkingDirectory -Force |
+    Out-Null
 
 $process = $null
+$knownProcessIds = @(Get-ProductProcesses | Select-Object -ExpandProperty Id)
 $testSucceeded = $false
 try {
     $setupProcess = Start-Process -FilePath $launcherPath `
@@ -199,7 +219,7 @@ try {
 
     $process = Start-Process -FilePath $launcherPath `
         -ArgumentList '--headless' `
-        -WorkingDirectory $appImage `
+        -WorkingDirectory $foreignWorkingDirectory `
         -RedirectStandardOutput $stdoutPath `
         -RedirectStandardError $stderrPath `
         -PassThru
@@ -207,8 +227,14 @@ try {
     $deadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
     $response = $null
     do {
-        if ($process.HasExited) {
-            throw "単一ランチャーが起動直後に終了しました (ExitCode: $($process.ExitCode))"
+        $replacement = @(
+            Get-ProductProcesses |
+                Where-Object { $_.Id -notin $knownProcessIds } |
+                Where-Object { -not $_.HasExited } |
+                Select-Object -First 1
+        )
+        if ($replacement.Count -gt 0) {
+            $process = $replacement[0]
         }
         try {
             $response = Invoke-WebRequest -Uri "http://127.0.0.1:$listenPort/" `
@@ -219,7 +245,13 @@ try {
     } until ($response -or [DateTime]::UtcNow -ge $deadline)
 
     if (-not $response) {
-        throw "単一ランチャーが${StartupTimeoutSeconds}秒以内に応答しませんでした"
+        $exitDescription = if ($process.HasExited) {
+            "最後のExitCode: $($process.ExitCode)"
+        } else {
+            'プロセスは実行中'
+        }
+        throw "異なる作業ディレクトリから起動した単一ランチャーが" +
+            "${StartupTimeoutSeconds}秒以内に応答しませんでした ($exitDescription)"
     }
     if ($response.StatusCode -ne 200) {
         throw "予期しないHTTPステータスです: $($response.StatusCode)"
@@ -228,21 +260,29 @@ try {
         throw 'ルート応答にNicoCache_nlのバージョン文字列がありません'
     }
 
+    Write-Output 'PASS 異なる作業ディレクトリから単一製品ランチャーを自己再起動'
     Write-Output "PASS 単一製品ランチャーの内部ヘッドレス起動"
     Write-Output "PASS HTTPループバック応答 (port=$listenPort)"
     $testSucceeded = $true
 } finally {
-    if ($process -and -not $process.HasExited) {
-        $expectedPath = (Resolve-Path -LiteralPath $launcherPath).Path
-        $actualPath = $process.MainModule.FileName
+    $expectedPath = (Resolve-Path -LiteralPath $launcherPath).Path
+    $startedProcesses = @(
+        Get-ProductProcesses |
+            Where-Object { $_.Id -notin $knownProcessIds }
+    )
+    foreach ($startedProcess in $startedProcesses) {
+        if ($startedProcess.HasExited) {
+            continue
+        }
+        $actualPath = $startedProcess.MainModule.FileName
         if (-not [string]::Equals(
                 $expectedPath,
                 $actualPath,
                 [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "終了対象プロセスがランチャーと一致しません: $actualPath"
         }
-        Stop-Process -Id $process.Id -Force
-        $process.WaitForExit(10000) | Out-Null
+        Stop-Process -Id $startedProcess.Id -Force
+        $startedProcess.WaitForExit(10000) | Out-Null
     }
     if (Test-Path -LiteralPath $systemStatePath) {
         & powershell.exe `

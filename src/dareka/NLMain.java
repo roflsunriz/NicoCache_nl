@@ -75,6 +75,9 @@ public class NLMain {
     private static Thread mainThread;
 
     public static void main(String[] args) {
+        if (relaunchFromApplicationDirectory(args)) {
+            return;
+        }
         LaunchOptions launchOptions = LaunchOptions.parse(args);
         if (launchOptions.getError() != null) {
             System.err.println(launchOptions.getError());
@@ -127,6 +130,35 @@ public class NLMain {
                 System.exit(0);
             }
         }
+    }
+
+    private static boolean relaunchFromApplicationDirectory(String[] args) {
+        String packagedLauncher = System.getProperty("jpackage.app-path");
+        if (packagedLauncher == null || packagedLauncher.isBlank()) {
+            return false;
+        }
+        Path appDirectory = applicationDirectory();
+        Path currentDirectory = Path.of("").toAbsolutePath().normalize();
+        if (appDirectory.equals(currentDirectory)) {
+            return false;
+        }
+
+        String[] command = new String[args.length + 1];
+        command[0] = Path.of(packagedLauncher)
+                .toAbsolutePath()
+                .normalize()
+                .toString();
+        System.arraycopy(args, 0, command, 1, args.length);
+        try {
+            new ProcessBuilder(command)
+                    .directory(appDirectory.toFile())
+                    .inheritIO()
+                    .start();
+        } catch (IOException error) {
+            error.printStackTrace();
+            System.exit(-1);
+        }
+        return true;
     }
 
     private static Path applicationDirectory() {

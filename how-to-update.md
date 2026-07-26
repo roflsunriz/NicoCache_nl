@@ -81,6 +81,10 @@ JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチ
   -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
 ```
 
+この隔離テストはログオン時起動を再現するため、製品ルートとは異なる作業
+ディレクトリから単一ランチャーを起動し、製品ルートからの自己再起動後も
+HTTP応答を継続することを確認する。
+
 ローカルではOSへインストールせず、`.test-work/windows-package/` 内の
 アプリイメージだけを検証する。MSIの生成と `msiexec /qn` による無人
 インストール・修復・更新・アンインストールは、一時的なGitHub Actions
