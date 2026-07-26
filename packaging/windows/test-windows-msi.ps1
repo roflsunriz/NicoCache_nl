@@ -62,15 +62,113 @@ function Invoke-MsiExec {
         [Parameter(Mandatory)]
         [string[]]$ArgumentList,
         [Parameter(Mandatory)]
-        [string]$FailureMessage
+        [string]$FailureMessage,
+        [Parameter(Mandatory)]
+        [string]$LogPath
     )
 
+    if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
+        Remove-Item -LiteralPath $LogPath -Force
+    }
+    $effectiveArguments = @($ArgumentList) + @(
+        '/L*V',
+        "`"$LogPath`""
+    )
     $process = Start-Process -FilePath 'msiexec.exe' `
-        -ArgumentList $ArgumentList `
+        -ArgumentList $effectiveArguments `
         -Wait `
         -PassThru
     if ($process.ExitCode -ne 0) {
-        throw "$FailureMessage (ExitCode: $($process.ExitCode))"
+        $logTail = if (Test-Path -LiteralPath $LogPath -PathType Leaf) {
+            (
+                Get-Content -LiteralPath $LogPath -Tail 80 -ErrorAction SilentlyContinue
+            ) -join "`n"
+        } else {
+            'MSIログは作成されませんでした'
+        }
+        throw (
+            "$FailureMessage (ExitCode: $($process.ExitCode))`n" +
+            "MSIログ: $LogPath`n$logTail"
+        )
+    }
+}
+
+function Get-MsiProductCode {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $installer = $null
+    $database = $null
+    $view = $null
+    $record = $null
+    try {
+        $installer = New-Object -ComObject WindowsInstaller.Installer
+        $database = $installer.GetType().InvokeMember(
+            'OpenDatabase',
+            [Reflection.BindingFlags]::InvokeMethod,
+            $null,
+            $installer,
+            @($Path, 0)
+        )
+        $view = $database.GetType().InvokeMember(
+            'OpenView',
+            [Reflection.BindingFlags]::InvokeMethod,
+            $null,
+            $database,
+            @(
+                'SELECT `Value` FROM `Property` ' +
+                "WHERE `Property` = 'ProductCode'"
+            )
+        )
+        $view.GetType().InvokeMember(
+            'Execute',
+            [Reflection.BindingFlags]::InvokeMethod,
+            $null,
+            $view,
+            $null
+        ) | Out-Null
+        $record = $view.GetType().InvokeMember(
+            'Fetch',
+            [Reflection.BindingFlags]::InvokeMethod,
+            $null,
+            $view,
+            $null
+        )
+        if (-not $record) {
+            throw "MSIにProductCodeがありません: $Path"
+        }
+        $productCode = $record.StringData(1)
+        if ($productCode -notmatch
+                '^\{[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}$') {
+            throw "MSIのProductCodeがGUIDではありません: $productCode"
+        }
+        return $productCode
+    } finally {
+        if ($record) {
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                $record
+            ) | Out-Null
+        }
+        if ($view) {
+            $view.GetType().InvokeMember(
+                'Close',
+                [Reflection.BindingFlags]::InvokeMethod,
+                $null,
+                $view,
+                $null
+            ) | Out-Null
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject($view) |
+                Out-Null
+        }
+        if ($database) {
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                $database
+            ) | Out-Null
+        }
+        if ($installer) {
+            [Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                $installer
+            ) | Out-Null
+        }
     }
 }
 
@@ -150,35 +248,9 @@ function Assert-AppVersion {
     }
 }
 
-function Get-InstalledProductCode {
-    param([Parameter(Mandatory)][string]$ExpectedVersion)
-
-    $entries = @(
-        Get-ChildItem -LiteralPath (
-            'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall'
-        ) -ErrorAction SilentlyContinue |
-            Where-Object {
-                $properties = Get-ItemProperty -LiteralPath $_.PSPath `
-                    -ErrorAction SilentlyContinue
-                $properties.DisplayName -eq 'NicoCache_nl' -and
-                    $properties.DisplayVersion -eq $ExpectedVersion
-            }
-    )
-    if ($entries.Count -ne 1) {
-        throw (
-            "インストール済みMSIの製品コードを一意に特定できません " +
-            "(version=$ExpectedVersion, count=$($entries.Count))"
-        )
-    }
-    $productCode = $entries[0].PSChildName
-    if ($productCode -notmatch
-            '^\{[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}\}$') {
-        throw "MSIの製品コードがGUIDではありません: $productCode"
-    }
-    return $productCode
-}
-
 $osStateBefore = Get-OsIntegrationState
+$previousProductCode = Get-MsiProductCode -Path $resolvedPreviousMsi
+$currentProductCode = Get-MsiProductCode -Path $resolvedMsi
 $installed = $false
 $upgraded = $false
 $userStatePath = Join-Path $installRoot 'data\installer-lifecycle-user.txt'
@@ -192,15 +264,20 @@ try {
         '/qn',
         '/norestart',
         "INSTALLDIR=`"$installRoot`""
-    ) -FailureMessage '旧版MSIの無人インストールに失敗しました'
+    ) `
+        -FailureMessage '旧版MSIの無人インストールに失敗しました' `
+        -LogPath (Join-Path $testRoot 'msi-install-previous.log')
     $installed = $true
 
     if (-not (Test-Path -LiteralPath $installRoot -PathType Container)) {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
     Assert-AppVersion -ExpectedVersion $ExpectedPreviousVersion
-    $previousProductCode =
-        Get-InstalledProductCode -ExpectedVersion $ExpectedPreviousVersion
+    $initialCertificateFiles = @(
+        Get-ChildItem -LiteralPath (Join-Path $installRoot 'certs') -File `
+            -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName
+    )
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -226,7 +303,9 @@ try {
         $previousProductCode,
         '/qn',
         '/norestart'
-    ) -FailureMessage 'MSI修復に失敗しました'
+    ) `
+        -FailureMessage 'MSI修復に失敗しました' `
+        -LogPath (Join-Path $testRoot 'msi-repair.log')
     if (-not (Test-Path -LiteralPath $repairTarget -PathType Leaf)) {
         throw 'MSI修復で配布ファイルが復元されませんでした'
     }
@@ -245,7 +324,9 @@ try {
         '/qn',
         '/norestart',
         "INSTALLDIR=`"$installRoot`""
-    ) -FailureMessage '新版MSIへの無人更新に失敗しました'
+    ) `
+        -FailureMessage '新版MSIへの無人更新に失敗しました' `
+        -LogPath (Join-Path $testRoot 'msi-upgrade.log')
     $upgraded = $true
     Assert-AppVersion -ExpectedVersion $ExpectedCurrentVersion
     Assert-NoInstalledProcess
@@ -264,11 +345,6 @@ try {
     Write-Output 'PASS 更新後MSIの隔離起動'
 
     $certificateDirectory = Join-Path $installRoot 'certs'
-    $initialCertificateFiles = @(
-        Get-ChildItem -LiteralPath $certificateDirectory -File `
-            -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty FullName
-    )
     $launcher = Join-Path $installRoot 'NicoCache_nl.exe'
     $setupProcess = Start-Process `
         -FilePath $launcher `
@@ -331,13 +407,19 @@ try {
             Remove-Item -Force
     }
     if ($installed) {
-        $uninstallMsi = if ($upgraded) { $resolvedMsi } else { $resolvedPreviousMsi }
+        $uninstallProductCode = if ($upgraded) {
+            $currentProductCode
+        } else {
+            $previousProductCode
+        }
         Invoke-MsiExec -ArgumentList @(
             '/x',
-            "`"$uninstallMsi`"",
+            $uninstallProductCode,
             '/qn',
             '/norestart'
-        ) -FailureMessage 'MSIの無人アンインストールに失敗しました'
+        ) `
+            -FailureMessage 'MSIの無人アンインストールに失敗しました' `
+            -LogPath (Join-Path $testRoot 'msi-uninstall.log')
     }
 }
 
