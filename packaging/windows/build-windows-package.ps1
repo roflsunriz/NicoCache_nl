@@ -20,6 +20,9 @@ $dependencyRoot = Join-Path $workRoot 'dependencies'
 $inputRoot = Join-Path $workRoot 'input'
 $outputRoot = Join-Path $workRoot 'output'
 $msiTempRoot = Join-Path $workRoot 'jpackage-msi'
+$msiProbeOutputRoot = Join-Path $workRoot 'msi-probe-output'
+$msiProbeTempRoot = Join-Path $workRoot 'jpackage-msi-probe'
+$msiResourceRoot = Join-Path $workRoot 'msi-resources'
 $appImagePath = Join-Path $outputRoot 'NicoCache_nl'
 $packageIdentity = Import-PowerShellDataFile -LiteralPath (
     Join-Path $PSScriptRoot 'package-identity.psd1'
@@ -114,6 +117,74 @@ function Copy-DistributionFile {
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force |
         Out-Null
     Copy-Item -LiteralPath $source -Destination $destination
+}
+
+function Remove-JPackageInstallRootCleaner {
+    param(
+        [Parameter(Mandatory)]
+        [string]$BundlePath
+    )
+
+    $document = [Xml]::new()
+    $document.PreserveWhitespace = $true
+    $document.Load($BundlePath)
+    $namespaces = [Xml.XmlNamespaceManager]::new($document.NameTable)
+    $namespaces.AddNamespace(
+        'wix',
+        'http://schemas.microsoft.com/wix/2006/wi'
+    )
+    $namespaces.AddNamespace(
+        'util',
+        'http://schemas.microsoft.com/wix/UtilExtension'
+    )
+
+    $cleaners = @($document.SelectNodes(
+        '//util:RemoveFolderEx[@On="uninstall"]',
+        $namespaces
+    ))
+    if ($cleaners.Count -ne 1) {
+        throw (
+            'jpackageの導入先再帰削除定義が1件ではありません: ' +
+            $cleaners.Count
+        )
+    }
+
+    $component = $cleaners[0].ParentNode
+    if ($component.LocalName -ne 'Component') {
+        throw 'jpackageの導入先再帰削除定義がComponent配下にありません'
+    }
+    $componentId = $component.GetAttribute('Id')
+    $propertyId = $cleaners[0].GetAttribute('Property')
+    if ([string]::IsNullOrWhiteSpace($componentId) -or
+            [string]::IsNullOrWhiteSpace($propertyId)) {
+        throw 'jpackageの導入先再帰削除定義に必要なIDがありません'
+    }
+
+    $componentRefs = @($document.SelectNodes(
+        "//wix:ComponentRef[@Id='$componentId']",
+        $namespaces
+    ))
+    if ($componentRefs.Count -ne 1) {
+        throw (
+            '導入先再帰削除ComponentRefが1件ではありません: ' +
+            $componentRefs.Count
+        )
+    }
+    $properties = @($document.SelectNodes(
+        "//wix:Property[@Id='$propertyId']",
+        $namespaces
+    ))
+    if ($properties.Count -ne 1) {
+        throw (
+            '導入先再帰削除Propertyが1件ではありません: ' +
+            $properties.Count
+        )
+    }
+
+    $component.ParentNode.RemoveChild($component) | Out-Null
+    $componentRefs[0].ParentNode.RemoveChild($componentRefs[0]) | Out-Null
+    $properties[0].ParentNode.RemoveChild($properties[0]) | Out-Null
+    $document.Save($BundlePath)
 }
 
 Assert-ChildPath -Path $workRoot -Parent $testRoot
@@ -341,7 +412,7 @@ foreach ($relativePath in $runtimeLayoutPaths) {
 
 if ($PackageType -in @('Msi', 'All')) {
     $msiDescription = 'Local HTTP/HTTPS proxy and cache server for NicoNico'
-    $msiArguments = @(
+    $sharedMsiArguments = @(
         '-J-Duser.language=ja',
         '-J-Duser.country=JP',
         '--type', 'msi',
@@ -350,10 +421,7 @@ if ($PackageType -in @('Msi', 'All')) {
         '--vendor', 'NicoCache_nl',
         '--description', $msiDescription,
         '--app-image', $appImagePath,
-        '--dest', $outputRoot,
-        '--temp', $msiTempRoot,
         '--verbose',
-        '--resource-dir', (Join-Path $PSScriptRoot 'resources'),
         '--win-per-user-install',
         '--win-menu',
         '--win-menu-group', $packageIdentity.MenuGroup,
@@ -362,7 +430,33 @@ if ($PackageType -in @('Msi', 'All')) {
         '--win-upgrade-uuid', $upgradeUuid.ToString(),
         '--win-dir-chooser'
     )
-    Invoke-NativeCommand -FilePath $jpackage -ArgumentList $msiArguments `
+
+    New-Item -ItemType Directory -Path $msiProbeOutputRoot | Out-Null
+    $probeMsiArguments = $sharedMsiArguments + @(
+        '--dest', $msiProbeOutputRoot,
+        '--temp', $msiProbeTempRoot,
+        '--resource-dir', (Join-Path $PSScriptRoot 'resources')
+    )
+    Invoke-NativeCommand -FilePath $jpackage -ArgumentList $probeMsiArguments `
+        -FailureMessage 'Windows MSIの生成定義作成に失敗しました'
+
+    New-Item -ItemType Directory -Path $msiResourceRoot | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'resources') -File |
+        Copy-Item -Destination $msiResourceRoot
+    $generatedBundle = Join-Path $msiProbeTempRoot 'config\bundle.wxf'
+    if (-not (Test-Path -LiteralPath $generatedBundle -PathType Leaf)) {
+        throw "jpackageの生成定義が見つかりません: $generatedBundle"
+    }
+    $customBundle = Join-Path $msiResourceRoot 'bundle.wxf'
+    Copy-Item -LiteralPath $generatedBundle -Destination $customBundle
+    Remove-JPackageInstallRootCleaner -BundlePath $customBundle
+
+    $finalMsiArguments = $sharedMsiArguments + @(
+        '--dest', $outputRoot,
+        '--temp', $msiTempRoot,
+        '--resource-dir', $msiResourceRoot
+    )
+    Invoke-NativeCommand -FilePath $jpackage -ArgumentList $finalMsiArguments `
         -FailureMessage 'Windows MSIの作成に失敗しました'
 }
 

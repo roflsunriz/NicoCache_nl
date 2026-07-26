@@ -146,6 +146,17 @@ try {
         -Database $database `
         -Query 'SELECT `Action`, `Condition`, `Sequence` FROM `InstallExecuteSequence`' `
         -FieldCount 3)
+    $tableNames = @(
+        Get-MsiRows `
+            -Database $database `
+            -Query 'SELECT `Name` FROM `_Tables`' `
+            -FieldCount 1 |
+            ForEach-Object { $_.Values[0] }
+    )
+    if ($tableNames -contains 'WixRemoveFolderEx') {
+        throw 'MSIに導入先を再帰削除するWixRemoveFolderExが残っています'
+    }
+    Write-Output 'PASS 更新時にユーザーデータを再帰削除しない定義'
 
     $desktopShortcuts = @(
         $shortcuts |
@@ -217,10 +228,11 @@ try {
     if ([int]$rollbackAction.Values[1] -ne 34) {
         throw "Windows設定復元アクションが同期・失敗検出型ではありません: $($rollbackAction.Values[1])"
     }
-    if ($rollbackAction.Values[2] -ne 'INSTALLDIR') {
+    if ($rollbackAction.Values[2] -ne 'TARGETDIR') {
         throw "Windows設定復元アクションの実行場所が不正です: $($rollbackAction.Values[2])"
     }
     foreach ($requiredArgument in @(
+            '[NICOCACHE_INSTALLDIR]',
             'setup\windows\first-run-setup.ps1',
             '-Action Rollback'
         )) {
@@ -242,7 +254,7 @@ try {
     }
     $rollbackSequence = $rollbackSequenceRows[0]
     if (($rollbackSequence.Values[1] -replace '\s+', ' ').Trim() -ne
-            'REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE') {
+            'REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE AND NICOCACHE_INSTALLDIR') {
         throw "Windows設定復元の実行条件が不正です: $($rollbackSequence.Values[1])"
     }
     $removeFilesRows = @(

@@ -67,13 +67,38 @@
     <CustomAction Id="JpDisallowDowngrade" Error="!(loc.DowngradeErrorMessage)" />
     <?endif?>
 
+    <Property Id="NICOCACHE_INSTALLDIR">
+      <RegistrySearch
+        Id="NicoCacheInstallDirSearch"
+        Root="HKCU"
+        Key="Software\NicoCache_nl\Installer"
+        Name="InstallDir"
+        Type="directory"
+        Win64="yes" />
+    </Property>
+
     <!-- Standard required root -->
     <Directory Id="TARGETDIR" Name="SourceDir"/>
+    <DirectoryRef Id="INSTALLDIR">
+      <Component
+        Id="NicoCacheInstallState"
+        Guid="{3DAF0BA2-122D-4E0A-91CC-D2CC80B11C5B}"
+        Win64="yes">
+        <RegistryKey Root="HKCU" Key="Software\NicoCache_nl\Installer">
+          <RegistryValue
+            Name="InstallDir"
+            Type="string"
+            Value="[INSTALLDIR]"
+            KeyPath="yes" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
 
     <Feature Id="DefaultFeature" Title="!(loc.MainFeatureTitle)" Level="1">
       <ComponentGroupRef Id="Shortcuts"/>
       <ComponentGroupRef Id="Files"/>
       <ComponentGroupRef Id="FileAssociations"/>
+      <ComponentRef Id="NicoCacheInstallState"/>
     </Feature>
 
     <CustomAction Id="JpSetARPINSTALLLOCATION" Property="ARPINSTALLLOCATION" Value="[INSTALLDIR]" />
@@ -82,8 +107,8 @@
     <CustomAction Id="JpSetARPSIZE" Property="ARPSIZE" Value="$(var.JpAppSizeKb)" />
     <CustomAction
       Id="NicoCacheRollbackWindowsSetup"
-      Directory="INSTALLDIR"
-      ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback"
+      Directory="TARGETDIR"
+      ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[NICOCACHE_INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback"
       Execute="immediate"
       Return="check" />
 
@@ -128,7 +153,7 @@
       <Custom Action="JpDisallowDowngrade" After="FindRelatedProducts">JP_DOWNGRADABLE_FOUND</Custom>
       <?endif?>
       <Custom Action="NicoCacheRollbackWindowsSetup" Before="RemoveFiles">
-        REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE
+        REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE AND NICOCACHE_INSTALLDIR
       </Custom>
       <RemoveExistingProducts Before="CostInitialize"/>
     </InstallExecuteSequence>
