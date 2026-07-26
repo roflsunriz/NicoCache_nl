@@ -83,7 +83,7 @@ jobs:
         run: |
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
-            -AppVersion 0.1.5 `
+            -AppVersion 0.1.6 `
             -NlFiltersSource .\nlFilters
           $lifecycle = New-Item `
             -ItemType Directory `
@@ -98,14 +98,14 @@ jobs:
             throw '旧版MSI成果物がありません'
           }
           Copy-Item -LiteralPath $previousMsi.FullName `
-            -Destination (Join-Path $lifecycle 'NicoCache_nl-0.1.5.msi')
+            -Destination (Join-Path $lifecycle 'NicoCache_nl-0.1.6.msi')
 
       - name: Build current app image and MSI
         shell: pwsh
         run: |
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
-            -AppVersion 0.1.6 `
+            -AppVersion 0.1.7 `
             -NlFiltersSource .\nlFilters
 
       - name: Test MSI shortcut structure
@@ -147,7 +147,7 @@ jobs:
           }
           .\packaging\windows\test-windows-msi.ps1 `
             -PreviousMsiPath `
-              .\.test-work\installer-lifecycle\NicoCache_nl-0.1.5.msi `
+              .\.test-work\installer-lifecycle\NicoCache_nl-0.1.6.msi `
             -MsiPath $msi.FullName
 
       - name: Create MSI checksum

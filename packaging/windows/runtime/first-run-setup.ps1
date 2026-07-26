@@ -164,7 +164,10 @@ function Restore-State {
             $State.Certificate.Thumbprint) {
         $certificatePath =
             "Cert:\CurrentUser\Root\$($State.Certificate.Thumbprint)"
-        Remove-Item -LiteralPath $certificatePath -ErrorAction SilentlyContinue
+        Remove-Item `
+            -LiteralPath $certificatePath `
+            -Force `
+            -ErrorAction SilentlyContinue
     }
 }
 

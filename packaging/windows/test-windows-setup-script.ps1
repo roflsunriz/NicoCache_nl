@@ -17,6 +17,39 @@ $missingLauncher = Join-Path $testRoot 'missing-launcher.exe'
 if (-not (Test-Path -LiteralPath $scriptSource -PathType Leaf)) {
     throw "Windows設定スクリプトがありません: $scriptSource"
 }
+$tokens = $null
+$parseErrors = $null
+$scriptAst = [System.Management.Automation.Language.Parser]::ParseFile(
+    $scriptSource,
+    [ref]$tokens,
+    [ref]$parseErrors
+)
+if ($parseErrors.Count -gt 0) {
+    throw "Windows設定スクリプトを解析できません: $($parseErrors[0].Message)"
+}
+$certificateRemovals = @(
+    $scriptAst.FindAll({
+            param($node)
+
+            if ($node -isnot
+                    [System.Management.Automation.Language.CommandAst] -or
+                    $node.GetCommandName() -ne 'Remove-Item' -or
+                    $node.Extent.Text -notmatch '\$certificatePath') {
+                return $false
+            }
+            return @(
+                $node.CommandElements |
+                    Where-Object {
+                        $_ -is
+                            [System.Management.Automation.Language.CommandParameterAst] -and
+                        $_.ParameterName -eq 'Force'
+                    }
+            ).Count -eq 1
+        }, $true)
+)
+if ($certificateRemovals.Count -ne 1) {
+    throw '信頼済みルートCAの無人削除に必要な -Force がありません'
+}
 if (Test-Path -LiteralPath $testRoot) {
     $resolvedTestRoot = (Resolve-Path -LiteralPath $testRoot).Path
     if (-not $resolvedTestRoot.StartsWith(
@@ -138,4 +171,4 @@ if ($missingStateRollback.ExitCode -ne 0) {
     throw "状態保存先がないロールバックに失敗しました (ExitCode: $($missingStateRollback.ExitCode))"
 }
 
-Write-Output 'PASS Windows設定の段階別診断と安全なロールバック'
+Write-Output 'PASS Windows設定の段階別診断と信頼済みルートCAの無人ロールバック'
