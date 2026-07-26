@@ -217,6 +217,39 @@ try {
     }
     Write-Output 'PASS MSI内のデスクトップ・スタートメニューショートカット定義'
 
+    $restoreInstallDirActions = @(
+        $customActions |
+            Where-Object { $_.Values[0] -eq 'NicoCacheRestoreInstallDir' }
+    )
+    if ($restoreInstallDirActions.Count -ne 1) {
+        throw "導入先復元アクションが1件ではありません: $($restoreInstallDirActions.Count)"
+    }
+    $restoreInstallDirAction = $restoreInstallDirActions[0]
+    if ([int]$restoreInstallDirAction.Values[1] -ne 51 -or
+            $restoreInstallDirAction.Values[2] -ne 'INSTALLDIR' -or
+            $restoreInstallDirAction.Values[3] -ne '[NICOCACHE_INSTALLDIR]') {
+        throw "導入先復元アクションが不正です: $($restoreInstallDirAction.Values -join ', ')"
+    }
+    $restoreInstallDirSequenceRows = @(
+        $executeSequence |
+            Where-Object { $_.Values[0] -eq 'NicoCacheRestoreInstallDir' }
+    )
+    if ($restoreInstallDirSequenceRows.Count -ne 1 -or
+            $restoreInstallDirSequenceRows[0].Values[1] -ne
+            'NICOCACHE_INSTALLDIR') {
+        throw '導入先復元の実行条件が不正です'
+    }
+    $costInitializeRows = @(
+        $executeSequence |
+            Where-Object { $_.Values[0] -eq 'CostInitialize' }
+    )
+    if ($costInitializeRows.Count -ne 1 -or
+            [int]$restoreInstallDirSequenceRows[0].Values[2] -ge
+            [int]$costInitializeRows[0].Values[2]) {
+        throw '保存済み導入先がCostInitializeより前に復元されません'
+    }
+    Write-Output 'PASS MSI内の保存済み導入先復元定義'
+
     $rollbackActions = @(
         $customActions |
             Where-Object { $_.Values[0] -eq 'NicoCacheRollbackWindowsSetup' }
