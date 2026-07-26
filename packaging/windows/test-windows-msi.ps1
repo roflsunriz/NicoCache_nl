@@ -31,6 +31,11 @@ $menuGroup = (Import-PowerShellDataFile -LiteralPath (
 $startMenuShortcut = Join-Path $env:APPDATA (
     "Microsoft\Windows\Start Menu\Programs\$menuGroup\NicoCache_nl.lnk"
 )
+$desktopShortcut = Join-Path (
+    [Environment]::GetFolderPath(
+        [Environment+SpecialFolder]::DesktopDirectory
+    )
+) 'NicoCache_nl.lnk'
 
 if (-not $installRoot.StartsWith(
         $testRoot + [System.IO.Path]::DirectorySeparatorChar,
@@ -89,6 +94,7 @@ function Get-OsIntegrationState {
         CertificateThumbprints = $certificateThumbprints
         UninstallEntries = $uninstallEntries
         StartMenuShortcutExists = Test-Path -LiteralPath $startMenuShortcut
+        DesktopShortcutExists = Test-Path -LiteralPath $desktopShortcut
     } | ConvertTo-Json -Depth 5 -Compress
 }
 
@@ -142,12 +148,15 @@ try {
     if (-not (Test-Path -LiteralPath $installRoot -PathType Container)) {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
-    Assert-AppVersion -ExpectedVersion '0.1.3'
+    Assert-AppVersion -ExpectedVersion '0.1.4'
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
     }
-    Write-Output 'PASS 旧版MSIの無人インストールと起動抑止'
+    if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
+        throw "デスクトップのショートカットがありません: $desktopShortcut"
+    }
+    Write-Output 'PASS 旧版MSIの無人インストール・ショートカット・起動抑止'
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $userStatePath) `
         -Force | Out-Null
@@ -169,6 +178,9 @@ try {
     if (-not (Test-Path -LiteralPath $repairTarget -PathType Leaf)) {
         throw 'MSI修復で配布ファイルが復元されませんでした'
     }
+    if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
+        throw 'MSI修復後にデスクトップのショートカットがありません'
+    }
     if ((Get-Content -Raw -LiteralPath $userStatePath).Trim() -ne
             'preserve-user-state-across-repair-and-upgrade') {
         throw 'MSI修復でユーザー状態が変化しました'
@@ -183,8 +195,11 @@ try {
         "INSTALLDIR=`"$installRoot`""
     ) -FailureMessage '新版MSIへの無人更新に失敗しました'
     $upgraded = $true
-    Assert-AppVersion -ExpectedVersion '0.1.4'
+    Assert-AppVersion -ExpectedVersion '0.1.5'
     Assert-NoInstalledProcess
+    if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
+        throw 'MSI更新後にデスクトップのショートカットがありません'
+    }
     if ((Get-Content -Raw -LiteralPath $userStatePath).Trim() -ne
             'preserve-user-state-across-repair-and-upgrade') {
         throw 'MSI更新でユーザー状態が失われました'
@@ -221,6 +236,9 @@ if (Test-Path -LiteralPath $installRoot) {
 }
 if (Test-Path -LiteralPath $startMenuShortcut) {
     throw 'アンインストール後にスタートメニューのショートカットが残っています'
+}
+if (Test-Path -LiteralPath $desktopShortcut) {
+    throw 'アンインストール後にデスクトップのショートカットが残っています'
 }
 $osStateAfter = Get-OsIntegrationState
 if ($osStateAfter -ne $osStateBefore) {

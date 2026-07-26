@@ -350,6 +350,7 @@ if ($PackageType -in @('Msi', 'All')) {
         '--win-per-user-install',
         '--win-menu',
         '--win-menu-group', $packageIdentity.MenuGroup,
+        '--win-shortcut',
         '--win-shortcut-prompt',
         '--win-upgrade-uuid', $upgradeUuid.ToString(),
         '--win-dir-chooser'

@@ -81,6 +81,14 @@ JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチ
   -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
 ```
 
+MSIを生成した場合は、インストールせずに内部テーブルを読み取り、デスクトップと
+スタートメニューのショートカットが各1件定義されていることを確認する。
+
+```powershell
+.\packaging\windows\test-windows-msi-structure.ps1 `
+  -MsiPath .\.test-work\windows-package\output\NicoCache_nl-<version>.msi
+```
+
 この隔離テストはログオン時起動を再現するため、製品ルートとは異なる作業
 ディレクトリから単一ランチャーを起動し、製品ルートからの自己再起動後も
 HTTP応答を継続することを確認する。
