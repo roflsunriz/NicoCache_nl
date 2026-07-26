@@ -44,7 +44,7 @@ if ($providerCertificateRemovals.Count -ne 0) {
 }
 if ($scriptContentForValidation = Get-Content -Raw -LiteralPath $scriptSource) {
     if ($scriptContentForValidation -notmatch
-            'CertAddEncodedCertificateToSystemStore') {
+            'CERT_SYSTEM_STORE_UNPROTECTED_FLAG') {
         throw '信頼済みルートCAが無人対応のWindows APIで登録されません'
     }
     if ($scriptContentForValidation -notmatch

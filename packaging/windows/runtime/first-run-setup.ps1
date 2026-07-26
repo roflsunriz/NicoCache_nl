@@ -60,6 +60,22 @@ function Write-SetupError {
     }
 }
 
+function Write-SetupStageMarker {
+    if ([string]::IsNullOrWhiteSpace($ErrorPath)) {
+        return
+    }
+    try {
+        $fullErrorPath = [System.IO.Path]::GetFullPath($ErrorPath)
+        $errorDirectory = Split-Path -Parent $fullErrorPath
+        if (Test-Path -LiteralPath $errorDirectory -PathType Container) {
+            "処理中: $script:CurrentStage" |
+                Set-Content -LiteralPath $fullErrorPath -Encoding UTF8
+        }
+    } catch {
+        # 診断ファイルの書き込み失敗でセットアップを止めない。
+    }
+}
+
 trap {
     Write-SetupError -ErrorRecord $_
     [Console]::Error.WriteLine($_.Exception.Message)
@@ -145,19 +161,68 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 namespace NicoCache {
     public static class CertificateStore {
+        private const uint X509_ASN_ENCODING = 0x00000001;
+        private const uint CERT_STORE_ADD_REPLACE_EXISTING = 3;
+        private const uint CERT_STORE_OPEN_EXISTING_FLAG = 0x00004000;
+        private const uint CERT_SYSTEM_STORE_CURRENT_USER = 0x00010000;
+        private const uint CERT_SYSTEM_STORE_UNPROTECTED_FLAG = 0x40000000;
+        private static readonly IntPtr CERT_STORE_PROV_SYSTEM_W =
+            new IntPtr(10);
+
         [DllImport(
             "crypt32.dll",
             CharSet = CharSet.Unicode,
             SetLastError = true)]
-        private static extern bool CertAddEncodedCertificateToSystemStore(
-            string storeName,
+        private static extern IntPtr CertOpenStore(
+            IntPtr storeProvider,
+            uint encodingType,
+            IntPtr cryptProvider,
+            uint flags,
+            string storeName);
+
+        [DllImport("crypt32.dll", SetLastError = true)]
+        private static extern bool CertAddEncodedCertificateToStore(
+            IntPtr store,
+            uint encodingType,
             byte[] certificate,
-            int certificateLength);
+            int certificateLength,
+            uint addDisposition,
+            IntPtr storedContext);
+
+        [DllImport("crypt32.dll", SetLastError = true)]
+        private static extern bool CertCloseStore(
+            IntPtr store,
+            uint flags);
 
         public static void AddToCurrentUserRoot(byte[] certificate) {
-            if (!CertAddEncodedCertificateToSystemStore(
-                    "ROOT", certificate, certificate.Length)) {
-                throw new Win32Exception(Marshal.GetLastWin32Error());
+            uint flags = CERT_STORE_OPEN_EXISTING_FLAG |
+                CERT_SYSTEM_STORE_CURRENT_USER |
+                CERT_SYSTEM_STORE_UNPROTECTED_FLAG;
+            IntPtr store = CertOpenStore(
+                CERT_STORE_PROV_SYSTEM_W,
+                0,
+                IntPtr.Zero,
+                flags,
+                "ROOT");
+            if (store == IntPtr.Zero) {
+                throw new Win32Exception(
+                    Marshal.GetLastWin32Error(),
+                    "CurrentUser ROOT証明書ストアを開けませんでした");
+            }
+            try {
+                if (!CertAddEncodedCertificateToStore(
+                        store,
+                        X509_ASN_ENCODING,
+                        certificate,
+                        certificate.Length,
+                        CERT_STORE_ADD_REPLACE_EXISTING,
+                        IntPtr.Zero)) {
+                    throw new Win32Exception(
+                        Marshal.GetLastWin32Error(),
+                        "CA証明書をCurrentUser ROOTへ登録できませんでした");
+                }
+            } finally {
+                CertCloseStore(store, 0);
             }
         }
     }
@@ -300,6 +365,7 @@ $state | ConvertTo-Json -Depth 6 |
 try {
     if ($EnableCertificate -and -not $certificateWasPresent) {
         $script:CurrentStage = 'CA証明書を現在のユーザーへ登録'
+        Write-SetupStageMarker
         $state.Changes.Certificate = $true
         Add-CurrentUserRootCertificate -Path $resolvedCertificate
         if (-not (Test-Path -LiteralPath (
@@ -311,6 +377,7 @@ try {
 
     if ($EnableProxy) {
         $script:CurrentStage = 'Windows自動プロキシーを設定'
+        Write-SetupStageMarker
         $state.Changes.Proxy = $true
         if (-not (Test-Path -LiteralPath $proxyRegistryPath)) {
             New-Item -Path $proxyRegistryPath -Force | Out-Null
@@ -334,13 +401,16 @@ try {
                 -Force | Out-Null
         }
         $script:CurrentStage = 'Windowsプロキシー変更を通知'
+        Write-SetupStageMarker
         Notify-ProxyChanged
     }
 
     if ($EnableAutoStart) {
         $script:CurrentStage = 'ログオン時自動起動の実行ファイルを確認'
+        Write-SetupStageMarker
         $resolvedLauncher = (Resolve-Path -LiteralPath $LauncherPath).Path
         $script:CurrentStage = 'ログオン時自動起動を登録'
+        Write-SetupStageMarker
         $state.Changes.AutoStart = $true
         if (-not (Test-Path -LiteralPath $runRegistryPath)) {
             New-Item -Path $runRegistryPath -Force | Out-Null
@@ -354,6 +424,7 @@ try {
     }
 
     $script:CurrentStage = 'Windows設定状態を確定'
+    Write-SetupStageMarker
     $state.Status = 'Applied'
     $state | ConvertTo-Json -Depth 6 |
         Set-Content -LiteralPath $fullStatePath -Encoding UTF8
