@@ -11,6 +11,7 @@ $ErrorActionPreference = 'Stop'
 $stateRoot = Join-Path $ApplicationRoot '.runtime-dependency-updater'
 $pendingPath = Join-Path $stateRoot 'pending-update.json'
 $backupRoot = Join-Path $stateRoot 'backups'
+$installedStatePath = Join-Path $stateRoot 'installed-versions.json'
 if (-not (Test-Path -LiteralPath $pendingPath -PathType Leaf)) { return }
 
 if ($WaitForProcessId -gt 0) {
@@ -37,6 +38,17 @@ if (Test-Path -LiteralPath $destination) {
 }
 try {
     Move-Item -LiteralPath $source -Destination $destination
+
+    $state = @{}
+    if (Test-Path -LiteralPath $installedStatePath -PathType Leaf) {
+        $json = Get-Content -LiteralPath $installedStatePath -Raw | ConvertFrom-Json
+        foreach ($property in $json.PSObject.Properties) {
+            $state[$property.Name] = [string]$property.Value
+        }
+    }
+    $state[[string]$pending.Id] = [string]$pending.Version
+    $state | ConvertTo-Json | Set-Content -LiteralPath $installedStatePath -Encoding UTF8
+
     Remove-Item -LiteralPath $pendingPath -Force
 } catch {
     if (Test-Path -LiteralPath $destination) {
