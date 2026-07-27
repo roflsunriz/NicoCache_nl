@@ -20,8 +20,7 @@ $buildLog = Join-Path $workRoot 'jpackage.log'
 if (Test-Path -LiteralPath $workRoot) {
     Remove-Item -LiteralPath $workRoot -Recurse -Force
 }
-New-Item -ItemType Directory -Path $classesRoot, $inputRoot, $outputRoot |
-    Out-Null
+New-Item -ItemType Directory -Path $classesRoot, $inputRoot, $outputRoot | Out-Null
 
 $javac = (Get-Command javac -ErrorAction Stop).Source
 $jar = (Get-Command jar -ErrorAction Stop).Source
@@ -29,21 +28,28 @@ $jpackage = (Get-Command jpackage -ErrorAction Stop).Source
 
 $source = Join-Path $root 'updater\src\dareka\updater\NicoCacheUpdater.java'
 & $javac --release 11 -encoding UTF-8 -d $classesRoot $source
-if ($LASTEXITCODE -ne 0) {
-    throw 'NicoCache_nl Updaterのコンパイルに失敗しました'
-}
+if ($LASTEXITCODE -ne 0) { throw 'NicoCache_nl Updaterのコンパイルに失敗しました' }
 
 $manifest = Join-Path $workRoot 'manifest.mf'
-@(
-    'Manifest-Version: 1.0'
-    'Main-Class: dareka.updater.NicoCacheUpdater'
-    ''
-) | Set-Content -LiteralPath $manifest -Encoding ascii
+@('Manifest-Version: 1.0', 'Main-Class: dareka.updater.NicoCacheUpdater', '') |
+    Set-Content -LiteralPath $manifest -Encoding ascii
 
 $jarPath = Join-Path $inputRoot 'NicoCacheUpdater.jar'
 & $jar cfm $jarPath $manifest -C $classesRoot .
-if ($LASTEXITCODE -ne 0) {
-    throw 'NicoCache_nl UpdaterのJAR作成に失敗しました'
+if ($LASTEXITCODE -ne 0) { throw 'NicoCache_nl UpdaterのJAR作成に失敗しました' }
+
+# The GUI executes this engine from the updater installation, never from the target NicoCache_nl root.
+$engineInput = Join-Path $inputRoot 'extensions'
+New-Item -ItemType Directory -Path $engineInput | Out-Null
+foreach ($name in @(
+        'update-runtime-dependencies.ps1',
+        'runtime-dependencies.psd1',
+        'apply-pending-runtime-update.ps1')) {
+    $sourceFile = Join-Path $root "packaging\windows\runtime\$name"
+    if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
+        throw "Updater同梱エンジンが見つかりません: $sourceFile"
+    }
+    Copy-Item -LiteralPath $sourceFile -Destination (Join-Path $engineInput $name)
 }
 
 $commonArguments = @(
@@ -64,9 +70,7 @@ function Invoke-JPackage {
         [Parameter(Mandatory)][string]$FailureMessage
     )
     & $jpackage @Arguments 2>&1 | Tee-Object -FilePath $buildLog -Append
-    if ($LASTEXITCODE -ne 0) {
-        throw $FailureMessage
-    }
+    if ($LASTEXITCODE -ne 0) { throw $FailureMessage }
 }
 
 if ($PackageType -in @('AppImage', 'All')) {
