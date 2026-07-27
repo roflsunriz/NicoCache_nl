@@ -30,6 +30,7 @@ import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -61,28 +62,33 @@ public final class NicoCacheUpdater {
             new HashSet<Integer>(Arrays.asList(17, 21)));
     private static final int RECOMMENDED_LTS = 21;
 
-    private final Path applicationRoot;
+    private Path applicationRoot;
     private final JFrame frame;
+    private final JLabel targetRootLabel;
     private final JTextArea applicationOutput;
     private final JTextArea dependencyOutput;
     private final JButton applicationCheckButton;
     private final JButton applicationUpdateButton;
     private final JButton dependencyCheckButton;
     private final JButton dependencyUpdateButton;
+    private final JButton changeTargetButton;
     private final JComboBox<JavaChoice> javaChoice;
     private Release latestRelease;
 
     private NicoCacheUpdater(Path applicationRoot) {
-        this.applicationRoot = applicationRoot;
+        this.applicationRoot = applicationRoot.toAbsolutePath().normalize();
         frame = new JFrame("NicoCache_nl Updater");
+        targetRootLabel = new JLabel();
         applicationOutput = createOutput();
         dependencyOutput = createOutput();
         applicationCheckButton = new JButton("更新を確認");
         applicationUpdateButton = new JButton("NicoCache_nlを更新");
         dependencyCheckButton = new JButton("更新を確認");
         dependencyUpdateButton = new JButton("更新可能な項目を適用");
+        changeTargetButton = new JButton("変更…");
         javaChoice = new JComboBox<JavaChoice>();
         buildUi();
+        refreshTargetLabel();
     }
 
     private static JTextArea createOutput() {
@@ -94,12 +100,20 @@ public final class NicoCacheUpdater {
     }
 
     private void buildUi() {
+        JPanel root = new JPanel(new BorderLayout(8, 8));
+        JPanel targetPanel = new JPanel(new BorderLayout(8, 0));
+        targetPanel.add(targetRootLabel, BorderLayout.CENTER);
+        targetPanel.add(changeTargetButton, BorderLayout.EAST);
+        root.add(targetPanel, BorderLayout.NORTH);
+
         JTabbedPane tabs = new JTabbedPane();
         tabs.addTab("NicoCache_nl", buildApplicationPanel());
         tabs.addTab("外部依存関係", buildDependencyPanel());
+        root.add(tabs, BorderLayout.CENTER);
+
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.add(tabs, BorderLayout.CENTER);
-        frame.setPreferredSize(new Dimension(900, 560));
+        frame.add(root, BorderLayout.CENTER);
+        frame.setPreferredSize(new Dimension(920, 590));
         frame.pack();
         frame.setLocationRelativeTo(null);
         applicationUpdateButton.setEnabled(false);
@@ -107,12 +121,11 @@ public final class NicoCacheUpdater {
         applicationUpdateButton.addActionListener(event -> installApplicationUpdate());
         dependencyCheckButton.addActionListener(event -> runDependencyUpdater(false));
         dependencyUpdateButton.addActionListener(event -> runDependencyUpdater(true));
+        changeTargetButton.addActionListener(event -> chooseTargetRoot());
         javaChoice.setRenderer(new JavaChoiceRenderer());
         javaChoice.addActionListener(event -> {
             JavaChoice selected = (JavaChoice) javaChoice.getSelectedItem();
-            if (selected != null && !selected.supported) {
-                javaChoice.setSelectedItem(findRecommendedChoice());
-            }
+            if (selected != null && !selected.supported) javaChoice.setSelectedItem(findRecommendedChoice());
         });
         loadJavaChoices();
     }
@@ -134,7 +147,7 @@ public final class NicoCacheUpdater {
         JPanel header = new JPanel();
         header.add(new JLabel("Temurin LTS:"));
         header.add(javaChoice);
-        header.add(new JLabel("未対応LTSは自動表示されますが選択できません。"));
+        header.add(new JLabel("未対応LTSは表示のみで選択できません。"));
         panel.add(header, BorderLayout.NORTH);
         panel.add(new JScrollPane(dependencyOutput), BorderLayout.CENTER);
         JPanel buttons = new JPanel();
@@ -144,17 +157,39 @@ public final class NicoCacheUpdater {
         return panel;
     }
 
+    private void refreshTargetLabel() {
+        String status = TargetRootResolver.isInstallation(applicationRoot)
+                ? "検出済み" : "未インストール";
+        targetRootLabel.setText("更新対象: " + applicationRoot + "（" + status + "）");
+    }
+
+    private void chooseTargetRoot() {
+        JFileChooser chooser = new JFileChooser(applicationRoot.toFile());
+        chooser.setDialogTitle("NicoCache_nlのインストール先を選択");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setAcceptAllFileFilterUsed(false);
+        if (chooser.showOpenDialog(frame) != JFileChooser.APPROVE_OPTION) return;
+        try {
+            Path selected = TargetRootResolver.requireInstallation(chooser.getSelectedFile().toPath());
+            TargetRootResolver.remember(selected);
+            applicationRoot = selected;
+            latestRelease = null;
+            applicationUpdateButton.setEnabled(false);
+            applicationOutput.setText("更新対象を変更しました: " + applicationRoot + "\n");
+            dependencyOutput.setText("更新対象を変更しました: " + applicationRoot + "\n");
+            refreshTargetLabel();
+        } catch (IOException error) {
+            JOptionPane.showMessageDialog(frame, error.getMessage(), "更新対象を変更できません",
+                    JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void checkApplicationUpdate() {
         setApplicationBusy(true);
         applicationOutput.setText("最新版を確認しています…\n");
         new SwingWorker<Release, Void>() {
-            @Override
-            protected Release doInBackground() throws Exception {
-                return fetchLatestRelease();
-            }
-
-            @Override
-            protected void done() {
+            @Override protected Release doInBackground() throws Exception { return fetchLatestRelease(); }
+            @Override protected void done() {
                 try {
                     latestRelease = get();
                     String installed = readInstalledVersion();
@@ -163,9 +198,7 @@ public final class NicoCacheUpdater {
                             + latestRelease.msiUri + "\n");
                     applicationUpdateButton.setEnabled("不明".equals(installed)
                             || compareVersions(latestRelease.version, installed) > 0);
-                    if (!applicationUpdateButton.isEnabled()) {
-                        applicationOutput.append("既に最新版です。\n");
-                    }
+                    if (!applicationUpdateButton.isEnabled()) applicationOutput.append("既に最新版です。\n");
                 } catch (Exception error) {
                     applicationOutput.append("確認に失敗しました: " + rootMessage(error) + "\n");
                 } finally {
@@ -176,27 +209,17 @@ public final class NicoCacheUpdater {
     }
 
     private void installApplicationUpdate() {
-        if (latestRelease == null) {
-            return;
-        }
+        if (latestRelease == null) return;
         int answer = JOptionPane.showConfirmDialog(frame,
                 "NicoCache_nl " + latestRelease.version + " をダウンロードして更新しますか？\n"
                         + "対象: " + applicationRoot + "\n実行中のNicoCache_nlは先に終了してください。",
-                "NicoCache_nlの更新", JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.QUESTION_MESSAGE);
-        if (answer != JOptionPane.OK_OPTION) {
-            return;
-        }
+                "NicoCache_nlの更新", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION) return;
         setApplicationBusy(true);
         applicationOutput.append("配布物をダウンロードして検証しています…\n");
         new SwingWorker<Path, Void>() {
-            @Override
-            protected Path doInBackground() throws Exception {
-                return downloadAndVerify(latestRelease);
-            }
-
-            @Override
-            protected void done() {
+            @Override protected Path doInBackground() throws Exception { return downloadAndVerify(latestRelease); }
+            @Override protected void done() {
                 try {
                     Path msi = get();
                     new ProcessBuilder("msiexec.exe", "/i", msi.toString()).start();
@@ -211,6 +234,13 @@ public final class NicoCacheUpdater {
     }
 
     private void runDependencyUpdater(boolean update) {
+        try {
+            TargetRootResolver.requireInstallation(applicationRoot);
+        } catch (IOException error) {
+            JOptionPane.showMessageDialog(frame, error.getMessage(), "更新対象が無効です",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         JavaChoice selected = (JavaChoice) javaChoice.getSelectedItem();
         if (selected == null || !selected.supported) {
             JOptionPane.showMessageDialog(frame, "対応済みのTemurin LTSを選択してください。",
@@ -223,56 +253,42 @@ public final class NicoCacheUpdater {
                             + "\nUpdater自身やシステムPATH上の依存関係は変更しません。",
                     "外部依存関係の更新", JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.QUESTION_MESSAGE);
-            if (answer != JOptionPane.OK_OPTION) {
-                return;
-            }
+            if (answer != JOptionPane.OK_OPTION) return;
         }
         setDependencyBusy(true);
         dependencyOutput.setText(update ? "更新を準備しています…\n" : "更新を確認しています…\n");
         final int javaMajor = selected.major;
         new SwingWorker<String, Void>() {
-            @Override
-            protected String doInBackground() throws Exception {
+            @Override protected String doInBackground() throws Exception {
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 return update ? engine.updateAll(javaMajor) : engine.checkAll(javaMajor);
             }
-
-            @Override
-            protected void done() {
-                try {
-                    dependencyOutput.setText(get());
-                } catch (Exception error) {
+            @Override protected void done() {
+                try { dependencyOutput.setText(get()); }
+                catch (Exception error) {
                     dependencyOutput.append("\n処理に失敗しました: " + rootMessage(error) + "\n");
-                } finally {
-                    setDependencyBusy(false);
-                }
+                } finally { setDependencyBusy(false); }
             }
         }.execute();
     }
 
     private void loadJavaChoices() {
         javaChoice.setModel(new DefaultComboBoxModel<JavaChoice>(new JavaChoice[] {
-                new JavaChoice(21, true, true),
-                new JavaChoice(17, true, false)
+                new JavaChoice(21, true, true), new JavaChoice(17, true, false)
         }));
         new SwingWorker<List<Integer>, Void>() {
-            @Override
-            protected List<Integer> doInBackground() throws Exception {
+            @Override protected List<Integer> doInBackground() throws Exception {
                 return fetchAvailableLtsReleases();
             }
-
-            @Override
-            protected void done() {
+            @Override protected void done() {
                 try {
-                    List<Integer> releases = get();
                     List<JavaChoice> choices = new ArrayList<JavaChoice>();
-                    for (Integer major : releases) {
+                    for (Integer major : get()) {
                         choices.add(new JavaChoice(major.intValue(), TESTED_LTS.contains(major),
                                 major.intValue() == RECOMMENDED_LTS));
                     }
                     choices.sort(Comparator.comparingInt((JavaChoice value) -> value.major).reversed());
-                    javaChoice.setModel(new DefaultComboBoxModel<JavaChoice>(
-                            choices.toArray(new JavaChoice[0])));
+                    javaChoice.setModel(new DefaultComboBoxModel<JavaChoice>(choices.toArray(new JavaChoice[0])));
                     javaChoice.setSelectedItem(findRecommendedChoice());
                 } catch (Exception error) {
                     dependencyOutput.append("Temurin LTS一覧の取得に失敗しました。内蔵一覧を使用します。\n");
@@ -284,9 +300,7 @@ public final class NicoCacheUpdater {
     private JavaChoice findRecommendedChoice() {
         for (int index = 0; index < javaChoice.getItemCount(); index++) {
             JavaChoice choice = javaChoice.getItemAt(index);
-            if (choice.recommended) {
-                return choice;
-            }
+            if (choice.recommended) return choice;
         }
         return javaChoice.getItemCount() == 0 ? null : javaChoice.getItemAt(0);
     }
@@ -294,59 +308,50 @@ public final class NicoCacheUpdater {
     private Release fetchLatestRelease() throws IOException, InterruptedException {
         String json = sendText(RELEASE_URI).body();
         Matcher tagMatcher = TAG_PATTERN.matcher(json);
-        if (!tagMatcher.find()) {
-            throw new IOException("release tag is missing");
-        }
+        if (!tagMatcher.find()) throw new IOException("release tag is missing");
         Matcher versionMatcher = VERSION_PATTERN.matcher(tagMatcher.group(1));
-        if (!versionMatcher.matches()) {
-            throw new IOException("unsupported release tag: " + tagMatcher.group(1));
-        }
+        if (!versionMatcher.matches()) throw new IOException("unsupported release tag: " + tagMatcher.group(1));
         URI msi = null;
         URI checksum = null;
         Matcher matcher = DOWNLOAD_PATTERN.matcher(json);
         while (matcher.find()) {
             String value = matcher.group(1).replace("\\/", "/");
             String lower = value.toLowerCase(Locale.ROOT);
-            if (lower.endsWith(".msi")) {
-                msi = URI.create(value);
-            } else if (lower.endsWith(".sha256") || lower.endsWith(".sha256.txt")) {
-                checksum = URI.create(value);
-            }
+            if (lower.endsWith(".msi")) msi = URI.create(value);
+            else if (lower.endsWith(".sha256") || lower.endsWith(".sha256.txt")) checksum = URI.create(value);
         }
-        if (msi == null || checksum == null) {
-            throw new IOException("MSIまたはSHA-256がReleaseにありません");
-        }
+        if (msi == null || checksum == null) throw new IOException("MSIまたはSHA-256がReleaseにありません");
         return new Release(versionMatcher.group(1), msi, checksum);
     }
 
     private List<Integer> fetchAvailableLtsReleases() throws IOException, InterruptedException {
         Matcher matcher = LTS_RELEASES_PATTERN.matcher(sendText(ADOPTIUM_RELEASES_URI).body());
-        if (!matcher.find()) {
-            throw new IOException("available_lts_releases is missing");
-        }
+        if (!matcher.find()) throw new IOException("available_lts_releases is missing");
         List<Integer> result = new ArrayList<Integer>();
         for (String value : matcher.group(1).split(",")) {
             String trimmed = value.trim();
-            if (!trimmed.isEmpty()) {
-                result.add(Integer.valueOf(trimmed));
-            }
+            if (!trimmed.isEmpty()) result.add(Integer.valueOf(trimmed));
         }
         return result;
     }
 
-    private static HttpResponse<String> sendText(URI uri)
-            throws IOException, InterruptedException {
+    private static HttpResponse<String> sendText(URI uri) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT)
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
-        HttpRequest request = HttpRequest.newBuilder(uri).timeout(REQUEST_TIMEOUT)
-                .header("Accept", "application/json")
-                .header("User-Agent", "NicoCache_nl Updater").build();
-        HttpResponse<String> response = client.send(request,
+        HttpRequest.Builder builder = HttpRequest.newBuilder(uri).timeout(REQUEST_TIMEOUT)
+                .header("Accept", "application/json").header("User-Agent", "NicoCache_nl Updater");
+        addGitHubToken(builder, uri);
+        HttpResponse<String> response = client.send(builder.build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        if (response.statusCode() != 200) {
-            throw new IOException("HTTP " + response.statusCode() + ": " + uri);
-        }
+        if (response.statusCode() != 200) throw new IOException("HTTP " + response.statusCode() + ": " + uri);
         return response;
+    }
+
+    private static void addGitHubToken(HttpRequest.Builder builder, URI uri) {
+        if (!"api.github.com".equalsIgnoreCase(uri.getHost())) return;
+        String token = System.getenv("GITHUB_TOKEN");
+        if (token != null && !token.isBlank()) builder.header("Authorization", "Bearer " + token);
+        builder.header("X-GitHub-Api-Version", "2022-11-28");
     }
 
     private Path downloadAndVerify(Release release) throws IOException, InterruptedException {
@@ -359,13 +364,9 @@ public final class NicoCacheUpdater {
                 HttpRequest.newBuilder(release.msiUri).timeout(Duration.ofMinutes(5))
                         .header("User-Agent", "NicoCache_nl Updater").build(),
                 HttpResponse.BodyHandlers.ofFile(partial));
-        if (binary.statusCode() != 200) {
-            throw new IOException("MSI download returned HTTP " + binary.statusCode());
-        }
+        if (binary.statusCode() != 200) throw new IOException("MSI download returned HTTP " + binary.statusCode());
         Matcher checksumMatcher = SHA256_PATTERN.matcher(sendText(release.checksumUri).body());
-        if (!checksumMatcher.find()) {
-            throw new IOException("SHA-256 value is missing");
-        }
+        if (!checksumMatcher.find()) throw new IOException("SHA-256 value is missing");
         String expected = checksumMatcher.group(1).toLowerCase(Locale.ROOT);
         String actual = sha256(partial);
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),
@@ -381,57 +382,24 @@ public final class NicoCacheUpdater {
         Path versionFile = applicationRoot.resolve("version.txt");
         try {
             if (Files.isRegularFile(versionFile)) {
-                String value = Files.readString(versionFile, StandardCharsets.UTF_8).trim();
-                Matcher matcher = VERSION_PATTERN.matcher(value);
-                if (matcher.matches()) {
-                    return matcher.group(1);
-                }
+                Matcher matcher = VERSION_PATTERN.matcher(Files.readString(versionFile, StandardCharsets.UTF_8).trim());
+                if (matcher.matches()) return matcher.group(1);
             }
-        } catch (IOException ignored) {
-            // Repair remains available when the version file is unreadable.
-        }
+        } catch (IOException ignored) { }
         return "不明";
     }
 
     private void setApplicationBusy(boolean busy) {
         applicationCheckButton.setEnabled(!busy);
         applicationUpdateButton.setEnabled(!busy && latestRelease != null);
+        changeTargetButton.setEnabled(!busy);
     }
 
     private void setDependencyBusy(boolean busy) {
         dependencyCheckButton.setEnabled(!busy);
         dependencyUpdateButton.setEnabled(!busy);
         javaChoice.setEnabled(!busy);
-    }
-
-    private static Path defaultApplicationRoot() {
-        String programFiles = System.getenv("ProgramFiles");
-        return programFiles == null
-                ? Path.of("NicoCache_nl").toAbsolutePath().normalize()
-                : Path.of(programFiles, "NicoCache_nl").toAbsolutePath().normalize();
-    }
-
-    private static String argument(String[] args, String name) {
-        for (int index = 0; index + 1 < args.length; index++) {
-            if (name.equals(args[index])) {
-                return args[index + 1];
-            }
-        }
-        return null;
-    }
-
-    private static boolean hasArgument(String[] args, String name) {
-        for (String argument : args) {
-            if (name.equals(argument)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static int intArgument(String[] args, String name, int fallback) {
-        String value = argument(args, name);
-        return value == null ? fallback : Integer.parseInt(value);
+        changeTargetButton.setEnabled(!busy);
     }
 
     private static String sha256(Path file) throws IOException {
@@ -440,14 +408,10 @@ public final class NicoCacheUpdater {
             try (java.io.InputStream input = Files.newInputStream(file)) {
                 byte[] buffer = new byte[8192];
                 int read;
-                while ((read = input.read(buffer)) >= 0) {
-                    digest.update(buffer, 0, read);
-                }
+                while ((read = input.read(buffer)) >= 0) digest.update(buffer, 0, read);
             }
             StringBuilder result = new StringBuilder(64);
-            for (byte value : digest.digest()) {
-                result.append(String.format("%02x", value & 0xff));
-            }
+            for (byte value : digest.digest()) result.append(String.format("%02x", value & 0xff));
             return result.toString();
         } catch (java.security.NoSuchAlgorithmException impossible) {
             throw new IllegalStateException(impossible);
@@ -461,41 +425,19 @@ public final class NicoCacheUpdater {
         for (int index = 0; index < length; index++) {
             int leftValue = index < leftParts.length ? Integer.parseInt(leftParts[index]) : 0;
             int rightValue = index < rightParts.length ? Integer.parseInt(rightParts[index]) : 0;
-            if (leftValue != rightValue) {
-                return Integer.compare(leftValue, rightValue);
-            }
+            if (leftValue != rightValue) return Integer.compare(leftValue, rightValue);
         }
         return 0;
     }
 
     private static String rootMessage(Exception error) {
         Throwable value = error;
-        while (value.getCause() != null) {
-            value = value.getCause();
-        }
+        while (value.getCause() != null) value = value.getCause();
         return value.getMessage() == null ? value.toString() : value.getMessage();
     }
 
     public static void main(String[] args) {
-        Path applicationRoot = argument(args, "--app-root") == null
-                ? defaultApplicationRoot()
-                : Path.of(argument(args, "--app-root")).toAbsolutePath().normalize();
-        if (hasArgument(args, "--self-test") || hasArgument(args, "--dependency-check")) {
-            try {
-                DependencyEngine engine = new DependencyEngine(applicationRoot);
-                if (hasArgument(args, "--dependency-check")) {
-                    System.out.print(engine.checkAll(intArgument(args, "--java-major", RECOMMENDED_LTS)));
-                } else {
-                    System.out.println("SELF_TEST_OK applicationRoot=" + applicationRoot
-                            + " engine=java");
-                }
-                return;
-            } catch (Exception error) {
-                System.err.println("SELF_TEST_FAILED: " + rootMessage(error));
-                System.exit(1);
-                return;
-            }
-        }
+        Path applicationRoot = TargetRootResolver.resolve(UpdaterLauncher.argument(args, "--app-root"));
         SwingUtilities.invokeLater(() -> new NicoCacheUpdater(applicationRoot).frame.setVisible(true));
     }
 
@@ -503,7 +445,6 @@ public final class NicoCacheUpdater {
         final String version;
         final URI msiUri;
         final URI checksumUri;
-
         Release(String version, URI msiUri, URI checksumUri) {
             this.version = version;
             this.msiUri = msiUri;
@@ -515,39 +456,26 @@ public final class NicoCacheUpdater {
         final int major;
         final boolean supported;
         final boolean recommended;
-
         JavaChoice(int major, boolean supported, boolean recommended) {
             this.major = major;
             this.supported = supported;
             this.recommended = recommended;
         }
-
-        @Override
-        public String toString() {
+        @Override public String toString() {
             String suffix = recommended ? "（推奨）" : supported ? "" : "（未対応）";
             return "Java " + major + " LTS" + suffix;
         }
-
-        @Override
-        public boolean equals(Object other) {
+        @Override public boolean equals(Object other) {
             return other instanceof JavaChoice && ((JavaChoice) other).major == major;
         }
-
-        @Override
-        public int hashCode() {
-            return major;
-        }
+        @Override public int hashCode() { return major; }
     }
 
     private static final class JavaChoiceRenderer extends DefaultListCellRenderer {
-        @Override
-        public Component getListCellRendererComponent(javax.swing.JList<?> list,
+        @Override public Component getListCellRendererComponent(javax.swing.JList<?> list,
                 Object value, int index, boolean selected, boolean focus) {
-            Component component = super.getListCellRendererComponent(
-                    list, value, index, selected, focus);
-            if (value instanceof JavaChoice && !((JavaChoice) value).supported) {
-                component.setEnabled(false);
-            }
+            Component component = super.getListCellRendererComponent(list, value, index, selected, focus);
+            if (value instanceof JavaChoice && !((JavaChoice) value).supported) component.setEnabled(false);
             return component;
         }
     }
