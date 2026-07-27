@@ -70,6 +70,26 @@ public final class NicoCachePaths {
         return dataRoot().resolve(relativePath).normalize();
     }
 
+    public static File configFile() {
+        return userPath("config.properties").toFile();
+    }
+
+    public static File guiPropertyFile() {
+        return userPath("NicoCacheGUI.property").toFile();
+    }
+
+    public static File proxyPacFile() {
+        return userPath("proxy.pac").toFile();
+    }
+
+    public static File localDirectory() {
+        return userPath("local").toFile();
+    }
+
+    public static File nlFiltersDirectory() {
+        return userPath("nlFilters").toFile();
+    }
+
     public static File configuredFile(String value, String defaultRelativePath) {
         String selected = value;
         if (selected == null || selected.isBlank()) {
@@ -80,5 +100,26 @@ public final class NicoCachePaths {
             path = dataRoot().resolve(path);
         }
         return path.normalize().toFile();
+    }
+
+    public static File configuredFile(String propertyKey,
+            String defaultRelativePath, boolean readSystemProperty) {
+        String value = readSystemProperty
+                ? System.getProperty(propertyKey)
+                : propertyKey;
+        return configuredFile(value, defaultRelativePath);
+    }
+
+    public static File cacheDirectory() {
+        return configuredFile(System.getProperty("cacheFolder"), "cache");
+    }
+
+    public static File thumbnailCacheDirectory() {
+        return configuredFile(System.getProperty("thcacheFolder"), "thcache");
+    }
+
+    public static File convertedCacheDirectory() {
+        return configuredFile(System.getProperty("convertedCacheFolder"),
+                "cvcache");
     }
 }
