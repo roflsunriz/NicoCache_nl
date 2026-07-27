@@ -6,31 +6,16 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 
-import javax.swing.filechooser.FileSystemView;
-
 /**
- * Packaged launcher that separates mutable user data from application files.
- *
- * <p>The packaged application keeps immutable distribution files beside the
- * executable while mutable files live in a user-visible NicoCache_nl folder
- * under the operating system's default documents directory. A portable launch
- * remains available by placing {@code portable.flag} beside the executable.</p>
+ * Packaged launcher that separates user-managed files from application files.
  */
 public final class UserDataMain {
-    private static final String DATA_ROOT_PROPERTY = "nicocache.dataRoot";
-    private static final String PORTABLE_FLAG = "portable.flag";
     private static final List<String> USER_FILES = List.of(
             "config.properties",
             "proxy.pac");
     private static final List<String> USER_DIRECTORIES = List.of(
             "local",
-            "nlFilters",
-            "cache",
-            "certs",
-            "cvcache",
-            "data",
-            "list",
-            "thcache");
+            "nlFilters");
     private static final List<String> DISTRIBUTION_DIRECTORIES = List.of(
             "defaults",
             "extensions",
@@ -57,21 +42,25 @@ public final class UserDataMain {
         }
 
         Path executable = Path.of(packagedLauncher).toAbsolutePath().normalize();
-        Path applicationDirectory = executable.getParent();
-        if (applicationDirectory == null
-                || Files.exists(applicationDirectory.resolve(PORTABLE_FLAG))) {
+        Path applicationRoot = executable.getParent();
+        if (applicationRoot == null) {
+            NLMain.main(args);
+            return;
+        }
+        System.setProperty(NicoCachePaths.APPLICATION_ROOT_PROPERTY,
+                applicationRoot.toString());
+
+        if (NicoCachePaths.isPortable()) {
             NLMain.main(args);
             return;
         }
 
         try {
-            Path dataRoot = resolveDataRoot();
-            prepareDataRoot(applicationDirectory, dataRoot);
+            Path dataRoot = NicoCachePaths.dataRoot();
+            prepareDataRoot(applicationRoot, dataRoot);
 
-            // NLMain normally restores user.dir to the packaged application
-            // directory. Clear this marker after the required files have been
-            // copied so all existing relative-path code uses the data root.
-            System.setProperty(DATA_ROOT_PROPERTY, dataRoot.toString());
+            System.setProperty(NicoCachePaths.DATA_ROOT_PROPERTY,
+                    dataRoot.toString());
             System.clearProperty("jpackage.app-path");
             System.setProperty("user.dir", dataRoot.toString());
 
@@ -82,7 +71,6 @@ public final class UserDataMain {
             }
         } catch (IOException error) {
             System.err.println("利用者データ領域の準備に失敗しました: " + error);
-            // Do not make an existing installation unusable if migration fails.
             NLMain.main(args);
             return;
         }
@@ -90,51 +78,29 @@ public final class UserDataMain {
         NLMain.main(args);
     }
 
-    static Path resolveDataRoot() throws IOException {
-        String override = System.getProperty(DATA_ROOT_PROPERTY);
-        if (override != null && !override.isBlank()) {
-            Path path = Path.of(override).toAbsolutePath().normalize();
-            Files.createDirectories(path);
-            return path;
-        }
-
-        Path documentsDirectory;
-        try {
-            documentsDirectory = FileSystemView.getFileSystemView()
-                    .getDefaultDirectory()
-                    .toPath();
-        } catch (RuntimeException error) {
-            documentsDirectory = Path.of(System.getProperty("user.home"));
-        }
-
-        Path root = documentsDirectory.resolve("NicoCache_nl");
-        Files.createDirectories(root);
-        return root.toAbsolutePath().normalize();
-    }
-
-    static void prepareDataRoot(Path applicationDirectory, Path dataRoot)
+    static void prepareDataRoot(Path applicationRoot, Path dataRoot)
             throws IOException {
         Files.createDirectories(dataRoot);
 
         for (String name : USER_FILES) {
-            migrateIfMissing(applicationDirectory.resolve(name),
-                    dataRoot.resolve(name));
+            migrateIfMissing(applicationRoot.resolve(name),
+                    NicoCachePaths.userPath(name));
         }
         for (String name : USER_DIRECTORIES) {
-            migrateDirectoryIfMissing(applicationDirectory.resolve(name),
-                    dataRoot.resolve(name));
+            migrateDirectoryIfMissing(applicationRoot.resolve(name),
+                    NicoCachePaths.userPath(name));
         }
 
         for (String name : DISTRIBUTION_FILES) {
-            copyIfMissing(applicationDirectory.resolve(name),
-                    dataRoot.resolve(name));
+            copyIfMissing(applicationRoot.resolve(name),
+                    NicoCachePaths.userPath(name));
         }
         for (String name : DISTRIBUTION_DIRECTORIES) {
-            copyDirectoryIfMissing(applicationDirectory.resolve(name),
-                    dataRoot.resolve(name));
+            copyDirectoryIfMissing(applicationRoot.resolve(name),
+                    NicoCachePaths.userPath(name));
         }
 
-        Files.writeString(dataRoot.resolve(".data-layout-version"), "1\n");
+        Files.writeString(dataRoot.resolve(".data-layout-version"), "2\n");
     }
 
     private static void migrateIfMissing(Path source, Path destination)
