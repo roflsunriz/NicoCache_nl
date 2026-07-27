@@ -57,7 +57,15 @@ jobs:
 
       - name: Run Java, transaction, security, GUI and package tests
         shell: pwsh
-        run: .\packaging\windows\test-standalone-updater.ps1 -BuildMsi
+        run: |
+          New-Item -ItemType Directory -Force .\.test-work | Out-Null
+          Start-Transcript -Path .\.test-work\standalone-updater-transcript.txt -Force
+          try {
+            .\packaging\windows\test-standalone-updater.ps1 -BuildMsi
+          }
+          finally {
+            Stop-Transcript
+          }
 
       - name: Upload updater packages and diagnostics
         if: ${{ always() }}
@@ -66,9 +74,11 @@ jobs:
           name: standalone-updater-${{ github.sha }}
           if-no-files-found: warn
           retention-days: 14
+          include-hidden-files: true
           path: |
             .test-work/standalone-updater/output/**
             .test-work/updater-tests/**
+            .test-work/standalone-updater-transcript.txt
 
   live-contracts:
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
