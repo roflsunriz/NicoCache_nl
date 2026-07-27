@@ -75,7 +75,7 @@ $packageType = if ($BuildMsi) { 'All' } else { 'AppImage' }
 $appImage = Join-Path $root '.test-work\standalone-updater\output\NicoCache_nl Updater'
 Assert-Directory $appImage
 Assert-File (Join-Path $appImage 'NicoCache_nl Updater.exe')
-Assert-File (Join-Path $appImage 'runtime\bin\java.exe')
+Assert-File (Join-Path $appImage 'runtime\lib\modules')
 Assert-File (Join-Path $appImage 'app\NicoCacheUpdater.jar')
 
 # Independence: fake NicoCache_nl root is deliberately incomplete/broken.
