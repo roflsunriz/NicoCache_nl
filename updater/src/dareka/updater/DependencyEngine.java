@@ -1,6 +1,5 @@
 package dareka.updater;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -101,21 +100,29 @@ final class DependencyEngine {
 
     /**
      * Packaged, offline transaction E2E. It exercises HTTP download, hash validation,
-     * ZIP extraction, zip-slip rejection, backup, replacement and rollback invariants.
+     * ZIP extraction, zip-slip rejection, directory replacement, file merge, backup and rollback.
      */
     String selfTestTransactions() throws Exception {
         try (OperationLock ignored = acquireOperationLock()) {
             Path destination = managed("tools/selftest");
+            Path fileDestination = managed("lib-selftest");
             deleteTree(destination);
+            deleteTree(fileDestination);
             Files.createDirectories(destination);
+            Files.createDirectories(fileDestination);
             Files.writeString(destination.resolve("marker.txt"), "old", StandardCharsets.UTF_8);
+            Files.writeString(fileDestination.resolve("unrelated.jar"), "keep", StandardCharsets.UTF_8);
 
             byte[] goodZip = zipBytes("payload/marker.txt", "new");
             byte[] evilZip = zipBytes("../escaped.txt", "escape");
+            byte[] firstFile = "first".getBytes(StandardCharsets.UTF_8);
+            byte[] secondFile = "second".getBytes(StandardCharsets.UTF_8);
             Map<String, byte[]> payloads = new HashMap<>();
             payloads.put("/good.zip", goodZip);
             payloads.put("/evil.zip", evilZip);
-            try (FixtureServer server = new FixtureServer(payloads, 3)) {
+            payloads.put("/first.jar", firstFile);
+            payloads.put("/second.jar", secondFile);
+            try (FixtureServer server = new FixtureServer(payloads, 5)) {
                 URI good = server.uri("/good.zip");
                 Release successful = Release.archive("selftest-good", "Self Test", "1",
                         destination, good, "good.zip", digest(goodZip, "SHA-256"),
@@ -142,10 +149,26 @@ final class DependencyEngine {
                 Files.deleteIfExists(escaped);
                 expectFailure(() -> install(zipSlip), "ZIP traversalが受理されました");
                 if (Files.exists(escaped)) throw new IOException("ZIP traversalで管理外へ書き込みました");
+
+                List<Artifact> files = new ArrayList<>();
+                files.add(new Artifact(server.uri("/first.jar"), "first.jar",
+                        digest(firstFile, "SHA-256"), "SHA-256"));
+                files.add(new Artifact(server.uri("/second.jar"), "second.jar",
+                        digest(secondFile, "SHA-256"), "SHA-256"));
+                install(Release.files("selftest-files", "Self Test Files", "1", fileDestination, files));
+                if (!Files.isRegularFile(fileDestination.resolve("first.jar"))
+                        || !Files.isRegularFile(fileDestination.resolve("second.jar"))) {
+                    throw new IOException("ファイル単位更新に失敗しました");
+                }
+                String unrelated = Files.readString(fileDestination.resolve("unrelated.jar"), StandardCharsets.UTF_8);
+                if (!"keep".equals(unrelated)) {
+                    throw new IOException("ファイル単位更新が無関係な既存ファイルを削除しました");
+                }
             } finally {
                 deleteTree(destination);
+                deleteTree(fileDestination);
             }
-            return "TRANSACTION_E2E_OK hash zip-slip backup rollback";
+            return "TRANSACTION_E2E_OK hash zip-slip backup rollback file-merge preserve-unrelated";
         }
     }
 
@@ -272,11 +295,13 @@ final class DependencyEngine {
                     Files.copy(downloaded, staging.resolve(artifact.fileName),
                             StandardCopyOption.REPLACE_EXISTING);
                 }
+                transactionalMergeFiles(staging, release.destination, release.id);
             } else if (release.archiveType == ArchiveType.ZIP) {
                 Artifact artifact = release.artifacts.get(0);
                 Path downloaded = download(artifact, downloads);
                 unzip(downloaded, staging);
                 flattenSingleDirectory(staging);
+                transactionalReplace(staging, release.destination, release.id);
             } else {
                 Artifact archive = release.artifacts.get(0);
                 Artifact bootstrap = release.artifacts.get(1);
@@ -287,8 +312,8 @@ final class DependencyEngine {
                 process.getInputStream().transferTo(OutputStream.nullOutputStream());
                 if (process.waitFor() != 0) throw new IOException("7-Zip展開に失敗しました");
                 flattenSingleDirectory(staging);
+                transactionalReplace(staging, release.destination, release.id);
             }
-            transactionalReplace(staging, release.destination, release.id);
         } catch (Exception error) {
             deleteTree(operation);
             throw error;
@@ -326,6 +351,38 @@ final class DependencyEngine {
             deleteTree(destination);
             if (hadExisting && Files.exists(backup)) {
                 Files.move(backup, destination, StandardCopyOption.REPLACE_EXISTING);
+            }
+            throw error;
+        }
+    }
+
+    private void transactionalMergeFiles(Path staged, Path destination, String id) throws Exception {
+        assertInside(applicationRoot, destination);
+        assertNoReparseEscape(applicationRoot, destination);
+        Files.createDirectories(destination);
+        Path backup = stateRoot.resolve("backups")
+                .resolve(id + "-" + Instant.now().toEpochMilli());
+        Files.createDirectories(backup);
+        List<Path> installed = new ArrayList<>();
+        List<Path> replaced = new ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(staged)) {
+            for (Path source : stream) {
+                if (!Files.isRegularFile(source)) throw new IOException("ファイル更新にディレクトリが混入しました");
+                Path target = destination.resolve(source.getFileName()).normalize();
+                assertInside(destination, target);
+                assertNoReparseEscape(applicationRoot, target);
+                if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                    Files.move(target, backup.resolve(target.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+                    replaced.add(target);
+                }
+                Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                installed.add(target);
+            }
+        } catch (Exception error) {
+            for (Path target : installed) Files.deleteIfExists(target);
+            for (Path target : replaced) {
+                Path saved = backup.resolve(target.getFileName());
+                if (Files.exists(saved)) Files.move(saved, target, StandardCopyOption.REPLACE_EXISTING);
             }
             throw error;
         }
@@ -374,9 +431,16 @@ final class DependencyEngine {
     }
 
     private static void verify(Path file, String expected, String algorithm) throws Exception {
-        String actual = digest(Files.readAllBytes(file), algorithm);
+        MessageDigest digest = MessageDigest.getInstance(algorithm.replace("-", ""));
+        try (InputStream input = Files.newInputStream(file)) {
+            byte[] buffer = new byte[64 * 1024];
+            int read;
+            while ((read = input.read(buffer)) >= 0) digest.update(buffer, 0, read);
+        }
+        StringBuilder actual = new StringBuilder();
+        for (byte value : digest.digest()) actual.append(String.format("%02x", value & 0xff));
         if (!MessageDigest.isEqual(expected.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.US_ASCII),
-                actual.getBytes(StandardCharsets.US_ASCII))) {
+                actual.toString().getBytes(StandardCharsets.US_ASCII))) {
             throw new IOException("ハッシュが一致しません: " + file.getFileName());
         }
     }
