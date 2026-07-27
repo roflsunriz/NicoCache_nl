@@ -1,0 +1,14 @@
+# NicoCache_nl local dependency update manifest
+# This file must be distributed over HTTPS.
+
+component.official-filter.name=Official nlFilter sample
+component.official-filter.version=2026.07.27
+component.official-filter.url=https://example.invalid/NicoCache_nl/nlFilters/01_official.txt
+component.official-filter.sha256=0000000000000000000000000000000000000000000000000000000000000000
+component.official-filter.target=nlFilters/01_official.txt
+
+component.local-script.name=Official local script
+component.local-script.version=1.0.0
+component.local-script.url=https://example.invalid/NicoCache_nl/local/example.js
+component.local-script.sha256=0000000000000000000000000000000000000000000000000000000000000000
+component.local-script.target=local/example.js
