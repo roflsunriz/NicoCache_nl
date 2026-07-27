@@ -221,15 +221,39 @@ public class NLConfig extends BasicConfig {
         return m != null && m.matches();
     }
 
-    private static InputStream getAsciiInputStream(File f, String line)
-            throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        FileUtil.copy(f, out);
-        byte[] data = out.toByteArray();
-        String charset = FileUtil.detectCharset(data, line);
-        if (charset == null) {
-            charset = System.getProperty("file.encoding");
+    /**
+     * 日本語文字を1バイト文字('\\uXXXX')に変換した入力ストリームを返す。
+     * startlineが指定されている場合、内部で文字セットを判別して変換して処理する。
+     * 全てメモリに読み込んで処理するので、サイズの大きなファイルを指定しないこと。
+     *
+     * @param file 読み込む対象のファイル
+     * @param startline 開始文字列(日本語文字を含んでいる必要がある)
+     * @return 1バイト文字に変換された入力ストリーム
+     * @throws IOException 処理途中に何らかの問題が発生した
+     * @see FileUtil#getInputStreamReader(File, String)
+     */
+    public static InputStream getAsciiInputStream(File file,
+            String startline) throws IOException {
+        if (file.length() > Integer.MAX_VALUE) {
+            throw new IOException(file.getPath() + " too large");
         }
-        return new ByteArrayInputStream(new String(data, charset).getBytes("ISO-8859-1"));
+        InputStreamReader in = FileUtil.getInputStreamReader(file, startline);
+        ByteArrayOutputStream out = new ByteArrayOutputStream((int)file.length());
+        try {
+            int ch;
+            while ((ch = in.read()) != -1) {
+                if (ch > 0xff) {
+                    String enc = "0000" + Integer.toHexString(ch);
+                    enc = "\\u" + enc.substring(enc.length() - 4);
+                    out.write(enc.getBytes("ISO-8859-1"), 0, 6);
+                } else {
+                    out.write(ch);
+                }
+            }
+        } finally {
+            CloseUtil.close(in);
+            CloseUtil.close(out);
+        }
+        return new ByteArrayInputStream(out.toByteArray());
     }
 }
