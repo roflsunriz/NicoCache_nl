@@ -34,14 +34,13 @@ public class NLConfig extends BasicConfig {
 
     @Override
     protected String doGetConfigFileComments() {
-        return "NicoCache_nl config file"; // 多バイト文字は指定できない
+        return "NicoCache_nl config file";
     }
 
     @Override
     protected void doSetDefaults(Properties properties) {
         super.doSetDefaults(properties);
 
-        // デフォルト値が存在しないと困るものだけ記述する
         properties.setProperty("allowFrom", "local");
         properties.setProperty("speedLimit", "0");
         properties.setProperty("cacheFolder", "cache");
@@ -146,7 +145,7 @@ public class NLConfig extends BasicConfig {
     protected void loadFrom(File propertyFile, Properties p)
             throws FileNotFoundException, IOException {
         InputStream in = getAsciiInputStream(propertyFile, CHARTEST_LINE);
-        try { // ensure closing in
+        try {
             p.load(in);
         } finally {
             CloseUtil.close(in);
@@ -155,34 +154,32 @@ public class NLConfig extends BasicConfig {
 
     /**
      * プロパティ値をパスとみなして File オブジェクトを取得する。
+     * 相対パスは利用者データルート基準で解決する。
      *
      * @param key プロパティ名
      * @return File オブジェクト、プロパティ名が無効な場合は null
      * @since NicoCache_nl+111111mod
      */
     public static File getFile(String key) {
-        String value = System.getProperty(key);
-        if (value == null || value.length() == 0) {
-            if ("cacheFolder".equals(key)) {
-                return new File("cache");
-            }
+        if (key == null) {
             return null;
         }
-        return new File(value);
+        switch (key) {
+        case "cacheFolder":
+            return NicoCachePaths.cacheDirectory();
+        case "thcacheFolder":
+            return NicoCachePaths.thumbnailCacheDirectory();
+        case "convertedCacheFolder":
+            return NicoCachePaths.convertedCacheDirectory();
+        default:
+            String value = System.getProperty(key);
+            if (value == null || value.length() == 0) {
+                return null;
+            }
+            return NicoCachePaths.configuredFile(value, null);
+        }
     }
 
-    /**
-     * プロパティ値を正規表現とみなしてコンパイル済みのパターンを返す。
-     *
-     * @param key プロパティ名
-     * @return コンパイル済みのパターン、次のいずれかの場合は null
-     * <ul>
-     * <li>プロパティ値が存在しない
-     * <li>プロパティ値が空文字列
-     * <li>プロパティ値に正規表現エラーがある
-     * </ul>
-     * @since NicoCache_nl+111124mod
-     */
     public static Pattern getPattern(String key) {
         Pattern pattern = patternCache.get(key);
         if (pattern == null) {
@@ -199,20 +196,6 @@ public class NLConfig extends BasicConfig {
         return pattern;
     }
 
-    /**
-     * プロパティ値を正規表現とみなして入力文字列をマッチングする正規表現エンジンを返す。
-     *
-     * @param key プロパティ名
-     * @param input 入力文字列
-     * @return 入力文字列をマッチングする正規表現エンジン<br>
-     * 次のいずれかの場合は null
-     * <ul>
-     * <li>入力文字列が null or 空文字列
-     * <li>プロパティ値が存在しない or 空文字列
-     * <li>プロパティ値に正規表現エラーがある
-     * </ul>
-     * @since NicoCache_nl+110706mod
-     */
     public static Matcher getMatcher(String key, String input) {
         if (input != null && input.length() > 0) {
             Pattern pattern = getPattern(key);
@@ -223,77 +206,30 @@ public class NLConfig extends BasicConfig {
         return null;
     }
 
-    /**
-     * プロパティ値を正規表現とみなして入力文字列と部分一致のマッチングを行う。
-     *
-     * @param key プロパティ名
-     * @param input 入力文字列
-     * @return 入力文字列にマッチすればtrue。入力文字列がnull、空文字列、
-     * マッチしない、プロパティ値が存在しない、正規表現エラーがあるならfalse
-     */
     public static boolean find(String key, String input) {
         Matcher m = getMatcher(key, input);
         return m != null && m.find();
     }
 
-    /**
-     * プロパティ値を正規表現とみなして入力文字列と領域の先頭からマッチングを行う。
-     *
-     * @see #find(String, String)
-     * @see java.util.regex.Matcher#lookingAt()
-     * @since NicoCache_nl+110411mod
-     */
     public static boolean lookingAt(String key, String input) {
         Matcher m = getMatcher(key, input);
         return m != null && m.lookingAt();
     }
 
-    /**
-     * プロパティ値を正規表現とみなして入力文字列と領域全体のマッチングを行う。
-     *
-     * @see #find(String, String)
-     * @see java.util.regex.Matcher#matches()
-     * @since NicoCache_nl+110411mod
-     */
     public static boolean matches(String key, String input) {
         Matcher m = getMatcher(key, input);
         return m != null && m.matches();
     }
 
-    /**
-     * 日本語文字を1バイト文字('\\uXXXX')に変換した入力ストリームを返す。
-     * startlineが指定されている場合、内部で文字セットを判別して変換して処理する。
-     * 全てメモリに読み込んで処理するので、サイズの大きなファイルを指定しないこと。
-     *
-     * @param file 読み込む対象のファイル
-     * @param startline 開始文字列(日本語文字を含んでいる必要がある)
-     * @return 1バイト文字に変換された入力ストリーム
-     * @throws IOException 処理途中に何らかの問題が発生した
-     * @see FileUtil#getInputStreamReader(File, String)
-     */
-    public static InputStream getAsciiInputStream(File file,
-            String startline) throws IOException {
-        if (file.length() > Integer.MAX_VALUE) {
-            throw new IOException(file.getPath() + " too large");
+    private static InputStream getAsciiInputStream(File f, String line)
+            throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        FileUtil.copy(f, out);
+        byte[] data = out.toByteArray();
+        String charset = FileUtil.detectCharset(data, line);
+        if (charset == null) {
+            charset = System.getProperty("file.encoding");
         }
-        InputStreamReader in = FileUtil.getInputStreamReader(file, startline);
-        ByteArrayOutputStream out = new ByteArrayOutputStream((int)file.length());
-        try {
-            int ch;
-            while ((ch = in.read()) != -1) {
-                if (ch > 0xff) {
-                    String enc = "0000" + Integer.toHexString(ch);
-                    enc = "\\u" + enc.substring(enc.length() - 4);
-                    out.write(enc.getBytes("ISO-8859-1"), 0, 6);
-                } else {
-                    out.write(ch);
-                }
-            }
-        } finally {
-            CloseUtil.close(in);
-            CloseUtil.close(out);
-        }
-        return new ByteArrayInputStream(out.toByteArray());
+        return new ByteArrayInputStream(new String(data, charset).getBytes("ISO-8859-1"));
     }
-
 }
