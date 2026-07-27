@@ -22,6 +22,7 @@ public final class DependencyEngineTest {
             DependencyEngine engine = new DependencyEngine(root);
             String result = engine.selfTestTransactions();
             assertContains(result, "TRANSACTION_E2E_OK", "transaction self-test");
+            assertContains(result, "preserve-unrelated", "file merge preservation");
 
             boolean invalidLts = false;
             try {
@@ -69,12 +70,18 @@ public final class DependencyEngineTest {
                     "findAsset", String.class, Pattern.class);
             findAsset.setAccessible(true);
             String digest = repeat('a', 64);
-            String json = "{\"assets\":[{\"browser_download_url\":\"https://example.invalid/a.bin\","
-                    + "\"name\":\"a.bin\",\"digest\":\"sha256:" + digest + "\"}]}";
+            String json = "{\"assets\":[{\"name\":\"a.bin\",\"digest\":\"sha256:"
+                    + digest + "\",\"browser_download_url\":\"https://example.invalid/a.bin\"},"
+                    + "{\"name\":\"b.bin\",\"digest\":\"sha256:" + repeat('b', 64)
+                    + "\",\"browser_download_url\":\"https://example.invalid/b.bin\"}]}";
             Object asset = findAsset.invoke(null, json, Pattern.compile("^a\\.bin$"));
             java.lang.reflect.Field digestField = asset.getClass().getDeclaredField("digest");
+            java.lang.reflect.Field urlField = asset.getClass().getDeclaredField("url");
             digestField.setAccessible(true);
+            urlField.setAccessible(true);
             assertTrue(digest.equals(digestField.get(asset)), "GitHub asset digest was not parsed");
+            assertTrue("https://example.invalid/a.bin".equals(urlField.get(asset).toString()),
+                    "GitHub asset URL crossed into another asset object");
 
             testSymlinkEscape(root);
             System.out.println("DependencyEngine security and transaction tests passed");
