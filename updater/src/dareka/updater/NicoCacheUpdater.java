@@ -63,30 +63,20 @@ public final class NicoCacheUpdater {
     private static final int RECOMMENDED_LTS = 21;
 
     private Path applicationRoot;
-    private final JFrame frame;
-    private final JLabel targetRootLabel;
-    private final JTextArea applicationOutput;
-    private final JTextArea dependencyOutput;
-    private final JButton applicationCheckButton;
-    private final JButton applicationUpdateButton;
-    private final JButton dependencyCheckButton;
-    private final JButton dependencyUpdateButton;
-    private final JButton changeTargetButton;
-    private final JComboBox<JavaChoice> javaChoice;
+    private final JFrame frame = new JFrame("NicoCache_nl Updater");
+    private final JLabel targetRootLabel = new JLabel();
+    private final JTextArea applicationOutput = createOutput();
+    private final JTextArea dependencyOutput = createOutput();
+    private final JButton applicationCheckButton = new JButton("更新を確認");
+    private final JButton applicationUpdateButton = new JButton("NicoCache_nlを更新");
+    private final JButton dependencyCheckButton = new JButton("更新を確認");
+    private final JButton dependencyUpdateButton = new JButton("更新可能な項目を適用");
+    private final JButton changeTargetButton = new JButton("変更…");
+    private final JComboBox<JavaChoice> javaChoice = new JComboBox<JavaChoice>();
     private Release latestRelease;
 
     private NicoCacheUpdater(Path applicationRoot) {
         this.applicationRoot = applicationRoot.toAbsolutePath().normalize();
-        frame = new JFrame("NicoCache_nl Updater");
-        targetRootLabel = new JLabel();
-        applicationOutput = createOutput();
-        dependencyOutput = createOutput();
-        applicationCheckButton = new JButton("更新を確認");
-        applicationUpdateButton = new JButton("NicoCache_nlを更新");
-        dependencyCheckButton = new JButton("更新を確認");
-        dependencyUpdateButton = new JButton("更新可能な項目を適用");
-        changeTargetButton = new JButton("変更…");
-        javaChoice = new JComboBox<JavaChoice>();
         buildUi();
         refreshTargetLabel();
     }
@@ -158,8 +148,7 @@ public final class NicoCacheUpdater {
     }
 
     private void refreshTargetLabel() {
-        String status = TargetRootResolver.isInstallation(applicationRoot)
-                ? "検出済み" : "未インストール";
+        String status = TargetRootResolver.isInstallation(applicationRoot) ? "検出済み" : "未インストール";
         targetRootLabel.setText("更新対象: " + applicationRoot + "（" + status + "）");
     }
 
@@ -236,9 +225,10 @@ public final class NicoCacheUpdater {
     private void runDependencyUpdater(boolean update) {
         try {
             TargetRootResolver.requireInstallation(applicationRoot);
+            if (update) ApplicationProcessGuard.requireStopped(applicationRoot);
         } catch (IOException error) {
-            JOptionPane.showMessageDialog(frame, error.getMessage(), "更新対象が無効です",
-                    JOptionPane.ERROR_MESSAGE);
+            String title = update ? "NicoCache_nlを終了してください" : "更新対象が無効です";
+            JOptionPane.showMessageDialog(frame, error.getMessage(), title, JOptionPane.ERROR_MESSAGE);
             return;
         }
         JavaChoice selected = (JavaChoice) javaChoice.getSelectedItem();
@@ -250,7 +240,7 @@ public final class NicoCacheUpdater {
         if (update) {
             int answer = JOptionPane.showConfirmDialog(frame,
                     "NicoCache_nl管理下の依存関係だけを更新します。\n対象: " + applicationRoot
-                            + "\nUpdater自身やシステムPATH上の依存関係は変更しません。",
+                            + "\n更新完了までNicoCache_nlを起動しないでください。",
                     "外部依存関係の更新", JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.QUESTION_MESSAGE);
             if (answer != JOptionPane.OK_OPTION) return;
@@ -260,14 +250,18 @@ public final class NicoCacheUpdater {
         final int javaMajor = selected.major;
         new SwingWorker<String, Void>() {
             @Override protected String doInBackground() throws Exception {
+                if (update) ApplicationProcessGuard.requireStopped(applicationRoot);
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 return update ? engine.updateAll(javaMajor) : engine.checkAll(javaMajor);
             }
             @Override protected void done() {
-                try { dependencyOutput.setText(get()); }
-                catch (Exception error) {
+                try {
+                    dependencyOutput.setText(get());
+                } catch (Exception error) {
                     dependencyOutput.append("\n処理に失敗しました: " + rootMessage(error) + "\n");
-                } finally { setDependencyBusy(false); }
+                } finally {
+                    setDependencyBusy(false);
+                }
             }
         }.execute();
     }
@@ -379,14 +373,7 @@ public final class NicoCacheUpdater {
     }
 
     private String readInstalledVersion() {
-        Path versionFile = applicationRoot.resolve("version.txt");
-        try {
-            if (Files.isRegularFile(versionFile)) {
-                Matcher matcher = VERSION_PATTERN.matcher(Files.readString(versionFile, StandardCharsets.UTF_8).trim());
-                if (matcher.matches()) return matcher.group(1);
-            }
-        } catch (IOException ignored) { }
-        return "不明";
+        return InstalledVersionDetector.detect(applicationRoot);
     }
 
     private void setApplicationBusy(boolean busy) {
