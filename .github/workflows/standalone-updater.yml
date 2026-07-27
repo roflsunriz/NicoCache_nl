@@ -120,6 +120,7 @@ jobs:
           $classes = Join-Path $env:RUNNER_TEMP 'updater-live-contract-classes'
           $target = Join-Path $env:RUNNER_TEMP 'updater-live-contract-target'
           New-Item -ItemType Directory -Force $classes, $target | Out-Null
+          Set-Content -LiteralPath (Join-Path $target 'version.txt') -Value '0.0.0' -Encoding ascii
           $sources = @(Get-ChildItem .\updater\src -Filter '*.java' -Recurse -File | ForEach-Object FullName)
           javac --release 11 -encoding UTF-8 -Xlint:all -d $classes @sources
           if ($LASTEXITCODE -ne 0) { throw 'Pure Java updater compilation failed' }
