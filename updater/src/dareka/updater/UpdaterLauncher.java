@@ -38,14 +38,12 @@ public final class UpdaterLauncher {
                 return;
             }
             if (hasArgument(args, "--dependency-check")) {
-                TargetRootResolver.requireInstallation(applicationRoot);
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 System.out.print(engine.checkAll(intArgument(args, "--java-major", RECOMMENDED_LTS)));
                 return;
             }
             if (hasArgument(args, "--dependency-update")) {
                 TargetRootResolver.requireInstallation(applicationRoot);
-                ApplicationProcessGuard.requireStopped(applicationRoot);
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 System.out.print(engine.updateAll(intArgument(args, "--java-major", RECOMMENDED_LTS)));
                 return;
