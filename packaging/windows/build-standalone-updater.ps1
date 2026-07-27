@@ -17,9 +17,7 @@ $inputRoot = Join-Path $workRoot 'input'
 $outputRoot = Join-Path $workRoot 'output'
 $buildLog = Join-Path $workRoot 'jpackage.log'
 
-if (Test-Path -LiteralPath $workRoot) {
-    Remove-Item -LiteralPath $workRoot -Recurse -Force
-}
+if (Test-Path -LiteralPath $workRoot) { Remove-Item -LiteralPath $workRoot -Recurse -Force }
 New-Item -ItemType Directory -Path $classesRoot, $inputRoot, $outputRoot | Out-Null
 
 $javac = (Get-Command javac -ErrorAction Stop).Source
@@ -33,23 +31,26 @@ if ($LASTEXITCODE -ne 0) { throw 'NicoCache_nl Updaterのコンパイルに失�
 $manifest = Join-Path $workRoot 'manifest.mf'
 @('Manifest-Version: 1.0', 'Main-Class: dareka.updater.NicoCacheUpdater', '') |
     Set-Content -LiteralPath $manifest -Encoding ascii
-
 $jarPath = Join-Path $inputRoot 'NicoCacheUpdater.jar'
 & $jar cfm $jarPath $manifest -C $classesRoot .
 if ($LASTEXITCODE -ne 0) { throw 'NicoCache_nl UpdaterのJAR作成に失敗しました' }
 
-# The GUI executes this engine from the updater installation, never from the target NicoCache_nl root.
+# Bundle the actual engine. packaging/windows/runtime contains installer wrappers and is not usable here.
 $engineInput = Join-Path $inputRoot 'extensions'
 New-Item -ItemType Directory -Path $engineInput | Out-Null
 foreach ($name in @(
         'update-runtime-dependencies.ps1',
         'runtime-dependencies.psd1',
         'apply-pending-runtime-update.ps1')) {
-    $sourceFile = Join-Path $root "packaging\windows\runtime\$name"
+    $sourceFile = Join-Path $root "extensions\$name"
     if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
         throw "Updater同梱エンジンが見つかりません: $sourceFile"
     }
     Copy-Item -LiteralPath $sourceFile -Destination (Join-Path $engineInput $name)
+}
+$bundledEngine = Get-Content -LiteralPath (Join-Path $engineInput 'update-runtime-dependencies.ps1') -Raw
+if ($bundledEngine.Contains("Join-Path `$ApplicationRoot 'extensions\update-runtime-dependencies.ps1'")) {
+    throw '本物の更新エンジンではなく再帰ラッパーが混入しています'
 }
 
 $commonArguments = @(
@@ -65,10 +66,8 @@ $commonArguments = @(
 )
 
 function Invoke-JPackage {
-    param(
-        [Parameter(Mandatory)][string[]]$Arguments,
-        [Parameter(Mandatory)][string]$FailureMessage
-    )
+    param([Parameter(Mandatory)][string[]]$Arguments,
+          [Parameter(Mandatory)][string]$FailureMessage)
     & $jpackage @Arguments 2>&1 | Tee-Object -FilePath $buildLog -Append
     if ($LASTEXITCODE -ne 0) { throw $FailureMessage }
 }
@@ -77,14 +76,9 @@ if ($PackageType -in @('AppImage', 'All')) {
     Invoke-JPackage -Arguments ($commonArguments + @('--type', 'app-image')) `
         -FailureMessage 'Updater AppImageの作成に失敗しました'
 }
-
 if ($PackageType -in @('Msi', 'All')) {
     Invoke-JPackage -Arguments ($commonArguments + @(
-            '--type', 'msi',
-            '--win-dir-chooser',
-            '--win-menu',
-            '--win-shortcut'
-        )) -FailureMessage 'Updater MSIの作成に失敗しました'
+            '--type', 'msi', '--win-dir-chooser', '--win-menu', '--win-shortcut')) `
+        -FailureMessage 'Updater MSIの作成に失敗しました'
 }
-
 Write-Host "成果物: $outputRoot"
