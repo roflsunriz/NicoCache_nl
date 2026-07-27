@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-07-27T00:00:00Z",
+  "dependencies": [
+    {
+      "id": "temurin",
+      "version": "11.0.0+0",
+      "archiveType": "zip",
+      "contentRoot": "jdk-11.0.0+0-jre",
+      "source": "https://adoptium.net/",
+      "artifacts": [
+        {
+          "url": "https://example.invalid/OpenJDK11U-jre_x64_windows_hotspot.zip",
+          "sha256": "REPLACE_WITH_SHA256"
+        }
+      ]
+    },
+    {
+      "id": "ffmpeg",
+      "version": "0.0",
+      "archiveType": "zip",
+      "contentRoot": "ffmpeg",
+      "source": "https://ffmpeg.org/",
+      "artifacts": [
+        {
+          "url": "https://example.invalid/ffmpeg.zip",
+          "sha256": "REPLACE_WITH_SHA256"
+        }
+      ]
+    },
+    {
+      "id": "bouncycastle",
+      "version": "1.84",
+      "archiveType": "files",
+      "source": "https://www.bouncycastle.org/",
+      "artifacts": [
+        {
+          "fileName": "bcprov.jar",
+          "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.84/bcprov-jdk18on-1.84.jar",
+          "sha256": "64d6c5a6121fcd927152dd182cbed39afe0fda641a970d9bcc0c9cb1858b2731"
+        },
+        {
+          "fileName": "bcpkix.jar",
+          "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcpkix-jdk18on/1.84/bcpkix-jdk18on-1.84.jar",
+          "sha256": "c87f16ed9e5ec61bc94151e9f3646ac44e50cd448121ce84367fa4b7ec7ec1bb"
+        },
+        {
+          "fileName": "bcutil.jar",
+          "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcutil-jdk18on/1.84/bcutil-jdk18on-1.84.jar",
+          "sha256": "b374e16963421fb9cfb01cc20d7ad8fd2f8b8188e3eef0ec0a8965e245f7619a"
+        }
+      ]
+    },
+    {
+      "id": "ant",
+      "version": "0.0",
+      "archiveType": "zip",
+      "contentRoot": "apache-ant",
+      "source": "https://ant.apache.org/",
+      "artifacts": [
+        {
+          "url": "https://example.invalid/apache-ant-bin.zip",
+          "sha256": "REPLACE_WITH_SHA256"
+        }
+      ]
+    },
+    {
+      "id": "7zip",
+      "version": "0.0",
+      "archiveType": "zip",
+      "source": "https://www.7-zip.org/",
+      "artifacts": [
+        {
+          "url": "https://example.invalid/7zip-extra.zip",
+          "sha256": "REPLACE_WITH_SHA256"
+        }
+      ]
+    }
+  ]
+}
