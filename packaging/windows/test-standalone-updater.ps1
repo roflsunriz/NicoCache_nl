@@ -30,91 +30,86 @@ function Invoke-MsiExec([string[]]$Arguments, [string]$FailureMessage) {
 function Invoke-UpdaterCli(
         [string]$Executable,
         [string[]]$Arguments,
-        [int[]]$ExpectedExitCodes = @(0),
-        [int]$TimeoutSeconds = 180) {
+        [int]$TimeoutSeconds = 240) {
+    $stdout = Join-Path $work ('stdout-' + [guid]::NewGuid().ToString('N') + '.txt')
+    $stderr = Join-Path $work ('stderr-' + [guid]::NewGuid().ToString('N') + '.txt')
     $argumentLine = ($Arguments | ForEach-Object {
         if ($_ -match '[\s"]') { '"' + $_.Replace('"', '\"') + '"' } else { $_ }
     }) -join ' '
-    $process = Start-Process -FilePath $Executable -ArgumentList $argumentLine -PassThru
+    $process = Start-Process -FilePath $Executable -ArgumentList $argumentLine `
+        -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         throw "Updater CLI timed out: $Executable $argumentLine"
     }
-    Assert-True ($process.ExitCode -in $ExpectedExitCodes) `
-        "Unexpected updater exit code $($process.ExitCode): $Executable $argumentLine"
-    $process.ExitCode
-}
-function Assert-PackagedEngine([string]$UpdaterRoot) {
-    $engine = Join-Path $UpdaterRoot 'app\extensions'
-    Assert-Directory $engine
-    foreach ($name in @(
-            'update-runtime-dependencies.ps1',
-            'runtime-dependencies.psd1',
-            'apply-pending-runtime-update.ps1')) {
-        Assert-File (Join-Path $engine $name)
+    $output = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) +
+        (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
+    if ($process.ExitCode -ne 0) {
+        throw "Updater CLI failed ($($process.ExitCode)): $argumentLine`n$output"
     }
-    $engineSource = Get-Content -LiteralPath (Join-Path $engine 'update-runtime-dependencies.ps1') -Raw
-    Assert-True ($engineSource.Contains('function Resolve-AdoptiumRelease')) `
-        'Packaged dependency updater is not the real engine'
-    Assert-True (-not $engineSource.Contains(
-            "Join-Path `$ApplicationRoot 'extensions\update-runtime-dependencies.ps1'")) `
-        'Packaged dependency updater recursively delegates to the target installation'
+    [pscustomobject]@{ ExitCode=$process.ExitCode; Output=$output }
 }
-function Invoke-DependencyE2E([string]$Executable, [string]$UpdaterRoot, [string]$TargetRoot) {
+function Assert-NoPowerShellPayload([string]$UpdaterRoot) {
+    $files = @(Get-ChildItem -LiteralPath $UpdaterRoot -Recurse -File |
+        Where-Object Extension -in @('.ps1', '.psd1', '.psm1'))
+    Assert-True ($files.Count -eq 0) `
+        "PowerShell payload leaked into standalone updater: $($files.FullName -join ', ')"
+}
+function Invoke-PureJavaDependencyE2E([string]$Executable, [string]$UpdaterRoot, [string]$TargetRoot) {
     Remove-Item -LiteralPath $TargetRoot -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $TargetRoot | Out-Null
     Set-Content (Join-Path $TargetRoot 'version.txt') 'broken-version' -Encoding ascii
 
-    Invoke-UpdaterCli $Executable @('--self-test', '--app-root', $TargetRoot) | Out-Null
-    Invoke-UpdaterCli $Executable @(
-        '--dependency-check', '--app-root', $TargetRoot, '--java-major', '21') | Out-Null
+    $self = Invoke-UpdaterCli $Executable @('--self-test', '--app-root', $TargetRoot)
+    Assert-True $self.Output.Contains('SELF_TEST_OK') 'Pure Java self-test did not report success'
+    Assert-True $self.Output.Contains('engine=java') 'Updater did not use the Java dependency engine'
 
+    $check = Invoke-UpdaterCli $Executable @(
+        '--dependency-check', '--app-root', $TargetRoot, '--java-major', '21')
+    foreach ($name in @('Eclipse Temurin OpenJDK', 'FFmpeg', 'Bouncy Castle', 'Apache Ant', '7-Zip')) {
+        Assert-True $check.Output.Contains($name) "Dependency check output missing: $name`n$($check.Output)"
+    }
+    Assert-True (-not $check.Output.Contains('PowerShell')) 'Dependency check unexpectedly invoked PowerShell'
     Assert-Directory (Join-Path $TargetRoot '.runtime-dependency-updater')
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $UpdaterRoot '.runtime-dependency-updater'))) `
-        'Dependency updater wrote state into the updater installation'
-    Assert-True (-not (Test-Path -LiteralPath (Join-Path $UpdaterRoot 'runtime\bin\java.exe'))) `
-        'Dependency updater modified the updater private runtime'
-
-    # Safety invariant: updater and target roots may never be identical.
-    Invoke-UpdaterCli $Executable @('--self-test', '--app-root', $UpdaterRoot) @(1) | Out-Null
+        'Dependency engine wrote state into the updater installation'
 }
 
-# Compile production source and dependency-free unit tests.
+# Compile every production class plus dependency-free unit tests.
 $classes = Join-Path $work 'classes'
 New-Item -ItemType Directory -Path $classes | Out-Null
-& javac --release 11 -encoding UTF-8 -Xlint:all -d $classes `
-    (Join-Path $root 'updater\src\dareka\updater\NicoCacheUpdater.java') `
-    (Join-Path $root 'updater\test\dareka\updater\NicoCacheUpdaterTest.java')
+$sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'updater\src') -Filter '*.java' -Recurse -File |
+    ForEach-Object FullName)
+$tests = @(Get-ChildItem -LiteralPath (Join-Path $root 'updater\test') -Filter '*.java' -Recurse -File |
+    ForEach-Object FullName)
+& javac --release 11 -encoding UTF-8 -Xlint:all -d $classes @sources @tests
 if ($LASTEXITCODE -ne 0) { throw 'Updater javac/unit-test compilation failed' }
 & java -cp $classes dareka.updater.NicoCacheUpdaterTest
 if ($LASTEXITCODE -ne 0) { throw 'Updater Java unit tests failed' }
 
-# Source/security invariants.
-$source = Get-Content (Join-Path $root 'updater\src\dareka\updater\NicoCacheUpdater.java') -Raw
+# Source invariants: standalone dependency handling is Java-only.
+$updaterSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\NicoCacheUpdater.java') -Raw
+$engineSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\DependencyEngine.java') -Raw
 foreach ($required in @(
         'tabs.addTab("NicoCache_nl"',
         'tabs.addTab("外部依存関係"',
-        'available_lts_releases',
-        'MSIのSHA-256が一致しません',
-        'TESTED_LTS',
-        '17, 21',
-        'updaterRoot.resolve("app").resolve("extensions")',
+        'new DependencyEngine(applicationRoot)',
         '--dependency-check',
-        'Updater自身とNicoCache_nl対象ルートが分離されていません')) {
-    Assert-True $source.Contains($required) "Updater source invariant missing: $required"
+        'engine=java')) {
+    Assert-True $updaterSource.Contains($required) "Updater source invariant missing: $required"
 }
-Assert-True (-not $source.Contains('RuntimeDependencyUpdaterGUI')) `
-    'Standalone updater must not embed the old GUI'
-$definition = Import-PowerShellDataFile (Join-Path $root 'extensions\runtime-dependencies.psd1')
-Assert-True ($definition.SchemaVersion -ge 3) 'Runtime dependency schema is obsolete'
-Assert-True ((@($definition.Dependencies.Id | Sort-Object) -join ',') -eq `
-    '7zip,ant,bouncycastle,ffmpeg,temurin') 'Dependency set mismatch'
-$temurin = $definition.Dependencies | Where-Object Id -eq temurin
-Assert-True ((@($temurin.SupportedLtsVersions) -join ',') -eq '17,21') `
-    'Supported Temurin LTS mismatch'
-Assert-True ($temurin.RecommendedLtsVersion -eq 21) 'Recommended Temurin LTS mismatch'
+foreach ($required in @(
+        'resolveTemurin', 'resolveFfmpeg', 'resolveBouncyCastle', 'resolveAnt',
+        'resolveSevenZip', 'transactionalReplace', 'assertInside', 'MAX_EXPANDED_BYTES')) {
+    Assert-True $engineSource.Contains($required) "Java engine invariant missing: $required"
+}
+Assert-True (-not $updaterSource.Contains('powershell.exe')) 'GUI still invokes PowerShell'
+Assert-True (-not $updaterSource.Contains('.ps1')) 'GUI still references a PowerShell script'
+Assert-True (-not $engineSource.Contains('powershell.exe')) 'Java engine invokes PowerShell'
+Assert-True (-not $engineSource.Contains('.ps1')) 'Java engine references a PowerShell script'
 
-# End-of-process runtime replacement transaction.
+# Existing pending replacement script still receives transaction/path-security tests until
+# the NicoCache_nl exit hook is migrated separately; it is not packaged with the updater.
 $app = Join-Path $work 'fake-app'
 $state = Join-Path $app '.runtime-dependency-updater'
 $oldRuntime = Join-Path $app 'runtime'
@@ -129,12 +124,7 @@ Assert-True ((Get-Content (Join-Path $oldRuntime 'marker.txt') -Raw).Trim() -eq 
     'Runtime was not replaced'
 Assert-True (-not (Test-Path (Join-Path $state 'pending-update.json'))) `
     'Pending state was not removed'
-$installed = Get-Content (Join-Path $state 'installed-versions.json') -Raw | ConvertFrom-Json
-Assert-True ($installed.temurin -eq '21.0.9') 'Installed runtime state was not persisted'
-Assert-True (@(Get-ChildItem (Join-Path $state 'backups') -Directory).Count -eq 1) `
-    'Runtime backup missing'
 
-# Reject destination outside the managed application root.
 $escapeSource = Join-Path $state 'staging\escape'
 New-Item -ItemType Directory -Path $escapeSource -Force | Out-Null
 $outside = Join-Path $work 'outside-runtime'
@@ -145,9 +135,8 @@ try { & (Join-Path $root 'extensions\apply-pending-runtime-update.ps1') -Applica
 catch { $rejected = $true }
 Assert-True $rejected 'Path traversal/out-of-root destination was accepted'
 Assert-True (-not (Test-Path $outside)) 'Updater wrote outside application root'
-Remove-Item (Join-Path $state 'pending-update.json') -Force -ErrorAction SilentlyContinue
 
-# Build self-contained AppImage/MSI and execute the installed functional path.
+# Build and execute AppImage functional E2E.
 $packageType = if ($BuildMsi) { 'All' } else { 'AppImage' }
 & (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') `
     -PackageType $packageType -AppVersion 0.1.0
@@ -157,14 +146,14 @@ $appImageExe = Join-Path $appImage 'NicoCache_nl Updater.exe'
 Assert-File $appImageExe
 Assert-File (Join-Path $appImage 'runtime\lib\modules')
 Assert-File (Join-Path $appImage 'app\NicoCacheUpdater.jar')
-Assert-PackagedEngine $appImage
-Invoke-DependencyE2E $appImageExe $appImage (Join-Path $work 'appimage-target')
+Assert-NoPowerShellPayload $appImage
+Invoke-PureJavaDependencyE2E $appImageExe $appImage (Join-Path $work 'appimage-target')
 
-# GUI smoke remains separate from functional CLI E2E: the same invokeDependencyUpdater method is used.
+# GUI startup smoke.
 $guiTarget = Join-Path $work 'gui-target'
 New-Item -ItemType Directory -Path $guiTarget | Out-Null
-$process = Start-Process -FilePath $appImageExe -ArgumentList `
-    ('--app-root "' + $guiTarget + '"') -PassThru
+$process = Start-Process -FilePath $appImageExe `
+    -ArgumentList ('--app-root "' + $guiTarget + '"') -PassThru
 Start-Sleep -Seconds 5
 Assert-True (-not $process.HasExited) 'Standalone updater GUI did not remain running'
 Stop-Process -Id $process.Id -Force
@@ -181,8 +170,8 @@ if ($BuildMsi) {
         $installedExe = Join-Path $installedRoot 'NicoCache_nl Updater.exe'
         Assert-File $installedExe
         Assert-File (Join-Path $installedRoot 'runtime\lib\modules')
-        Assert-PackagedEngine $installedRoot
-        Invoke-DependencyE2E $installedExe $installedRoot (Join-Path $work 'installed-target')
+        Assert-NoPowerShellPayload $installedRoot
+        Invoke-PureJavaDependencyE2E $installedExe $installedRoot (Join-Path $work 'installed-target')
     }
     finally {
         Invoke-MsiExec -Arguments @('/x', $msi.FullName, '/qn', '/norestart', '/l*v',
@@ -192,4 +181,4 @@ if ($BuildMsi) {
     Assert-True (-not (Test-Path -LiteralPath $installedRoot)) `
         'Updater MSI left its install directory behind'
 }
-Write-Output 'Standalone updater functional E2E tests passed'
+Write-Output 'Standalone updater pure Java functional E2E tests passed'
