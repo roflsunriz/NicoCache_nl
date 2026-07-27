@@ -4,35 +4,22 @@
   "dependencies": [
     {
       "id": "temurin",
-      "version": "11.0.0+0",
-      "archiveType": "zip",
-      "contentRoot": "jdk-11.0.0+0-jre",
-      "source": "https://adoptium.net/",
-      "artifacts": [
-        {
-          "url": "https://example.invalid/OpenJDK11U-jre_x64_windows_hotspot.zip",
-          "sha256": "REPLACE_WITH_SHA256"
-        }
-      ]
+      "enabled": false,
+      "reason": "Adoptium APIからOS・CPU・JRE種別に一致する実体URLとchecksumを取得するプロバイダー実装まで更新無効",
+      "source": "https://adoptium.net/"
     },
     {
       "id": "ffmpeg",
-      "version": "0.0",
-      "archiveType": "zip",
-      "contentRoot": "ffmpeg",
-      "source": "https://ffmpeg.org/",
-      "artifacts": [
-        {
-          "url": "https://example.invalid/ffmpeg.zip",
-          "sha256": "REPLACE_WITH_SHA256"
-        }
-      ]
+      "enabled": false,
+      "reason": "FFmpeg公式はWindowsバイナリを直接配布していないため、採用するビルド配布元と検証方式の決定まで更新無効",
+      "source": "https://ffmpeg.org/download.html"
     },
     {
       "id": "bouncycastle",
+      "enabled": true,
       "version": "1.84",
       "archiveType": "files",
-      "source": "https://www.bouncycastle.org/",
+      "source": "https://repo.maven.apache.org/maven2/org/bouncycastle/",
       "artifacts": [
         {
           "fileName": "bcprov.jar",
@@ -53,28 +40,16 @@
     },
     {
       "id": "ant",
-      "version": "0.0",
-      "archiveType": "zip",
-      "contentRoot": "apache-ant",
-      "source": "https://ant.apache.org/",
-      "artifacts": [
-        {
-          "url": "https://example.invalid/apache-ant-bin.zip",
-          "sha256": "REPLACE_WITH_SHA256"
-        }
-      ]
+      "enabled": false,
+      "version": "1.10.17",
+      "reason": "Apache公開SHA-512またはPGP検証を更新エンジンへ実装するまで更新無効",
+      "source": "https://ant.apache.org/bindownload"
     },
     {
       "id": "7zip",
-      "version": "0.0",
-      "archiveType": "zip",
-      "source": "https://www.7-zip.org/",
-      "artifacts": [
-        {
-          "url": "https://example.invalid/7zip-extra.zip",
-          "sha256": "REPLACE_WITH_SHA256"
-        }
-      ]
+      "enabled": false,
+      "reason": "公式配布物の署名・ハッシュ検証方式を実装するまで更新無効",
+      "source": "https://www.7-zip.org/download.html"
     }
   ]
 }
