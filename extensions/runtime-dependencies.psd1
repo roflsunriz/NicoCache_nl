@@ -1,18 +1,21 @@
 @{
-    SchemaVersion = 2
+    SchemaVersion = 3
     Dependencies = @(
         @{
             Id = 'temurin'
             DisplayName = 'Eclipse Temurin OpenJDK'
             Provider = 'Adoptium'
             ManagedPath = 'runtime'
-            Executable = 'bin\java.exe'
+            Executable = 'bin\java'
+            WindowsExecutable = 'bin\java.exe'
             VersionArguments = @('-version')
             VersionPattern = 'version "(?<version>[^"]+)"'
             UpdateMode = 'AfterExit'
-            MajorVersion = 11
             ImageType = 'jre'
-            Architecture = 'x64'
+            PlatformDetection = 'Runtime'
+            SupportedLtsVersions = @(17, 21)
+            RecommendedLtsVersion = 21
+            LtsDescription = 'LTSは長期間アップデートが提供される安定版です。迷った場合は推奨版を選択してください。'
         }
         @{
             Id = 'ffmpeg'
