@@ -74,7 +74,10 @@ function Invoke-PureJavaDependencyE2E([string]$Executable, [string]$UpdaterRoot,
     foreach ($name in @('Eclipse Temurin OpenJDK', 'FFmpeg', 'Bouncy Castle', 'Apache Ant', '7-Zip')) {
         Assert-True $check.Output.Contains($name) "Dependency check output missing: $name`n$($check.Output)"
     }
-    Assert-True $check.Output.Contains('検証情報あり') 'A provider resolved without verifiable hash metadata'
+    # DependencyEngine.resolveAll rejects every artifact lacking a checksum/algorithm before
+    # checkAll can return. A successful exit therefore proves every provider has verifiable metadata;
+    # do not assert localized text because jpackage redirects Windows console output using the system code page.
+    Assert-True ($check.ExitCode -eq 0) 'Dependency provider verification did not complete successfully'
     Assert-True (-not $check.Output.Contains('PowerShell')) 'Dependency check unexpectedly invoked PowerShell'
     Assert-Directory (Join-Path $TargetRoot '.runtime-dependency-updater')
     Assert-True (-not (Test-Path -LiteralPath (Join-Path $UpdaterRoot '.runtime-dependency-updater'))) `
