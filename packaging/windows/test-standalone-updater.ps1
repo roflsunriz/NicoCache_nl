@@ -42,8 +42,9 @@ function Invoke-UpdaterCli(
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         throw "Updater CLI timed out: $Executable $argumentLine"
     }
-    $output = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) +
-        (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
+    $stdoutText = if (Test-Path -LiteralPath $stdout) { Get-Content $stdout -Raw } else { '' }
+    $stderrText = if (Test-Path -LiteralPath $stderr) { Get-Content $stderr -Raw } else { '' }
+    $output = $stdoutText + $stderrText
     if ($process.ExitCode -ne 0) {
         throw "Updater CLI failed ($($process.ExitCode)): $argumentLine`n$output"
     }
@@ -52,8 +53,10 @@ function Invoke-UpdaterCli(
 function Assert-NoPowerShellPayload([string]$UpdaterRoot) {
     $files = @(Get-ChildItem -LiteralPath $UpdaterRoot -Recurse -File |
         Where-Object Extension -in @('.ps1', '.psd1', '.psm1'))
-    Assert-True ($files.Count -eq 0) `
-        "PowerShell payload leaked into standalone updater: $($files.FullName -join ', ')"
+    if ($files.Count -ne 0) {
+        $fileNames = @($files | ForEach-Object FullName) -join ', '
+        throw "PowerShell payload leaked into standalone updater: $fileNames"
+    }
 }
 function Invoke-PureJavaDependencyE2E([string]$Executable, [string]$UpdaterRoot, [string]$TargetRoot) {
     Remove-Item -LiteralPath $TargetRoot -Recurse -Force -ErrorAction SilentlyContinue
@@ -108,8 +111,7 @@ Assert-True (-not $updaterSource.Contains('.ps1')) 'GUI still references a Power
 Assert-True (-not $engineSource.Contains('powershell.exe')) 'Java engine invokes PowerShell'
 Assert-True (-not $engineSource.Contains('.ps1')) 'Java engine references a PowerShell script'
 
-# Existing pending replacement script still receives transaction/path-security tests until
-# the NicoCache_nl exit hook is migrated separately; it is not packaged with the updater.
+# Legacy exit-hook script remains covered but is not part of the standalone updater package.
 $app = Join-Path $work 'fake-app'
 $state = Join-Path $app '.runtime-dependency-updater'
 $oldRuntime = Join-Path $app 'runtime'
