@@ -53,7 +53,8 @@ if ($LASTEXITCODE -ne 0) {
 $forbidden = @(Get-ChildItem -LiteralPath $inputRoot -Recurse -File -ErrorAction SilentlyContinue |
     Where-Object Extension -in @('.ps1', '.psd1', '.psm1'))
 if ($forbidden.Count -ne 0) {
-    throw "PowerShell files leaked into updater input: $($forbidden.FullName -join ', ')"
+    $forbiddenNames = @($forbidden | ForEach-Object FullName) -join ', '
+    throw "PowerShell files leaked into updater input: $forbiddenNames"
 }
 
 $commonArguments = @(
