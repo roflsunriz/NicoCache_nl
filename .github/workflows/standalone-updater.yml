@@ -4,10 +4,6 @@ on:
   pull_request:
     paths:
       - 'updater/**'
-      - 'extensions/RuntimeDependencyUpdater.java'
-      - 'extensions/*runtime-update*.ps1'
-      - 'extensions/runtime-dependencies.psd1'
-      - 'extensions/update-runtime-dependencies.ps1'
       - 'packaging/windows/build-standalone-updater.ps1'
       - 'packaging/windows/test-standalone-updater.ps1'
       - '.github/workflows/standalone-updater.yml'
@@ -15,10 +11,6 @@ on:
     branches: [main]
     paths:
       - 'updater/**'
-      - 'extensions/RuntimeDependencyUpdater.java'
-      - 'extensions/*runtime-update*.ps1'
-      - 'extensions/runtime-dependencies.psd1'
-      - 'extensions/update-runtime-dependencies.ps1'
       - 'packaging/windows/build-standalone-updater.ps1'
       - 'packaging/windows/test-standalone-updater.ps1'
       - '.github/workflows/standalone-updater.yml'
@@ -84,70 +76,55 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 20
     env:
-      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Verify live release and LTS contracts
+      - name: Set up JDK 17
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify NicoCache_nl release contract
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $lts = Invoke-RestMethod 'https://api.adoptium.net/v3/info/available_releases'
-          if (-not $lts.available_lts_releases -or 21 -notin $lts.available_lts_releases) {
-            throw 'Adoptium available_lts_releases contract changed'
-          }
-
-          $githubHeaders = @{
-            'Authorization' = "Bearer $env:GH_TOKEN"
+          $headers = @{
+            'Authorization' = "Bearer $env:GITHUB_TOKEN"
             'Accept' = 'application/vnd.github+json'
             'X-GitHub-Api-Version' = '2022-11-28'
             'User-Agent' = 'NicoCache_nl updater contract test'
           }
           $release = Invoke-RestMethod `
             'https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest' `
-            -Headers $githubHeaders
+            -Headers $headers
           $msi = @($release.assets | Where-Object name -like '*.msi')
           $sha = @($release.assets | Where-Object { $_.name -like '*.sha256' -or $_.name -like '*.sha256.txt' })
           if ($msi.Count -lt 1 -or $sha.Count -lt 1) {
             throw 'NicoCache_nl latest release no longer exposes MSI plus checksum assets'
           }
 
-          $ffmpeg = Invoke-RestMethod `
-            'https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest' `
-            -Headers $githubHeaders
-          if (-not @($ffmpeg.assets | Where-Object name -eq 'checksums.sha256') -or
-              -not @($ffmpeg.assets | Where-Object name -match '^ffmpeg-master-latest-win64-gpl\.zip$')) {
-            throw 'BtbN FFmpeg release contract changed'
-          }
-
-          $sevenZip = Invoke-RestMethod `
-            'https://api.github.com/repos/ip7z/7zip/releases/latest' `
-            -Headers $githubHeaders
-          if (-not @($sevenZip.assets | Where-Object name -match '^7z[0-9]+-extra\.7z$') -or
-              -not @($sevenZip.assets | Where-Object name -eq '7zr.exe')) {
-            throw '7-Zip release contract changed'
-          }
-
-      - name: Resolve non-GitHub dependency providers in Check mode
+      - name: Compile and execute pure Java live provider contracts
         shell: pwsh
         run: |
-          $contractRoot = Join-Path $env:RUNNER_TEMP 'nicocache-updater-contract-root'
-          New-Item -ItemType Directory -Force $contractRoot | Out-Null
-          .\extensions\update-runtime-dependencies.ps1 `
-            -Mode Check `
-            -Id temurin,bouncycastle,ant `
-            -ApplicationRoot $contractRoot `
-            -JavaMajor 21 `
-            -NonInteractive
+          $classes = Join-Path $env:RUNNER_TEMP 'updater-live-contract-classes'
+          $target = Join-Path $env:RUNNER_TEMP 'updater-live-contract-target'
+          New-Item -ItemType Directory -Force $classes, $target | Out-Null
+          $sources = @(Get-ChildItem .\updater\src -Filter '*.java' -Recurse -File | ForEach-Object FullName)
+          javac --release 11 -encoding UTF-8 -Xlint:all -d $classes @sources
+          if ($LASTEXITCODE -ne 0) { throw 'Pure Java updater compilation failed' }
+          java -cp $classes dareka.updater.UpdaterLauncher `
+            --dependency-check --app-root $target --java-major 21
+          if ($LASTEXITCODE -ne 0) { throw 'Pure Java live dependency contract check failed' }
 
-      - name: Verify dependency manifest completeness
+      - name: Reject PowerShell dependency payloads
         shell: pwsh
         run: |
-          $definition = Import-PowerShellDataFile .\extensions\runtime-dependencies.psd1
-          foreach ($dependency in $definition.Dependencies) {
-            if (-not $dependency.Id -or -not $dependency.Provider -or -not $dependency.ManagedPath) {
-              throw "Incomplete dependency definition: $($dependency | ConvertTo-Json -Compress)"
-            }
+          $forbidden = @(Get-ChildItem .\updater -Recurse -File |
+            Where-Object Extension -in @('.ps1', '.psd1', '.psm1'))
+          if ($forbidden.Count -ne 0) {
+            throw "PowerShell dependency payload detected: $(@($forbidden.FullName) -join ', ')"
           }
-          Write-Output 'Live updater contracts passed'
+          Write-Output 'Pure Java live updater contracts passed'
