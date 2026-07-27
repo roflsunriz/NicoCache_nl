@@ -1,6 +1,7 @@
 package dareka.updater;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.prefs.Preferences;
@@ -14,14 +15,14 @@ final class TargetRootResolver {
 
     static Path resolve(String explicitRoot) {
         if (explicitRoot != null && !explicitRoot.isBlank()) {
-            return normalize(Path.of(explicitRoot));
+            return prepare(normalize(Path.of(explicitRoot)));
         }
         String saved = PREFERENCES.get(ROOT_KEY, "");
         if (!saved.isBlank()) {
             Path candidate = normalize(Path.of(saved));
-            if (isInstallation(candidate)) return candidate;
+            if (isInstallation(candidate)) return prepare(candidate);
         }
-        return defaultRoot();
+        return prepare(defaultRoot());
     }
 
     static Path defaultRoot() {
@@ -50,7 +51,7 @@ final class TargetRootResolver {
     }
 
     static Path requireInstallation(Path root) throws IOException {
-        Path normalized = normalize(root);
+        Path normalized = prepare(normalize(root));
         if (!isInstallation(normalized)) {
             throw new IOException("NicoCache_nlのインストール先ではありません: " + normalized);
         }
@@ -61,7 +62,21 @@ final class TargetRootResolver {
         if (root == null || !Files.isDirectory(root)) return false;
         return Files.isRegularFile(root.resolve("NicoCache_nl.jar"))
                 || Files.isRegularFile(root.resolve("NicoCache_nl.exe"))
-                || Files.isRegularFile(root.resolve("version.txt"));
+                || Files.isRegularFile(root.resolve("version.txt"))
+                || Files.isRegularFile(root.resolve("app").resolve(".jpackage.xml"));
+    }
+
+    private static Path prepare(Path root) {
+        if (!Files.isDirectory(root) || Files.isRegularFile(root.resolve("version.txt"))) return root;
+        String detected = InstalledVersionDetector.detect(root);
+        if ("不明".equals(detected)) return root;
+        try {
+            Files.writeString(root.resolve("version.txt"), detected + System.lineSeparator(),
+                    StandardCharsets.US_ASCII);
+        } catch (IOException ignored) {
+            // The GUI can still read app/.jpackage.xml directly after this fallback is wired.
+        }
+        return root;
     }
 
     private static Path normalize(Path path) {
