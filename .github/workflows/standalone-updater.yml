@@ -1,0 +1,103 @@
+name: Standalone Updater
+
+on:
+  pull_request:
+    paths:
+      - 'updater/**'
+      - 'extensions/RuntimeDependencyUpdater.java'
+      - 'extensions/*runtime-update*.ps1'
+      - 'extensions/runtime-dependencies.psd1'
+      - 'extensions/update-runtime-dependencies.ps1'
+      - 'packaging/windows/build-standalone-updater.ps1'
+      - 'packaging/windows/test-standalone-updater.ps1'
+      - '.github/workflows/standalone-updater.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'updater/**'
+      - 'extensions/RuntimeDependencyUpdater.java'
+      - 'extensions/*runtime-update*.ps1'
+      - 'extensions/runtime-dependencies.psd1'
+      - 'extensions/update-runtime-dependencies.ps1'
+      - 'packaging/windows/build-standalone-updater.ps1'
+      - 'packaging/windows/test-standalone-updater.ps1'
+      - '.github/workflows/standalone-updater.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '23 18 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standalone-updater-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-integration-package:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Show tool versions
+        shell: pwsh
+        run: |
+          java --version
+          javac --version
+          jpackage --version
+          $PSVersionTable
+
+      - name: Run Java, transaction, security, GUI and package tests
+        shell: pwsh
+        run: .\packaging\windows\test-standalone-updater.ps1 -BuildMsi
+
+      - name: Upload updater packages and diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: standalone-updater-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            .test-work/standalone-updater/output/**
+            .test-work/updater-tests/**
+
+  live-contracts:
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Verify live provider contracts without installing
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $lts = Invoke-RestMethod 'https://api.adoptium.net/v3/info/available_releases'
+          if (-not $lts.available_lts_releases -or 21 -notin $lts.available_lts_releases) {
+            throw 'Adoptium available_lts_releases contract changed'
+          }
+          $release = Invoke-RestMethod `
+            'https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest' `
+            -Headers @{ 'User-Agent'='NicoCache_nl updater contract test' }
+          $msi = @($release.assets | Where-Object name -like '*.msi')
+          $sha = @($release.assets | Where-Object { $_.name -like '*.sha256' -or $_.name -like '*.sha256.txt' })
+          if ($msi.Count -lt 1 -or $sha.Count -lt 1) {
+            throw 'NicoCache_nl latest release no longer exposes MSI plus checksum assets'
+          }
+          $definition = Import-PowerShellDataFile .\extensions\runtime-dependencies.psd1
+          foreach ($dependency in $definition.Dependencies) {
+            if (-not $dependency.Id -or -not $dependency.Provider -or -not $dependency.ManagedPath) {
+              throw "Incomplete dependency definition: $($dependency | ConvertTo-Json -Compress)"
+            }
+          }
+          Write-Output 'Live updater contracts passed'
