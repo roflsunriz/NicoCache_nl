@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Iterator;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * Packaged launcher that separates user-managed files from application files.
@@ -142,8 +144,10 @@ public final class UserDataMain {
 
     private static void copyTree(Path source, Path destination)
             throws IOException {
-        try (var paths = Files.walk(source)) {
-            for (Path path : paths.toList()) {
+        try (Stream<Path> paths = Files.walk(source)) {
+            Iterator<Path> iterator = paths.iterator();
+            while (iterator.hasNext()) {
+                Path path = iterator.next();
                 Path relative = source.relativize(path);
                 Path target = destination.resolve(relative);
                 if (Files.isDirectory(path)) {
