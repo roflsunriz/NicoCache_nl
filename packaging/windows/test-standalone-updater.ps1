@@ -15,7 +15,14 @@ function Assert-True([bool]$Condition, [string]$Message) {
 function Assert-File([string]$Path) { Assert-True (Test-Path -LiteralPath $Path -PathType Leaf) "File missing: $Path" }
 function Assert-Directory([string]$Path) { Assert-True (Test-Path -LiteralPath $Path -PathType Container) "Directory missing: $Path" }
 function Invoke-MsiExec([string[]]$Arguments, [string]$FailureMessage) {
-    $process = Start-Process msiexec.exe -ArgumentList $Arguments -Wait -PassThru
+    $quotedArguments = $Arguments | ForEach-Object {
+        if ($_ -match '[\s"]') {
+            '"' + $_.Replace('"', '\"') + '"'
+        } else {
+            $_
+        }
+    }
+    $process = Start-Process msiexec.exe -ArgumentList ($quotedArguments -join ' ') -Wait -PassThru
     if ($process.ExitCode -notin @(0, 1641, 3010)) {
         throw "$FailureMessage (ExitCode: $($process.ExitCode))"
     }
