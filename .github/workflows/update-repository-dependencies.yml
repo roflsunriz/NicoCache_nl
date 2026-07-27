@@ -90,7 +90,6 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          OLD_VERSION: ${{ steps.update.outputs.old-version }}
           NEW_VERSION: ${{ steps.update.outputs.new-version }}
         run: |
           $branch = 'automation/update-bouncy-castle'
@@ -108,8 +107,6 @@ jobs:
 - AppImageスモークテストとMSI構造テスト
 
 自動マージは行いません。レビュー後に取り込んでください。
-
-Closes #4
 "@
 
           git config user.name 'github-actions[bot]'
