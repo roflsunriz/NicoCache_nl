@@ -7,7 +7,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,17 +20,15 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
-import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
 /**
- * Beginner-friendly GUI for checking and updating NicoCache_nl managed
- * runtime dependencies. PowerShell is treated as an internal implementation
- * detail; users do not need to open a terminal or type commands.
+ * NicoCache_nl 管理下の外部依存関係を確認・更新するGUI。
+ * 利用者にターミナル操作を要求しない。
  */
 public final class RuntimeDependencyUpdaterGUI {
     private static final String SCRIPT =
-            "packaging/windows/runtime/update-runtime-dependencies.ps1";
+            "extensions/update-runtime-dependencies.ps1";
 
     private final JDialog dialog;
     private final JTextArea output;
@@ -41,7 +39,7 @@ public final class RuntimeDependencyUpdaterGUI {
         dialog = new JDialog(owner, "依存関係の更新", false);
         output = new JTextArea();
         checkButton = new JButton("更新を確認");
-        updateButton = new JButton("選択可能な更新を適用");
+        updateButton = new JButton("更新可能な項目を適用");
 
         output.setEditable(false);
         output.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
@@ -108,7 +106,7 @@ public final class RuntimeDependencyUpdaterGUI {
                         JOptionPane.showMessageDialog(
                                 dialog,
                                 "依存関係の更新処理が完了しました。\n"
-                                        + "Java Runtimeの更新はNicoCache_nl終了後に適用される場合があります。",
+                                        + "Java Runtimeの更新はNicoCache_nl終了後に自動適用される場合があります。",
                                 "更新完了",
                                 JOptionPane.INFORMATION_MESSAGE);
                     }
@@ -140,6 +138,8 @@ public final class RuntimeDependencyUpdaterGUI {
         command.add("-NoLogo");
         command.add("-NoProfile");
         command.add("-NonInteractive");
+        command.add("-WindowStyle");
+        command.add("Hidden");
         command.add("-ExecutionPolicy");
         command.add("Bypass");
         command.add("-File");
@@ -159,8 +159,9 @@ public final class RuntimeDependencyUpdaterGUI {
         Process process = builder.start();
 
         StringBuilder text = new StringBuilder();
+        Charset consoleCharset = Charset.defaultCharset();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(
-                process.getInputStream(), StandardCharsets.UTF_8))) {
+                process.getInputStream(), consoleCharset))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 text.append(line).append(System.lineSeparator());
@@ -182,7 +183,8 @@ public final class RuntimeDependencyUpdaterGUI {
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new RuntimeDependencyUpdaterGUI(null).show());
+        javax.swing.SwingUtilities.invokeLater(() ->
+                new RuntimeDependencyUpdaterGUI(null).show());
     }
 
     private static final class CommandResult {
