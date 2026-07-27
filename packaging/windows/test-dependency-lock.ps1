@@ -15,7 +15,9 @@ if ([string]$lock.BouncyCastleVersion -notmatch '^\d+\.\d+$') {
 
 $expectedNames = @('bcprov', 'bcpkix', 'bcutil')
 $actualNames = @($lock.Artifacts | ForEach-Object { [string]$_.Name })
-if (@($actualNames | Sort-Object) -join ',' -ne @($expectedNames | Sort-Object) -join ',') {
+$expectedNameSet = (@($expectedNames | Sort-Object) -join ',')
+$actualNameSet = (@($actualNames | Sort-Object) -join ',')
+if ($actualNameSet -ne $expectedNameSet) {
     throw "依存ファイルの集合が不正です: $($actualNames -join ', ')"
 }
 
@@ -40,7 +42,8 @@ try {
 
         $destination = Join-Path $temp ([string]$artifact.FileName)
         Invoke-WebRequest -Uri $uri -OutFile $destination -MaximumRedirection 0 -UseBasicParsing
-        $actualHash = (Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLowerInvariant()
+        $hash = Get-FileHash -LiteralPath $destination -Algorithm SHA256
+        $actualHash = $hash.Hash.ToLowerInvariant()
         if ($actualHash -ne [string]$artifact.Sha256) {
             throw "SHA-256が一致しません: $($artifact.Name)"
         }
