@@ -16,11 +16,15 @@ $classesRoot = Join-Path $workRoot 'classes'
 $inputRoot = Join-Path $workRoot 'input'
 $outputRoot = Join-Path $workRoot 'output'
 $buildLog = Join-Path $workRoot 'jpackage.log'
+$icon = Join-Path $root 'niconico-0.ico'
 
 if (Test-Path -LiteralPath $workRoot) {
     Remove-Item -LiteralPath $workRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Path $classesRoot, $inputRoot, $outputRoot | Out-Null
+if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) {
+    throw "Updaterアイコンが見つかりません: $icon"
+}
 
 $javac = (Get-Command javac -ErrorAction Stop).Source
 $jar = (Get-Command jar -ErrorAction Stop).Source
@@ -28,7 +32,7 @@ $jpackage = (Get-Command jpackage -ErrorAction Stop).Source
 
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'updater\src') -Filter '*.java' -Recurse -File |
     ForEach-Object FullName)
-if ($sources.Count -lt 3) {
+if ($sources.Count -lt 4) {
     throw 'Pure Java updater sources are incomplete'
 }
 & $javac --release 11 -encoding UTF-8 -Xlint:all -d $classesRoot @sources
@@ -49,7 +53,6 @@ if ($LASTEXITCODE -ne 0) {
     throw 'NicoCache_nl UpdaterのJAR作成に失敗しました'
 }
 
-# The standalone updater is intentionally pure Java. No PowerShell engine or manifest is packaged.
 $forbidden = @(Get-ChildItem -LiteralPath $inputRoot -Recurse -File -ErrorAction SilentlyContinue |
     Where-Object Extension -in @('.ps1', '.psd1', '.psm1'))
 if ($forbidden.Count -ne 0) {
@@ -58,6 +61,8 @@ if ($forbidden.Count -ne 0) {
 }
 
 $commonArguments = @(
+    '-J-Duser.language=ja',
+    '-J-Duser.country=JP',
     '--name', 'NicoCache_nl Updater',
     '--app-version', $AppVersion,
     '--input', $inputRoot,
@@ -66,6 +71,7 @@ $commonArguments = @(
     '--dest', $outputRoot,
     '--vendor', 'NicoCache_nl',
     '--description', 'NicoCache_nl本体と外部依存関係を一元管理する純Javaアップデーター',
+    '--icon', $icon,
     '--verbose'
 )
 
@@ -75,9 +81,7 @@ function Invoke-JPackage {
         [Parameter(Mandatory)][string]$FailureMessage
     )
     & $jpackage @Arguments 2>&1 | Tee-Object -FilePath $buildLog -Append
-    if ($LASTEXITCODE -ne 0) {
-        throw $FailureMessage
-    }
+    if ($LASTEXITCODE -ne 0) { throw $FailureMessage }
 }
 
 if ($PackageType -in @('AppImage', 'All')) {
