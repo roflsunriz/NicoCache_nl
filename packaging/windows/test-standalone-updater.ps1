@@ -14,6 +14,12 @@ function Assert-True([bool]$Condition, [string]$Message) {
 }
 function Assert-File([string]$Path) { Assert-True (Test-Path -LiteralPath $Path -PathType Leaf) "File missing: $Path" }
 function Assert-Directory([string]$Path) { Assert-True (Test-Path -LiteralPath $Path -PathType Container) "Directory missing: $Path" }
+function Invoke-MsiExec([string[]]$Arguments, [string]$FailureMessage) {
+    $process = Start-Process msiexec.exe -ArgumentList $Arguments -Wait -PassThru
+    if ($process.ExitCode -notin @(0, 1641, 3010)) {
+        throw "$FailureMessage (ExitCode: $($process.ExitCode))"
+    }
+}
 
 # Compile production source and dependency-free unit tests.
 $classes = Join-Path $work 'classes'
@@ -91,5 +97,24 @@ Stop-Process -Id $process.Id -Force
 if ($BuildMsi) {
     $msi = Get-ChildItem (Join-Path $root '.test-work\standalone-updater\output') -Filter '*.msi' -File | Select-Object -First 1
     Assert-True ($null -ne $msi -and $msi.Length -gt 0) 'Updater MSI was not generated'
+    $msiLog = Join-Path $work 'updater-msi.log'
+    $installedRoot = Join-Path $env:ProgramFiles 'NicoCache_nl Updater'
+    try {
+        Invoke-MsiExec @('/i', $msi.FullName, '/qn', '/norestart', '/l*v', $msiLog) `
+            'Updater MSI install failed'
+        $installedExe = Join-Path $installedRoot 'NicoCache_nl Updater.exe'
+        Assert-File $installedExe
+        Assert-File (Join-Path $installedRoot 'runtime\lib\modules')
+        $installedProcess = Start-Process -FilePath $installedExe `
+            -ArgumentList '--app-root', $brokenRoot -PassThru
+        Start-Sleep -Seconds 5
+        Assert-True (-not $installedProcess.HasExited) 'Installed updater failed to launch independently'
+        Stop-Process -Id $installedProcess.Id -Force
+    }
+    finally {
+        Invoke-MsiExec @('/x', $msi.FullName, '/qn', '/norestart', '/l*v', (Join-Path $work 'updater-msi-uninstall.log')) `
+            'Updater MSI uninstall failed'
+    }
+    Assert-True (-not (Test-Path -LiteralPath $installedRoot)) 'Updater MSI left its install directory behind'
 }
 Write-Output 'Standalone updater automated tests passed'
