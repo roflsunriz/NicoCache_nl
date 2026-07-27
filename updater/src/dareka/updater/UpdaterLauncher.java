@@ -9,10 +9,17 @@ public final class UpdaterLauncher {
     private UpdaterLauncher() {}
 
     public static void main(String[] args) {
-        Path applicationRoot = argument(args, "--app-root") == null
-                ? defaultApplicationRoot()
-                : Path.of(argument(args, "--app-root")).toAbsolutePath().normalize();
+        String explicitRoot = argument(args, "--app-root");
+        Path applicationRoot = TargetRootResolver.resolve(explicitRoot);
         try {
+            if (hasArgument(args, "--print-target-root")) {
+                System.out.println(applicationRoot);
+                return;
+            }
+            if (hasArgument(args, "--validate-target-root")) {
+                System.out.println(TargetRootResolver.requireInstallation(applicationRoot));
+                return;
+            }
             if (hasArgument(args, "--self-test")) {
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 System.out.println("SELF_TEST_OK applicationRoot=" + applicationRoot + " engine=java");
@@ -20,11 +27,13 @@ public final class UpdaterLauncher {
                 return;
             }
             if (hasArgument(args, "--dependency-check")) {
+                TargetRootResolver.requireInstallation(applicationRoot);
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 System.out.print(engine.checkAll(intArgument(args, "--java-major", RECOMMENDED_LTS)));
                 return;
             }
             if (hasArgument(args, "--dependency-update")) {
+                TargetRootResolver.requireInstallation(applicationRoot);
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 System.out.print(engine.updateAll(intArgument(args, "--java-major", RECOMMENDED_LTS)));
                 return;
@@ -36,14 +45,7 @@ public final class UpdaterLauncher {
         }
     }
 
-    private static Path defaultApplicationRoot() {
-        String programFiles = System.getenv("ProgramFiles");
-        return programFiles == null
-                ? Path.of("NicoCache_nl").toAbsolutePath().normalize()
-                : Path.of(programFiles, "NicoCache_nl").toAbsolutePath().normalize();
-    }
-
-    private static String argument(String[] args, String name) {
+    static String argument(String[] args, String name) {
         for (int index = 0; index + 1 < args.length; index++) {
             if (name.equals(args[index])) return args[index + 1];
         }
