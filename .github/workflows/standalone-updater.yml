@@ -81,14 +81,13 @@ jobs:
             .test-work/standalone-updater-transcript.txt
 
   live-contracts:
-    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-2022
     timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Verify live provider contracts without installing
+      - name: Verify live release and LTS contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -104,6 +103,21 @@ jobs:
           if ($msi.Count -lt 1 -or $sha.Count -lt 1) {
             throw 'NicoCache_nl latest release no longer exposes MSI plus checksum assets'
           }
+
+      - name: Resolve every external dependency provider in Check mode
+        shell: pwsh
+        run: |
+          $contractRoot = Join-Path $env:RUNNER_TEMP 'nicocache-updater-contract-root'
+          New-Item -ItemType Directory -Force $contractRoot | Out-Null
+          .\extensions\update-runtime-dependencies.ps1 `
+            -Mode Check `
+            -ApplicationRoot $contractRoot `
+            -JavaMajor 21 `
+            -NonInteractive
+
+      - name: Verify dependency manifest completeness
+        shell: pwsh
+        run: |
           $definition = Import-PowerShellDataFile .\extensions\runtime-dependencies.psd1
           foreach ($dependency in $definition.Dependencies) {
             if (-not $dependency.Id -or -not $dependency.Provider -or -not $dependency.ManagedPath) {
