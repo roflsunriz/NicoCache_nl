@@ -100,8 +100,8 @@ if ($BuildMsi) {
     $msiLog = Join-Path $work 'updater-msi.log'
     $installedRoot = Join-Path $env:ProgramFiles 'NicoCache_nl Updater'
     try {
-        Invoke-MsiExec @('/i', $msi.FullName, '/qn', '/norestart', '/l*v', $msiLog) `
-            'Updater MSI install failed'
+        Invoke-MsiExec -Arguments @('/i', $msi.FullName, '/qn', '/norestart', '/l*v', $msiLog) `
+            -FailureMessage 'Updater MSI install failed'
         $installedExe = Join-Path $installedRoot 'NicoCache_nl Updater.exe'
         Assert-File $installedExe
         Assert-File (Join-Path $installedRoot 'runtime\lib\modules')
@@ -112,8 +112,9 @@ if ($BuildMsi) {
         Stop-Process -Id $installedProcess.Id -Force
     }
     finally {
-        Invoke-MsiExec @('/x', $msi.FullName, '/qn', '/norestart', '/l*v', (Join-Path $work 'updater-msi-uninstall.log')) `
-            'Updater MSI uninstall failed'
+        Invoke-MsiExec -Arguments @('/x', $msi.FullName, '/qn', '/norestart', '/l*v',
+                (Join-Path $work 'updater-msi-uninstall.log')) `
+            -FailureMessage 'Updater MSI uninstall failed'
     }
     Assert-True (-not (Test-Path -LiteralPath $installedRoot)) 'Updater MSI left its install directory behind'
 }
