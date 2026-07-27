@@ -98,10 +98,6 @@ final class DependencyEngine {
         }
     }
 
-    /**
-     * Packaged, offline transaction E2E. It exercises HTTP download, hash validation,
-     * ZIP extraction, zip-slip rejection, directory replacement, file merge, backup and rollback.
-     */
     String selfTestTransactions() throws Exception {
         try (OperationLock ignored = acquireOperationLock()) {
             Path destination = managed("tools/selftest");
@@ -124,27 +120,25 @@ final class DependencyEngine {
             payloads.put("/second.jar", secondFile);
             try (FixtureServer server = new FixtureServer(payloads, 5)) {
                 URI good = server.uri("/good.zip");
-                Release successful = Release.archive("selftest-good", "Self Test", "1",
-                        destination, good, "good.zip", digest(goodZip, "SHA-256"),
-                        "SHA-256", ArchiveType.ZIP, false);
-                install(successful);
+                install(Release.archive("selftest-good", "Self Test", "1", destination,
+                        good, "good.zip", digest(goodZip, "SHA-256"), "SHA-256",
+                        ArchiveType.ZIP, false));
                 String marker = Files.readString(destination.resolve("marker.txt"), StandardCharsets.UTF_8);
                 if (!"new".equals(marker)) throw new IOException("自己診断の置換結果が不正です");
                 if (!hasBackupWithMarker("selftest-good", "old")) {
                     throw new IOException("自己診断でバックアップが作成されませんでした");
                 }
 
-                Release badHash = Release.archive("selftest-hash", "Self Test", "2",
-                        destination, good, "good.zip", repeat('0', 64),
-                        "SHA-256", ArchiveType.ZIP, false);
+                Release badHash = Release.archive("selftest-hash", "Self Test", "2", destination,
+                        good, "good.zip", repeat('0', 64), "SHA-256", ArchiveType.ZIP, false);
                 expectFailure(() -> install(badHash), "ハッシュ不一致が受理されました");
                 marker = Files.readString(destination.resolve("marker.txt"), StandardCharsets.UTF_8);
                 if (!"new".equals(marker)) throw new IOException("ハッシュ失敗後に既存内容が破損しました");
 
                 URI evil = server.uri("/evil.zip");
-                Release zipSlip = Release.archive("selftest-zipslip", "Self Test", "3",
-                        destination, evil, "evil.zip", digest(evilZip, "SHA-256"),
-                        "SHA-256", ArchiveType.ZIP, false);
+                Release zipSlip = Release.archive("selftest-zipslip", "Self Test", "3", destination,
+                        evil, "evil.zip", digest(evilZip, "SHA-256"), "SHA-256",
+                        ArchiveType.ZIP, false);
                 Path escaped = stateRoot.resolve("escaped.txt");
                 Files.deleteIfExists(escaped);
                 expectFailure(() -> install(zipSlip), "ZIP traversalが受理されました");
@@ -160,8 +154,8 @@ final class DependencyEngine {
                         || !Files.isRegularFile(fileDestination.resolve("second.jar"))) {
                     throw new IOException("ファイル単位更新に失敗しました");
                 }
-                String unrelated = Files.readString(fileDestination.resolve("unrelated.jar"), StandardCharsets.UTF_8);
-                if (!"keep".equals(unrelated)) {
+                if (!"keep".equals(Files.readString(fileDestination.resolve("unrelated.jar"),
+                        StandardCharsets.UTF_8))) {
                     throw new IOException("ファイル単位更新が無関係な既存ファイルを削除しました");
                 }
             } finally {
@@ -210,9 +204,8 @@ final class DependencyEngine {
         Asset zip = findAsset(json, Pattern.compile("^ffmpeg-master-latest-win64-gpl\\.zip$"));
         Asset checksums = findAsset(json, Pattern.compile("^checksums\\.sha256$"));
         String checksumText = text(checksums.url, "text/plain");
-        Pattern line = Pattern.compile("(?m)^([0-9a-fA-F]{64})\\s+\\*?"
-                + Pattern.quote(zip.name) + "\\s*$");
-        Matcher match = line.matcher(checksumText);
+        Matcher match = Pattern.compile("(?m)^([0-9a-fA-F]{64})\\s+\\*?"
+                + Pattern.quote(zip.name) + "\\s*$").matcher(checksumText);
         if (!match.find()) throw new IOException("FFmpegのSHA-256が見つかりません");
         Matcher published = JSON_PUBLISHED.matcher(json);
         String version = published.find() ? published.group(1) : "latest";
@@ -298,8 +291,7 @@ final class DependencyEngine {
                 transactionalMergeFiles(staging, release.destination, release.id);
             } else if (release.archiveType == ArchiveType.ZIP) {
                 Artifact artifact = release.artifacts.get(0);
-                Path downloaded = download(artifact, downloads);
-                unzip(downloaded, staging);
+                unzip(download(artifact, downloads), staging);
                 flattenSingleDirectory(staging);
                 transactionalReplace(staging, release.destination, release.id);
             } else {
@@ -360,8 +352,7 @@ final class DependencyEngine {
         assertInside(applicationRoot, destination);
         assertNoReparseEscape(applicationRoot, destination);
         Files.createDirectories(destination);
-        Path backup = stateRoot.resolve("backups")
-                .resolve(id + "-" + Instant.now().toEpochMilli());
+        Path backup = stateRoot.resolve("backups").resolve(id + "-" + Instant.now().toEpochMilli());
         Files.createDirectories(backup);
         List<Path> installed = new ArrayList<>();
         List<Path> replaced = new ArrayList<>();
@@ -470,19 +461,18 @@ final class DependencyEngine {
         builder.header("X-GitHub-Api-Version", "2022-11-28");
     }
 
+    /** Parse one GitHub release asset using the actual API order: name/digest before download URL. */
     private static Asset findAsset(String json, Pattern namePattern) throws IOException {
         Matcher names = JSON_NAME.matcher(json);
         while (names.find()) {
             String name = unescape(names.group(1));
             if (!namePattern.matcher(name).matches()) continue;
-            int urlStart = json.lastIndexOf("\"browser_download_url\"", names.start());
-            if (urlStart < 0) continue;
-            int nextUrl = json.indexOf("\"browser_download_url\"", urlStart + 1);
-            int end = nextUrl < 0 ? Math.min(json.length(), names.end() + 3000) : nextUrl;
-            String segment = json.substring(urlStart, end);
+            int nextAssetName = json.indexOf("\"name\"", names.end());
+            int end = nextAssetName < 0 ? Math.min(json.length(), names.end() + 5000) : nextAssetName;
+            String segment = json.substring(names.start(), end);
             Matcher url = JSON_URL.matcher(segment);
-            if (!url.find()) continue;
             Matcher digest = JSON_DIGEST.matcher(segment);
+            if (!url.find()) throw new IOException("Release asset URLがありません: " + name);
             String hash = digest.find() ? digest.group(1).toLowerCase(Locale.ROOT) : null;
             return new Asset(name, URI.create(unescape(url.group(1))), hash);
         }
@@ -507,9 +497,7 @@ final class DependencyEngine {
     private static void assertNoReparseEscape(Path root, Path candidate) throws IOException {
         Path realRoot = root.toRealPath();
         Path current = candidate;
-        while (current != null && !Files.exists(current, LinkOption.NOFOLLOW_LINKS)) {
-            current = current.getParent();
-        }
+        while (current != null && !Files.exists(current, LinkOption.NOFOLLOW_LINKS)) current = current.getParent();
         if (current != null) {
             Path real = current.toRealPath();
             if (!real.startsWith(realRoot)) throw new IOException("リンク経由の管理外パスです: " + real);
@@ -601,7 +589,6 @@ final class DependencyEngine {
     }
 
     private interface CheckedAction { void run() throws Exception; }
-
     private enum ArchiveType { ZIP, SEVEN_ZIP, FILES }
 
     private static final class Asset {
