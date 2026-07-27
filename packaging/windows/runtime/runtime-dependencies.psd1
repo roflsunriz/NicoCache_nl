@@ -1,55 +1,65 @@
 @{
-    SchemaVersion = 1
-    ReleaseManifestUri = 'https://raw.githubusercontent.com/roflsunriz/NicoCache_nl/main/packaging/windows/runtime/runtime-dependency-releases.json'
+    SchemaVersion = 2
     Dependencies = @(
         @{
             Id = 'temurin'
             DisplayName = 'Eclipse Temurin OpenJDK'
-            Kind = 'Directory'
+            Provider = 'Adoptium'
             ManagedPath = 'runtime'
             Executable = 'bin\java.exe'
             VersionArguments = @('-version')
             VersionPattern = 'version "(?<version>[^"]+)"'
             UpdateMode = 'AfterExit'
+            MajorVersion = 11
+            ImageType = 'jre'
+            Architecture = 'x64'
         }
         @{
             Id = 'ffmpeg'
             DisplayName = 'FFmpeg'
-            Kind = 'Directory'
+            Provider = 'BtbNGitHub'
             ManagedPath = 'tools\ffmpeg'
             Executable = 'bin\ffmpeg.exe'
             VersionArguments = @('-version')
             VersionPattern = '^ffmpeg version (?<version>\S+)'
             UpdateMode = 'Immediate'
+            Repository = 'BtbN/FFmpeg-Builds'
+            AssetPattern = '^ffmpeg-master-latest-win64-gpl\.zip$'
         }
         @{
             Id = 'bouncycastle'
             DisplayName = 'Bouncy Castle'
-            Kind = 'FileSet'
+            Provider = 'MavenCentral'
             ManagedPath = 'lib'
             Files = @('bcprov.jar', 'bcpkix.jar', 'bcutil.jar')
             VersionSource = 'packaging\windows\dependency-lock.psd1'
             UpdateMode = 'Immediate'
+            MavenGroupPath = 'org/bouncycastle'
+            MavenArtifacts = @('bcprov-jdk18on', 'bcpkix-jdk18on', 'bcutil-jdk18on')
         }
         @{
             Id = 'ant'
             DisplayName = 'Apache Ant'
-            Kind = 'Directory'
+            Provider = 'ApacheDistribution'
             ManagedPath = 'tools\ant'
             Executable = 'bin\ant.bat'
             VersionArguments = @('-version')
             VersionPattern = 'Apache Ant\(TM\) version (?<version>\S+)'
             UpdateMode = 'Immediate'
+            DistributionUri = 'https://downloads.apache.org/ant/binaries/'
         }
         @{
             Id = '7zip'
             DisplayName = '7-Zip'
-            Kind = 'Directory'
+            Provider = 'GitHubRelease'
             ManagedPath = 'tools\7zip'
-            Executable = '7z.exe'
+            Executable = '7za.exe'
             VersionArguments = @()
             VersionPattern = '7-Zip\s+(?<version>[0-9.]+)'
             UpdateMode = 'Immediate'
+            Repository = 'ip7z/7zip'
+            AssetPattern = '^7z[0-9]+-extra\.7z$'
+            BootstrapPattern = '^7zr\.exe$'
         }
     )
 }
