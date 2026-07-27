@@ -4,6 +4,7 @@ param(
     [string]$Mode = 'Check',
     [string[]]$Id,
     [string]$ApplicationRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
+    [int]$JavaMajor = 0,
     [switch]$NonInteractive
 )
 
@@ -61,12 +62,59 @@ function Save-InstalledState([hashtable]$State) {
     $State | ConvertTo-Json | Set-Content -LiteralPath $installedStatePath -Encoding UTF8
 }
 
+function Get-AdoptiumPlatform {
+    $os = if ([Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [Runtime.InteropServices.OSPlatform]::Windows)) {
+        'windows'
+    } elseif ([Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [Runtime.InteropServices.OSPlatform]::Linux)) {
+        'linux'
+    } elseif ([Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [Runtime.InteropServices.OSPlatform]::OSX)) {
+        'mac'
+    } else {
+        throw "Temurin自動更新に未対応のOSです: $([Runtime.InteropServices.RuntimeInformation]::OSDescription)"
+    }
+
+    $architecture = switch ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()) {
+        'x64' { 'x64' }
+        'x86' { 'x32' }
+        'arm64' { 'aarch64' }
+        'arm' { 'arm' }
+        's390x' { 's390x' }
+        'ppc64le' { 'ppc64' }
+        default { throw "Temurin自動更新に未対応のCPUです: $([Runtime.InteropServices.RuntimeInformation]::OSArchitecture)" }
+    }
+    [pscustomobject]@{ Os=$os; Architecture=$architecture }
+}
+
+function Get-JavaExecutableName {
+    if ([Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [Runtime.InteropServices.OSPlatform]::Windows)) { 'java.exe' } else { 'java' }
+}
+
+function Get-SelectedJavaMajor($Dependency) {
+    $supported = @($Dependency.SupportedLtsVersions | ForEach-Object { [int]$_ })
+    $selected = if ($JavaMajor -gt 0) { $JavaMajor } else { [int]$Dependency.RecommendedLtsVersion }
+    if ($selected -notin $supported) {
+        throw "Java $selected はNicoCache_nlで検証済みのLTSではありません。選択可能: $($supported -join ', ')"
+    }
+    $selected
+}
+
 function Invoke-VersionCommand($Dependency, [string]$Executable) {
     if (-not (Test-Path -LiteralPath $Executable -PathType Leaf)) { return $null }
     $output = & $Executable @($Dependency.VersionArguments) 2>&1 | Out-String
     $match = [regex]::Match($output, $Dependency.VersionPattern,
         [Text.RegularExpressions.RegexOptions]::Multiline)
     if ($match.Success) { $match.Groups['version'].Value } else { $null }
+}
+
+function Get-ManagedExecutable($Dependency, [string]$ManagedRoot) {
+    if ($Dependency.Id -eq 'temurin') {
+        return Join-Path (Join-Path $ManagedRoot 'bin') (Get-JavaExecutableName)
+    }
+    Join-Path $ManagedRoot $Dependency.Executable
 }
 
 function Get-CurrentDependency($Dependency, [hashtable]$InstalledState) {
@@ -82,23 +130,32 @@ function Get-CurrentDependency($Dependency, [hashtable]$InstalledState) {
         return [pscustomobject]@{ Version=$null; Managed=$true; Path=$managedRoot }
     }
 
-    $managedExe = Join-Path $managedRoot $Dependency.Executable
+    $managedExe = Get-ManagedExecutable $Dependency $managedRoot
     $version = Invoke-VersionCommand $Dependency $managedExe
     if ($version) {
         if ($stateVersion) { $version = $stateVersion }
         return [pscustomobject]@{ Version=$version; Managed=$true; Path=$managedRoot }
     }
 
-    if ($Dependency.Id -eq 'temurin' -and $env:JAVA_HOME) {
-        $externalExe = Join-Path $env:JAVA_HOME 'bin\java.exe'
-        $version = Invoke-VersionCommand $Dependency $externalExe
-        if ($version) { return [pscustomobject]@{ Version=$version; Managed=$false; Path=$env:JAVA_HOME } }
+    if ($Dependency.Id -eq 'temurin') {
+        $externalExe = $null
+        if ($env:JAVA_HOME) {
+            $externalExe = Join-Path (Join-Path $env:JAVA_HOME 'bin') (Get-JavaExecutableName)
+        }
+        if (-not $externalExe -or -not (Test-Path -LiteralPath $externalExe -PathType Leaf)) {
+            $command = Get-Command (Get-JavaExecutableName) -ErrorAction SilentlyContinue
+            if ($command) { $externalExe = $command.Source }
+        }
+        if ($externalExe) {
+            $version = Invoke-VersionCommand $Dependency $externalExe
+            if ($version) { return [pscustomobject]@{ Version=$version; Managed=$false; Path=$externalExe } }
+        }
     }
 
     $commandName = switch ($Dependency.Id) {
-        'ffmpeg' { 'ffmpeg.exe' }
-        'ant' { 'ant.bat' }
-        '7zip' { '7z.exe' }
+        'ffmpeg' { 'ffmpeg' }
+        'ant' { 'ant' }
+        '7zip' { if ($IsWindows) { '7z.exe' } else { '7z' } }
         default { $null }
     }
     if ($commandName) {
@@ -124,15 +181,20 @@ function New-Artifact([string]$Url, [string]$Hash, [string]$Algorithm,
 }
 
 function Resolve-AdoptiumRelease($Dependency) {
-    $uri = "https://api.adoptium.net/v3/assets/latest/$($Dependency.MajorVersion)/hotspot" +
-        "?architecture=$($Dependency.Architecture)&image_type=$($Dependency.ImageType)" +
-        '&os=windows&vendor=eclipse'
+    $platform = Get-AdoptiumPlatform
+    $major = Get-SelectedJavaMajor $Dependency
+    $uri = "https://api.adoptium.net/v3/assets/latest/$major/hotspot" +
+        "?architecture=$($platform.Architecture)&image_type=$($Dependency.ImageType)" +
+        "&os=$($platform.Os)&vendor=eclipse"
     $assets = @(Invoke-JsonRequest $uri)
-    if ($assets.Count -eq 0) { throw 'Adoptium APIから対象ランタイムを取得できませんでした。' }
+    if ($assets.Count -eq 0) {
+        throw "Adoptium APIに $($platform.Os)/$($platform.Architecture)/Java $major LTS のランタイムがありません。"
+    }
     $asset = $assets[0]
     $package = $asset.binary.package
     [pscustomobject]@{
         id=$Dependency.Id; version=[string]$asset.version.semver; archiveType='zip'
+        javaMajor=$major; os=$platform.Os; architecture=$platform.Architecture
         artifacts=@(New-Artifact ([string]$package.link) ([string]$package.checksum) 'SHA256' ([string]$package.name))
     }
 }
@@ -269,9 +331,8 @@ function Expand-Release($Dependency, $Release, [hashtable]$Downloads, [string]$D
             $extractor = Join-Path (Join-Path $ApplicationRoot $Dependency.ManagedPath) $Dependency.Executable
             if (-not (Test-Path -LiteralPath $extractor -PathType Leaf)) { $extractor = $Downloads['bootstrap'] }
             if (-not $extractor) { throw '7-Zip archiveを展開するbootstrap実行ファイルがありません。' }
-            $process = Start-Process -FilePath $extractor -ArgumentList @(
-                'x', $Downloads['payload'], "-o$Destination", '-y'
-            ) -Wait -PassThru -WindowStyle Hidden
+            $arguments = @('x', $Downloads['payload'], "-o$Destination", '-y')
+            $process = Start-Process -FilePath $extractor -ArgumentList $arguments -Wait -PassThru
             if ($process.ExitCode -ne 0) { throw "7-Zip archiveの展開に失敗しました: $($process.ExitCode)" }
         }
         default { throw "未対応のアーカイブ形式です: $($Release.archiveType)" }
@@ -279,11 +340,14 @@ function Expand-Release($Dependency, $Release, [hashtable]$Downloads, [string]$D
 }
 
 function Find-ContentRoot($Dependency, [string]$Stage) {
-    $expected = [IO.Path]::GetFileName([string]$Dependency.Executable)
+    $expected = if ($Dependency.Id -eq 'temurin') { Get-JavaExecutableName } else {
+        [IO.Path]::GetFileName([string]$Dependency.Executable)
+    }
     $candidate = Get-ChildItem -LiteralPath $Stage -Recurse -File -Filter $expected | Select-Object -First 1
     if (-not $candidate) { throw "展開内容に必要な実行ファイルがありません: $expected" }
     $root = $candidate.Directory
-    $segments = ([string]$Dependency.Executable -replace '/', '\').Split('\')
+    $relativeExecutable = if ($Dependency.Id -eq 'temurin') { "bin\$expected" } else { [string]$Dependency.Executable }
+    $segments = ($relativeExecutable -replace '/', '\').Split('\')
     for ($i=1; $i -lt $segments.Count; $i++) { $root = $root.Parent }
     $root.FullName
 }
