@@ -61,6 +61,12 @@ jobs:
             Stop-Transcript
           }
 
+      - name: Install real Bouncy Castle, Ant and 7-Zip releases
+        shell: pwsh
+        run: |
+          java -cp .\.test-work\updater-tests\classes dareka.updater.LiveDependencyInstallTest
+          if ($LASTEXITCODE -ne 0) { throw 'Live dependency installation E2E failed' }
+
       - name: Upload updater packages and diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
