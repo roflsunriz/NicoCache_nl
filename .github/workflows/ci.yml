@@ -37,6 +37,10 @@ jobs:
           javac --version
           jar --version
 
+      - name: Verify repository dependency lock
+        shell: pwsh
+        run: .\packaging\windows\test-dependency-lock.ps1
+
       - name: Build NicoCache_nl.jar
         shell: pwsh
         run: .\build-javac.ps1
