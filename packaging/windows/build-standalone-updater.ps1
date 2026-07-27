@@ -28,7 +28,7 @@ $jpackage = (Get-Command jpackage -ErrorAction Stop).Source
 
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'updater\src') -Filter '*.java' -Recurse -File |
     ForEach-Object FullName)
-if ($sources.Count -lt 2) {
+if ($sources.Count -lt 3) {
     throw 'Pure Java updater sources are incomplete'
 }
 & $javac --release 11 -encoding UTF-8 -Xlint:all -d $classesRoot @sources
@@ -39,7 +39,7 @@ if ($LASTEXITCODE -ne 0) {
 $manifest = Join-Path $workRoot 'manifest.mf'
 @(
     'Manifest-Version: 1.0'
-    'Main-Class: dareka.updater.NicoCacheUpdater'
+    'Main-Class: dareka.updater.UpdaterLauncher'
     ''
 ) | Set-Content -LiteralPath $manifest -Encoding ascii
 
@@ -62,7 +62,7 @@ $commonArguments = @(
     '--app-version', $AppVersion,
     '--input', $inputRoot,
     '--main-jar', 'NicoCacheUpdater.jar',
-    '--main-class', 'dareka.updater.NicoCacheUpdater',
+    '--main-class', 'dareka.updater.UpdaterLauncher',
     '--dest', $outputRoot,
     '--vendor', 'NicoCache_nl',
     '--description', 'NicoCache_nl本体と外部依存関係を一元管理する純Javaアップデーター',
