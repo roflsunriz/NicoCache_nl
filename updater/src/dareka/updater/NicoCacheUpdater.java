@@ -41,21 +41,18 @@ import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
-/** Standalone updater for NicoCache_nl and its managed dependencies. */
+/** Standalone updater for NicoCache_nl and user-wide command-line dependencies. */
 public final class NicoCacheUpdater {
     private static final URI RELEASE_URI = URI.create(
             "https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest");
     private static final URI ADOPTIUM_RELEASES_URI = URI.create(
             "https://api.adoptium.net/v3/info/available_releases");
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(20);
-    private static final Pattern TAG_PATTERN = Pattern.compile(
-            "\\\"tag_name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+    private static final Pattern TAG_PATTERN = Pattern.compile("\\\"tag_name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern DOWNLOAD_PATTERN = Pattern.compile(
             "\\\"browser_download_url\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
-    private static final Pattern VERSION_PATTERN = Pattern.compile(
-            "^v?(\\d+(?:\\.\\d+){1,3})$");
-    private static final Pattern SHA256_PATTERN = Pattern.compile(
-            "(?i)\\b([0-9a-f]{64})\\b");
+    private static final Pattern VERSION_PATTERN = Pattern.compile("^v?(\\d+(?:\\.\\d+){1,3})$");
+    private static final Pattern SHA256_PATTERN = Pattern.compile("(?i)\\b([0-9a-f]{64})\\b");
     private static final Pattern LTS_RELEASES_PATTERN = Pattern.compile(
             "\\\"available_lts_releases\\\"\\s*:\\s*\\[([^]]*)]");
     private static final Set<Integer> TESTED_LTS = Collections.unmodifiableSet(
@@ -69,8 +66,8 @@ public final class NicoCacheUpdater {
     private final JTextArea dependencyOutput = createOutput();
     private final JButton applicationCheckButton = new JButton("更新を確認");
     private final JButton applicationUpdateButton = new JButton("NicoCache_nlを更新");
-    private final JButton dependencyCheckButton = new JButton("更新を確認");
-    private final JButton dependencyUpdateButton = new JButton("更新可能な項目を適用");
+    private final JButton dependencyCheckButton = new JButton("環境を確認");
+    private final JButton dependencyUpdateButton = new JButton("インストールまたは更新");
     private final JButton changeTargetButton = new JButton("変更…");
     private final JComboBox<JavaChoice> javaChoice = new JComboBox<JavaChoice>();
     private Release latestRelease;
@@ -103,7 +100,7 @@ public final class NicoCacheUpdater {
 
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.add(root, BorderLayout.CENTER);
-        frame.setPreferredSize(new Dimension(920, 590));
+        frame.setPreferredSize(new Dimension(940, 620));
         frame.pack();
         frame.setLocationRelativeTo(null);
         applicationUpdateButton.setEnabled(false);
@@ -137,8 +134,11 @@ public final class NicoCacheUpdater {
         JPanel header = new JPanel();
         header.add(new JLabel("Temurin LTS:"));
         header.add(javaChoice);
-        header.add(new JLabel("未対応LTSは表示のみで選択できません。"));
+        header.add(new JLabel("WinGetを優先し、利用できない場合は公式配布APIへフォールバックします。"));
         panel.add(header, BorderLayout.NORTH);
+        dependencyOutput.setText("Temurin、FFmpeg、Apache Ant、7-Zipは現在のWindowsユーザーへ導入し、"
+                + "新しいCMD/PowerShellから利用可能にします。\n"
+                + "Bouncy CastleだけはNicoCache_nl専用ライブラリとして管理します。\n");
         panel.add(new JScrollPane(dependencyOutput), BorderLayout.CENTER);
         JPanel buttons = new JPanel();
         buttons.add(dependencyCheckButton);
@@ -149,7 +149,7 @@ public final class NicoCacheUpdater {
 
     private void refreshTargetLabel() {
         String status = TargetRootResolver.isInstallation(applicationRoot) ? "検出済み" : "未インストール";
-        targetRootLabel.setText("更新対象: " + applicationRoot + "（" + status + "）");
+        targetRootLabel.setText("NicoCache_nl本体: " + applicationRoot + "（" + status + "）");
     }
 
     private void chooseTargetRoot() {
@@ -165,7 +165,6 @@ public final class NicoCacheUpdater {
             latestRelease = null;
             applicationUpdateButton.setEnabled(false);
             applicationOutput.setText("更新対象を変更しました: " + applicationRoot + "\n");
-            dependencyOutput.setText("更新対象を変更しました: " + applicationRoot + "\n");
             refreshTargetLabel();
         } catch (IOException error) {
             JOptionPane.showMessageDialog(frame, error.getMessage(), "更新対象を変更できません",
@@ -181,10 +180,9 @@ public final class NicoCacheUpdater {
             @Override protected void done() {
                 try {
                     latestRelease = get();
-                    String installed = readInstalledVersion();
+                    String installed = InstalledVersionDetector.detect(applicationRoot);
                     applicationOutput.setText("対象: " + applicationRoot + "\n導入版: " + installed
-                            + "\n最新版: " + latestRelease.version + "\n配布物: "
-                            + latestRelease.msiUri + "\n");
+                            + "\n最新版: " + latestRelease.version + "\n配布物: " + latestRelease.msiUri + "\n");
                     applicationUpdateButton.setEnabled("不明".equals(installed)
                             || compareVersions(latestRelease.version, installed) > 0);
                     if (!applicationUpdateButton.isEnabled()) applicationOutput.append("既に最新版です。\n");
@@ -223,14 +221,6 @@ public final class NicoCacheUpdater {
     }
 
     private void runDependencyUpdater(boolean update) {
-        try {
-            TargetRootResolver.requireInstallation(applicationRoot);
-            if (update) ApplicationProcessGuard.requireStopped(applicationRoot);
-        } catch (IOException error) {
-            String title = update ? "NicoCache_nlを終了してください" : "更新対象が無効です";
-            JOptionPane.showMessageDialog(frame, error.getMessage(), title, JOptionPane.ERROR_MESSAGE);
-            return;
-        }
         JavaChoice selected = (JavaChoice) javaChoice.getSelectedItem();
         if (selected == null || !selected.supported) {
             JOptionPane.showMessageDialog(frame, "対応済みのTemurin LTSを選択してください。",
@@ -239,29 +229,26 @@ public final class NicoCacheUpdater {
         }
         if (update) {
             int answer = JOptionPane.showConfirmDialog(frame,
-                    "NicoCache_nl管理下の依存関係だけを更新します。\n対象: " + applicationRoot
-                            + "\n更新完了までNicoCache_nlを起動しないでください。",
-                    "外部依存関係の更新", JOptionPane.OK_CANCEL_OPTION,
+                    "Temurin、FFmpeg、Apache Ant、7-Zipを現在のWindowsユーザーへ導入・更新します。\n"
+                            + "WinGetを優先し、失敗または利用不可の場合は公式配布APIを使用します。\n"
+                            + "ユーザーPATHとJAVA_HOMEが必要に応じて更新されます。",
+                    "外部依存関係のインストール", JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.QUESTION_MESSAGE);
             if (answer != JOptionPane.OK_OPTION) return;
         }
         setDependencyBusy(true);
-        dependencyOutput.setText(update ? "更新を準備しています…\n" : "更新を確認しています…\n");
+        dependencyOutput.setText(update ? "インストールまたは更新を開始します…\n" : "ユーザー環境を確認しています…\n");
         final int javaMajor = selected.major;
         new SwingWorker<String, Void>() {
             @Override protected String doInBackground() throws Exception {
-                if (update) ApplicationProcessGuard.requireStopped(applicationRoot);
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 return update ? engine.updateAll(javaMajor) : engine.checkAll(javaMajor);
             }
             @Override protected void done() {
-                try {
-                    dependencyOutput.setText(get());
-                } catch (Exception error) {
+                try { dependencyOutput.setText(get()); }
+                catch (Exception error) {
                     dependencyOutput.append("\n処理に失敗しました: " + rootMessage(error) + "\n");
-                } finally {
-                    setDependencyBusy(false);
-                }
+                } finally { setDependencyBusy(false); }
             }
         }.execute();
     }
@@ -271,9 +258,7 @@ public final class NicoCacheUpdater {
                 new JavaChoice(21, true, true), new JavaChoice(17, true, false)
         }));
         new SwingWorker<List<Integer>, Void>() {
-            @Override protected List<Integer> doInBackground() throws Exception {
-                return fetchAvailableLtsReleases();
-            }
+            @Override protected List<Integer> doInBackground() throws Exception { return fetchAvailableLtsReleases(); }
             @Override protected void done() {
                 try {
                     List<JavaChoice> choices = new ArrayList<JavaChoice>();
@@ -334,18 +319,15 @@ public final class NicoCacheUpdater {
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
         HttpRequest.Builder builder = HttpRequest.newBuilder(uri).timeout(REQUEST_TIMEOUT)
                 .header("Accept", "application/json").header("User-Agent", "NicoCache_nl Updater");
-        addGitHubToken(builder, uri);
+        if ("api.github.com".equalsIgnoreCase(uri.getHost())) {
+            String token = System.getenv("GITHUB_TOKEN");
+            if (token != null && !token.isBlank()) builder.header("Authorization", "Bearer " + token);
+            builder.header("X-GitHub-Api-Version", "2022-11-28");
+        }
         HttpResponse<String> response = client.send(builder.build(),
                 HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
         if (response.statusCode() != 200) throw new IOException("HTTP " + response.statusCode() + ": " + uri);
         return response;
-    }
-
-    private static void addGitHubToken(HttpRequest.Builder builder, URI uri) {
-        if (!"api.github.com".equalsIgnoreCase(uri.getHost())) return;
-        String token = System.getenv("GITHUB_TOKEN");
-        if (token != null && !token.isBlank()) builder.header("Authorization", "Bearer " + token);
-        builder.header("X-GitHub-Api-Version", "2022-11-28");
     }
 
     private Path downloadAndVerify(Release release) throws IOException, InterruptedException {
@@ -370,10 +352,6 @@ public final class NicoCacheUpdater {
         }
         Files.move(partial, msi, StandardCopyOption.REPLACE_EXISTING);
         return msi;
-    }
-
-    private String readInstalledVersion() {
-        return InstalledVersionDetector.detect(applicationRoot);
     }
 
     private void setApplicationBusy(boolean busy) {
