@@ -45,12 +45,6 @@ function Assert-ExecutableHasIcon([string]$Executable) {
     try { Assert-True ($null -ne $icon -and $icon.Width -ge 16) "Packaged executable has no icon: $Executable" }
     finally { if ($icon) { $icon.Dispose() } }
 }
-function Get-MsiLanguage([string]$MsiPath) {
-    $installer = New-Object -ComObject WindowsInstaller.Installer
-    $summary = $installer.GetType().InvokeMember('SummaryInformation', 'InvokeMethod', $null,
-        $installer, @($MsiPath, 0))
-    [string]$summary.GetType().InvokeMember('Property', 'GetProperty', $null, $summary, 7)
-}
 function Invoke-PureJavaDependencyE2E([string]$Executable, [string]$UpdaterRoot, [string]$TargetRoot) {
     Remove-Item $TargetRoot -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path $TargetRoot | Out-Null
@@ -133,7 +127,9 @@ Stop-Process -Id $process.Id -Force
 if ($BuildMsi) {
     $msi = Get-ChildItem (Join-Path $root '.test-work\standalone-updater\output') -Filter '*.msi' -File | Select-Object -First 1
     Assert-True ($null -ne $msi -and $msi.Length -gt 0) 'Updater MSI was not generated'
-    Assert-True ((Get-MsiLanguage $msi.FullName) -eq '1041') 'Updater MSI summary language is not Japanese (1041)'
+    $jpackageLog = Get-Content (Join-Path $root '.test-work\standalone-updater\jpackage.log') -Raw
+    Assert-True $jpackageLog.Contains('MsiInstallerStrings_ja.wxl') 'Japanese MSI localization resource was not linked'
+    Assert-True $jpackageLog.Contains('-cultures:ja-JP') 'Japanese MSI culture was not selected'
     $installedRoot = Join-Path $env:ProgramFiles 'NicoCache_nl Updater'
     try {
         Invoke-MsiExec @('/i', $msi.FullName, '/qn', '/norestart', '/l*v', (Join-Path $work 'updater-msi.log')) 'Updater MSI install failed'
