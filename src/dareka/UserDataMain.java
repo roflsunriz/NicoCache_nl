@@ -6,11 +6,14 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
 
+import javax.swing.filechooser.FileSystemView;
+
 /**
  * Packaged launcher that separates mutable user data from application files.
  *
  * <p>The packaged application keeps immutable distribution files beside the
- * executable while mutable files live under LOCALAPPDATA. A portable launch
+ * executable while mutable files live in a user-visible NicoCache_nl folder
+ * under the operating system's default documents directory. A portable launch
  * remains available by placing {@code portable.flag} beside the executable.</p>
  */
 public final class UserDataMain {
@@ -95,14 +98,16 @@ public final class UserDataMain {
             return path;
         }
 
-        String localAppData = System.getenv("LOCALAPPDATA");
-        Path root;
-        if (localAppData != null && !localAppData.isBlank()) {
-            root = Path.of(localAppData, "NicoCache_nl");
-        } else {
-            root = Path.of(System.getProperty("user.home"),
-                    ".nicocache_nl");
+        Path documentsDirectory;
+        try {
+            documentsDirectory = FileSystemView.getFileSystemView()
+                    .getDefaultDirectory()
+                    .toPath();
+        } catch (RuntimeException error) {
+            documentsDirectory = Path.of(System.getProperty("user.home"));
         }
+
+        Path root = documentsDirectory.resolve("NicoCache_nl");
         Files.createDirectories(root);
         return root.toAbsolutePath().normalize();
     }
