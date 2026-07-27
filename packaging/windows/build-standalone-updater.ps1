@@ -51,12 +51,20 @@ $engineDestination = Join-Path $engineInput 'update-runtime-dependencies.ps1'
 if (-not (Test-Path -LiteralPath $engineSource -PathType Leaf)) {
     throw "Updater同梱エンジンが見つかりません: $engineSource"
 }
-# Windows PowerShell 5.1 has no $IsWindows automatic variable. The updater deliberately
-# invokes the inbox host so the standalone package does not depend on a separately installed pwsh.
-@(
-    "if (-not (Get-Variable -Name IsWindows -Scope Global -ErrorAction SilentlyContinue)) { `$global:IsWindows = `$true }"
-    Get-Content -LiteralPath $engineSource
-) | Set-Content -LiteralPath $engineDestination -Encoding UTF8
+# Windows PowerShell 5.1 has no $IsWindows automatic variable. Keep CmdletBinding/param first,
+# then inject the compatibility initialization before Set-StrictMode.
+$engineText = Get-Content -LiteralPath $engineSource -Raw
+$compatibility = "if (-not (Get-Variable -Name IsWindows -Scope Global -ErrorAction SilentlyContinue)) { `$global:IsWindows = `$true }"
+$pattern = '(?s)(\[CmdletBinding\(\)\]\s*param\(.*?\)\s*)(Set-StrictMode)'
+if ($engineText -notmatch $pattern) {
+    throw '更新エンジンのparamブロックを検出できません'
+}
+$packagedEngine = [regex]::Replace(
+    $engineText,
+    $pattern,
+    { param($match) $match.Groups[1].Value + $compatibility + "`r`n`r`n" + $match.Groups[2].Value },
+    1)
+Set-Content -LiteralPath $engineDestination -Value $packagedEngine -Encoding UTF8
 
 $bundledEngine = Get-Content -LiteralPath $engineDestination -Raw
 if ($bundledEngine.Contains("Join-Path `$ApplicationRoot 'extensions\update-runtime-dependencies.ps1'")) {
@@ -64,6 +72,9 @@ if ($bundledEngine.Contains("Join-Path `$ApplicationRoot 'extensions\update-runt
 }
 if (-not $bundledEngine.Contains('function Resolve-AdoptiumRelease')) {
     throw '同梱した依存関係更新エンジンが不完全です'
+}
+if (-not $bundledEngine.Contains('$global:IsWindows = $true')) {
+    throw 'Windows PowerShell互換初期化が同梱されていません'
 }
 
 $commonArguments = @(
