@@ -15,6 +15,7 @@ $workRoot = Join-Path $root '.test-work\standalone-updater'
 $classesRoot = Join-Path $workRoot 'classes'
 $inputRoot = Join-Path $workRoot 'input'
 $outputRoot = Join-Path $workRoot 'output'
+$buildLog = Join-Path $workRoot 'jpackage.log'
 
 if (Test-Path -LiteralPath $workRoot) {
     Remove-Item -LiteralPath $workRoot -Recurse -Force
@@ -54,22 +55,32 @@ $commonArguments = @(
     '--dest', $outputRoot,
     '--vendor', 'NicoCache_nl',
     '--description', 'NicoCache_nl本体と外部依存関係を一元管理する独立アップデーター',
-    '--win-menu',
-    '--win-shortcut'
+    '--verbose'
 )
 
-if ($PackageType -in @('AppImage', 'All')) {
-    & $jpackage @commonArguments --type app-image
+function Invoke-JPackage {
+    param(
+        [Parameter(Mandatory)][string[]]$Arguments,
+        [Parameter(Mandatory)][string]$FailureMessage
+    )
+    & $jpackage @Arguments 2>&1 | Tee-Object -FilePath $buildLog -Append
     if ($LASTEXITCODE -ne 0) {
-        throw 'Updater AppImageの作成に失敗しました'
+        throw $FailureMessage
     }
 }
 
+if ($PackageType -in @('AppImage', 'All')) {
+    Invoke-JPackage -Arguments ($commonArguments + @('--type', 'app-image')) `
+        -FailureMessage 'Updater AppImageの作成に失敗しました'
+}
+
 if ($PackageType -in @('Msi', 'All')) {
-    & $jpackage @commonArguments --type msi --win-dir-chooser
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Updater MSIの作成に失敗しました'
-    }
+    Invoke-JPackage -Arguments ($commonArguments + @(
+            '--type', 'msi',
+            '--win-dir-chooser',
+            '--win-menu',
+            '--win-shortcut'
+        )) -FailureMessage 'Updater MSIの作成に失敗しました'
 }
 
 Write-Host "成果物: $outputRoot"
