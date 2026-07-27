@@ -50,7 +50,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # The standalone updater is intentionally pure Java. No PowerShell engine or manifest is packaged.
-Assert-PathDoesNotContainPowerShell:
 $forbidden = @(Get-ChildItem -LiteralPath $inputRoot -Recurse -File -ErrorAction SilentlyContinue |
     Where-Object Extension -in @('.ps1', '.psd1', '.psm1'))
 if ($forbidden.Count -ne 0) {
