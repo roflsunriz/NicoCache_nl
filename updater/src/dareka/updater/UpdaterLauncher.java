@@ -20,6 +20,17 @@ public final class UpdaterLauncher {
                 System.out.println(TargetRootResolver.requireInstallation(applicationRoot));
                 return;
             }
+            if (hasArgument(args, "--installed-version")) {
+                TargetRootResolver.requireInstallation(applicationRoot);
+                System.out.println(InstalledVersionDetector.detect(applicationRoot));
+                return;
+            }
+            if (hasArgument(args, "--assert-application-stopped")) {
+                TargetRootResolver.requireInstallation(applicationRoot);
+                ApplicationProcessGuard.requireStopped(applicationRoot);
+                System.out.println("APPLICATION_STOPPED");
+                return;
+            }
             if (hasArgument(args, "--self-test")) {
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 System.out.println("SELF_TEST_OK applicationRoot=" + applicationRoot + " engine=java");
@@ -34,6 +45,7 @@ public final class UpdaterLauncher {
             }
             if (hasArgument(args, "--dependency-update")) {
                 TargetRootResolver.requireInstallation(applicationRoot);
+                ApplicationProcessGuard.requireStopped(applicationRoot);
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
                 System.out.print(engine.updateAll(intArgument(args, "--java-major", RECOMMENDED_LTS)));
                 return;
