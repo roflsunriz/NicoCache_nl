@@ -20,11 +20,12 @@ public final class ApplicationProcessGuardTest {
         try {
             Path systemRoot = Path.of(System.getenv("SystemRoot"));
             Path executable = root.resolve("NicoCache_nl.exe");
-            Files.copy(systemRoot.resolve("System32").resolve("cmd.exe"), executable,
+            Files.copy(systemRoot.resolve("System32").resolve("ping.exe"), executable,
                     StandardCopyOption.REPLACE_EXISTING);
-            process = new ProcessBuilder(executable.toString(), "/c", "ping -n 30 127.0.0.1 >nul")
-                    .directory(root.toFile()).start();
-            Thread.sleep(750);
+            process = new ProcessBuilder(executable.toString(), "-n", "30", "127.0.0.1")
+                    .directory(root.toFile()).redirectErrorStream(true).start();
+            Thread.sleep(1000);
+            assertTrue(process.isAlive(), "fixture process exited before detection");
 
             boolean rejected = false;
             try {
