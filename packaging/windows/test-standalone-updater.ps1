@@ -29,8 +29,9 @@ function Invoke-UpdaterCli([string]$Executable, [string[]]$Arguments,
         Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
         throw "Updater CLI timed out: $Executable $argumentLine"
     }
-    $output = (if (Test-Path $stdout) { Get-Content $stdout -Raw } else { '' }) +
-        (if (Test-Path $stderr) { Get-Content $stderr -Raw } else { '' })
+    $stdoutText = if (Test-Path $stdout) { Get-Content $stdout -Raw } else { '' }
+    $stderrText = if (Test-Path $stderr) { Get-Content $stderr -Raw } else { '' }
+    $output = $stdoutText + $stderrText
     if ($process.ExitCode -ne 0) { throw "Updater CLI failed ($($process.ExitCode)): $argumentLine`n$output" }
     [pscustomobject]@{ ExitCode=$process.ExitCode; Output=$output }
 }
