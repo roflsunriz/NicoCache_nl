@@ -54,7 +54,7 @@ Assert-True ((Get-Content (Join-Path $oldRuntime 'marker.txt') -Raw).Trim() -eq 
 Assert-True (-not (Test-Path (Join-Path $state 'pending-update.json'))) 'Pending state was not removed'
 $installed = Get-Content (Join-Path $state 'installed-versions.json') -Raw | ConvertFrom-Json
 Assert-True ($installed.temurin -eq '21.0.9') 'Installed runtime state was not persisted'
-Assert-True ((Get-ChildItem (Join-Path $state 'backups') -Directory).Count -eq 1) 'Runtime backup missing'
+Assert-True (@(Get-ChildItem (Join-Path $state 'backups') -Directory).Count -eq 1) 'Runtime backup missing'
 
 # Reject destination outside the managed application root.
 $escapeSource = Join-Path $state 'staging\escape'
