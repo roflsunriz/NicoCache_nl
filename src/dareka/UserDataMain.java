@@ -12,6 +12,7 @@ import java.util.List;
 public final class UserDataMain {
     private static final List<String> USER_FILES = List.of(
             "config.properties",
+            "NicoCacheGUI.property",
             "proxy.pac");
     private static final List<String> USER_DIRECTORIES = List.of(
             "local",
@@ -100,7 +101,7 @@ public final class UserDataMain {
                     NicoCachePaths.userPath(name));
         }
 
-        Files.writeString(dataRoot.resolve(".data-layout-version"), "2\n");
+        Files.writeString(dataRoot.resolve(".data-layout-version"), "3\n");
     }
 
     private static void migrateIfMissing(Path source, Path destination)
