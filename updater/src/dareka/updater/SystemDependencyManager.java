@@ -49,6 +49,7 @@ final class SystemDependencyManager {
 
     private final Path userProgramsRoot;
     private final Map<String, String> environment;
+    private final String wingetExecutable;
 
     SystemDependencyManager() throws IOException {
         this(resolveUserProgramsRoot(), System.getenv());
@@ -57,6 +58,7 @@ final class SystemDependencyManager {
     SystemDependencyManager(Path userProgramsRoot, Map<String, String> environment) throws IOException {
         this.userProgramsRoot = userProgramsRoot.toAbsolutePath().normalize();
         this.environment = new LinkedHashMap<String, String>(environment);
+        this.wingetExecutable = resolveWingetExecutable(this.environment);
         Files.createDirectories(this.userProgramsRoot);
     }
 
@@ -86,9 +88,11 @@ final class SystemDependencyManager {
                 } catch (Exception failure) {
                     result = new CommandResult(1, failure.getMessage() == null ? failure.toString() : failure.getMessage());
                 }
-                ready = result.exitCode == 0 && probe(tool.probe).exitCode == 0;
+                ready = result.exitCode == 0;
                 out.append(tool.displayName).append(ready ? ": WinGetで利用可能\n" : ": WinGet不成立、フォールバックへ移行\n");
-                if (!ready && !result.output.isBlank()) out.append("  ").append(result.output.replace("\n", "\n  ").trim()).append('\n');
+                if (!ready && !result.output.isBlank()) {
+                    out.append("  ").append(result.output.replace("\n", "\n  ").trim()).append('\n');
+                }
             }
             if (!ready) {
                 Path command = installFallback(tool);
@@ -115,7 +119,7 @@ final class SystemDependencyManager {
             if (probe(Arrays.asList("command-that-must-not-exist-nicocache", "--version")).exitCode == 0) {
                 throw new IOException("不存在コマンドの自己診断に失敗しました");
             }
-            List<String> winget = wingetArguments("install", "Example.Package");
+            List<String> winget = wingetArguments("winget", "install", "Example.Package");
             int source = winget.indexOf("--source");
             if (source < 0 || source + 1 >= winget.size() || !"winget".equals(winget.get(source + 1))) {
                 throw new IOException("WinGet source固定の自己診断に失敗しました");
@@ -136,9 +140,9 @@ final class SystemDependencyManager {
                 new Tool("7zip", "7-Zip", "7zip.7zip", Arrays.asList("7z"), "7z.exe", false, 0));
     }
 
-    private static List<String> wingetArguments(String operation, String packageId) {
+    private static List<String> wingetArguments(String executable, String operation, String packageId) {
         List<String> command = new ArrayList<String>();
-        command.add("winget");
+        command.add(executable);
         command.add(operation);
         command.add("--id");
         command.add(packageId);
@@ -155,12 +159,68 @@ final class SystemDependencyManager {
     }
 
     private CommandResult runWinget(Tool tool) throws Exception {
-        List<String> upgrade = wingetArguments("upgrade", tool.wingetId);
-        CommandResult result = run(upgrade, Duration.ofMinutes(20));
-        if (result.exitCode == 0 && probe(tool.probe).exitCode == 0) return result;
-        List<String> install = wingetArguments("install", tool.wingetId);
+        StringBuilder output = new StringBuilder();
+        List<String> upgrade = wingetArguments(wingetExecutable, "upgrade", tool.wingetId);
+        CommandResult upgradeResult = run(upgrade, Duration.ofMinutes(20));
+        output.append(upgradeResult.output);
+        if (isWingetPackageInstalled(tool.wingetId)) {
+            refreshEnvironmentAfterWinget();
+            return new CommandResult(0, output.toString());
+        }
+
+        List<String> install = wingetArguments(wingetExecutable, "install", tool.wingetId);
         install.add("--force");
-        return run(install, Duration.ofMinutes(20));
+        CommandResult installResult = run(install, Duration.ofMinutes(20));
+        if (!installResult.output.isBlank()) {
+            if (output.length() > 0 && output.charAt(output.length() - 1) != '\n') output.append('\n');
+            output.append(installResult.output);
+        }
+        if (isWingetPackageInstalled(tool.wingetId)) {
+            refreshEnvironmentAfterWinget();
+            return new CommandResult(0, output.toString());
+        }
+        int code = installResult.exitCode != 0 ? installResult.exitCode : upgradeResult.exitCode != 0 ? upgradeResult.exitCode : 1;
+        return new CommandResult(code, output.toString());
+    }
+
+    private boolean isWingetPackageInstalled(String packageId) {
+        try {
+            List<String> command = Arrays.asList(wingetExecutable, "list", "--id", packageId, "--exact",
+                    "--source", "winget", "--accept-source-agreements", "--disable-interactivity");
+            CommandResult result = run(command, Duration.ofMinutes(2));
+            if (result.exitCode != 0) return false;
+            String lower = result.output.toLowerCase(Locale.ROOT);
+            return lower.contains(packageId.toLowerCase(Locale.ROOT));
+        } catch (Exception failure) {
+            return false;
+        }
+    }
+
+    private void refreshEnvironmentAfterWinget() {
+        try {
+            String userPath = readUserEnvironment("Path");
+            String currentPath = environment.getOrDefault("PATH", environment.getOrDefault("Path", ""));
+            if (!userPath.isBlank()) {
+                String merged = mergePathStrings(currentPath, userPath);
+                environment.put("PATH", merged);
+                environment.put("Path", merged);
+            }
+            String javaHome = readUserEnvironment("JAVA_HOME");
+            if (!javaHome.isBlank()) environment.put("JAVA_HOME", javaHome);
+        } catch (Exception ignored) { }
+    }
+
+    private static String mergePathStrings(String first, String second) {
+        Set<String> normalized = new LinkedHashSet<String>();
+        List<String> values = new ArrayList<String>();
+        for (String source : Arrays.asList(first, second)) {
+            if (source == null || source.isBlank()) continue;
+            for (String entry : source.split(";")) {
+                String trimmed = entry.trim();
+                if (!trimmed.isEmpty() && normalized.add(normalizePathEntry(trimmed))) values.add(trimmed);
+            }
+        }
+        return String.join(";", values);
     }
 
     private Path installFallback(Tool tool) throws Exception {
@@ -260,7 +320,18 @@ final class SystemDependencyManager {
         }
     }
 
-    private boolean isWingetAvailable() { return probe(Arrays.asList("winget", "--version")).exitCode == 0; }
+    private boolean isWingetAvailable() {
+        return wingetExecutable != null && probe(Arrays.asList(wingetExecutable, "--version")).exitCode == 0;
+    }
+
+    private static String resolveWingetExecutable(Map<String, String> environment) {
+        String localAppData = environment.get("LOCALAPPDATA");
+        if (localAppData != null && !localAppData.isBlank()) {
+            Path alias = Path.of(localAppData, "Microsoft", "WindowsApps", "winget.exe");
+            if (Files.exists(alias)) return alias.toString();
+        }
+        return "winget";
+    }
 
     private Release resolveTemurin(int major) throws Exception {
         String json = text(URI.create("https://api.adoptium.net/v3/assets/latest/" + major
@@ -455,7 +526,8 @@ final class SystemDependencyManager {
     private static String unescape(String value) { return value.replace("\\/", "/").replace("\\u0026", "&"); }
     private static String firstLine(String value) { return value.lines().findFirst().orElse(value).trim(); }
     private static int compareVersions(String left, String right) {
-        String[] a = left.split("\\."); String[] b = right.split("\\.");
+        String[] a = left.split("\\.");
+        String[] b = right.split("\\.");
         for (int i = 0; i < Math.max(a.length, b.length); i++) {
             int av = i < a.length ? Integer.parseInt(a[i]) : 0;
             int bv = i < b.length ? Integer.parseInt(b[i]) : 0;
@@ -463,6 +535,7 @@ final class SystemDependencyManager {
         }
         return 0;
     }
+
     private static void deleteTree(Path root) throws IOException {
         if (root == null || !Files.exists(root)) return;
         try (java.util.stream.Stream<Path> stream = Files.walk(root)) {
@@ -472,36 +545,64 @@ final class SystemDependencyManager {
 
     private enum ArchiveType { ZIP, SEVEN_ZIP }
     private static final class Tool {
-        final String id, displayName, wingetId, commandFileName; final List<String> probe; final boolean javaTool; final int javaMajor;
-        Tool(String id, String displayName, String wingetId, List<String> probe, String commandFileName, boolean javaTool, int javaMajor) {
-            this.id=id; this.displayName=displayName; this.wingetId=wingetId; this.probe=probe;
-            this.commandFileName=commandFileName; this.javaTool=javaTool; this.javaMajor=javaMajor;
+        final String id, displayName, wingetId, commandFileName;
+        final List<String> probe;
+        final boolean javaTool;
+        final int javaMajor;
+        Tool(String id, String displayName, String wingetId, List<String> probe, String commandFileName,
+                boolean javaTool, int javaMajor) {
+            this.id = id;
+            this.displayName = displayName;
+            this.wingetId = wingetId;
+            this.probe = probe;
+            this.commandFileName = commandFileName;
+            this.javaTool = javaTool;
+            this.javaMajor = javaMajor;
         }
     }
     private static final class Artifact {
-        final URI url; final String fileName, checksum, algorithm;
+        final URI url;
+        final String fileName, checksum, algorithm;
         Artifact(URI url, String fileName, String checksum, String algorithm) {
-            this.url=url; this.fileName=fileName; this.checksum=checksum; this.algorithm=algorithm;
+            this.url = url;
+            this.fileName = fileName;
+            this.checksum = checksum;
+            this.algorithm = algorithm;
         }
     }
     private static final class Release {
-        final String id, version; final List<Artifact> artifacts; final ArchiveType type;
+        final String id, version;
+        final List<Artifact> artifacts;
+        final ArchiveType type;
         Release(String id, String version, List<Artifact> artifacts, ArchiveType type) {
-            this.id=id; this.version=version; this.artifacts=artifacts; this.type=type;
+            this.id = id;
+            this.version = version;
+            this.artifacts = artifacts;
+            this.type = type;
         }
         static Release zip(String id, String version, URI url, String fileName, String checksum, String algorithm) {
-            return new Release(id, version, Arrays.asList(new Artifact(url,fileName,checksum,algorithm)), ArchiveType.ZIP);
+            return new Release(id, version, Arrays.asList(new Artifact(url, fileName, checksum, algorithm)), ArchiveType.ZIP);
         }
         static Release sevenZip(String id, String version, Artifact archive, Artifact bootstrap) {
-            return new Release(id, version, Arrays.asList(archive,bootstrap), ArchiveType.SEVEN_ZIP);
+            return new Release(id, version, Arrays.asList(archive, bootstrap), ArchiveType.SEVEN_ZIP);
         }
     }
     private static final class Asset {
-        final String name; final URI url; final String digest;
-        Asset(String name, URI url, String digest) { this.name=name; this.url=url; this.digest=digest; }
+        final String name;
+        final URI url;
+        final String digest;
+        Asset(String name, URI url, String digest) {
+            this.name = name;
+            this.url = url;
+            this.digest = digest;
+        }
     }
     private static final class CommandResult {
-        final int exitCode; final String output;
-        CommandResult(int exitCode, String output) { this.exitCode=exitCode; this.output=output; }
+        final int exitCode;
+        final String output;
+        CommandResult(int exitCode, String output) {
+            this.exitCode = exitCode;
+            this.output = output == null ? "" : output;
+        }
     }
 }
