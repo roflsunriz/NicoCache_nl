@@ -43,6 +43,7 @@ final class DependencyEngine {
 
     String updateAll(int javaMajor) throws Exception {
         StringBuilder output = new StringBuilder(systemDependencies.updateAll(javaMajor));
+        UserToolAliasRepair.repair();
         output.append(updateBouncyCastle());
         return output.toString();
     }
