@@ -3,7 +3,6 @@
 ## 前提
 
 - JDK 17、21、25 のいずれか（`build-javac.ps1` が検出して選択）
-- Apache Ant 1.9.8 以降（Ant ビルドを確認する場合）
 - PowerShell
 
 作業前に `git status --short --branch` を確認する。`cache/`、`certs/`、
@@ -35,12 +34,6 @@
 
 ```powershell
 .\RunNicoCache.ps1 -JavaVersion 21
-```
-
-または Apache Ant を利用する。
-
-```powershell
-.\build-ant.ps1
 ```
 
 初回起動ウィザードを変更した場合は、OS設定を変更しない専用テストも実行する。

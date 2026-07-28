@@ -8,6 +8,9 @@
 
 ### Changed
 
+- ビルド経路を `build-javac.ps1` に統一し、旧Ant用ビルドスクリプトを廃止した。
+- GUI起動経路をJDK選択とJAR検証を備えた `RunNicoCache.ps1` に統一し、旧Starter
+  バッチを廃止した。
 - `build-javac.ps1` で検出できた JDK 17、21、25 の `javac` を選択して本体を
   ビルドできるようにし、CIなどの無指定実行では検出された最新版を自動選択する。
 - `RunNicoCache.ps1` でも検出できた JDK 17、21、25 の `javaw` を選択して

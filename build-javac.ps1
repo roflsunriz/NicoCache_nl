@@ -11,7 +11,11 @@ $manifestPath = Join-Path $root "manifest-nl.mf"
 $jarPath = Join-Path $root "NicoCache_nl.jar"
 . (Join-Path $root "java-tool-selection.ps1")
 
-$selectedJavac = Select-JavaToolCandidate (Get-JavaToolCandidates "javac") $JavaVersion
+$selectionParameters = @{ Candidates = @(Get-JavaToolCandidates "javac") }
+if ($PSBoundParameters.ContainsKey("JavaVersion")) {
+    $selectionParameters.JavaVersion = $JavaVersion
+}
+$selectedJavac = Select-JavaToolCandidate @selectionParameters
 
 Write-Host "javac $($selectedJavac.Major) を使用します: $($selectedJavac.Path)"
 Push-Location -LiteralPath $root
