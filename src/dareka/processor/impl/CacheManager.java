@@ -90,7 +90,9 @@ public class CacheManager {
     public static final String TYPE_CACHELIST = "cachelist";
     public static final String TYPE_CACHELIST_ALL = "cachelistall";
 
-    protected static File cacheDir = new File("cache");
+    protected static File cacheDir =
+            UserDataPaths.configuredFile(
+                    System.getProperty("cacheFolder"), "cache");
 
     protected static ConcurrentHashMap<String, SortedSet<VideoDescriptor>> id2Videos =
             new ConcurrentHashMap<String, SortedSet<VideoDescriptor>>();
@@ -228,7 +230,9 @@ public class CacheManager {
             new ConcurrentHashMap<>();
 
     // ローカルで変換済みのmp4をキャッシュするディレクトリ
-    protected static File convertedCacheDir = new File("cvcache");
+    protected static File convertedCacheDir =
+            UserDataPaths.configuredFile(
+                    System.getProperty("convertedCacheFolder"), "cvcache");
     // Flv2Mp4で変換済みのファイル一覧
     protected final static ConcurrentHashMap<VideoDescriptor, File> video2ConvertedMp4 =
             new ConcurrentHashMap<>();
@@ -286,7 +290,8 @@ public class CacheManager {
     public static synchronized void init() {
         video2FileLock.writeLock().lock();
         try {
-            cacheDir = new File(System.getProperty("cacheFolder"));
+            cacheDir = UserDataPaths.configuredFile(
+                    System.getProperty("cacheFolder"), "cache");
             cacheDir.mkdir();
             id2Videos.clear();
             video2File.clear();
@@ -301,7 +306,10 @@ public class CacheManager {
             removeUnnecessaryNltmpsWorkaround();
 
             if (Boolean.getBoolean("convertFlv2Mp4")) {
-                convertedCacheDir = new File(System.getProperty("convertedCacheFolder"));
+                convertedCacheDir =
+                        UserDataPaths.configuredFile(
+                                System.getProperty("convertedCacheFolder"),
+                                "cvcache");
                 convertedCacheDir.mkdir();
                 searchConvertedCachesOnADirectory(convertedCacheDir);
             }
@@ -1837,7 +1845,8 @@ public class CacheManager {
      * @return 生成したflvlist文字列
      */
     public static String getFlvList(String templateFilename) {
-        File templateFile = new File(new File("."), templateFilename);
+        File templateFile = UserDataPaths.configuredFile(
+                templateFilename, null);
         if (templateFile.exists()) {
             LocalFlvTemplate template = new LocalFlvTemplate(templateFile);
             try {

@@ -155,20 +155,30 @@ public class NLConfig extends BasicConfig {
 
     /**
      * プロパティ値をパスとみなして File オブジェクトを取得する。
+     * 相対パスは利用者データルート基準で解決する。
      *
      * @param key プロパティ名
      * @return File オブジェクト、プロパティ名が無効な場合は null
      * @since NicoCache_nl+111111mod
      */
     public static File getFile(String key) {
-        String value = System.getProperty(key);
-        if (value == null || value.length() == 0) {
-            if ("cacheFolder".equals(key)) {
-                return new File("cache");
-            }
+        if (key == null) {
             return null;
         }
-        return new File(value);
+        switch (key) {
+        case "cacheFolder":
+            return NicoCachePaths.cacheDirectory();
+        case "thcacheFolder":
+            return NicoCachePaths.thumbnailCacheDirectory();
+        case "convertedCacheFolder":
+            return NicoCachePaths.convertedCacheDirectory();
+        default:
+            String value = System.getProperty(key);
+            if (value == null || value.length() == 0) {
+                return null;
+            }
+            return NicoCachePaths.configuredFile(value, null);
+        }
     }
 
     /**

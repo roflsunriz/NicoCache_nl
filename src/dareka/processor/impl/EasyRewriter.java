@@ -138,12 +138,15 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
     private synchronized void load() {
         ArrayList<FilterFile> newFilterFile = new ArrayList<>();
         if (this == INSTANCE_SYS) {
-            if (!addFilterFile("nlFilter_sys.txt", newFilterFile)) {
+            if (!addFilterFile(
+                    UserDataPaths.applicationFile(
+                            "nlFilter_sys.txt").getPath(),
+                    newFilterFile)) {
                 Logger.warning("no nlFilter_sys.txt found. please check...");
             }
         } else {
             // ディレクトリから検索、追加(名前順)
-            File nlFilters = new File("nlFilters");
+            File nlFilters = UserDataPaths.userFile("nlFilters");
             if (nlFilters.isDirectory()) {
                 String[] filterArray = nlFilters.list((dir, name) -> {
                     if (IGNORE_FILENAME_PATTERN.matcher(name).find() ||
@@ -160,7 +163,9 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                 }
             }
             // 元のnlFilterは最後に追加
-            addFilterFile("nlFilter.txt", newFilterFile);
+            addFilterFile(
+                    UserDataPaths.userFile("nlFilter.txt").getPath(),
+                    newFilterFile);
         }
 
         if (newFilterFile.equals(filterFiles)) {

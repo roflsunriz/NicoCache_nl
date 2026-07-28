@@ -41,11 +41,14 @@ final class FirstRunSetupService {
         this.systemIntegration = systemIntegration;
     }
 
-    static FirstRunSetupService production(Path appDirectory) {
+    static FirstRunSetupService production(
+            Path appDirectory, Path dataDirectory) {
         return new FirstRunSetupService(
-                new SetupFiles(appDirectory),
-                new PackagedCertificateGenerator(appDirectory),
-                new WindowsSetupIntegration(appDirectory));
+                new SetupFiles(appDirectory, dataDirectory),
+                new PackagedCertificateGenerator(
+                        appDirectory, dataDirectory),
+                new WindowsSetupIntegration(
+                        appDirectory, dataDirectory));
     }
 
     void apply(SetupOptions options) throws Exception {
@@ -89,19 +92,25 @@ final class FirstRunSetupService {
 
     static final class SetupFiles {
         private final Path appDirectory;
+        private final Path dataDirectory;
         private final List<Path> createdFiles = new ArrayList<>();
 
         SetupFiles(Path appDirectory) {
+            this(appDirectory, appDirectory);
+        }
+
+        SetupFiles(Path appDirectory, Path dataDirectory) {
             this.appDirectory = appDirectory.toAbsolutePath().normalize();
+            this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
         }
 
         void prepare(SetupOptions options) throws IOException {
-            Files.createDirectories(appDirectory.resolve("data"));
+            Files.createDirectories(dataDirectory.resolve("data"));
             createConfig(options.isHttpsEnabled());
             if (options.isProxyConfigured()) {
                 copyIfMissing(
                         appDirectory.resolve("proxy_sample.pac"),
-                        appDirectory.resolve("proxy.pac"));
+                        dataDirectory.resolve("proxy.pac"));
             }
             createGuiProperties();
         }
@@ -120,7 +129,7 @@ final class FirstRunSetupService {
             state.setProperty("enableAutoStart",
                     Boolean.toString(options.isAutoStartEnabled()));
 
-            Path statePath = appDirectory.resolve(
+            Path statePath = dataDirectory.resolve(
                     "data/first-run-setup.properties");
             if (Files.exists(statePath)) {
                 throw new IOException("初回セットアップ状態が既に存在します: "
@@ -164,7 +173,7 @@ final class FirstRunSetupService {
 
         private void createConfig(boolean enableHttps) throws IOException {
             Path source = appDirectory.resolve("config.properties.default");
-            Path target = appDirectory.resolve("config.properties");
+            Path target = dataDirectory.resolve("config.properties");
             if (Files.exists(target)) {
                 throw new IOException("設定ファイルが既に存在します: " + target);
             }
@@ -196,7 +205,7 @@ final class FirstRunSetupService {
         }
 
         private void createGuiProperties() throws IOException {
-            Path target = appDirectory.resolve("NicoCacheGUI.property");
+            Path target = dataDirectory.resolve("NicoCacheGUI.property");
             if (Files.exists(target)) {
                 return;
             }
@@ -256,15 +265,18 @@ final class FirstRunSetupService {
         private static final String CERTS_DIRECTORY_PROPERTY =
                 "nicocacheca.certsDirectory";
         private final Path appDirectory;
+        private final Path dataDirectory;
         private final Set<Path> generatedFiles = new HashSet<>();
 
-        private PackagedCertificateGenerator(Path appDirectory) {
+        private PackagedCertificateGenerator(
+                Path appDirectory, Path dataDirectory) {
             this.appDirectory = appDirectory.toAbsolutePath().normalize();
+            this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
         }
 
         @Override
         public void generate() throws Exception {
-            Path certificateDirectory = appDirectory.resolve("certs");
+            Path certificateDirectory = dataDirectory.resolve("certs");
             Files.createDirectories(certificateDirectory);
             Set<Path> existing = listRegularFiles(certificateDirectory);
             if (Files.isRegularFile(certificateDirectory.resolve("ca.cer"))
@@ -370,17 +382,20 @@ final class FirstRunSetupService {
             implements SystemIntegration {
         private static final long TIMEOUT_SECONDS = 300L;
         private final Path appDirectory;
+        private final Path dataDirectory;
         private final Path statePath;
         private final Path errorPath;
         private final Path rollbackErrorPath;
 
-        private WindowsSetupIntegration(Path appDirectory) {
+        private WindowsSetupIntegration(
+                Path appDirectory, Path dataDirectory) {
             this.appDirectory = appDirectory.toAbsolutePath().normalize();
-            this.statePath = this.appDirectory.resolve(
+            this.dataDirectory = dataDirectory.toAbsolutePath().normalize();
+            this.statePath = this.dataDirectory.resolve(
                     "data/setup-system-state.json");
-            this.errorPath = this.appDirectory.resolve(
+            this.errorPath = this.dataDirectory.resolve(
                     "data/setup-windows-error.txt");
-            this.rollbackErrorPath = this.appDirectory.resolve(
+            this.rollbackErrorPath = this.dataDirectory.resolve(
                     "data/setup-windows-rollback-error.txt");
         }
 
@@ -412,7 +427,7 @@ final class FirstRunSetupService {
             command.add("-ErrorPath");
             command.add(errorPath.toString());
             command.add("-CaCertificatePath");
-            command.add(appDirectory.resolve("certs/ca.cer").toString());
+            command.add(dataDirectory.resolve("certs/ca.cer").toString());
             command.add("-AutoConfigUrl");
             command.add("http://localhost:8080/proxy.pac");
             command.add("-LauncherPath");

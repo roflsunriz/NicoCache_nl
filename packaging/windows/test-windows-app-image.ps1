@@ -25,12 +25,13 @@ $appDirectory = $appImage
 $internalAppDirectory = Join-Path $appImage 'app'
 $launcherPath = Join-Path $appImage 'NicoCache_nl.exe'
 $separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
-$configPath = Join-Path $appDirectory 'config.properties'
-$guiPropertiesPath = Join-Path $appDirectory 'NicoCacheGUI.property'
-$setupStatePath = Join-Path $appDirectory 'data\first-run-setup.properties'
-$systemStatePath = Join-Path $appDirectory 'data\setup-system-state.json'
+$dataRoot = Join-Path $testRoot 'app-image-user-data'
+$configPath = Join-Path $dataRoot 'config.properties'
+$guiPropertiesPath = Join-Path $dataRoot 'NicoCacheGUI.property'
+$setupStatePath = Join-Path $dataRoot 'data\first-run-setup.properties'
+$systemStatePath = Join-Path $dataRoot 'data\setup-system-state.json'
 $setupScriptPath = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
-$certificateDirectory = Join-Path $appDirectory 'certs'
+$certificateDirectory = Join-Path $dataRoot 'certs'
 $certificateTargetsPath = Join-Path $appDirectory 'certificate-targets.txt'
 $logRoot = Join-Path $appImage 'smoke-test-logs'
 $stdoutPath = Join-Path $logRoot 'stdout.log'
@@ -61,6 +62,8 @@ $archive = [System.IO.Compression.ZipFile]::OpenRead($jarPath)
 try {
     $jarEntries = @($archive.Entries | Select-Object -ExpandProperty FullName)
     foreach ($requiredEntry in @(
+            'dareka/UserDataMain.class',
+            'dareka/NicoCachePaths.class',
             'dareka/FirstRunSetup.class',
             'dareka/FirstRunWizard.class',
             'dareka/FirstRunWizardPanel.class',
@@ -86,6 +89,15 @@ if ($rootLaunchers.Count -ne 1 -or $rootLaunchers[0] -ne 'NicoCache_nl.exe') {
 }
 if (Test-Path -LiteralPath $configPath) {
     throw "既存設定を上書きしないためテストを中止します: $configPath"
+}
+if (Test-Path -LiteralPath $dataRoot) {
+    $resolvedDataRoot = (Resolve-Path -LiteralPath $dataRoot).Path
+    if (-not $resolvedDataRoot.StartsWith(
+            $testRoot + [System.IO.Path]::DirectorySeparatorChar,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "安全でない利用者データ試験パスです: $resolvedDataRoot"
+    }
+    Remove-Item -LiteralPath $resolvedDataRoot -Recurse -Force
 }
 $certificateTargets = @(
     Get-Content -LiteralPath $certificateTargetsPath |
@@ -151,6 +163,8 @@ New-Item -ItemType Directory -Path $logRoot, $foreignWorkingDirectory -Force |
 $process = $null
 $knownProcessIds = @(Get-ProductProcesses | Select-Object -ExpandProperty Id)
 $testSucceeded = $false
+$previousDataRootEnvironment = $env:NICOCACHE_DATA_ROOT
+$env:NICOCACHE_DATA_ROOT = $dataRoot
 try {
     $setupProcess = Start-Process -FilePath $launcherPath `
         -ArgumentList @(
@@ -168,6 +182,16 @@ try {
         -PassThru
     if ($setupProcess.ExitCode -ne 0) {
         throw "ヘッドレス初回セットアップに失敗しました (ExitCode: $($setupProcess.ExitCode))"
+    }
+    foreach ($forbiddenApplicationFile in @(
+            (Join-Path $appDirectory 'config.properties'),
+            (Join-Path $appDirectory 'NicoCacheGUI.property'),
+            (Join-Path $appDirectory 'proxy.pac'),
+            (Join-Path $appDirectory '.data-layout-version')
+        )) {
+        if (Test-Path -LiteralPath $forbiddenApplicationFile) {
+            throw "利用者データがアプリ本体へ作成されました: $forbiddenApplicationFile"
+        }
     }
     foreach ($createdPath in @(
             $configPath,
@@ -317,6 +341,14 @@ try {
         throw '隔離スモークテストの前後で証明書ストアまたはプロキシー設定が変化しました'
     }
     Write-Output 'PASS 証明書ストア・Windowsプロキシー設定の不変性'
+    if (Test-Path -LiteralPath $dataRoot) {
+        Remove-Item -LiteralPath $dataRoot -Recurse -Force
+    }
+    if ($null -eq $previousDataRootEnvironment) {
+        Remove-Item Env:NICOCACHE_DATA_ROOT -ErrorAction SilentlyContinue
+    } else {
+        $env:NICOCACHE_DATA_ROOT = $previousDataRootEnvironment
+    }
     if ($testSucceeded -and -not $KeepLogs -and
             (Test-Path -LiteralPath $logRoot)) {
         Remove-Item -LiteralPath $logRoot -Recurse -Force

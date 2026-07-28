@@ -31,6 +31,9 @@ $testRoot = [System.IO.Path]::GetFullPath((Join-Path $root '.test-work')).
 $installRoot = [System.IO.Path]::GetFullPath(
     (Join-Path $testRoot 'windows-msi-install')
 )
+$userDataRoot = [System.IO.Path]::GetFullPath(
+    (Join-Path $testRoot 'windows-msi-user-data')
+)
 $resolvedMsi = (Resolve-Path -LiteralPath $MsiPath).Path
 $resolvedPreviousMsi = (Resolve-Path -LiteralPath $PreviousMsiPath).Path
 $menuGroup = (Import-PowerShellDataFile -LiteralPath (
@@ -47,6 +50,8 @@ $desktopShortcut = Join-Path (
 $runRegistryPath =
     'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValueName = 'NicoCache_nl'
+$stateLocatorRegistryPath = 'HKCU:\Software\NicoCache_nl'
+$stateLocatorValueName = 'SetupStatePath'
 
 if (-not $installRoot.StartsWith(
         $testRoot + [System.IO.Path]::DirectorySeparatorChar,
@@ -56,6 +61,11 @@ if (-not $installRoot.StartsWith(
 if (Test-Path -LiteralPath $installRoot) {
     throw "MSIテスト先が既に存在します: $installRoot"
 }
+if (Test-Path -LiteralPath $userDataRoot) {
+    throw "MSI利用者データ試験先が既に存在します: $userDataRoot"
+}
+$previousDataRootEnvironment = $env:NICOCACHE_DATA_ROOT
+$env:NICOCACHE_DATA_ROOT = $userDataRoot
 
 function Invoke-MsiExec {
     param(
@@ -225,6 +235,12 @@ function Get-OsIntegrationState {
         UninstallEntries = $uninstallEntries
         StartMenuShortcutExists = Test-Path -LiteralPath $startMenuShortcut
         DesktopShortcutExists = Test-Path -LiteralPath $desktopShortcut
+        StateLocator = Get-ItemProperty `
+            -LiteralPath $stateLocatorRegistryPath `
+            -Name $stateLocatorValueName `
+            -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty $stateLocatorValueName `
+                -ErrorAction SilentlyContinue
     } | ConvertTo-Json -Depth 5 -Compress
 }
 
@@ -265,9 +281,8 @@ $previousProductCode = Get-MsiProductCode -Path $resolvedPreviousMsi
 $currentProductCode = Get-MsiProductCode -Path $resolvedMsi
 $installed = $false
 $upgraded = $false
-$userStatePath = Join-Path $installRoot 'data\installer-lifecycle-user.txt'
-$setupStatePath = Join-Path $installRoot 'data\setup-system-state.json'
-$initialCertificateFiles = @()
+$userStatePath = Join-Path $userDataRoot 'data\installer-lifecycle-user.txt'
+$setupStatePath = Join-Path $userDataRoot 'data\setup-system-state.json'
 $primaryFailure = $null
 
 try {
@@ -286,11 +301,6 @@ try {
         throw "MSIが指定先へインストールされませんでした: $installRoot"
     }
     Assert-AppVersion -ExpectedVersion $ExpectedPreviousVersion
-    $initialCertificateFiles = @(
-        Get-ChildItem -LiteralPath (Join-Path $installRoot 'certs') -File `
-            -ErrorAction SilentlyContinue |
-            Select-Object -ExpandProperty FullName
-    )
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -371,7 +381,7 @@ try {
         -StartupTimeoutSeconds $StartupTimeoutSeconds
     Write-Output 'PASS 更新後MSIの隔離起動'
 
-    $certificateDirectory = Join-Path $installRoot 'certs'
+    $certificateDirectory = Join-Path $userDataRoot 'certs'
     $launcher = Join-Path $installRoot 'NicoCache_nl.exe'
     $setupProcess = Start-Process `
         -FilePath $launcher `
@@ -393,6 +403,14 @@ try {
         ConvertFrom-Json
     if ($savedState.Status -ne 'Applied') {
         throw "Windows連携状態がAppliedではありません: $($savedState.Status)"
+    }
+    $registeredStatePath = Get-ItemProperty `
+        -LiteralPath $stateLocatorRegistryPath `
+        -Name $stateLocatorValueName `
+        -ErrorAction Stop |
+        Select-Object -ExpandProperty $stateLocatorValueName
+    if ($registeredStatePath -ne $setupStatePath) {
+        throw "Windows設定状態の保存先登録が一致しません: $registeredStatePath"
     }
     $proxy = Get-ItemProperty -LiteralPath (
         'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
@@ -417,24 +435,6 @@ try {
 } catch {
     $primaryFailure = $_
 } finally {
-    if (Test-Path -LiteralPath $userStatePath) {
-        Remove-Item -LiteralPath $userStatePath -Force
-    }
-    foreach ($generatedPath in @(
-            (Join-Path $installRoot 'config.properties'),
-            (Join-Path $installRoot 'NicoCacheGUI.property'),
-            (Join-Path $installRoot 'data\first-run-setup.properties'),
-            (Join-Path $installRoot 'proxy.pac')
-        )) {
-        if (Test-Path -LiteralPath $generatedPath -PathType Leaf) {
-            Remove-Item -LiteralPath $generatedPath -Force
-        }
-    }
-    if (Test-Path -LiteralPath (Join-Path $installRoot 'certs')) {
-        Get-ChildItem -LiteralPath (Join-Path $installRoot 'certs') -File |
-            Where-Object { $_.FullName -notin $initialCertificateFiles } |
-            Remove-Item -Force
-    }
     if ($installed) {
         $uninstallProductCode = if ($upgraded) {
             $currentProductCode
@@ -484,6 +484,24 @@ if (Test-Path -LiteralPath $desktopShortcut) {
 }
 $osStateAfter = Get-OsIntegrationState
 if ($osStateAfter -ne $osStateBefore) {
-    throw 'MSI試験の前後でOS統合状態が変化しました'
+    throw (
+        "MSI試験の前後でOS統合状態が変化しました`n" +
+        "変更前: $osStateBefore`n変更後: $osStateAfter"
+    )
 }
-Write-Output 'PASS MSIの無人アンインストールとOS統合状態の復元'
+if (-not (Test-Path -LiteralPath $userStatePath -PathType Leaf)) {
+    throw 'アンインストール後に利用者データが失われました'
+}
+if (Test-Path -LiteralPath $setupStatePath) {
+    throw 'アンインストール後にWindows設定の復元状態が残っています'
+}
+Write-Output 'PASS MSIの無人アンインストール、利用者データ保持、OS統合状態の復元'
+
+if (Test-Path -LiteralPath $userDataRoot) {
+    Remove-Item -LiteralPath $userDataRoot -Recurse -Force
+}
+if ($null -eq $previousDataRootEnvironment) {
+    Remove-Item Env:NICOCACHE_DATA_ROOT -ErrorAction SilentlyContinue
+} else {
+    $env:NICOCACHE_DATA_ROOT = $previousDataRootEnvironment
+}

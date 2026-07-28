@@ -58,7 +58,11 @@ public class LocalFileResource extends Resource implements ConfigObserver {
         }
         if (Boolean.getBoolean("localPathCheck")) {
             // カレントディレクトリを含まないパスは禁止
-            String cwd = new File(".").getCanonicalPath() + File.separator;
+            String dataRoot = System.getProperty("nicocache.dataRoot");
+            File workingRoot = dataRoot == null || dataRoot.isBlank()
+                    ? new File(".")
+                    : new File(dataRoot);
+            String cwd = workingRoot.getCanonicalPath() + File.separator;
             String path = file.getCanonicalPath();
             if (!path.startsWith(cwd)) {
                 throw new SecurityException("Invalid local path: " + path);

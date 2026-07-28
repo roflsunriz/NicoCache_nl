@@ -18,8 +18,10 @@ import javax.net.ssl.SSLSocketFactory;
 import dareka.common.Logger;
 
 public class TlsEndPoint {
-    private final static File SITE_KEYSTORE_FILE = new File("certs/site.jks");
-    private final static File SITE_TARGETS_FILE = new File("certs/site.targets");
+    private final static File SITE_KEYSTORE_FILE =
+            NicoCachePaths.userFile("certs/site.jks");
+    private final static File SITE_TARGETS_FILE =
+            NicoCachePaths.userFile("certs/site.targets");
     private final static String KEYSTORE_PASSPHRASE = "NicoCache";
     private SSLSocketFactory tlsSocketFactory = null;
     private boolean ready = false;

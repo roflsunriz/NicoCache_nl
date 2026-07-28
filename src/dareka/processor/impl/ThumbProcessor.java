@@ -42,8 +42,10 @@ public class ThumbProcessor implements Processor, TransferListener {
     private static AtomicLong savedRequest = new AtomicLong();
     private static AtomicLong savedTransfer = new AtomicLong();
 
-    private static File thcache  = new File("thcache.dat");
-    private static File thcacheIndex  = new File("thIndex.dat");
+    private static File thcache =
+            UserDataPaths.userFile("thcache.dat");
+    private static File thcacheIndex =
+            UserDataPaths.userFile("thIndex.dat");
 
     private static boolean indexStoreMode = true;
 

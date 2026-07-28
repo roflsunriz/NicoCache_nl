@@ -102,7 +102,7 @@
       <manifest>
         <attribute name="Class-Path"
                    value="sqlite-jdbc.jar igo.jar library.jar"/>
-        <attribute name="Main-Class" value="dareka.NLMain"/>
+        <attribute name="Main-Class" value="dareka.UserDataMain"/>
         <attribute name="Add-Opens" value="java.base/sun.net java.base/sun.net.www.protocol.http java.base/java.net java.base/java.lang java.base/java.lang.reflect"/>
       </manifest>
       <fileset dir="src">
