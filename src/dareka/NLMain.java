@@ -499,6 +499,9 @@ public class NLMain {
                     tray.close(); tray = null;
                 }
                 if (logWindow.frame != null) {
+                    for (LogPane pane : logWindow.tabs.values()) {
+                        pane.dispose();
+                    }
                     Rectangle rect = logWindow.frame.getBounds();
                     if (!rect.equals(logWindowRect)) {
                         config.setInteger("LogWindowX", rect.x);
@@ -760,6 +763,9 @@ public class NLMain {
         JFrame frame = new JFrame();
         JTabbedPane tabbedPane = new JTabbedPane();
         LinkedHashMap<Integer, LogPane> tabs = new LinkedHashMap<>();
+        LinkedHashMap<String, Integer> extensionTitleOccurrences =
+                new LinkedHashMap<>();
+        LogSearchHistory searchHistory = new LogSearchHistory(config);
         LogPane mainPane, debugPane;
         String windowTitle = "NicoCache_nl";
 
@@ -862,8 +868,18 @@ public class NLMain {
 
         LogPane addTab(String title, String tip, int maxLines, boolean dedupe) {
             int tabIndex = tabbedPane.getTabCount();
+            String historyKey;
+            if ("main".equals(title) || "debug".equals(title)) {
+                historyKey = title;
+            } else {
+                int occurrence = extensionTitleOccurrences.getOrDefault(
+                        title, 0);
+                extensionTitleOccurrences.put(title, occurrence + 1);
+                historyKey = "extension:" + title + ":" + occurrence;
+            }
             final LogPane pane = new LogPane(
-                    title, tip, maxLines, dedupe, this, tabIndex);
+                    title, tip, maxLines, dedupe, this, tabIndex,
+                    searchHistory, historyKey);
             if ("main".equals(title)) {
                 pane.popup.addSeparator();
 
@@ -895,7 +911,7 @@ public class NLMain {
                 }
             }
             tabs.put(tabbedPane.getTabCount(), pane);
-            tabbedPane.addTab(title, null, pane.scrollPane, tip);
+            tabbedPane.addTab(title, null, pane.searchPanel.getComponent(), tip);
 
             return pane;
         }
@@ -945,6 +961,8 @@ public class NLMain {
         JScrollPane scrollPane = new JScrollPane(textArea,
                 JScrollPane.VERTICAL_SCROLLBAR_ALWAYS,
                 JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        LogBuffer buffer = new LogBuffer();
+        LogSearchPanel searchPanel;
         int maxLines;
         int maxLinesInBacklog;
         boolean dedupe;
@@ -952,7 +970,8 @@ public class NLMain {
 
         LogPane(String title, String tip,
                 int maxLines, boolean dedupe, LogWindow logWindow,
-                int tabIndex) {
+                int tabIndex, LogSearchHistory searchHistory,
+                String historyKey) {
             String componentPrefix;
             if ("main".equals(title) || "debug".equals(title)) {
                 componentPrefix = "log." + title;
@@ -978,6 +997,9 @@ public class NLMain {
             setupTextArea();
             setupPopupMenu();
             setupScrollPane();
+            searchPanel = new LogSearchPanel(
+                    textArea, scrollPane, buffer, searchHistory,
+                    historyKey, componentPrefix);
         }
 
         void setupTextArea() {
@@ -1106,94 +1128,26 @@ public class NLMain {
             if (textArea == null) {
                 return;
             }
-            if (replaceCachingProgress(log)) {
-                return;
-            }
-            if (dedupeMessage(log)) {
-                textArea.append(log + "\n");
-            }
-
-            // 最大ログ行数を超えたら先頭から順に削除
             int threashold = isBackLog() ? maxLinesInBacklog : maxLines;
-            if (textArea.getLineCount() > threashold) {
-                try {
-                    int offset = textArea.getLineEndOffset(
-                            textArea.getLineCount() - threashold - 1);
-                    textArea.replaceRange(null, 0, offset);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
+            buffer.append(log, dedupe, threashold);
+            searchPanel.requestRefresh();
         }
 
-        // CMAFキャッシュの進捗は同じ動画IDの行を更新し、ログ行を増やさない.
-        private boolean replaceCachingProgress(String message) {
-            if (message == null || !message.startsWith("caching ")) {
-                return false;
-            }
-            int separator = message.indexOf(": ");
-            if (separator < 0) {
-                return false;
-            }
-
-            String prefix = message.substring(0, separator + 1);
-            javax.swing.text.Element root =
-                textArea.getDocument().getDefaultRootElement();
-            try {
-                for (int i = root.getElementCount() - 1; i >= 0; --i) {
-                    javax.swing.text.Element line = root.getElement(i);
-                    int start = line.getStartOffset();
-                    int end = Math.min(
-                        line.getEndOffset(), textArea.getDocument().getLength());
-                    if (end > start && "\n".equals(textArea.getText(end - 1, 1))) {
-                        --end;
-                    }
-                    String existing = textArea.getText(start, end - start).strip();
-                    if (existing.startsWith(prefix)) {
-                        textArea.replaceRange(message, start, end);
-                        lastMessage = message;
-                        needNewline = false;
-                        return true;
-                    }
-                }
-            } catch (Exception e) {
-                return false;
-            }
-            return false;
+        void refreshDisplay() {
+            searchPanel.refreshNow();
         }
 
         void setDedupe(boolean dedupe) {
             this.dedupe = dedupe;
         }
 
-        String lastMessage = null;
-        boolean needNewline = false;
-        boolean dedupeMessage(String message) {
-            if (!dedupe) {
-                return true;
-            }
+        void clearLog() {
+            buffer.clear();
+            searchPanel.refreshNow();
+        }
 
-            if (lastMessage == null || message == null) {
-                lastMessage = message;
-                if (needNewline) {
-                    textArea.append("\n");
-                    needNewline = false;
-                }
-                return true;
-            }
-            boolean same = lastMessage.equals(message);
-            lastMessage = message;
-            if (same) {
-                textArea.append("+");
-                needNewline = true;
-                return false;
-            } else {
-                if (needNewline) {
-                    textArea.append("\n");
-                    needNewline = false;
-                }
-                return true;
-            }
+        void dispose() {
+            searchPanel.dispose();
         }
     }
     }

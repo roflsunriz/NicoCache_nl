@@ -90,6 +90,7 @@ public final class FunctionalTestMain {
                     this::testTemplateAndCmafUtility);
             run("LRU map minimum capacity and eviction",
                     this::testLruMapCapacity);
+            run("GUI log filtering primitives", LogSearchUnitTest::run);
             run("forward proxy GET/POST/HEAD and upstream status", this::testForwardProxy);
             run("forward proxy byte range", this::testForwardProxyRange);
             run("HTTPS CONNECT and TLS loopback", this::testHttpsMitmLocalFile);

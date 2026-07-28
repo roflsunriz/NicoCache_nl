@@ -23,6 +23,14 @@
 .\build-javac.ps1
 ```
 
+GUIログのタブ、検索、メニュー、履歴保存など画面操作を変更した場合は、実Swing
+ウィンドウを使うE2Eも実行する。`-KeepWorkDir`を付けると、最小サイズと標準サイズの
+確認画像を`.test-work/e2e/gui/preview/`へ残せる。
+
+```powershell
+.\test-e2e.ps1 -KeepWorkDir
+```
+
 複数の対応 JDK がある場合は、既定で検出された最新版を使用する。特定の JDK を
 使う場合は、次のように指定する。
 

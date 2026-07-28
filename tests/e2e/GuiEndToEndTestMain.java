@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.imageio.ImageIO;
 import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
@@ -76,6 +77,8 @@ public final class GuiEndToEndTestMain {
                     this::testMenusAndTabs);
             run("GUI log retention, dedupe, and progress",
                     this::testLogBehaviour);
+            run("GUI tab-specific live log search and history",
+                    this::testLogSearch);
             run("GUI persistence and resource cleanup",
                     this::testPersistenceAndCleanup);
         } finally {
@@ -101,7 +104,7 @@ public final class GuiEndToEndTestMain {
             }
             throw new AssertionError("GUI end-to-end tests failed");
         }
-        System.out.println("GUI end-to-end tests passed: 5");
+        System.out.println("GUI end-to-end tests passed: 6");
     }
 
     private void prepare() throws IOException {
@@ -149,6 +152,18 @@ public final class GuiEndToEndTestMain {
             assertEquals("log.debug.text",
                     GUILauncher.logWindow.debugPane.textArea.getName(),
                     "debug text identity");
+            assertEquals("log.main.query",
+                    GUILauncher.logWindow.mainPane.searchPanel
+                            .queryField.getName(),
+                    "main search identity");
+            assertEquals("log.main.regex",
+                    GUILauncher.logWindow.mainPane.searchPanel
+                            .regexCheckBox.getName(),
+                    "main regex identity");
+            assertEquals("log.debug.history",
+                    GUILauncher.logWindow.debugPane.searchPanel
+                            .historyCombo.getName(),
+                    "debug history identity");
             assertMenuIdentity(GUILauncher.logWindow.mainPane.popup,
                     "log.copy", "log.select-all", "log.wrap",
                     "log.always-on-top");
@@ -264,13 +279,12 @@ public final class GuiEndToEndTestMain {
         onEdt(() -> {
             GUILauncher.LogPane pane = GUILauncher.logWindow.mainPane;
             pane.maxLines = 3;
-            pane.textArea.setText("");
-            pane.lastMessage = null;
-            pane.needNewline = false;
+            pane.clearLog();
             pane.setDedupe(false);
             for (String value : List.of("one", "two", "three", "four")) {
                 pane.append(value);
             }
+            pane.refreshDisplay();
             assertFalse(pane.textArea.getText().contains("one"),
                     "normal log must trim the oldest line");
             assertContains(pane.textArea.getText(), "four",
@@ -278,22 +292,20 @@ public final class GuiEndToEndTestMain {
             assertTrue(pane.textArea.getLineCount() <= 4,
                     "normal log line limit");
 
-            pane.textArea.setText("");
-            pane.lastMessage = null;
-            pane.needNewline = false;
+            pane.clearLog();
             pane.setDedupe(true);
             pane.append("same");
             pane.append("same");
             pane.append("same");
+            pane.refreshDisplay();
             assertEquals("same\n++", pane.textArea.getText(),
                     "deduplicated log");
 
-            pane.textArea.setText("");
-            pane.lastMessage = null;
-            pane.needNewline = false;
+            pane.clearLog();
             pane.setDedupe(false);
             pane.append("caching sm1: 10%");
             pane.append("caching sm1: 80%");
+            pane.refreshDisplay();
             assertFalse(pane.textArea.getText().contains("10%"),
                     "stale cache progress must be replaced");
             assertEquals(1, occurrences(
@@ -311,6 +323,119 @@ public final class GuiEndToEndTestMain {
         });
     }
 
+    private void testLogSearch() throws Exception {
+        onEdt(() -> {
+            GUILauncher.LogPane pane = GUILauncher.logWindow.mainPane;
+            pane.maxLines = 20;
+            pane.setDedupe(false);
+            pane.clearLog();
+            pane.append("INFO startup");
+            pane.append("error-42 first");
+            pane.append("ERROR-77 second");
+            pane.append("literal.value");
+            pane.refreshDisplay();
+
+            LogSearchPanel search = pane.searchPanel;
+            search.queryField.setText("error");
+            search.refreshNow();
+            assertFalse(pane.textArea.getText().contains("INFO"),
+                    "literal search must hide non-matching lines");
+            assertContains(pane.textArea.getText(), "error-42",
+                    "literal search lower-case result");
+            assertContains(pane.textArea.getText(), "ERROR-77",
+                    "literal search must be case-insensitive by default");
+            assertEquals("2 / 4 行", search.statusLabel.getText(),
+                    "literal search status");
+
+            search.caseSensitiveCheckBox.setSelected(true);
+            search.refreshNow();
+            assertContains(pane.textArea.getText(), "error-42",
+                    "case-sensitive matching result");
+            assertFalse(pane.textArea.getText().contains("ERROR-77"),
+                    "case-sensitive search must exclude upper-case result");
+
+            search.regexCheckBox.setSelected(true);
+            search.caseSensitiveCheckBox.setSelected(false);
+            search.queryField.setText("error-\\d+");
+            search.refreshNow();
+            assertEquals(2, occurrences(pane.textArea.getText(), "error-")
+                            + occurrences(pane.textArea.getText(), "ERROR-"),
+                    "regular expression line count");
+
+            pane.append("warning ignored");
+            pane.append("error-99 appended");
+            pane.refreshDisplay();
+            assertFalse(pane.textArea.getText().contains("warning ignored"),
+                    "active filter must apply to appended logs");
+            assertContains(pane.textArea.getText(), "error-99 appended",
+                    "active filter must include matching appended logs");
+
+            search.queryField.setText("[");
+            search.refreshNow();
+            assertContains(search.statusLabel.getText(), "正規表現エラー",
+                    "invalid regular-expression status");
+            assertContains(pane.textArea.getText(), "INFO startup",
+                    "invalid regular expression must preserve raw log view");
+
+            search.queryField.setText("error-\\d+");
+            search.refreshNow();
+            search.commitCurrentSearch();
+            assertTrue(search.historyCombo.getItemCount() > 0,
+                    "search history entry");
+            Component rendered = search.historyCombo.getRenderer()
+                    .getListCellRendererComponent(
+                            new javax.swing.JList<>(),
+                            search.historyCombo.getItemAt(0),
+                            0, false, false);
+            assertTrue(rendered instanceof JLabel,
+                    "history renderer component");
+            assertTrue(((JLabel) rendered).getText().matches(
+                            "\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}.*"),
+                    "history must show date and time");
+
+            search.clearQuery();
+            assertContains(pane.textArea.getText(), "warning ignored",
+                    "clear must restore all raw logs");
+            search.historyCombo.setSelectedIndex(0);
+            long originalTimestamp =
+                    search.historyCombo.getItemAt(0).getTimestamp();
+            assertEquals("error-\\d+", search.queryField.getText(),
+                    "history selection must replace query");
+            assertTrue(search.regexCheckBox.isSelected(),
+                    "history selection must restore regex mode");
+            assertFalse(pane.textArea.getText().contains("warning ignored"),
+                    "history selection must immediately search");
+            search.commitCurrentSearch();
+            assertEquals(originalTimestamp,
+                    search.historyCombo.getItemAt(0).getTimestamp(),
+                    "history selection must preserve original timestamp");
+
+            GUILauncher.LogPane extension = launcher.addExtPane(
+                    "search-fixture", "search history isolation");
+            assertEquals(0, extension.searchPanel.historyCombo.getItemCount(),
+                    "extension search history must start independently");
+            extension.append("extension-only");
+            extension.refreshDisplay();
+            extension.searchPanel.queryField.setText("extension");
+            extension.searchPanel.refreshNow();
+            extension.searchPanel.commitCurrentSearch();
+            assertEquals(1,
+                    extension.searchPanel.historyCombo.getItemCount(),
+                    "extension search history entry");
+            assertTrue(search.historyCombo.getItemCount() > 0,
+                    "main history must remain intact");
+
+            search.clearButton.doClick();
+            assertEquals("", search.queryField.getText(),
+                    "clear button");
+            search.queryField.setText("temporary");
+            search.queryField.getActionMap().get("clear-search")
+                    .actionPerformed(null);
+            assertEquals("", search.queryField.getText(),
+                    "Escape action");
+        });
+    }
+
     private void testPersistenceAndCleanup() throws Exception {
         Path propertyFile = sandbox.resolve("data/NicoCacheGUI.property");
         onEdt(() ->
@@ -324,6 +449,19 @@ public final class GuiEndToEndTestMain {
         assertEquals("50", saved.getProperty("LogWindowY"), "saved Y");
         assertEquals("700", saved.getProperty("LogWindowW"), "saved width");
         assertEquals("500", saved.getProperty("LogWindowH"), "saved height");
+        assertEquals("1", saved.getProperty("LogSearchHistory.Version"),
+                "search history schema version");
+        boolean savedQuery = saved.stringPropertyNames().stream()
+                .filter(name -> name.endsWith(".Query"))
+                .map(saved::getProperty)
+                .anyMatch(value -> "error-\\d+".equals(value));
+        boolean savedTimestamp = saved.stringPropertyNames().stream()
+                .filter(name -> name.endsWith(".Timestamp"))
+                .map(saved::getProperty)
+                .anyMatch(value -> value != null
+                        && value.matches("\\d{10,}"));
+        assertTrue(savedQuery, "search query persistence");
+        assertTrue(savedTimestamp, "search timestamp persistence");
         assertTrue(GUILauncher.logWindow.frame == null,
                 "frame reference must be cleared");
         assertTrue(GUILauncher.tray == null,
