@@ -406,6 +406,8 @@ foreach ($relativePath in $runtimeLayoutPaths) {
     if (Test-Path -LiteralPath $destination) {
         throw "アプリ実行時配置先が既に存在します: $destination"
     }
+    New-Item -ItemType Directory -Path (Split-Path -Parent $destination) `
+        -Force | Out-Null
     Move-Item -LiteralPath $source -Destination $destination
 }
 

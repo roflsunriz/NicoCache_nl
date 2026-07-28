@@ -50,7 +50,8 @@ foreach ($requiredPath in @(
         (Join-Path $internalAppDirectory 'lib\bcutil.jar'),
         (Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'),
         (Join-Path $appDirectory 'defaults\00_NicoCache.properties'),
-        (Join-Path $appDirectory 'local\mime.types.default')
+        (Join-Path $appDirectory 'local\mime.types.default'),
+        (Join-Path $appDirectory 'documents\tls.md')
     )) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "アプリイメージに必要なファイルがありません: $requiredPath"
