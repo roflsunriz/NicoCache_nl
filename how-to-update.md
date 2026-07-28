@@ -147,6 +147,18 @@ Javaシステムプロパティ `nicocache.dataRoot` で保存先を上書きで
   -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
 ```
 
+ZIPとMSIへ同じ内容を入れる変更を確認する場合は、共通アプリイメージとZIPを生成し、
+内容一致テストを実行する。
+
+```powershell
+.\packaging\windows\build-windows-package.ps1 `
+  -PackageType Zip `
+  -AppVersion 0.1.0
+.\packaging\windows\test-package-parity.ps1 `
+  -AppImagePath .\.test-work\windows-package\output\NicoCache_nl `
+  -ZipPath .\.test-work\windows-package\output\NicoCache_nl-0.1.0.zip
+```
+
 MSIを生成した場合は、インストールせずに内部テーブルを読み取り、デスクトップと
 スタートメニューのショートカットが各1件定義されていること、および明示的な
 アンインストール時にWindows設定復元が製品ファイル削除より前に実行されることを

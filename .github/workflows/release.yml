@@ -119,72 +119,6 @@ jobs:
           $hash = (Get-FileHash -LiteralPath $jarPath -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  NicoCache_nl.jar" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'NicoCache_nl.jar.sha256') -Encoding ascii
 
-      - name: Create distribution archive
-        shell: pwsh
-        env:
-          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
-        run: |
-          $workspace = (Resolve-Path -LiteralPath $env:GITHUB_WORKSPACE).Path
-          $staging = Join-Path $env:RUNNER_TEMP 'nicocache-release'
-          $archivePath = Join-Path $workspace ("NicoCache_nl-$env:RELEASE_TAG.zip")
-
-          if (Test-Path -LiteralPath $staging) {
-            Remove-Item -LiteralPath $staging -Recurse -Force
-          }
-          New-Item -ItemType Directory -Path $staging | Out-Null
-
-          $paths = @(git -c core.quotePath=false ls-files --cached --others --exclude-standard)
-          $paths += 'NicoCache_nl.jar'
-          foreach ($relativePath in $paths) {
-            if ([string]::IsNullOrWhiteSpace($relativePath)) {
-              continue
-            }
-            if ($relativePath -match '^documents/archive(?:/|$)') {
-              Write-Output "アーカイブ文書を除外: $relativePath"
-              continue
-            }
-            $sourcePath = Join-Path $workspace ($relativePath -replace '/', '\')
-            $sourceItem = Get-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue
-            if (-not $sourceItem) {
-              throw "アーカイブ対象が見つかりません: $relativePath"
-            }
-            if ($sourceItem.LinkType) {
-              Write-Output "シンボリックリンクを除外: $relativePath"
-              continue
-            }
-            if ($sourceItem.PSIsContainer) {
-              throw "ファイルではないアーカイブ対象です: $relativePath"
-            }
-
-            $destinationPath = Join-Path $staging ($relativePath -replace '/', '\')
-            $destinationDirectory = Split-Path -Parent $destinationPath
-            New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null
-            Copy-Item -LiteralPath $sourcePath -Destination $destinationPath -Force
-          }
-
-          $filterRoot = Join-Path $workspace 'nlFilters'
-          $filterCandidates = @(Get-ChildItem -LiteralPath $filterRoot -File -Filter '*.txt' |
-            Where-Object { $_.Name -match '^(0[1-9]|1[0-9]|20)(?:\D|$)' })
-          $filterCandidates | Where-Object LinkType | ForEach-Object {
-            Write-Output "シンボリックリンクを除外: nlFilters/$($_.Name)"
-          }
-          $filterFiles = @($filterCandidates | Where-Object { -not $_.LinkType })
-          if ($filterFiles.Count -eq 0) {
-            throw 'nlFilters の 01-20 番台 .txt がありません'
-          }
-          foreach ($filterFile in $filterFiles) {
-            $filterDestination = Join-Path $staging (Join-Path 'nlFilters' $filterFile.Name)
-            New-Item -ItemType Directory -Path (Split-Path -Parent $filterDestination) -Force | Out-Null
-            Copy-Item -LiteralPath $filterFile.FullName -Destination $filterDestination -Force
-          }
-
-          $archiveInputs = @(Get-ChildItem -LiteralPath $staging -Force | Select-Object -ExpandProperty FullName)
-          if ($archiveInputs.Count -eq 0) {
-            throw 'アーカイブ対象がありません'
-          }
-          Compress-Archive -LiteralPath $archiveInputs -DestinationPath $archivePath -CompressionLevel Optimal -Force
-          Write-Output "作成したアーカイブ: $archivePath"
-
       - name: Set up JDK 17 for Windows installer
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
@@ -206,11 +140,27 @@ jobs:
         shell: pwsh
         env:
           APP_VERSION: ${{ steps.release-tag.outputs.app_version }}
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
         run: |
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
             -AppVersion $env:APP_VERSION `
-            -NlFiltersSource .\nlFilters
+            -NlFiltersSource .\nlFilters `
+            -ZipFileName "NicoCache_nl-$env:RELEASE_TAG.zip"
+
+      - name: Stage distribution archive
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
+        run: |
+          $source = Join-Path $env:GITHUB_WORKSPACE `
+            ".test-work\windows-package\output\NicoCache_nl-$env:RELEASE_TAG.zip"
+          $destination = Join-Path $env:GITHUB_WORKSPACE `
+            "NicoCache_nl-$env:RELEASE_TAG.zip"
+          if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw "共通アプリイメージから作成したZIPがありません: $source"
+          }
+          Copy-Item -LiteralPath $source -Destination $destination -Force
 
       - name: Test release MSI structure
         shell: pwsh
@@ -227,6 +177,15 @@ jobs:
         run: |
           .\packaging\windows\test-windows-app-image.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
+
+      - name: Test ZIP and app image parity
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
+        run: |
+          .\packaging\windows\test-package-parity.ps1 `
+            -AppImagePath .\.test-work\windows-package\output\NicoCache_nl `
+            -ZipPath ".\.test-work\windows-package\output\NicoCache_nl-$env:RELEASE_TAG.zip"
 
       - name: Test release Windows integration and rollback
         shell: pwsh

@@ -51,7 +51,10 @@ foreach ($requiredPath in @(
         (Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'),
         (Join-Path $appDirectory 'defaults\00_NicoCache.properties'),
         (Join-Path $appDirectory 'local\mime.types.default'),
-        (Join-Path $appDirectory 'documents\tls.md')
+        (Join-Path $appDirectory 'documents\tls.md'),
+        (Join-Path $internalAppDirectory 'development\build-javac.ps1'),
+        (Join-Path $internalAppDirectory 'development\src\dareka\NLMain.java'),
+        (Join-Path $internalAppDirectory 'development\tests\functional\FunctionalTestMain.java')
     )) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "アプリイメージに必要なファイルがありません: $requiredPath"

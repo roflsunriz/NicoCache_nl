@@ -150,6 +150,19 @@ jobs:
           .\packaging\windows\test-windows-app-image.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
 
+      - name: Test ZIP and app image parity
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem `
+            -LiteralPath .\.test-work\windows-package\output `
+            -File -Filter '*.zip' | Select-Object -First 1
+          if (-not $zip) {
+            throw '共通アプリイメージ由来のZIPがありません'
+          }
+          .\packaging\windows\test-package-parity.ps1 `
+            -AppImagePath .\.test-work\windows-package\output\NicoCache_nl `
+            -ZipPath $zip.FullName
+
       - name: Test first-run Windows integration and rollback
         shell: pwsh
         run: |

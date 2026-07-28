@@ -3,10 +3,12 @@ param(
     [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
     [string]$AppVersion = '0.1.0',
 
-    [ValidateSet('AppImage', 'Msi', 'All')]
+    [ValidateSet('AppImage', 'Zip', 'Msi', 'All')]
     [string]$PackageType = 'AppImage',
 
-    [string]$NlFiltersSource
+    [string]$NlFiltersSource,
+
+    [string]$ZipFileName
 )
 
 Set-StrictMode -Version Latest
@@ -175,6 +177,58 @@ function Copy-DistributionFile {
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force |
         Out-Null
     Copy-Item -LiteralPath $source -Destination $destination
+}
+
+function Copy-DevelopmentPayload {
+    $developmentRoot = Join-Path $inputRoot 'development'
+    $excludedPrefixes = @(
+        '.github/',
+        '.vscode/',
+        '.settings/',
+        '.externalToolBuilders/',
+        'cache/',
+        'certs/',
+        'cvcache/',
+        'data/',
+        'defaults/',
+        'extensions/',
+        'lib/',
+        'list/',
+        'local/',
+        'nlFilters/',
+        'thcache/',
+        'documents/archive/'
+    )
+    $excludedFiles = @(
+        'NicoCache_nl.jar',
+        'NicoCache_nl.jar.old',
+        'NicoCache_nl.jar.sig',
+        'NicoCacheCA.jar',
+        'NicoCacheCA.jar.sig'
+    )
+
+    $trackedPaths = @(& git -C $root ls-files --cached --others --exclude-standard)
+    if ($LASTEXITCODE -ne 0) {
+        throw '開発用ペイロードのファイル一覧を取得できませんでした'
+    }
+    foreach ($relativePath in $trackedPaths) {
+        $normalizedPath = $relativePath -replace '\\', '/'
+        if ($excludedFiles -contains $normalizedPath -or
+                @($excludedPrefixes | Where-Object {
+                    $normalizedPath.StartsWith($_, [StringComparison]::OrdinalIgnoreCase)
+                }).Count -gt 0) {
+            continue
+        }
+        $source = Join-Path $root ($normalizedPath -replace '/', '\')
+        $sourceItem = Get-Item -LiteralPath $source -Force -ErrorAction SilentlyContinue
+        if (-not $sourceItem -or $sourceItem.LinkType -or $sourceItem.PSIsContainer) {
+            continue
+        }
+        $destination = Join-Path $developmentRoot ($normalizedPath -replace '/', '\')
+        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) `
+            -Force | Out-Null
+        Copy-Item -LiteralPath $source -Destination $destination -Force
+    }
 }
 
 function Remove-JPackageInstallRootCleaner {
@@ -365,6 +419,7 @@ $distributionDirectories = @('defaults', 'extensions', 'local')
 foreach ($relativePath in $distributionDirectories) {
     Copy-DistributionDirectory -RelativePath $relativePath
 }
+Copy-DevelopmentPayload
 $writableDirectories = @(
     'cache', 'certs', 'cvcache', 'data', 'list', 'nlFilters', 'thcache'
 )
@@ -538,6 +593,27 @@ if ($PackageType -in @('Msi', 'All')) {
     )
     Invoke-NativeCommand -FilePath $jpackage -ArgumentList $finalMsiArguments `
         -FailureMessage 'Windows MSIの作成に失敗しました'
+}
+
+if ($PackageType -in @('Zip', 'All')) {
+    $archiveName = if ([string]::IsNullOrWhiteSpace($ZipFileName)) {
+        "NicoCache_nl-$AppVersion.zip"
+    } else {
+        $ZipFileName
+    }
+    if ([System.IO.Path]::GetFileName($archiveName) -ne $archiveName -or
+            [System.IO.Path]::GetExtension($archiveName) -ne '.zip') {
+        throw "ZIPファイル名が不正です: $archiveName"
+    }
+    $archivePath = Join-Path $outputRoot $archiveName
+    $archiveInputs = @(Get-ChildItem -LiteralPath $appImagePath -Force |
+        Select-Object -ExpandProperty FullName)
+    if ($archiveInputs.Count -eq 0) {
+        throw 'ZIP対象のアプリイメージが空です'
+    }
+    Compress-Archive -LiteralPath $archiveInputs -DestinationPath $archivePath `
+        -CompressionLevel Optimal -Force
+    Write-Output "ZIPを作成しました: $archivePath"
 }
 
 $artifacts = @(Get-ChildItem -LiteralPath $outputRoot -Force |

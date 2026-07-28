@@ -56,6 +56,7 @@ foreach ($step in @(
         'Create release checksum',
         'Test release MSI structure',
         'Test release app image',
+        'Test ZIP and app image parity',
         'Test release Windows integration and rollback',
         'Create MSI checksum'
     )) {

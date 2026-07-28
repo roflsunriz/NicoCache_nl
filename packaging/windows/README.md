@@ -1,6 +1,6 @@
 # Windows インストーラー
 
-自己完結型の Windows アプリイメージと MSI を生成する。利用者の
+自己完結型の Windows アプリイメージ、ZIP、MSI を生成する。利用者の
 Java、PowerShell 7、Apache Ant、7-Zip には依存しない。
 
 ## 生成物
@@ -11,6 +11,12 @@ Java、PowerShell 7、Apache Ant、7-Zip には依存しない。
 - NicoCache_nl 本体、内部ライブラリとしての証明書生成ツール、Bouncy Castle、
   既定設定、ローカル配信用ファイル
 - `NicoCache_nl-<version>.msi`: 対話・無人インストール兼用パッケージ
+- `NicoCache_nl-<version>.zip`: MSIと同じアプリイメージを展開した開発・検証用ZIP
+
+ZIPとMSIは同じアプリイメージを共通の入力として生成する。ZIPにはMSIと同じ実行環境、
+既定設定、ローカル配信用ファイルに加え、`development/` 以下へソース、テスト、
+ビルド・検証スクリプト、開発資料を収録する。`.git`、CI管理ファイル、キャッシュ、
+証明書、利用者データは収録しない。
 
 MSI の無人操作には Windows Installer の標準オプションを使う。
 
@@ -98,7 +104,7 @@ Extension、キャッシュ、証明書、初回セットアップ状態をこ�
 
 ## ローカルでの安全な検証
 
-JDK 17 でアプリイメージだけを生成する。成果物と依存ファイルは Git 管理外の
+JDK 17 でアプリイメージとZIPを生成する。成果物と依存ファイルは Git 管理外の
 `.test-work/windows-package/` に限定される。
 
 ```powershell
