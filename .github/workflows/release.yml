@@ -139,6 +139,10 @@ jobs:
             if ([string]::IsNullOrWhiteSpace($relativePath)) {
               continue
             }
+            if ($relativePath -match '^documents/archive(?:/|$)') {
+              Write-Output "アーカイブ文書を除外: $relativePath"
+              continue
+            }
             $sourcePath = Join-Path $workspace ($relativePath -replace '/', '\')
             $sourceItem = Get-Item -LiteralPath $sourcePath -Force -ErrorAction SilentlyContinue
             if (-not $sourceItem) {

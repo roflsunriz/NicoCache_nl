@@ -11,6 +11,8 @@
 - 現行の利用手順と変更履歴を見つけやすくするため、`README.md` と
   `CHANGELOG.md` を正規の入口に統一し、旧版の README、変更履歴、開発メモを
   `documents/archive/` へ整理した。HTTPS MitM の手順は `documents/tls.md` に集約した。
+- リリース ZIP に旧版資料を混入させないよう、`documents/archive/` 以下を
+  アーカイブ収集対象から除外した。
 
 ### Added
 
