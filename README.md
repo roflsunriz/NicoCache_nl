@@ -30,7 +30,7 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## HTTPS と証明書
 
-HTTPS MitM を使う場合は [TLS 設定手順](documents/tls.md) を参照してください。
+現行ニコニコ動画ではHTTPS接続が必要です。[TLS 設定手順](documents/tls.md) を参照してください。
 証明書と秘密鍵を含む `certs/` は公開・共有しないでください。
 
 ## 開発者向け
