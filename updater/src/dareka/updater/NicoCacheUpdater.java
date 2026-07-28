@@ -287,22 +287,36 @@ public final class NicoCacheUpdater {
     }
 
     private Release fetchLatestRelease() throws IOException, InterruptedException {
-        String json = sendText(RELEASE_URI).body();
+        return parseRelease(sendText(RELEASE_URI).body());
+    }
+
+    private static Release parseRelease(String json) throws IOException {
         Matcher tagMatcher = TAG_PATTERN.matcher(json);
         if (!tagMatcher.find()) throw new IOException("release tag is missing");
         Matcher versionMatcher = VERSION_PATTERN.matcher(tagMatcher.group(1));
         if (!versionMatcher.matches()) throw new IOException("unsupported release tag: " + tagMatcher.group(1));
+        String version = versionMatcher.group(1);
+        String msiName = "NicoCache_nl-" + version + ".msi";
+        String checksumName = msiName + ".sha256";
         URI msi = null;
         URI checksum = null;
         Matcher matcher = DOWNLOAD_PATTERN.matcher(json);
         while (matcher.find()) {
             String value = matcher.group(1).replace("\\/", "/");
-            String lower = value.toLowerCase(Locale.ROOT);
-            if (lower.endsWith(".msi")) msi = URI.create(value);
-            else if (lower.endsWith(".sha256") || lower.endsWith(".sha256.txt")) checksum = URI.create(value);
+            URI asset = URI.create(value);
+            String path = asset.getPath();
+            String name = path.substring(path.lastIndexOf('/') + 1);
+            if (name.equalsIgnoreCase(msiName)) {
+                msi = asset;
+            } else if (name.equalsIgnoreCase(checksumName)
+                    || name.equalsIgnoreCase(checksumName + ".txt")) {
+                checksum = asset;
+            }
         }
-        if (msi == null || checksum == null) throw new IOException("MSIまたはSHA-256がReleaseにありません");
-        return new Release(versionMatcher.group(1), msi, checksum);
+        if (msi == null || checksum == null) {
+            throw new IOException("NicoCache_nl本体のMSIまたはSHA-256がReleaseにありません");
+        }
+        return new Release(version, msi, checksum);
     }
 
     private List<Integer> fetchAvailableLtsReleases() throws IOException, InterruptedException {

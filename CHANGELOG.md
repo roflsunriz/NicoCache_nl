@@ -7,6 +7,9 @@
 
 ### Added
 
+- 独立アップデーターを本体と同じGitHub Releaseから安全に導入できるよう、
+  `updater/VERSION` の版番号で自己完結MSIを生成し、SHA-256とともに既存の
+  ZIP、JAR、本体MSI資産へ追加するリリース処理と資産集合の契約テストを追加した。
 - リリースタグのソースと版番号から検証済みMSIを配布できるよう、
   `v<major>.<minor>.<build>` タグでWindowsインストーラーとSHA-256を生成し、
   ZIPおよびJARと同じGitHub Releaseへ自動添付する処理を追加した。
@@ -52,6 +55,9 @@
 
 ### Fixed
 
+- 独立アップデーターMSIの公開後も本体更新で正しい配布物を取得できるよう、
+  GitHub Release上の任意のMSIではなく、リリースタグと一致する本体MSIと
+  対応SHA-256だけを選択するよう修正した。
 - Windows更新後にユーザーPATHからWindowsAppsが欠落した環境でもWinGetを
   利用できるよう、Javaから通常ファイルとしては追跡できないApp Execution Aliasの
   reparse pointをリンク自体の存在で検出し、絶対パスから起動するよう修正した。

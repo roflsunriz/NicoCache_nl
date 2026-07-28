@@ -22,6 +22,22 @@ NicoCache_nl本体と管理対象の外部依存関係を、一つの独立GUI�
 
 外部依存関係を更新するときは、NicoCache_nlを先に終了してください。更新対象が使用中で置換できない場合、処理は失敗し、既存内容を復元します。
 
+## 入手と検証
+
+[GitHub Releases](https://github.com/roflsunriz/NicoCache_nl/releases) から
+`NicoCache_nl-Updater-<version>.msi` と対応する `.msi.sha256` をダウンロード
+します。アップデーターの版番号は本体のリリースタグから独立しており、
+`updater/VERSION` で管理します。
+
+インストール前に、同じディレクトリでSHA-256を照合します。
+
+```powershell
+$msi = Get-Item .\NicoCache_nl-Updater-*.msi
+$expected = (Get-Content "$($msi.FullName).sha256" -Raw).Split()[0]
+$actual = (Get-FileHash $msi.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw 'アップデーターMSIのSHA-256が一致しません' }
+```
+
 ## セキュリティ境界
 
 - Updater自身のインストール先とNicoCache_nlの対象ルートを分離

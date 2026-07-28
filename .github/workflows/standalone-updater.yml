@@ -111,8 +111,13 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28'; 'User-Agent' = 'NicoCache_nl updater provider contract test' }
           $release = Invoke-RestMethod 'https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest' -Headers $headers
-          if (@($release.assets | Where-Object name -like '*.msi').Count -lt 1) { throw 'Release MSI is missing' }
-          if (@($release.assets | Where-Object { $_.name -like '*.sha256*' }).Count -lt 1) { throw 'Release checksum is missing' }
+          if ($release.tag_name -notmatch '^v(?<version>\d+(?:\.\d+){2})$') { throw "Unsupported release tag: $($release.tag_name)" }
+          $productMsi = "NicoCache_nl-$($Matches.version).msi"
+          foreach ($name in @($productMsi, "$productMsi.sha256")) {
+            if (@($release.assets | Where-Object name -eq $name).Count -ne 1) {
+              throw "Required release asset is missing or duplicated: $name"
+            }
+          }
           $classes = Join-Path $env:RUNNER_TEMP 'updater-contract-classes'
           $target = Join-Path $env:RUNNER_TEMP 'updater-contract-target'
           New-Item -ItemType Directory -Force $classes, $target | Out-Null

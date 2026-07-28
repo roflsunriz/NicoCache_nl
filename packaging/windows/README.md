@@ -141,4 +141,6 @@ Windowsプロキシー設定、自動起動、変更前設定の保存と復元�
 `v<major>.<minor>.<build>` 形式のタグをpushすると、リリース対象タグのソースから
 MSIを再生成し、構造、隔離起動、Windows連携の適用と復元を検証する。合格した
 `NicoCache_nl-<version>.msi` とSHA-256ファイルは、ZIPおよびJARと同じ
-GitHub Releaseへ自動添付される。
+GitHub Releaseへ自動添付される。同じリリース処理は `updater/VERSION` を
+独立アップデーターの版として検証し、専用Javaランタイムを含む
+`NicoCache_nl-Updater-<version>.msi` とSHA-256も追加する。

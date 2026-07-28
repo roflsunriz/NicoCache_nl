@@ -75,12 +75,17 @@ try {
     Step 'Resolve latest public NicoCache_nl MSI'
     $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28'; 'User-Agent' = 'NicoCache_nl strict updater E2E' }
     $release = Invoke-RestMethod 'https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest' -Headers $headers
-    $asset = $release.assets | Where-Object name -like '*.msi' | Select-Object -First 1
-    if (-not $asset) { throw 'Latest release MSI is missing' }
+    if ($release.tag_name -notmatch '^v(?<version>\d+(?:\.\d+){2})$') {
+        throw "Unsupported latest release tag: $($release.tag_name)"
+    }
+    $tagVersion = $Matches.version
+    $productMsiName = "NicoCache_nl-$tagVersion.msi"
+    $assets = @($release.assets | Where-Object name -eq $productMsiName)
+    if ($assets.Count -ne 1) { throw "Latest release product MSI is missing or duplicated: $productMsiName" }
+    $asset = $assets[0]
     $productMsi = Join-Path $env:RUNNER_TEMP $asset.name
     Invoke-WebRequest $asset.browser_download_url -Headers $headers -OutFile $productMsi
     $productVersion = Get-MsiProperty $productMsi 'ProductVersion'
-    $tagVersion = $release.tag_name -replace '^v', ''
     Step "Release tag=$tagVersion MSI ProductVersion=$productVersion"
     if ($tagVersion -ne $productVersion) { throw "Release tag and MSI ProductVersion disagree: $tagVersion vs $productVersion" }
 

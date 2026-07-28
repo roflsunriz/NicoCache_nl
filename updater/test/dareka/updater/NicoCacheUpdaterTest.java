@@ -2,7 +2,9 @@ package dareka.updater;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,6 +54,28 @@ public final class NicoCacheUpdaterTest {
             throw new AssertionError("TESTED_LTS policy is inconsistent: " + set);
         }
 
+        Method parseRelease = updater.getDeclaredMethod("parseRelease", String.class);
+        parseRelease.setAccessible(true);
+        Object release = parseRelease.invoke(null,
+                "{\"tag_name\":\"v1.2.3\",\"assets\":["
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl.jar.sha256\"},"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-1.2.3.msi.sha256\"},"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-1.2.3.msi\"},"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.1.0.msi\"},"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.1.0.msi.sha256\"}"
+                + "]}");
+        Class<?> releaseClass = release.getClass();
+        assertFieldEquals(releaseClass, release, "version", "1.2.3");
+        assertFieldEquals(releaseClass, release, "msiUri",
+                URI.create("https://example.invalid/NicoCache_nl-1.2.3.msi"));
+        assertFieldEquals(releaseClass, release, "checksumUri",
+                URI.create("https://example.invalid/NicoCache_nl-1.2.3.msi.sha256"));
+        assertReleaseRejected(parseRelease,
+                "{\"tag_name\":\"v1.2.3\",\"assets\":["
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.1.0.msi\"},"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.1.0.msi.sha256\"}"
+                + "]}");
+
         System.out.println("NicoCacheUpdater Java unit tests passed");
     }
 
@@ -65,6 +89,27 @@ public final class NicoCacheUpdaterTest {
     private static void assertEquals(String expected, String actual, String label) {
         if (!expected.equals(actual)) {
             throw new AssertionError(label + ": expected " + expected + ", got " + actual);
+        }
+    }
+
+    private static void assertFieldEquals(Class<?> type, Object target, String fieldName, Object expected)
+            throws Exception {
+        Field field = type.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        Object actual = field.get(target);
+        if (!expected.equals(actual)) {
+            throw new AssertionError(fieldName + ": expected " + expected + ", got " + actual);
+        }
+    }
+
+    private static void assertReleaseRejected(Method parseRelease, String json) throws Exception {
+        try {
+            parseRelease.invoke(null, json);
+            throw new AssertionError("Updater-only release assets were accepted as the product MSI");
+        } catch (InvocationTargetException expected) {
+            if (!(expected.getCause() instanceof java.io.IOException)) {
+                throw expected;
+            }
         }
     }
 }
