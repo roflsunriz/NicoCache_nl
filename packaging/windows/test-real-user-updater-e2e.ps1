@@ -20,7 +20,7 @@ function Step([string]$Message) {
 function Invoke-Msi([string[]]$Arguments, [string]$Name, [string]$LogName) {
     $log = Join-Path $work $LogName
     $effective = @($Arguments) + @('/L*V', "`"$log`"")
-    Step "$Name: msiexec $($effective -join ' ')"
+    Step "${Name}: msiexec $($effective -join ' ')"
     $process = Start-Process msiexec.exe -ArgumentList $effective -Wait -PassThru
     if ($process.ExitCode -notin @(0, 1641, 3010)) { throw "$Name failed with exit code $($process.ExitCode)" }
 }
@@ -47,7 +47,7 @@ function Invoke-Updater([string]$Executable, [string[]]$Arguments, [string]$Name
     $stdout = Join-Path $work "$Name.stdout.txt"
     $stderr = Join-Path $work "$Name.stderr.txt"
     $line = ($Arguments | ForEach-Object { if ($_ -match '[\s"]') { '"' + $_.Replace('"', '\"') + '"' } else { $_ } }) -join ' '
-    Step "$Name: $Executable $line"
+    Step "${Name}: $Executable $line"
     $process = Start-Process -FilePath $Executable -ArgumentList $line -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     if (-not $process.WaitForExit($TimeoutSeconds * 1000)) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue; throw "$Name timed out" }
     $output = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) + (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
