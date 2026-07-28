@@ -62,7 +62,7 @@ java-options=-Djpackage.app-version=1.0.1
         Assert-True $self.Output.Contains($marker) "Packaged self-test missing: $marker"
     }
 
-    $check = Invoke-UpdaterCli $Executable @('--dependency-check', '--app-root', $TargetRoot, '--java-major', '21') 600
+    $check = Invoke-UpdaterCli $Executable @('--dependency-check', '--app-root', $TargetRoot, '--java-major', '25') 600
     foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Bouncy Castle', 'Apache Ant', '7-Zip', 'WinGet')) {
         Assert-True $check.Output.Contains($name) "Dependency check output missing: $name"
     }

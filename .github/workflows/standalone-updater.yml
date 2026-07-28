@@ -58,7 +58,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'winget source reset failed' }
           winget source update
           if ($LASTEXITCODE -ne 0) { throw 'winget source update failed' }
-          foreach ($id in @('EclipseAdoptium.Temurin.21.JDK', 'Gyan.FFmpeg')) {
+          foreach ($id in @('EclipseAdoptium.Temurin.25.JDK', 'Gyan.FFmpeg')) {
             winget show --id $id --exact --source winget --accept-source-agreements --disable-interactivity
             if ($LASTEXITCODE -ne 0) { throw "$id is not resolvable from the winget source" }
           }
@@ -125,7 +125,7 @@ jobs:
           $sources = @(Get-ChildItem .\updater\src -Filter '*.java' -Recurse -File | ForEach-Object FullName)
           javac --release 11 -encoding UTF-8 -Xlint:all -d $classes @sources
           if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed' }
-          java -cp $classes dareka.updater.UpdaterLauncher --dependency-check --app-root $target --java-major 21
+          java -cp $classes dareka.updater.UpdaterLauncher --dependency-check --app-root $target --java-major 25
           if ($LASTEXITCODE -ne 0) { throw 'Provider contract check failed' }
 
       - name: Reject bundled PowerShell dependency implementation

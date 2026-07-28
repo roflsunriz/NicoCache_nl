@@ -56,7 +56,7 @@ public final class NicoCacheUpdater {
     private static final Pattern LTS_RELEASES_PATTERN = Pattern.compile(
             "\\\"available_lts_releases\\\"\\s*:\\s*\\[([^]]*)]");
     private static final Set<Integer> TESTED_LTS = Collections.unmodifiableSet(
-            new HashSet<Integer>(Arrays.asList(17, 21)));
+            new HashSet<Integer>(Arrays.asList(17, 21, 25)));
     private static final int RECOMMENDED_LTS = 21;
 
     private Path applicationRoot;
@@ -257,7 +257,8 @@ public final class NicoCacheUpdater {
 
     private void loadJavaChoices() {
         javaChoice.setModel(new DefaultComboBoxModel<JavaChoice>(new JavaChoice[] {
-                new JavaChoice(21, true, true), new JavaChoice(17, true, false)
+                new JavaChoice(25, true, false), new JavaChoice(21, true, true),
+                new JavaChoice(17, true, false)
         }));
         new SwingWorker<List<Integer>, Void>() {
             @Override protected List<Integer> doInBackground() throws Exception { return fetchAvailableLtsReleases(); }

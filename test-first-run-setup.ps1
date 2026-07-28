@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath $PSScriptRoot).Path
-$testRoot = Join-Path $root '.test-work\first-run-setup'
+$testRoot = Join-Path (Join-Path $root '.test-work') 'first-run-setup'
 $classes = Join-Path $testRoot 'classes'
 $sandbox = Join-Path $testRoot 'sandbox'
 $preview = Join-Path $testRoot 'preview'
@@ -21,11 +21,11 @@ if (Test-Path -LiteralPath $testRoot) {
 New-Item -ItemType Directory -Path $classes, $sandbox, $preview | Out-Null
 
 try {
-    $productSources = Get-ChildItem -LiteralPath (Join-Path $root 'src\dareka') `
+    $productSources = Get-ChildItem -LiteralPath (Join-Path (Join-Path $root 'src') 'dareka') `
         -Recurse -File -Filter '*.java' |
         Where-Object { $_.Name -ne 'package-info.java' } |
         Select-Object -ExpandProperty FullName
-    $testSources = Get-ChildItem -LiteralPath (Join-Path $root 'tests\setup') `
+    $testSources = Get-ChildItem -LiteralPath (Join-Path (Join-Path $root 'tests') 'setup') `
         -File -Filter '*.java' |
         Select-Object -ExpandProperty FullName
 

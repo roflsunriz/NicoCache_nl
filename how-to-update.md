@@ -54,6 +54,9 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 
 `main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
 JDK 11 で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
+加えてTemurin 25でWindows、Linux、macOSのビルド、機能、TLS、
+Extension ABI、初回セットアップを検証し、WindowsインストーラーはJDK 17と
+JDK 25の両方で生成、隔離起動、修復、更新、アンインストールを確認する。
 さらにリリースワークフローの契約テストで、従来のZIP、JAR、本体MSIと各ハッシュ
 が公開対象に残り、独立アップデーターMSIとハッシュが追加されていることを確認する。
 
@@ -114,9 +117,10 @@ Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Cen
 
 ## Windows インストーラー
 
-JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチャーを含む
-アプリイメージを生成する。隔離テストでは同じ製品ランチャーへ内部用の
-`--headless` を指定する。
+リリースではJDK 17の `jpackage` を使い、Javaランタイムと単一の製品ランチャーを
+含むアプリイメージを生成する。互換性CIではJDK 25でも同じパッケージを生成し、
+日本語設定の読込みに必要な `jdk.charsets` を含む最小ランタイムで起動を検証する。
+隔離テストでは同じ製品ランチャーへ内部用の `--headless` を指定する。
 
 Windowsパッケージ版の利用者データは、既定ではWindowsの「ドキュメント」内の
 `NicoCache_nl` に保存する。更新前にアプリ本体と同じ場所へあった

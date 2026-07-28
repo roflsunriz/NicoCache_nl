@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path -LiteralPath $PSScriptRoot).Path
-$workRoot = Join-Path $root ".test-work\functional"
+$workRoot = Join-Path (Join-Path $root ".test-work") "functional"
 $classes = Join-Path $workRoot "classes"
 $sampleClasses = Join-Path $workRoot "sample-classes"
 $sandbox = Join-Path $workRoot "sandbox"
@@ -22,11 +22,11 @@ if (Test-Path -LiteralPath $workRoot) {
 New-Item -ItemType Directory -Path $classes, $sampleClasses, $sandbox | Out-Null
 
 try {
-    $productSources = Get-ChildItem -LiteralPath (Join-Path $root "src\dareka") `
+    $productSources = Get-ChildItem -LiteralPath (Join-Path (Join-Path $root "src") "dareka") `
         -Recurse -File -Filter "*.java" |
         Where-Object { $_.Name -ne "package-info.java" } |
         Select-Object -ExpandProperty FullName
-    $testSources = Get-ChildItem -LiteralPath (Join-Path $root "tests\functional") `
+    $testSources = Get-ChildItem -LiteralPath (Join-Path (Join-Path $root "tests") "functional") `
         -File -Filter "*.java" |
         Select-Object -ExpandProperty FullName
 
@@ -41,25 +41,26 @@ try {
         throw "ABI 検証用 JAR の作成に失敗しました"
     }
 
-    $baselinePath = Join-Path $root "tests\compat\extension-api.sha256"
+    $compatRoot = Join-Path (Join-Path $root "tests") "compat"
+    $baselinePath = Join-Path $compatRoot "extension-api.sha256"
     if (-not (Test-Path -LiteralPath $baselinePath)) {
         throw "ABI 基準ファイルがありません: $baselinePath"
     }
     $baselineHash = Get-Content -LiteralPath $baselinePath |
         Where-Object { $_ -notmatch '^\s*#' -and $_ -match '\S' } |
         Select-Object -Last 1
-    $actualHash = & (Join-Path $root "tests\compat\get-extension-api-hash.ps1") `
+    $actualHash = & (Join-Path $compatRoot "get-extension-api-hash.ps1") `
         -JarPath $testJar
     if ($LASTEXITCODE -ne 0 -or $actualHash -ne $baselineHash) {
         throw "Extension ABI が変化しました。expected=$baselineHash actual=$actualHash"
     }
     Write-Output "PASS Extension public/protected ABI ($actualHash)"
 
-    $baselineApiPath = Join-Path $root "tests\compat\extension-api.txt"
-    $allowedRemovalPath = Join-Path $root "tests\compat\allowed-api-removals.txt"
+    $baselineApiPath = Join-Path $compatRoot "extension-api.txt"
+    $allowedRemovalPath = Join-Path $compatRoot "allowed-api-removals.txt"
     $baselineApi = Get-Content -LiteralPath $baselineApiPath |
         Where-Object { $_ -match '\S' -and $_ -notmatch '^\s*#' }
-    $actualApi = & (Join-Path $root "tests\compat\get-extension-api.ps1") `
+    $actualApi = & (Join-Path $compatRoot "get-extension-api.ps1") `
         -JarPath $testJar
     if ($LASTEXITCODE -ne 0) {
         throw "Extension ABI 一覧を生成できませんでした"
@@ -91,7 +92,9 @@ try {
     }
     Write-Output "PASS bundled Extension sample compilation"
 
-    $fixtureSource = Get-ChildItem -LiteralPath (Join-Path $root "tests\functional\fixtures") `
+    $fixtureSource = Get-ChildItem -LiteralPath (
+        Join-Path (Join-Path (Join-Path $root "tests") "functional") "fixtures"
+    ) `
         -File -Filter "*.java" |
         Select-Object -ExpandProperty FullName
     & javac --release 11 -encoding UTF-8 -Xlint:all -classpath $classes `

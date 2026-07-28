@@ -46,8 +46,15 @@ concurrency:
 
 jobs:
   package-and-test:
+    name: Package and test (JDK ${{ matrix.java-version }})
     runs-on: windows-2022
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        java-version:
+          - '17'
+          - '25'
     env:
       TEST_PREVIOUS_VERSION: 1.0.0
       TEST_CURRENT_VERSION: 1.0.1
@@ -72,11 +79,11 @@ jobs:
         shell: pwsh
         run: git -C nlFilters show -s --format="commit=%H%ncommitted=%cI%nsubject=%s" HEAD
 
-      - name: Set up JDK 17
+      - name: Set up JDK ${{ matrix.java-version }}
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ matrix.java-version }}
 
       - name: Show packaging tool versions
         shell: pwsh
@@ -171,7 +178,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: msi-lifecycle-diagnostics
+          name: msi-lifecycle-diagnostics-jdk-${{ matrix.java-version }}
           if-no-files-found: ignore
           include-hidden-files: true
           path: .test-work/msi-*.log
@@ -190,7 +197,7 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: nicocache-windows-installer
+          name: nicocache-windows-installer-jdk-${{ matrix.java-version }}
           if-no-files-found: error
           include-hidden-files: true
           path: |

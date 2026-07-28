@@ -25,7 +25,7 @@ public final class DependencyEngineTest {
             assertContains(result, "fallback", "fallback policy");
 
             List<String> winget = SystemDependencyManager.wingetArguments(
-                    "winget", "install", "EclipseAdoptium.Temurin.21.JDK");
+                    "winget", "install", "EclipseAdoptium.Temurin.25.JDK");
             assertTrue(!winget.contains("--scope"),
                     "WinGet user scope requirement rejected machine-only packages: " + winget);
             int source = winget.indexOf("--source");
@@ -43,9 +43,12 @@ public final class DependencyEngineTest {
             }
             assertTrue(count == 1, "User PATH contained duplicate entries: " + merged);
 
+            String java25 = engine.checkAll(25);
+            assertContains(java25, "Eclipse Temurin JDK", "Java 25 LTS dependency check");
+
             boolean invalidLts = false;
             try {
-                engine.checkAll(25);
+                engine.checkAll(29);
             } catch (IOException expected) {
                 invalidLts = expected.getMessage().contains("未検証のTemurin");
             }

@@ -72,3 +72,38 @@ jobs:
             $changes | Write-Output
             throw "ビルドまたはテストによって追跡対象の差分が発生しました"
           }
+
+  java-25-compatibility:
+    name: Java 25 compatibility (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Show Java 25 tool versions
+        shell: pwsh
+        run: |
+          java --version
+          javac --version
+          jar --version
+
+      - name: Build and test with Java 25
+        shell: pwsh
+        run: |
+          ./build-javac.ps1
+          ./test-functional.ps1
+          ./test-first-run-setup.ps1

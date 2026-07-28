@@ -138,7 +138,9 @@ final class SystemDependencyManager {
     }
 
     private List<Tool> tools(int javaMajor) throws IOException {
-        if (javaMajor != 17 && javaMajor != 21) throw new IOException("未検証のTemurin LTSです: " + javaMajor);
+        if (javaMajor != 17 && javaMajor != 21 && javaMajor != 25) {
+            throw new IOException("未検証のTemurin LTSです: " + javaMajor);
+        }
         return Arrays.asList(
                 new Tool("temurin", "Eclipse Temurin JDK", "EclipseAdoptium.Temurin." + javaMajor + ".JDK",
                         Arrays.asList("java", "-version"), "java.exe", true, javaMajor),

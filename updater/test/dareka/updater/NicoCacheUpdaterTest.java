@@ -38,9 +38,11 @@ public final class NicoCacheUpdaterTest {
         Constructor<?> choiceConstructor = choiceClass.getDeclaredConstructor(int.class, boolean.class, boolean.class);
         choiceConstructor.setAccessible(true);
         Object supported = choiceConstructor.newInstance(21, true, true);
-        Object unsupported = choiceConstructor.newInstance(25, false, false);
+        Object supported25 = choiceConstructor.newInstance(25, true, false);
+        Object unsupported = choiceConstructor.newInstance(29, false, false);
         assertEquals("Java 21 LTS（推奨）", supported.toString(), "recommended LTS label");
-        assertEquals("Java 25 LTS（未対応）", unsupported.toString(), "unsupported LTS label");
+        assertEquals("Java 25 LTS", supported25.toString(), "supported Java 25 LTS label");
+        assertEquals("Java 29 LTS（未対応）", unsupported.toString(), "unsupported LTS label");
         Field supportedField = choiceClass.getDeclaredField("supported");
         supportedField.setAccessible(true);
         if ((boolean) supportedField.get(unsupported)) {
@@ -50,7 +52,7 @@ public final class NicoCacheUpdaterTest {
         Field testedLts = updater.getDeclaredField("TESTED_LTS");
         testedLts.setAccessible(true);
         String set = testedLts.get(null).toString();
-        if (!set.contains("17") || !set.contains("21") || set.contains("25")) {
+        if (!set.contains("17") || !set.contains("21") || !set.contains("25")) {
             throw new AssertionError("TESTED_LTS policy is inconsistent: " + set);
         }
 

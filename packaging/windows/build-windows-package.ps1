@@ -196,6 +196,7 @@ if (Test-Path -LiteralPath $workRoot) {
 New-Item -ItemType Directory -Path $buildRoot, $dependencyRoot, $inputRoot,
     $outputRoot | Out-Null
 
+$java = Get-RequiredCommand -Name 'java'
 $javac = Get-RequiredCommand -Name 'javac'
 $jar = Get-RequiredCommand -Name 'jar'
 $jpackage = Get-RequiredCommand -Name 'jpackage'
@@ -372,8 +373,25 @@ $sharedJavaOptions = @(
     '--add-opens=java.base/java.io=ALL-UNNAMED',
     '--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED'
 )
+$moduleResolution = & $java --show-module-resolution -version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw '既定Javaモジュールを解決できませんでした'
+}
+$runtimeModules = @(
+    $moduleResolution | ForEach-Object {
+        if ($_ -match '^root (?<module>[A-Za-z0-9.]+) ') {
+            $Matches.module
+        }
+    }
+    'jdk.charsets'
+) | Sort-Object -Unique
+if ($runtimeModules.Count -le 1) {
+    throw '既定Javaモジュールの一覧が空です'
+}
+# 非modular Extension向けの既定集合にEUC-JP文字セットを加える。
 $jpackageArguments = @(
     '--type', 'app-image',
+    '--add-modules', ($runtimeModules -join ','),
     '--name', 'NicoCache_nl',
     '--app-version', $AppVersion,
     '--vendor', 'NicoCache_nl',

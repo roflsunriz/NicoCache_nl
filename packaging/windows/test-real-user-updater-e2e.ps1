@@ -112,7 +112,7 @@ try {
     Step "Detected installed version=$detected"
     if ($detected -ne $productVersion) { throw "Installed version detection mismatch: expected=$productVersion actual=$detected" }
 
-    $dependencyOutput = Invoke-Updater $updaterExe @('--dependency-update', '--app-root', $productRoot, '--java-major', '21') 'dependency-update' 3600
+    $dependencyOutput = Invoke-Updater $updaterExe @('--dependency-update', '--app-root', $productRoot, '--java-major', '25') 'dependency-update' 3600
     foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip', 'Bouncy Castle')) { if (-not $dependencyOutput.Contains($name)) { throw "Dependency result omitted: $name" } }
     foreach ($route in @('Eclipse Temurin JDK', 'FFmpeg')) {
         $routeLines = @($dependencyOutput -split '\r?\n' | Where-Object { $_ -match "^${route}:" })

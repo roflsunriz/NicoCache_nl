@@ -8,6 +8,9 @@
 
 ### Changed
 
+- Java 25 LTSを利用者が選べるよう、Windows、Linux、macOSでビルド、基本動作、
+  TLS、Extension ABI、初回セットアップを継続検証し、アップデーターの対応
+  Temurin一覧へJava 25を追加した。推奨LTSは引き続きJava 21とする。
 - 現行の利用手順と変更履歴を見つけやすくするため、`README.md` と
   `CHANGELOG.md` を正規の入口に統一し、旧版の README、変更履歴、開発メモを
   `documents/archive/` へ整理した。HTTPS MitM の手順は `documents/tls.md` に集約した。
@@ -74,6 +77,9 @@
 
 ### Fixed
 
+- Java 25の `jpackage` が作る最小ランタイムでも日本語設定を読み込めるよう、
+  Windowsパッケージへ `jdk.charsets` を明示的に同梱し、`EUC-JP` が見つからず
+  起動できない問題を修正した。
 - Windowsアプリイメージへネストした資料を配置できるよう、配布ファイルの移動前に
   移動先の親ディレクトリを作成し、インストーラーCIが途中終了する問題を修正した。
 - 独立アップデーターMSIの公開後も本体更新で正しい配布物を取得できるよう、
