@@ -22,6 +22,7 @@ $outputRoot = Join-Path $workRoot 'output'
 $msiTempRoot = Join-Path $workRoot 'jpackage-msi'
 $msiProbeOutputRoot = Join-Path $workRoot 'msi-probe-output'
 $msiProbeTempRoot = Join-Path $workRoot 'jpackage-msi-probe'
+$msiProbeResourceRoot = Join-Path $workRoot 'msi-probe-resources'
 $msiResourceRoot = Join-Path $workRoot 'msi-resources'
 $appImagePath = Join-Path $outputRoot 'NicoCache_nl'
 $packageIdentity = Import-PowerShellDataFile -LiteralPath (
@@ -66,6 +67,63 @@ function Get-RequiredCommand {
         throw "必要なコマンドが見つかりません: $Name"
     }
     return $command.Source
+}
+
+function Get-JavaMajorVersion {
+    param([Parameter(Mandatory)][string]$JavaPath)
+
+    $versionProperties = @(
+        & $JavaPath -XshowSettings:properties -version 2>&1 |
+            ForEach-Object { [string]$_ }
+    )
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Javaのバージョン情報を取得できませんでした'
+    }
+    $versionLine = $versionProperties |
+        Where-Object { $_ -match '^\s*java\.specification\.version\s*=' } |
+        Select-Object -First 1
+    $versionMatch = [regex]::Match(
+        [string]$versionLine,
+        'java\.specification\.version\s*=\s*(?<major>\d+)'
+    )
+    if (-not $versionMatch.Success) {
+        throw 'Javaのメジャーバージョンを判定できませんでした'
+    }
+    return [int]$versionMatch.Groups['major'].Value
+}
+
+function Copy-JPackageMsiResources {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Destination,
+        [Parameter(Mandatory)]
+        [int]$JavaMajorVersion
+    )
+
+    $sourceRoot = Join-Path $PSScriptRoot 'resources'
+    $mainTemplateName = if ($JavaMajorVersion -ge 25) {
+        'main-jdk25.wxs'
+    } else {
+        'main.wxs'
+    }
+    $mainTemplate = Join-Path $sourceRoot $mainTemplateName
+    if (-not (Test-Path -LiteralPath $mainTemplate -PathType Leaf)) {
+        throw "jpackage用WiXテンプレートが見つかりません: $mainTemplate"
+    }
+
+    New-Item -ItemType Directory -Path $Destination | Out-Null
+    Get-ChildItem -LiteralPath $sourceRoot -File |
+        Where-Object { $_.Name -notin @('main.wxs', 'main-jdk25.wxs') } |
+        ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination $Destination
+        }
+    Copy-Item -LiteralPath $mainTemplate -Destination (
+        Join-Path $Destination 'main.wxs'
+    )
+    Write-Output (
+        "JDK $JavaMajorVersion 用WiXテンプレートを使用します: " +
+        $mainTemplateName
+    )
 }
 
 function Invoke-NativeCommand {
@@ -200,6 +258,7 @@ $java = Get-RequiredCommand -Name 'java'
 $javac = Get-RequiredCommand -Name 'javac'
 $jar = Get-RequiredCommand -Name 'jar'
 $jpackage = Get-RequiredCommand -Name 'jpackage'
+$javaMajorVersion = Get-JavaMajorVersion -JavaPath $java
 if ($PackageType -in @('Msi', 'All')) {
     Get-RequiredCommand -Name 'candle' | Out-Null
     Get-RequiredCommand -Name 'light' | Out-Null
@@ -450,17 +509,19 @@ if ($PackageType -in @('Msi', 'All')) {
         '--win-dir-chooser'
     )
 
+    Copy-JPackageMsiResources -Destination $msiProbeResourceRoot `
+        -JavaMajorVersion $javaMajorVersion
     New-Item -ItemType Directory -Path $msiProbeOutputRoot | Out-Null
     $probeMsiArguments = $sharedMsiArguments + @(
         '--dest', $msiProbeOutputRoot,
         '--temp', $msiProbeTempRoot,
-        '--resource-dir', (Join-Path $PSScriptRoot 'resources')
+        '--resource-dir', $msiProbeResourceRoot
     )
     Invoke-NativeCommand -FilePath $jpackage -ArgumentList $probeMsiArguments `
         -FailureMessage 'Windows MSIの生成定義作成に失敗しました'
 
     New-Item -ItemType Directory -Path $msiResourceRoot | Out-Null
-    Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'resources') -File |
+    Get-ChildItem -LiteralPath $msiProbeResourceRoot -File |
         Copy-Item -Destination $msiResourceRoot
     $generatedBundle = Join-Path $msiProbeTempRoot 'config\bundle.wxf'
     if (-not (Test-Path -LiteralPath $generatedBundle -PathType Leaf)) {

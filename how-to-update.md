@@ -155,11 +155,13 @@ MSIを生成した場合は、インストールせずに内部テーブルを�
 ディレクトリから単一ランチャーを起動し、製品ルートからの自己再起動後も
 HTTP応答を継続することを確認する。
 
-MSIの `packaging/windows/resources/main.wxs` はJDK 17の `jpackage` が内蔵する
-WiXテンプレートへ、アンインストール前のWindows設定復元だけを追加したもので
-ある。JDKを更新する場合は、そのJDKの `jdk.jpackage.jmod` に含まれる
-`jdk/jpackage/internal/resources/main.wxs` と比較し、上流テンプレートの変更を
-取り込んでからMSI構造試験を実行する。
+MSIの `packaging/windows/resources/main.wxs` と `main-jdk25.wxs` は、それぞれ
+JDK 17とJDK 25の `jpackage` が内蔵するWiXテンプレートへ、アンインストール前の
+Windows設定復元を追加したものである。パッケージ生成時は実行中のJDKに合う
+テンプレートを自動選択する。JDKを更新する場合は、そのJDKの
+`jdk.jpackage.jmod` に含まれる `jdk/jpackage/internal/resources/main.wxs` と
+対応テンプレートを比較し、上流テンプレートの変更を取り込んでからMSI構造試験を
+実行する。
 
 ローカルではOSへインストールせず、`.test-work/windows-package/` 内の
 アプリイメージだけを検証する。MSIの生成と `msiexec /qn` による無人
