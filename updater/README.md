@@ -12,7 +12,7 @@ NicoCache_nl本体と管理対象の外部依存関係を、一つの独立GUI�
   - Eclipse Temurin、FFmpeg、Bouncy Castle、Apache Ant、7-Zipを確認・更新
   - Adoptium APIから公開中のLTSを動的に列挙
   - NicoCache_nlで動作確認済みのJava 17、21、25 LTSだけを選択可能にし、
-    未対応LTSはグレー表示（推奨はJava 21）
+    未対応LTSはグレー表示（推奨・既定はJava 25）
   - WinGet標準のスコープ選択に任せ、既定ではユーザーを優先しつつ、
     パッケージがマシンスコープだけに対応する場合はWindowsの許可後にマシンへ導入
   - Windows更新後にユーザーPATHからWindowsAppsが欠落していても、登録済みの

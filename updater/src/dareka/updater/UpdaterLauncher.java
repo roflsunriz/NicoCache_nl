@@ -4,7 +4,7 @@ import java.nio.file.Path;
 
 /** CLI/GUI entry point kept small so packaged E2E exercises production engine paths. */
 public final class UpdaterLauncher {
-    private static final int RECOMMENDED_LTS = 21;
+    private static final int RECOMMENDED_LTS = 25;
 
     private UpdaterLauncher() {}
 

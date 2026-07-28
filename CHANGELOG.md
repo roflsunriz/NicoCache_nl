@@ -10,6 +10,7 @@
 
 - MSIの同梱JavaランタイムをJDK 25へ統一し、リリース、WindowsインストーラーCI、
   依存更新後のパッケージ検証で同じJDK 25の実行環境を生成するようにした。
+- 独立アップデーターのTemurin選択でJava 25を推奨・既定にし、GUI表示とCLIの依存更新対象を一致させた。
 - ZIPとMSIが同じWindowsアプリイメージを配布するよう、共通ペイロード生成へ統一した。
   開発時に必要なソース、テスト、ビルド・検証スクリプト、資料は `development/` に
   同梱し、ZIP展開物と共通アプリイメージの内容一致テストを追加した。
@@ -23,7 +24,7 @@
   起動できるようにした。
 - Java 25 LTSを利用者が選べるよう、Windows、Linux、macOSでビルド、基本動作、
   TLS、Extension ABI、初回セットアップを継続検証し、アップデーターの対応
-  Temurin一覧へJava 25を追加した。推奨LTSは引き続きJava 21とする。
+  Temurin一覧へJava 25を追加した。推奨LTSもJava 25とする。
 - 現行の利用手順と変更履歴を見つけやすくするため、`README.md` と
   `CHANGELOG.md` を正規の入口に統一し、旧版の README、変更履歴、開発メモを
   `documents/archive/` へ整理した。HTTPS MitM の手順は `documents/tls.md` に集約した。

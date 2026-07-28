@@ -57,7 +57,7 @@ public final class NicoCacheUpdater {
             "\\\"available_lts_releases\\\"\\s*:\\s*\\[([^]]*)]");
     private static final Set<Integer> TESTED_LTS = Collections.unmodifiableSet(
             new HashSet<Integer>(Arrays.asList(17, 21, 25)));
-    private static final int RECOMMENDED_LTS = 21;
+    private static final int RECOMMENDED_LTS = 25;
 
     private Path applicationRoot;
     private final JFrame frame = new JFrame("NicoCache_nl Updater");
@@ -257,7 +257,7 @@ public final class NicoCacheUpdater {
 
     private void loadJavaChoices() {
         javaChoice.setModel(new DefaultComboBoxModel<JavaChoice>(new JavaChoice[] {
-                new JavaChoice(25, true, false), new JavaChoice(21, true, true),
+                new JavaChoice(25, true, true), new JavaChoice(21, true, false),
                 new JavaChoice(17, true, false)
         }));
         new SwingWorker<List<Integer>, Void>() {

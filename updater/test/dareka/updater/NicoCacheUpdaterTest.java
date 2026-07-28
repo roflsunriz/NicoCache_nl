@@ -37,11 +37,11 @@ public final class NicoCacheUpdaterTest {
         Class<?> choiceClass = Class.forName("dareka.updater.NicoCacheUpdater$JavaChoice");
         Constructor<?> choiceConstructor = choiceClass.getDeclaredConstructor(int.class, boolean.class, boolean.class);
         choiceConstructor.setAccessible(true);
-        Object supported = choiceConstructor.newInstance(21, true, true);
-        Object supported25 = choiceConstructor.newInstance(25, true, false);
+        Object supported = choiceConstructor.newInstance(21, true, false);
+        Object supported25 = choiceConstructor.newInstance(25, true, true);
         Object unsupported = choiceConstructor.newInstance(29, false, false);
-        assertEquals("Java 21 LTS（推奨）", supported.toString(), "recommended LTS label");
-        assertEquals("Java 25 LTS", supported25.toString(), "supported Java 25 LTS label");
+        assertEquals("Java 21 LTS", supported.toString(), "supported Java 21 LTS label");
+        assertEquals("Java 25 LTS（推奨）", supported25.toString(), "recommended Java 25 LTS label");
         assertEquals("Java 29 LTS（未対応）", unsupported.toString(), "unsupported LTS label");
         Field supportedField = choiceClass.getDeclaredField("supported");
         supportedField.setAccessible(true);
@@ -54,6 +54,17 @@ public final class NicoCacheUpdaterTest {
         String set = testedLts.get(null).toString();
         if (!set.contains("17") || !set.contains("21") || !set.contains("25")) {
             throw new AssertionError("TESTED_LTS policy is inconsistent: " + set);
+        }
+
+        Field recommendedLts = updater.getDeclaredField("RECOMMENDED_LTS");
+        recommendedLts.setAccessible(true);
+        if (((Integer) recommendedLts.get(null)).intValue() != 25) {
+            throw new AssertionError("GUI recommended LTS must be Java 25");
+        }
+        Field launcherRecommendedLts = UpdaterLauncher.class.getDeclaredField("RECOMMENDED_LTS");
+        launcherRecommendedLts.setAccessible(true);
+        if (((Integer) launcherRecommendedLts.get(null)).intValue() != 25) {
+            throw new AssertionError("CLI default LTS must be Java 25");
         }
 
         Method parseRelease = updater.getDeclaredMethod("parseRelease", String.class);
