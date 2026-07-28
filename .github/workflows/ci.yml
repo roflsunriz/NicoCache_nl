@@ -55,6 +55,11 @@ jobs:
         shell: pwsh
         run: .\test-first-run-setup.ps1
 
+      - name: Run strict end-to-end and GUI tests
+        timeout-minutes: 5
+        shell: pwsh
+        run: .\test-e2e.ps1
+
       - name: Run safe Windows setup script failure test
         shell: pwsh
         run: .\packaging\windows\test-windows-setup-script.ps1

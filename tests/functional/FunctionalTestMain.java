@@ -701,10 +701,13 @@ public final class FunctionalTestMain {
         int restartPort = upstreamPort;
         stopUpstream();
         try {
-            byte[] unavailable = requestRaw("GET http://example.invalid/unavailable HTTP/1.1\r\n"
+            Response unavailable = request(
+                    "GET http://example.invalid/unavailable HTTP/1.1\r\n"
                     + "Host: example.invalid\r\nConnection: close\r\n\r\n");
-            assertEquals(0, unavailable.length,
-                    "upstream connection failure must close the client response");
+            assertEquals(502, unavailable.status,
+                    "upstream connection failure status");
+            assertFalse(unavailable.bodyText().isBlank(),
+                    "upstream connection failure response body");
         } finally {
             startUpstream(restartPort);
         }

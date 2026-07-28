@@ -94,6 +94,10 @@ public class HttpHeader {
      */
     private static final Pattern MESSAGE_HEADER_PATTERN =
             Pattern.compile("^([^:]+):\\s*(.*)\r?\n");
+    private static final Pattern FIELD_NAME_PATTERN =
+            Pattern.compile("^[!#$%&'*+.^_`|~0-9A-Za-z-]+$");
+    private static final int DEFAULT_MAX_HEADER_BYTES = 64 * 1024;
+    private static final int DEFAULT_MAX_HEADER_LINE_BYTES = 16 * 1024;
     /*
      * 文字エンコーディングの扱いについてメモ:
      *
@@ -283,10 +287,27 @@ public class HttpHeader {
 
     private void init(InputStream source) throws IOException, HttpIOException {
         int ch;
+        int headerBytes = 0;
+        int maxHeaderBytes = positiveIntegerProperty(
+                "httpHeaderMaxBytes", DEFAULT_MAX_HEADER_BYTES);
+        int maxLineBytes = Math.min(
+                maxHeaderBytes,
+                positiveIntegerProperty(
+                        "httpHeaderMaxLineBytes",
+                        DEFAULT_MAX_HEADER_LINE_BYTES));
         ByteArrayOutputStream lineBuf = new ByteArrayOutputStream(512);
 
         while ((ch = source.read()) != -1) {
+            headerBytes++;
+            if (headerBytes > maxHeaderBytes) {
+                throw new HttpIOException("HTTP header exceeds "
+                        + maxHeaderBytes + " bytes");
+            }
             lineBuf.write(ch);
+            if (lineBuf.size() > maxLineBytes) {
+                throw new HttpIOException("HTTP header line exceeds "
+                        + maxLineBytes + " bytes");
+            }
 
             if (ch != '\n') { // go next read() immediately for performance.
                 continue;
@@ -312,10 +333,11 @@ public class HttpHeader {
                 }
 
                 Matcher m = MESSAGE_HEADER_PATTERN.matcher(line);
-                if (m.find()) {
+                if (m.find()
+                        && FIELD_NAME_PATTERN.matcher(m.group(1)).matches()) {
                     messageHeaders.add(m.group(1), m.group(2));
                 } else {
-                    Logger.warning("invalid header field: " + lineBuf);
+                    throw new HttpIOException("invalid HTTP header field");
                 }
             }
 
@@ -326,6 +348,12 @@ public class HttpHeader {
             String header = createIncompleteHeaderString(lineBuf);
             throw new HttpIOException("premature end of header: " + header);
         }
+    }
+
+    private static int positiveIntegerProperty(
+            String name, int defaultValue) {
+        int configured = Integer.getInteger(name, defaultValue);
+        return configured > 0 ? configured : defaultValue;
     }
 
     private String createIncompleteHeaderString(ByteArrayOutputStream lineBuf)

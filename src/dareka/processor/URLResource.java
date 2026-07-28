@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.ConnectException;
 import java.net.ProtocolException;
 import java.net.Proxy;
 import java.net.Socket;
@@ -356,7 +357,13 @@ public class URLResource extends Resource {
         // [nl] ヘッダを受信していないなら受信して保存しておく
         if (captureResponseHeader == null) {
             captureResponseHeader = getResponseHeader(receiverIn, requestHeaderArg);
-            if (captureResponseHeader == null) return false;
+            if (captureResponseHeader == null) {
+                if (isStopped()) {
+                    return false;
+                }
+                throw new ConnectException(
+                        "upstream did not return an HTTP response");
+            }
         }
 
         try {
@@ -416,6 +423,8 @@ public class URLResource extends Resource {
             } finally {
                 CloseUtil.close(in);
             }
+        } catch (ConnectException e) {
+            throw e;
         } catch (IOException e) {
             Logger.debugWithThread(e);
             canContinue = false;

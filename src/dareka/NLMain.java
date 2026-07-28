@@ -4,7 +4,11 @@ import java.awt.AWTException;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Desktop;
+import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.GraphicsConfiguration;
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
 import java.awt.Image;
 import java.awt.MenuItem;
 import java.awt.PopupMenu;
@@ -492,8 +496,7 @@ class GUILauncher {
     }
 
     void close() {
-        try {
-            SwingUtilities.invokeAndWait(() -> {
+        Runnable closeGui = () -> {
                 if (tray != null) {
                     tray.close(); tray = null;
                 }
@@ -510,7 +513,13 @@ class GUILauncher {
                     logWindow.frame = null;
                 }
                 config.save();
-            });
+        };
+        if (SwingUtilities.isEventDispatchThread()) {
+            closeGui.run();
+            return;
+        }
+        try {
+            SwingUtilities.invokeAndWait(closeGui);
         } catch (InterruptedException | InvocationTargetException e) {
             Logger.error(e);
         }
@@ -522,11 +531,19 @@ class GUILauncher {
 
     LogPane addExtPane(String title, String tip) {
         LogPane[] result = { null };
+        Runnable addPane = () -> {
+            result[0] = logWindow.addTab(
+                    title,
+                    tip,
+                    config.getPositiveInteger("MaxLines") / 2,
+                    Boolean.getBoolean("dedupeLogMessage"));
+        };
+        if (SwingUtilities.isEventDispatchThread()) {
+            addPane.run();
+            return result[0];
+        }
         try {
-            SwingUtilities.invokeAndWait(() -> {
-                 result[0] = logWindow.addTab(title, tip, config.getInteger("MaxLines") / 2,
-                         Boolean.getBoolean("dedupeLogMessage"));
-            });
+            SwingUtilities.invokeAndWait(addPane);
         } catch (InterruptedException | InvocationTargetException e) {
             Logger.error(e);
         }
@@ -558,7 +575,7 @@ class GUILauncher {
             defaults.setProperty("LogWindowH", "480");
             defaults.setProperty("LogWindowAlwaysOnTop", "true");
             defaults.setProperty("LogWindowLineWrap", "true");
-            defaults.setProperty("DebugMode", "falae");
+            defaults.setProperty("DebugMode", "false");
             defaults.setProperty("DebugLog", "debug.log");
             defaults.setProperty("ExitOnClose", "false");
             defaults.setProperty("FlipColor", "false");
@@ -617,7 +634,14 @@ class GUILauncher {
         }
 
         boolean getBoolean(String key) {
-            return Boolean.parseBoolean(properties.getProperty(key));
+            String value = properties.getProperty(key);
+            if ("true".equalsIgnoreCase(value)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase(value)) {
+                return false;
+            }
+            return Boolean.parseBoolean(defaults.getProperty(key));
         }
 
         void setBoolean(String key, boolean value) {
@@ -630,6 +654,14 @@ class GUILauncher {
                 return Integer.parseInt(properties.getProperty(key));
             } catch (Exception e) {
                 Logger.error(e);
+            }
+            return Integer.parseInt(defaults.getProperty(key));
+        }
+
+        int getPositiveInteger(String key) {
+            int value = getInteger(key);
+            if (value > 0) {
+                return value;
             }
             return Integer.parseInt(defaults.getProperty(key));
         }
@@ -734,7 +766,12 @@ class GUILauncher {
         String windowTitle = "NicoCache_nl";
 
         LogWindow(boolean debugMode) {
-            int maxLines = config.getInteger("MaxLines");
+            int maxLines = config.getPositiveInteger("MaxLines");
+            frame.getRootPane().setName("log.frame");
+            frame.getRootPane().getAccessibleContext()
+                    .setAccessibleName("log.frame");
+            tabbedPane.setName("log.tabs");
+            tabbedPane.getAccessibleContext().setAccessibleName("log.tabs");
             mainPane = addTab("main", "通常ログ", maxLines,
                     Boolean.getBoolean("dedupeLogMessage"));
             // このタイミングではconfigが読み込まれていない可能性が高いので
@@ -771,14 +808,50 @@ class GUILauncher {
             });
             frame.setAlwaysOnTop(
                     config.getBoolean("LogWindowAlwaysOnTop"));
-            frame.setBounds(
+            frame.setMinimumSize(new Dimension(320, 200));
+            frame.setBounds(visibleBounds(
                     config.getInteger("LogWindowX"),
                     config.getInteger("LogWindowY"),
-                    config.getInteger("LogWindowW"),
-                    config.getInteger("LogWindowH"));
+                    config.getPositiveInteger("LogWindowW"),
+                    config.getPositiveInteger("LogWindowH")));
             frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
             frame.setIconImage(iconImage);
             frame.setTitle(windowTitle);
+        }
+
+        private static Rectangle visibleBounds(
+                int x, int y, int width, int height) {
+            Rectangle requested = new Rectangle(
+                    x, y, Math.max(320, width), Math.max(200, height));
+            Rectangle targetScreen = null;
+            long largestIntersection = -1L;
+            for (GraphicsDevice device : GraphicsEnvironment
+                    .getLocalGraphicsEnvironment().getScreenDevices()) {
+                GraphicsConfiguration configuration =
+                        device.getDefaultConfiguration();
+                Rectangle candidate = configuration.getBounds();
+                Rectangle intersection = requested.intersection(candidate);
+                long area = intersection.isEmpty()
+                        ? 0L
+                        : (long) intersection.width * intersection.height;
+                if (area > largestIntersection) {
+                    largestIntersection = area;
+                    targetScreen = candidate;
+                }
+            }
+            if (targetScreen == null || targetScreen.isEmpty()) {
+                return requested;
+            }
+            int usableWidth = Math.min(requested.width, targetScreen.width);
+            int usableHeight = Math.min(requested.height, targetScreen.height);
+            int maxX = targetScreen.x + targetScreen.width - usableWidth;
+            int maxY = targetScreen.y + targetScreen.height - usableHeight;
+            int visibleX = Math.max(
+                    targetScreen.x, Math.min(x, maxX));
+            int visibleY = Math.max(
+                    targetScreen.y, Math.min(y, maxY));
+            return new Rectangle(
+                    visibleX, visibleY, usableWidth, usableHeight);
         }
 
         void appendTitle(String append) {
@@ -790,7 +863,9 @@ class GUILauncher {
         }
 
         LogPane addTab(String title, String tip, int maxLines, boolean dedupe) {
-            final LogPane pane = new LogPane(title, tip, maxLines, dedupe, this);
+            int tabIndex = tabbedPane.getTabCount();
+            final LogPane pane = new LogPane(
+                    title, tip, maxLines, dedupe, this, tabIndex);
             if ("main".equals(title)) {
                 pane.popup.addSeparator();
 
@@ -838,8 +913,27 @@ class GUILauncher {
                 ChangeListener listener, JPopupMenu popup) {
             boolean checked = config.getBoolean(key);
             JCheckBoxMenuItem menuItem = new JCheckBoxMenuItem(label, checked);
+            String componentName = menuComponentName(key);
+            menuItem.setName(componentName);
+            menuItem.getAccessibleContext().setAccessibleName(componentName);
             menuItem.addChangeListener(listener);
             popup.add(menuItem);
+        }
+
+        private static String menuComponentName(String key) {
+            if ("LogWindowLineWrap".equals(key)) {
+                return "log.wrap";
+            }
+            if ("LogWindowAlwaysOnTop".equals(key)) {
+                return "log.always-on-top";
+            }
+            if ("HideWindow".equals(key)) {
+                return "log.hide-on-start";
+            }
+            if ("ExitOnClose".equals(key)) {
+                return "log.exit-on-close";
+            }
+            return "log.option." + key;
         }
 
         boolean isSelected(ChangeEvent e) {
@@ -848,10 +942,6 @@ class GUILauncher {
     }
 
     static class LogPane {
-        static final Font FONT = new Font(
-                config.getProperty("FontName"),
-                Font.PLAIN,
-                config.getInteger("FontSize"));
         JTextArea textArea = new JTextArea();
         JPopupMenu popup = new JPopupMenu();
         JScrollPane scrollPane = new JScrollPane(textArea,
@@ -863,11 +953,30 @@ class GUILauncher {
         LogWindow logWindow;
 
         LogPane(String title, String tip,
-                int maxLines, boolean dedupe, LogWindow logWindow) {
-            this.maxLines = Math.min(maxLines, config.getInteger("MaxLinesHard"));
+                int maxLines, boolean dedupe, LogWindow logWindow,
+                int tabIndex) {
+            String componentPrefix;
+            if ("main".equals(title) || "debug".equals(title)) {
+                componentPrefix = "log." + title;
+            } else {
+                componentPrefix = "log.extension-" + tabIndex;
+            }
+            textArea.setName(componentPrefix + ".text");
+            textArea.getAccessibleContext()
+                    .setAccessibleName(componentPrefix + ".text");
+            popup.setName(componentPrefix + ".popup");
+            popup.getAccessibleContext()
+                    .setAccessibleName(componentPrefix + ".popup");
+            scrollPane.setName(componentPrefix + ".scroll");
+            scrollPane.getAccessibleContext()
+                    .setAccessibleName(componentPrefix + ".scroll");
+            this.maxLines = Math.min(
+                    Math.max(1, maxLines),
+                    config.getPositiveInteger("MaxLinesHard"));
             this.dedupe = dedupe;
             this.logWindow = logWindow;
-            this.maxLinesInBacklog = config.getInteger("MaxLinesHard");
+            this.maxLinesInBacklog =
+                    config.getPositiveInteger("MaxLinesHard");
             setupTextArea();
             setupPopupMenu();
             setupScrollPane();
@@ -878,7 +987,7 @@ class GUILauncher {
             textArea.setFont(new Font(
                     config.getProperty("FontName"),
                     Font.PLAIN,
-                    config.getInteger("FontSize")));
+                    config.getPositiveInteger("FontSize")));
             textArea.setLineWrap(
                     config.getBoolean("LogWindowLineWrap"));
             textArea.addFocusListener(new FocusAdapter() {
@@ -899,12 +1008,14 @@ class GUILauncher {
             JMenuItem menuItem;
 
             menuItem = new JMenuItem("コピー");
+            configureMenuIdentity(menuItem, "log.copy");
             menuItem.addActionListener((ActionEvent e) -> {
                 textArea.copy();
             });
             popup.add(menuItem);
 
             menuItem = new JMenuItem("全選択");
+            configureMenuIdentity(menuItem, "log.select-all");
             menuItem.addActionListener((ActionEvent e) -> {
                 textArea.selectAll();
             });
@@ -920,6 +1031,12 @@ class GUILauncher {
                     }
                 }
             });
+        }
+
+        private static void configureMenuIdentity(
+                JMenuItem menuItem, String name) {
+            menuItem.setName(name);
+            menuItem.getAccessibleContext().setAccessibleName(name);
         }
 
         void setupScrollPane() {

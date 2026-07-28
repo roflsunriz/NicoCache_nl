@@ -33,6 +33,7 @@ public class LocalFileResource extends Resource implements ConfigObserver {
     private String statusline;
     private boolean clientCanKeepAlive;
     private boolean needsSendingBody, needsDecodingBody;
+    private boolean headRequest, rangeUnsatisfied;
     private boolean setLastModified = true;
     private HttpResponseHeader responseHeader;
 
@@ -128,6 +129,7 @@ public class LocalFileResource extends Resource implements ConfigObserver {
     public HttpResponseHeader getResponseHeader(HttpRequestHeader requestHeader,
             boolean setMandatoryHeader) throws IOException {
         needsSendingBody = needsDecodingBody = false;
+        headRequest = rangeUnsatisfied = false;
 
         String contentEncoding = null;
         String path = file.getPath();
@@ -152,11 +154,13 @@ public class LocalFileResource extends Resource implements ConfigObserver {
                 } else if (checkIfPartialContent(requestHeader)){
                     needsSendingBody = true;
                     statusline = "HTTP/1.1 206 Partial Content";
+                } else if (rangeUnsatisfied) {
+                    statusline = "HTTP/1.1 416 Range Not Satisfiable";
                 } else {
                     needsSendingBody = true;
                 }
             } else if (HttpHeader.HEAD.equalsIgnoreCase(method)) {
-                // do nothing.
+                headRequest = true;
             } else if (HttpHeader.POST.equalsIgnoreCase(method)) {
                 statusline = "HTTP/1.1 405 Method Not Allowed";
             } else {
@@ -271,9 +275,17 @@ public class LocalFileResource extends Resource implements ConfigObserver {
                 Matcher m = RANGE_PATTERN.matcher(range);
                 if (m.find()) {
                     start = Long.parseLong(m.group(1));
+                    if (start > end) {
+                        rangeUnsatisfied = true;
+                        return false;
+                    }
                     if (m.group(2) != null) {
                         long n = Long.parseLong(m.group(2));
-                        if (start < n && n < end) {
+                        if (n < start) {
+                            rangeUnsatisfied = true;
+                            return false;
+                        }
+                        if (n < end) {
                             end = n;
                         }
                     }
@@ -320,7 +332,7 @@ public class LocalFileResource extends Resource implements ConfigObserver {
     protected void doSetMandatoryResponseHeader(HttpResponseHeader responseHeader) {
         long contentLength = 0L;
         if (isValid()) {
-            if (needsSendingBody) {
+            if (needsSendingBody || headRequest) {
                 contentLength = getLength();
             }
             if (setLastModified) {
@@ -341,6 +353,9 @@ public class LocalFileResource extends Resource implements ConfigObserver {
             responseHeader.setMessageHeader("Accept-Ranges", "bytes");
             responseHeader.setMessageHeader("Content-Range",
                     String.format("bytes %d-%d/%d", start, end, file.length()));
+        } else if (responseHeader.getStatusCode() == 416) {
+            responseHeader.setMessageHeader(
+                    "Content-Range", "bytes */" + file.length());
         }
 
         if (clientCanKeepAlive) {

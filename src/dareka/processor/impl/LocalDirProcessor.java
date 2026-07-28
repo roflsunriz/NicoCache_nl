@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.URLDecoder;
+import java.nio.file.Path;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -48,7 +49,8 @@ public class LocalDirProcessor implements Processor {
     public Resource onRequest(HttpRequestHeader requestHeader, Socket browser)
             throws IOException {
         // GET以外も捕まえてサーバに存在しないURLへのリクエストが飛ぶのを防ぐ
-        if (!HttpHeader.GET.equals(requestHeader.getMethod())) {
+        if (!HttpHeader.GET.equals(requestHeader.getMethod())
+                && !HttpHeader.HEAD.equals(requestHeader.getMethod())) {
             return StringResource.getMethodNotAllowed();
         }
 
@@ -118,17 +120,34 @@ public class LocalDirProcessor implements Processor {
         try {
             for (int i = 0, end = list.length; i < end; ++i) {
                 list[i] = URLDecoder.decode(list[i], "UTF-8");
+                if (list[i].isEmpty()
+                        || ".".equals(list[i])
+                        || "..".equals(list[i])
+                        || list[i].indexOf('/') >= 0
+                        || list[i].indexOf('\\') >= 0
+                        || list[i].indexOf('\0') >= 0) {
+                    return null;
+                }
             };
         }
-        catch (UnsupportedEncodingException e) {
+        catch (UnsupportedEncodingException | IllegalArgumentException e) {
             Logger.warning("(LocalDirProcessor)failed to decode url: " + path);
-            return new File(UserDataPaths.userFile("local"), path);
+            return null;
         };
 
-        File file = UserDataPaths.userFile("local");
+        File root = UserDataPaths.userFile("local");
+        File file = root;
         for (int i = 0, end = list.length; i < end; ++i) {
             file = new File(file, list[i]);
         };
-        return file;
+        try {
+            Path canonicalRoot = root.getCanonicalFile().toPath();
+            Path canonicalFile = file.getCanonicalFile().toPath();
+            return canonicalFile.startsWith(canonicalRoot)
+                    ? canonicalFile.toFile() : null;
+        } catch (IOException e) {
+            Logger.warning("(LocalDirProcessor)failed to validate path: " + path);
+            return null;
+        }
     }
 }

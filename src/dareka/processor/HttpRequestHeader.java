@@ -30,20 +30,25 @@ public class HttpRequestHeader extends HttpHeader {
 
     public HttpRequestHeader(InputStream source) throws IOException {
         super(source);
-        init(false);
+        init(false, true);
     }
 
     public HttpRequestHeader(InputStream source, boolean tlsLoopback) throws IOException {
         super(source);
-        init(tlsLoopback);
+        init(tlsLoopback, true);
     }
 
     public HttpRequestHeader(String source) throws IOException {
         super(source);
-        init(false);
+        init(false, false);
     }
 
-    private void init(boolean tlsLoopback) throws HttpIOException {
+    private void init(
+            boolean tlsLoopback, boolean validateIncomingRequest)
+            throws HttpIOException {
+        if (validateIncomingRequest) {
+            validateFramingHeaders();
+        }
         Matcher m = PROXY_REQUEST_LINE_PATTERN.matcher(getStartLine());
         if (m.find()) {
             method = m.group(1);
@@ -54,6 +59,9 @@ public class HttpRequestHeader extends HttpHeader {
                     : Integer.parseInt(m.group(5));
             path = m.group(6) == null ? "" : m.group(6);
             version = m.group(7);
+            if (validateIncomingRequest && "HTTP/1.1".equals(version)) {
+                validateHostHeader();
+            }
 
             if (host == null) {
                 String hostport;
@@ -101,6 +109,43 @@ public class HttpRequestHeader extends HttpHeader {
         }
     }
 
+    private void validateFramingHeaders() throws HttpIOException {
+        java.util.List<String> contentLengths =
+                getMessageHeadersOfName(CONTENT_LENGTH);
+        if (contentLengths == null) {
+            contentLengths = java.util.Collections.emptyList();
+        }
+        if (contentLengths.size() > 1) {
+            throw new HttpIOException(
+                    "multiple Content-Length fields are not allowed");
+        }
+        String contentLength = contentLengths.isEmpty()
+                ? null : contentLengths.get(0);
+        if (contentLength != null) {
+            if (!contentLength.matches("0|[1-9][0-9]*")) {
+                throw new HttpIOException("invalid Content-Length");
+            }
+            try {
+                Long.parseLong(contentLength);
+            } catch (NumberFormatException error) {
+                throw new HttpIOException("Content-Length is too large");
+            }
+        }
+        if (getMessageHeader("Transfer-Encoding") != null) {
+            throw new HttpIOException(
+                    "Transfer-Encoding requests are not supported");
+        }
+    }
+
+    private void validateHostHeader() throws HttpIOException {
+        java.util.List<String> hosts = getMessageHeadersOfName("Host");
+        if (hosts == null || hosts.size() != 1
+                || hosts.get(0).isBlank()) {
+            throw new HttpIOException(
+                    "HTTP/1.1 requests require exactly one Host field");
+        }
+    }
+
     public String getMethod() {
         return method;
     }
@@ -132,7 +177,7 @@ public class HttpRequestHeader extends HttpHeader {
         updateStartLine();
         // [nl] 内部変数(pathとか)にも反映する
         try {
-            init(false);
+            init(false, false);
             updateHostHeader();
         } catch (HttpIOException e) {
             // ignore

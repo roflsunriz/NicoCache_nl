@@ -38,6 +38,7 @@ public class ConnectionManager implements Runnable {
     private Config config;
     private String processingMethod;
     private String processingURI;
+    private HttpRequestHeader processingRequestHeader;
     private volatile Resource processingResource;
     private volatile boolean stopped = false;
 
@@ -67,16 +68,19 @@ public class ConnectionManager implements Runnable {
                 // loop until the method returns false.
                 processingMethod = null;
                 processingURI = null;
+                processingRequestHeader = null;
             }
             Logger.debugWithThread("loop end");
         } catch (ConnectException e) {
             // アウトバウンド側に接続失敗
             Logger.debugWithThread(e);
             printWarning(e);
+            sendBadGateway();
         } catch (UnresolvedAddressException e) {
             // 存在しないドメインにhttps接続しようとした時
             Logger.debugWithThread(e);
             printWarning(e);
+            sendBadGateway();
         } catch (SocketException e) {
             Logger.debugWithThread(e);
 
@@ -140,6 +144,21 @@ public class ConnectionManager implements Runnable {
         Logger.warning("failed to process: " + processingURI + "\n\t"
                 + e.toString()
                 + (cause != null ? "\n\tCaused by " + cause.toString() : ""));
+    }
+
+    private void sendBadGateway() {
+        if (processingRequestHeader == null || browser.isClosed()) {
+            return;
+        }
+        try {
+            Resource resource = StringResource.getBadGateway(
+                    "Upstream connection failed");
+            resource.setResponseHeader(
+                    HttpHeader.CONTENT_TYPE, "text/plain; charset=UTF-8");
+            resource.transferTo(browser, processingRequestHeader, config);
+        } catch (Exception error) {
+            Logger.debugWithThread(error);
+        }
     }
 
     private void printWarningWithStacktrace(Exception e) {
@@ -252,6 +271,7 @@ public class ConnectionManager implements Runnable {
         browser.deleteInputStreamBuffer(); // [nl]
         HttpRequestHeader requestHeader =
                 new HttpRequestHeader(browser.getInputStream(), tlsLoopback);
+        processingRequestHeader = requestHeader;
         processingMethod = requestHeader.getMethod();
         processingURI = requestHeader.getURI();
 
