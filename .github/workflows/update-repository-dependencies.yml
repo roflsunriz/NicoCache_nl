@@ -1,0 +1,140 @@
+name: Update repository dependencies
+
+on:
+  schedule:
+    - cron: '17 18 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-repository-dependencies
+  cancel-in-progress: false
+
+jobs:
+  update-bouncy-castle:
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Resolve and verify latest Bouncy Castle release
+        id: update
+        shell: pwsh
+        run: |
+          .\packaging\windows\update-dependency-lock.ps1 `
+            -Mode Update `
+            -ReportFile "$env:RUNNER_TEMP\dependency-update-report.md"
+          .\packaging\windows\test-dependency-lock.ps1
+
+      - name: Set up JDK 11 for compatibility build
+        if: steps.update.outputs.updated == 'true'
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Run Java build and functional tests
+        if: steps.update.outputs.updated == 'true'
+        shell: pwsh
+        run: |
+          .\build-javac.ps1
+          .\test-functional.ps1
+          .\test-first-run-setup.ps1
+          .\packaging\windows\test-windows-setup-script.ps1
+
+      - name: Check out nlFilters packaging sources
+        if: steps.update.outputs.updated == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: roflsunriz/nlFilters
+          ref: main
+          path: nlFilters
+          persist-credentials: false
+
+      - name: Set up JDK 17 for jpackage
+        if: steps.update.outputs.updated == 'true'
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build and test Windows package
+        if: steps.update.outputs.updated == 'true'
+        shell: pwsh
+        run: |
+          .\packaging\windows\build-windows-package.ps1 `
+            -PackageType All `
+            -AppVersion 1.0.0 `
+            -NlFiltersSource .\nlFilters
+          .\packaging\windows\test-windows-app-image.ps1 `
+            -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
+          $msi = Get-ChildItem `
+            -LiteralPath .\.test-work\windows-package\output `
+            -File -Filter '*.msi' | Select-Object -First 1
+          if (-not $msi) {
+            throw 'MSI成果物がありません'
+          }
+          .\packaging\windows\test-windows-msi-structure.ps1 `
+            -MsiPath $msi.FullName
+
+      - name: Create or update dependency pull request
+        if: steps.update.outputs.updated == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW_VERSION: ${{ steps.update.outputs.new-version }}
+        run: |
+          $branch = 'automation/update-bouncy-castle'
+          $title = "build(deps): Bouncy Castleを$env:NEW_VERSIONへ更新"
+          $report = "$env:RUNNER_TEMP\dependency-update-report.md"
+          $additionalReport = @(
+            ''
+            '## 自動検証'
+            ''
+            '- dependency-lock.psd1のURL・版・ファイル名整合性'
+            '- 公式Maven Centralから取得した実体のSHA-256'
+            '- POMのライセンス名と公式ライセンスURL'
+            '- Java 11コンパイルと機能テスト'
+            '- Windows AppImage・MSI生成'
+            '- AppImageスモークテストとMSI構造テスト'
+            ''
+            '自動マージは行いません。レビュー後に取り込んでください。'
+          )
+          Add-Content -LiteralPath $report -Value $additionalReport -Encoding utf8
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C $branch
+          git add packaging/windows/dependency-lock.psd1
+          git commit -m $title
+          git push --force-with-lease origin "HEAD:refs/heads/$branch"
+
+          $existing = gh pr list `
+            --head $branch `
+            --base main `
+            --state open `
+            --json number `
+            --jq '.[0].number'
+          if ($existing) {
+            gh pr edit $existing --title $title --body-file $report
+          }
+          else {
+            gh pr create `
+              --base main `
+              --head $branch `
+              --title $title `
+              --body-file $report
+          }
+
+      - name: Report no update
+        if: steps.update.outputs.updated != 'true'
+        shell: pwsh
+        run: Write-Output 'Bouncy Castleは最新です。PRは作成しません。'

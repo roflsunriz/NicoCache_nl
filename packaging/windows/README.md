@@ -147,9 +147,16 @@ CA生成と証明書ストアが変わらないことを検証する。自動プ
 ## 依存関係
 
 Bouncy Castle 1.84 の取得URLとSHA-256を `dependency-lock.psd1` に固定している。
-ダウンロード後のハッシュが一致しない場合は生成を中止する。依存バージョンを
-更新する場合は、公式配布元、ライセンス、ハッシュ、証明書生成テストを確認して
-ロックファイルと `THIRD-PARTY-NOTICES.txt` を更新する。
+ダウンロード後のハッシュが一致しない場合は生成を中止する。毎週のGitHub Actions
+はMaven Centralの公式メタデータから安定版を確認し、3成果物の版、公式URL、
+SHA-256とPOMのライセンスを検証して、更新がある場合だけレビュー用PRを作成する。
+自動マージは行わない。
+
+手動確認では `update-dependency-lock.ps1 -Mode Check`、
+`test-dependency-lock.ps1`、`test-dependency-update.ps1` を実行する。版を更新する
+場合は `-Mode Update` を使い、証明書生成とパッケージ試験に加えて
+`THIRD-PARTY-NOTICES.txt` のライセンス本文と著作権表示も確認する。詳しい手順と
+復旧方法はリポジトリ直下の `how-to-update.md` を参照する。
 
 ## インストーラーの範囲
 

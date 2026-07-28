@@ -81,6 +81,37 @@ majorとminorは0〜255、buildは0〜65535にする。本体とアップデー�
 `NicoCache_nl-Updater-<アップデーター版>.msi` とそのSHA-256も添付される。
 既存タグから再実行する場合は、Release workflow の手動実行でタグ名を指定する。
 
+## リポジトリ依存関係
+
+GitHub Actionsは完全なコミットSHAへ固定し、Dependabotが毎週月曜日に同じ
+メジャー系列の更新を確認する。メジャー更新は自動追従せず、変更内容と移行条件を
+別途レビューする。DependabotとBouncy Castleの更新PRは自動マージしない。
+
+Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Central
+の公式メタデータから安定版を確認する。更新がある場合だけ
+`automation/update-bouncy-castle` ブランチのPRを作成または更新し、3成果物の
+版、URL、SHA-256、サイズとPOMのライセンス情報を本文へ記録する。
+
+手元で更新有無とレポートを確認する場合は次を実行する。
+
+```powershell
+.\packaging\windows\update-dependency-lock.ps1 `
+  -Mode Check `
+  -ReportFile .\.test-work\dependency-update-report.md
+.\packaging\windows\test-dependency-lock.ps1
+.\packaging\windows\test-dependency-update.ps1
+```
+
+ロックを更新する場合は `-Mode Update` を指定する。更新後は上記2テストに加えて
+本体ビルド、機能テスト、Windows AppImage・MSI生成と構造試験を実行し、
+`packaging/windows/THIRD-PARTY-NOTICES.txt` のライセンス本文や著作権表示に
+変更がないことも確認する。ライセンス名または公式URLが想定と異なる場合は
+自動更新せず、上流の公式POMとライセンスを確認する。
+
+更新PRの検証に失敗した場合はマージしない。自動処理が変更する管理対象は
+`packaging/windows/dependency-lock.psd1` だけなので、誤更新を取り込んだ場合は
+該当コミットを `git revert` し、直前のロックへ戻したうえで再検証する。
+
 ## Windows インストーラー
 
 JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチャーを含む
