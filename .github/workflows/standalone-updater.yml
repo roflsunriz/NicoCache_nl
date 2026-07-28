@@ -6,6 +6,7 @@ on:
       - 'updater/**'
       - 'packaging/windows/build-standalone-updater.ps1'
       - 'packaging/windows/test-standalone-updater.ps1'
+      - 'packaging/windows/test-real-user-updater-e2e.ps1'
       - '.github/workflows/standalone-updater.yml'
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - 'updater/**'
       - 'packaging/windows/build-standalone-updater.ps1'
       - 'packaging/windows/test-standalone-updater.ps1'
+      - 'packaging/windows/test-real-user-updater-e2e.ps1'
       - '.github/workflows/standalone-updater.yml'
   workflow_dispatch:
   schedule:
@@ -35,42 +37,30 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Set up JDK 17 used only to build the updater
+      - name: Set up JDK 17 used only to build updater
         uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Record runner state
+      - name: Record runner and WinGet state
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           java --version
           javac --version
           jpackage --version
-          $winget = Get-Command winget -ErrorAction SilentlyContinue
-          if ($winget) { winget --version } else { Write-Output 'WinGet unavailable; fallback path will be exercised' }
-          $PSVersionTable
+          if (Get-Command winget -ErrorAction SilentlyContinue) { winget --version }
+          else { Write-Output 'WinGet unavailable; strict E2E must use official API fallback' }
 
-      - name: Verify WinGet community package identities when WinGet exists
+      - name: Verify WinGet source package contracts when available
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-            Write-Output 'WinGet unavailable; package identity contract skipped and fallback remains mandatory'
-            exit 0
-          }
-          foreach ($id in @(
-              'EclipseAdoptium.Temurin.21.JDK',
-              'Gyan.FFmpeg',
-              'Apache.Ant',
-              '7zip.7zip'
-            )) {
-            winget show --id $id --exact --source winget `
-              --accept-source-agreements --disable-interactivity
-            if ($LASTEXITCODE -ne 0) {
-              throw "WinGet community source does not resolve package: $id"
-            }
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { exit 0 }
+          foreach ($id in @('EclipseAdoptium.Temurin.21.JDK','Gyan.FFmpeg','Apache.Ant','7zip.7zip')) {
+            winget show --id $id --exact --source winget --accept-source-agreements --disable-interactivity
+            if ($LASTEXITCODE -ne 0) { throw "winget source package missing: $id" }
           }
 
       - name: Build and package updater
@@ -79,182 +69,14 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force .\.test-work | Out-Null
           Start-Transcript -Path .\.test-work\standalone-updater-transcript.txt -Force
-          try {
-            .\packaging\windows\test-standalone-updater.ps1 -BuildMsi
-          }
-          finally {
-            Stop-Transcript
-          }
+          try { .\packaging\windows\test-standalone-updater.ps1 -BuildMsi }
+          finally { Stop-Transcript }
 
-      - name: Perform strict real-user installation and dependency E2E
+      - name: Run strict real-user E2E
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Set-StrictMode -Version Latest
+        run: .\packaging\windows\test-real-user-updater-e2e.ps1
 
-          function Invoke-Msi([string[]]$Arguments, [string]$Name) {
-            $process = Start-Process msiexec.exe -ArgumentList $Arguments -Wait -PassThru
-            if ($process.ExitCode -notin @(0, 1641, 3010)) {
-              throw "$Name failed with exit code $($process.ExitCode)"
-            }
-          }
-
-          function Get-MsiProperty([string]$Path, [string]$Property) {
-            $installer = $null
-            $database = $null
-            $view = $null
-            $record = $null
-            try {
-              $installer = New-Object -ComObject WindowsInstaller.Installer
-              $database = $installer.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $installer, @($Path, 0))
-              $view = $database.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $database,
-                @("SELECT `Value` FROM `Property` WHERE `Property` = '$Property'"))
-              $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null) | Out-Null
-              $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
-              if (-not $record) { throw "MSI property is missing: $Property" }
-              return $record.StringData(1)
-            }
-            finally {
-              if ($record) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($record) | Out-Null }
-              if ($view) {
-                $view.GetType().InvokeMember('Close', 'InvokeMethod', $null, $view, $null) | Out-Null
-                [Runtime.InteropServices.Marshal]::FinalReleaseComObject($view) | Out-Null
-              }
-              if ($database) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($database) | Out-Null }
-              if ($installer) { [Runtime.InteropServices.Marshal]::FinalReleaseComObject($installer) | Out-Null }
-            }
-          }
-
-          function Invoke-Updater([string]$Executable, [string[]]$Arguments, [int]$TimeoutSeconds = 1800) {
-            $stdout = Join-Path $env:RUNNER_TEMP ('updater-out-' + [guid]::NewGuid().ToString('N') + '.txt')
-            $stderr = Join-Path $env:RUNNER_TEMP ('updater-err-' + [guid]::NewGuid().ToString('N') + '.txt')
-            $line = ($Arguments | ForEach-Object {
-              if ($_ -match '[\s"]') { '"' + $_.Replace('"', '\"') + '"' } else { $_ }
-            }) -join ' '
-            $process = Start-Process -FilePath $Executable -ArgumentList $line `
-              -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-            if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
-              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-              throw "Updater timed out: $line"
-            }
-            $output = ((Get-Content $stdout -Raw -ErrorAction SilentlyContinue) +
-              (Get-Content $stderr -Raw -ErrorAction SilentlyContinue))
-            if ($process.ExitCode -ne 0) {
-              throw "Updater failed ($($process.ExitCode)): $line`n$output"
-            }
-            return $output
-          }
-
-          function Get-FreshUserPath {
-            $machine = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-            $user = [Environment]::GetEnvironmentVariable('Path', 'User')
-            return (($machine, $user | Where-Object { $_ }) -join ';')
-          }
-
-          function Assert-FreshCommand([string]$Command, [string[]]$Arguments) {
-            $cmdFile = Join-Path $env:RUNNER_TEMP ('fresh-shell-' + [guid]::NewGuid().ToString('N') + '.cmd')
-            $quoted = @($Command) + $Arguments | ForEach-Object { '"' + $_.Replace('"', '""') + '"' }
-            Set-Content -LiteralPath $cmdFile -Encoding ascii -Value ('@echo off' + "`r`n" + ($quoted -join ' '))
-            try {
-              $process = Start-Process cmd.exe -ArgumentList @('/d', '/c', "`"$cmdFile`"") `
-                -Wait -PassThru -NoNewWindow
-              if ($process.ExitCode -ne 0) { throw "Fresh CMD command failed: $Command $($Arguments -join ' ')" }
-            }
-            finally { Remove-Item $cmdFile -Force -ErrorAction SilentlyContinue }
-          }
-
-          $headers = @{
-            Authorization = "Bearer $env:GITHUB_TOKEN"
-            Accept = 'application/vnd.github+json'
-            'X-GitHub-Api-Version' = '2022-11-28'
-            'User-Agent' = 'NicoCache_nl updater strict real-user E2E'
-          }
-          $release = Invoke-RestMethod 'https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest' -Headers $headers
-          $asset = @($release.assets | Where-Object name -like '*.msi' | Select-Object -First 1)
-          if (-not $asset) { throw 'Latest NicoCache_nl release has no MSI' }
-          $productMsi = Join-Path $env:RUNNER_TEMP $asset.name
-          Invoke-WebRequest $asset.browser_download_url -Headers $headers -OutFile $productMsi
-          $productVersion = Get-MsiProperty $productMsi 'ProductVersion'
-          $tagVersion = $release.tag_name.TrimStart('v')
-          if ($productVersion -ne $tagVersion) {
-            throw "Release tag and MSI ProductVersion disagree: tag=$tagVersion msi=$productVersion"
-          }
-
-          $updaterMsi = Get-ChildItem .\.test-work\standalone-updater\output -Filter '*.msi' -File | Select-Object -First 1
-          if (-not $updaterMsi) { throw 'Built updater MSI is missing' }
-          $updaterRoot = Join-Path $env:ProgramFiles 'NicoCache_nl Updater'
-          $productRoot = Join-Path $env:LOCALAPPDATA 'NicoCache_nl'
-          $updaterInstalled = $false
-          $productInstalled = $false
-          try {
-            Invoke-Msi @('/i', "`"$($updaterMsi.FullName)`"", '/qn', '/norestart', '/l*v', "`".\.test-work\updater-real-install.log`"") 'Updater MSI installation'
-            $updaterInstalled = $true
-            $updaterExe = Join-Path $updaterRoot 'NicoCache_nl Updater.exe'
-            if (-not (Test-Path -LiteralPath $updaterExe -PathType Leaf)) { throw "Installed updater executable is missing: $updaterExe" }
-
-            Invoke-Msi @('/i', "`"$productMsi`"", '/qn', '/norestart', '/l*v', "`".\.test-work\product-real-install.log`"") 'NicoCache_nl MSI installation'
-            $productInstalled = $true
-
-            $installDir = (Get-ItemProperty 'HKCU:\Software\NicoCache_nl\Installer' -Name InstallDir -ErrorAction Stop).InstallDir
-            $resolvedProductRoot = [IO.Path]::GetFullPath($installDir).TrimEnd('\')
-            if ($resolvedProductRoot -ne [IO.Path]::GetFullPath($productRoot).TrimEnd('\')) {
-              throw "Installer registry and expected per-user location disagree: registry=$resolvedProductRoot expected=$productRoot"
-            }
-            $cfg = Join-Path $resolvedProductRoot 'app\NicoCache_nl.cfg'
-            if (-not (Test-Path -LiteralPath $cfg -PathType Leaf)) { throw "Installed launcher metadata is missing: $cfg" }
-
-            $detected = (Invoke-Updater $updaterExe @('--installed-version', '--app-root', $resolvedProductRoot)).Trim()
-            if ($detected -ne $productVersion) {
-              throw "Updater version detection is wrong: expected=$productVersion actual=$detected"
-            }
-
-            $dependencyResult = Invoke-Updater $updaterExe @('--dependency-update', '--app-root', $resolvedProductRoot, '--java-major', '21') 3600
-            foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip', 'Bouncy Castle')) {
-              if (-not $dependencyResult.Contains($name)) { throw "Dependency update omitted result for $name" }
-            }
-
-            $env:PATH = Get-FreshUserPath
-            $userJavaHome = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'User')
-            if ($userJavaHome) { $env:JAVA_HOME = $userJavaHome }
-            Assert-FreshCommand 'java' @('-version')
-            Assert-FreshCommand 'javac' @('-version')
-            Assert-FreshCommand 'ffmpeg' @('-version')
-            Assert-FreshCommand 'ffprobe' @('-version')
-            Assert-FreshCommand 'ant' @('-version')
-            Assert-FreshCommand '7z' @()
-
-            foreach ($command in @('java', 'javac', 'ffmpeg', 'ffprobe', 'ant', '7z')) {
-              $resolved = (Get-Command $command -ErrorAction Stop).Source
-              if ([IO.Path]::GetFullPath($resolved).StartsWith($resolvedProductRoot, [StringComparison]::OrdinalIgnoreCase)) {
-                throw "System dependency leaked into NicoCache_nl installation: $command -> $resolved"
-              }
-            }
-            foreach ($jar in @('bcprov.jar', 'bcpkix.jar', 'bcutil.jar')) {
-              if (-not (Test-Path -LiteralPath (Join-Path $resolvedProductRoot "lib\$jar") -PathType Leaf)) {
-                throw "NicoCache_nl-local Bouncy Castle artifact is missing: $jar"
-              }
-            }
-
-            $disabledCfg = "$cfg.disabled"
-            Move-Item $cfg $disabledCfg
-            try {
-              $broken = (Invoke-Updater $updaterExe @('--installed-version', '--app-root', $resolvedProductRoot)).Trim()
-              if ($broken -eq $productVersion) { throw 'Negative control failed: removed version metadata was not detected' }
-            }
-            finally { Move-Item $disabledCfg $cfg }
-
-            $restored = (Invoke-Updater $updaterExe @('--installed-version', '--app-root', $resolvedProductRoot)).Trim()
-            if ($restored -ne $productVersion) { throw "Version detection did not recover: $restored" }
-          }
-          finally {
-            if ($productInstalled) { Invoke-Msi @('/x', "`"$productMsi`"", '/qn', '/norestart') 'NicoCache_nl MSI uninstall' }
-            if ($updaterInstalled) { Invoke-Msi @('/x', "`"$($updaterMsi.FullName)`"", '/qn', '/norestart') 'Updater MSI uninstall' }
-          }
-          if (Test-Path $productRoot) { throw "NicoCache_nl install directory remains after uninstall: $productRoot" }
-          if (Test-Path $updaterRoot) { throw "Updater install directory remains after uninstall: $updaterRoot" }
-          Write-Output 'STRICT_REAL_USER_E2E_PASSED'
-
-      - name: Upload updater packages and all diagnostics
+      - name: Upload updater packages and diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -265,7 +87,7 @@ jobs:
           path: |
             .test-work/standalone-updater/output/**
             .test-work/updater-tests/**
-            .test-work/*.log
+            .test-work/real-user-e2e/**
             .test-work/standalone-updater-transcript.txt
 
   live-provider-contracts:
@@ -283,31 +105,26 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify release and provider contracts
+      - name: Verify live release and provider contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $headers = @{
-            Authorization = "Bearer $env:GITHUB_TOKEN"
-            Accept = 'application/vnd.github+json'
-            'X-GitHub-Api-Version' = '2022-11-28'
-            'User-Agent' = 'NicoCache_nl updater provider contract test'
-          }
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28'; 'User-Agent' = 'NicoCache_nl updater provider contract test' }
           $release = Invoke-RestMethod 'https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest' -Headers $headers
           if (@($release.assets | Where-Object name -like '*.msi').Count -lt 1) { throw 'Release MSI is missing' }
           if (@($release.assets | Where-Object { $_.name -like '*.sha256*' }).Count -lt 1) { throw 'Release checksum is missing' }
-          $classes = Join-Path $env:RUNNER_TEMP 'updater-live-contract-classes'
-          $target = Join-Path $env:RUNNER_TEMP 'updater-live-contract-target'
+          $classes = Join-Path $env:RUNNER_TEMP 'updater-contract-classes'
+          $target = Join-Path $env:RUNNER_TEMP 'updater-contract-target'
           New-Item -ItemType Directory -Force $classes, $target | Out-Null
           Set-Content -LiteralPath (Join-Path $target 'version.txt') -Value '0.0.0' -Encoding ascii
           $sources = @(Get-ChildItem .\updater\src -Filter '*.java' -Recurse -File | ForEach-Object FullName)
           javac --release 11 -encoding UTF-8 -Xlint:all -d $classes @sources
-          if ($LASTEXITCODE -ne 0) { throw 'Pure Java updater compilation failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed' }
           java -cp $classes dareka.updater.UpdaterLauncher --dependency-check --app-root $target --java-major 21
-          if ($LASTEXITCODE -ne 0) { throw 'Live provider contract check failed' }
+          if ($LASTEXITCODE -ne 0) { throw 'Provider contract check failed' }
 
       - name: Reject bundled PowerShell dependency implementation
         shell: pwsh
         run: |
-          $forbidden = @(Get-ChildItem .\updater -Recurse -File | Where-Object Extension -in @('.ps1', '.psd1', '.psm1'))
+          $forbidden = @(Get-ChildItem .\updater -Recurse -File | Where-Object Extension -in @('.ps1','.psd1','.psm1'))
           if ($forbidden.Count -ne 0) { throw "PowerShell dependency payload detected: $(@($forbidden.FullName) -join ', ')" }
