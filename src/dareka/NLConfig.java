@@ -34,13 +34,14 @@ public class NLConfig extends BasicConfig {
 
     @Override
     protected String doGetConfigFileComments() {
-        return "NicoCache_nl config file";
+        return "NicoCache_nl config file"; // 多バイト文字は指定できない
     }
 
     @Override
     protected void doSetDefaults(Properties properties) {
         super.doSetDefaults(properties);
 
+        // デフォルト値が存在しないと困るものだけ記述する
         properties.setProperty("allowFrom", "local");
         properties.setProperty("speedLimit", "0");
         properties.setProperty("cacheFolder", "cache");
@@ -145,7 +146,7 @@ public class NLConfig extends BasicConfig {
     protected void loadFrom(File propertyFile, Properties p)
             throws FileNotFoundException, IOException {
         InputStream in = getAsciiInputStream(propertyFile, CHARTEST_LINE);
-        try {
+        try { // ensure closing in
             p.load(in);
         } finally {
             CloseUtil.close(in);
@@ -180,6 +181,18 @@ public class NLConfig extends BasicConfig {
         }
     }
 
+    /**
+     * プロパティ値を正規表現とみなしてコンパイル済みのパターンを返す。
+     *
+     * @param key プロパティ名
+     * @return コンパイル済みのパターン、次のいずれかの場合は null
+     * <ul>
+     * <li>プロパティ値が存在しない
+     * <li>プロパティ値が空文字列
+     * <li>プロパティ値に正規表現エラーがある
+     * </ul>
+     * @since NicoCache_nl+111124mod
+     */
     public static Pattern getPattern(String key) {
         Pattern pattern = patternCache.get(key);
         if (pattern == null) {
@@ -196,6 +209,20 @@ public class NLConfig extends BasicConfig {
         return pattern;
     }
 
+    /**
+     * プロパティ値を正規表現とみなして入力文字列をマッチングする正規表現エンジンを返す。
+     *
+     * @param key プロパティ名
+     * @param input 入力文字列
+     * @return 入力文字列をマッチングする正規表現エンジン<br>
+     * 次のいずれかの場合は null
+     * <ul>
+     * <li>入力文字列が null or 空文字列
+     * <li>プロパティ値が存在しない or 空文字列
+     * <li>プロパティ値に正規表現エラーがある
+     * </ul>
+     * @since NicoCache_nl+110706mod
+     */
     public static Matcher getMatcher(String key, String input) {
         if (input != null && input.length() > 0) {
             Pattern pattern = getPattern(key);
@@ -206,16 +233,38 @@ public class NLConfig extends BasicConfig {
         return null;
     }
 
+    /**
+     * プロパティ値を正規表現とみなして入力文字列と部分一致のマッチングを行う。
+     *
+     * @param key プロパティ名
+     * @param input 入力文字列
+     * @return 入力文字列にマッチすればtrue。入力文字列がnull、空文字列、
+     * マッチしない、プロパティ値が存在しない、正規表現エラーがあるならfalse
+     */
     public static boolean find(String key, String input) {
         Matcher m = getMatcher(key, input);
         return m != null && m.find();
     }
 
+    /**
+     * プロパティ値を正規表現とみなして入力文字列と領域の先頭からマッチングを行う。
+     *
+     * @see #find(String, String)
+     * @see java.util.regex.Matcher#lookingAt()
+     * @since NicoCache_nl+110411mod
+     */
     public static boolean lookingAt(String key, String input) {
         Matcher m = getMatcher(key, input);
         return m != null && m.lookingAt();
     }
 
+    /**
+     * プロパティ値を正規表現とみなして入力文字列と領域全体のマッチングを行う。
+     *
+     * @see #find(String, String)
+     * @see java.util.regex.Matcher#matches()
+     * @since NicoCache_nl+110411mod
+     */
     public static boolean matches(String key, String input) {
         Matcher m = getMatcher(key, input);
         return m != null && m.matches();
@@ -256,4 +305,5 @@ public class NLConfig extends BasicConfig {
         }
         return new ByteArrayInputStream(out.toByteArray());
     }
+
 }

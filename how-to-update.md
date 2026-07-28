@@ -87,6 +87,19 @@ JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチ
 アプリイメージを生成する。隔離テストでは同じ製品ランチャーへ内部用の
 `--headless` を指定する。
 
+Windowsパッケージ版の利用者データは、既定ではWindowsの「ドキュメント」内の
+`NicoCache_nl` に保存する。更新前にアプリ本体と同じ場所へあった
+`config.properties`、`config.ini`、`NicoCacheGUI.property`、`proxy.pac`、
+`local/`、`nlFilters/`、`extensions/` は、新配置に同名の項目がない場合だけ
+初回起動時にコピーする。移行元と、設定で絶対パスを指定したキャッシュは削除・
+移動しない。
+
+一時的な検証や管理された配備では、環境変数 `NICOCACHE_DATA_ROOT` または
+Javaシステムプロパティ `nicocache.dataRoot` で保存先を上書きできる。
+実行ファイル横に `portable.flag` を置いた場合は、明示ルートがない限り従来どおり
+アプリ本体を利用者データルートにする。復旧時は利用者データを削除せず、
+`.data-layout-version` と移行元・移行先を確認する。
+
 ```powershell
 .\packaging\windows\build-windows-package.ps1 -PackageType AppImage
 .\packaging\windows\test-windows-app-image.ps1 `
