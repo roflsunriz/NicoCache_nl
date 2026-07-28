@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   real-user-e2e:
-    runs-on: windows-2022
+    runs-on: windows-latest
     timeout-minutes: 75
     env:
       GITHUB_TOKEN: ${{ github.token }}
@@ -43,21 +43,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Record runner and WinGet state
+      - name: Record runner and require WinGet
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           java --version
           javac --version
           jpackage --version
-          if (Get-Command winget -ErrorAction SilentlyContinue) { winget --version }
-          else { Write-Output 'WinGet unavailable; strict E2E must use official API fallback' }
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            throw 'Strict WinGet success/fallback regression test requires WinGet'
+          }
+          winget --version
 
-      - name: Verify WinGet source package contracts when available
+      - name: Verify WinGet source package contracts
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { exit 0 }
           foreach ($id in @('EclipseAdoptium.Temurin.21.JDK','Gyan.FFmpeg','Apache.Ant','7zip.7zip')) {
             winget show --id $id --exact --source winget --accept-source-agreements --disable-interactivity
             if ($LASTEXITCODE -ne 0) { throw "winget source package missing: $id" }
