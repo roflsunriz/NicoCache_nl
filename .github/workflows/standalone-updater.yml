@@ -43,7 +43,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Record runner and require WinGet
+      - name: Require healthy WinGet FFmpeg source
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -54,6 +54,12 @@ jobs:
             throw 'Strict WinGet success/fallback regression test requires WinGet'
           }
           winget --version
+          winget source reset --force
+          if ($LASTEXITCODE -ne 0) { throw 'winget source reset failed' }
+          winget source update
+          if ($LASTEXITCODE -ne 0) { throw 'winget source update failed' }
+          winget show --id Gyan.FFmpeg --exact --source winget --accept-source-agreements --disable-interactivity
+          if ($LASTEXITCODE -ne 0) { throw 'Gyan.FFmpeg is not resolvable from the winget source' }
 
       - name: Build and package updater
         shell: pwsh
