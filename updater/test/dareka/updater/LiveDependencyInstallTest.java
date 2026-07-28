@@ -10,7 +10,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
-/** Disposable-runner E2E: install/update dependencies and resolve them from a fresh shell. */
+/** Disposable-runner E2E: install/update dependencies and resolve them from a fresh user shell. */
 public final class LiveDependencyInstallTest {
     private LiveDependencyInstallTest() {}
 
@@ -30,12 +30,17 @@ public final class LiveDependencyInstallTest {
             assertContains(result, "7-Zip", "7-Zip result");
             assertContains(result, "Bouncy Castle", "Bouncy Castle result");
 
-            verifyFreshShell(Arrays.asList("java", "-version"));
-            verifyFreshShell(Arrays.asList("javac", "-version"));
-            verifyFreshShell(Arrays.asList("ffmpeg", "-version"));
-            verifyFreshShell(Arrays.asList("ffprobe", "-version"));
-            verifyFreshShell(Arrays.asList("ant", "-version"));
-            verifyFreshShell(Arrays.asList("7z"));
+            String persistedPath = readUserEnvironment("Path");
+            String persistedJavaHome = readUserEnvironment("JAVA_HOME");
+            assertTrue(!persistedPath.isBlank(), "User PATH was not persisted");
+            assertTrue(!persistedJavaHome.isBlank(), "JAVA_HOME was not persisted");
+
+            verifyFreshShell(Arrays.asList("java", "-version"), persistedPath, persistedJavaHome);
+            verifyFreshShell(Arrays.asList("javac", "-version"), persistedPath, persistedJavaHome);
+            verifyFreshShell(Arrays.asList("ffmpeg", "-version"), persistedPath, persistedJavaHome);
+            verifyFreshShell(Arrays.asList("ffprobe", "-version"), persistedPath, persistedJavaHome);
+            verifyFreshShell(Arrays.asList("ant", "-version"), persistedPath, persistedJavaHome);
+            verifyFreshShell(Arrays.asList("7z"), persistedPath, persistedJavaHome);
 
             assertTrue(Files.isRegularFile(root.resolve("lib/bcprov.jar")), "Bouncy Castle was not installed locally");
             assertTrue(!Files.exists(root.resolve("runtime")), "Temurin leaked into the NicoCache_nl runtime directory");
@@ -48,14 +53,37 @@ public final class LiveDependencyInstallTest {
         }
     }
 
-    private static void verifyFreshShell(List<String> command) throws Exception {
+    private static String readUserEnvironment(String name) throws Exception {
+        Process process = new ProcessBuilder("reg.exe", "query", "HKCU\\Environment", "/v", name)
+                .redirectErrorStream(true).start();
+        String output;
+        try (InputStream input = process.getInputStream()) {
+            output = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        process.waitFor();
+        if (process.exitValue() != 0) return "";
+        for (String line : output.split("\\R")) {
+            String trimmed = line.trim();
+            if (trimmed.toLowerCase().startsWith(name.toLowerCase() + " ")) {
+                String[] parts = trimmed.split("\\s+", 3);
+                if (parts.length == 3) return parts[2];
+            }
+        }
+        return "";
+    }
+
+    private static void verifyFreshShell(List<String> command, String userPath, String javaHome) throws Exception {
         StringBuilder line = new StringBuilder();
         for (String value : command) {
             if (line.length() > 0) line.append(' ');
             line.append('"').append(value.replace("\"", "\\\"")).append('"');
         }
-        Process process = new ProcessBuilder("cmd.exe", "/d", "/c", line.toString())
-                .redirectErrorStream(true).start();
+        ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/d", "/c", line.toString())
+                .redirectErrorStream(true);
+        String inherited = builder.environment().getOrDefault("PATH", "");
+        builder.environment().put("PATH", userPath + ";" + inherited);
+        builder.environment().put("JAVA_HOME", javaHome);
+        Process process = builder.start();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         Thread reader = new Thread(() -> {
             try (InputStream input = process.getInputStream()) { input.transferTo(output); }
