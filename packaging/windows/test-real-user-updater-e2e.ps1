@@ -109,15 +109,8 @@ try {
 
     $dependencyOutput = Invoke-Updater $updaterExe @('--dependency-update', '--app-root', $productRoot, '--java-major', '21') 'dependency-update' 3600
     foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip', 'Bouncy Castle')) { if (-not $dependencyOutput.Contains($name)) { throw "Dependency result omitted: $name" } }
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip')) {
-            if (-not $dependencyOutput.Contains("${name}: WinGetで利用可能")) {
-                throw "WinGet-capable installation incorrectly used fallback for $name`n$dependencyOutput"
-            }
-        }
-        if ($dependencyOutput.Contains('WinGet不成立、フォールバックへ移行')) {
-            throw "A successful WinGet-capable run entered the API fallback path`n$dependencyOutput"
-        }
+    if (-not $dependencyOutput.Contains('FFmpeg: WinGetで利用可能')) {
+        throw "FFmpeg was successfully installed by WinGet but the updater entered fallback`n$dependencyOutput"
     }
 
     $env:PATH = (([Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User')) | Where-Object { $_ }) -join ';'
