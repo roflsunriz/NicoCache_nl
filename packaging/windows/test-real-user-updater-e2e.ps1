@@ -13,7 +13,7 @@ $errorFile = Join-Path $work 'failure.txt'
 
 function Step([string]$Message) {
     $line = "[$([DateTime]::UtcNow.ToString('O'))] $Message"
-    Write-Output $line
+    Write-Host $line
     Add-Content -LiteralPath (Join-Path $work 'milestones.txt') -Value $line -Encoding utf8
 }
 
