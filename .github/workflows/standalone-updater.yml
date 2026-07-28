@@ -47,7 +47,25 @@ jobs:
           java --version
           javac --version
           jpackage --version
+          winget --version
           $PSVersionTable
+
+      - name: Verify WinGet community-source package contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($id in @(
+              'EclipseAdoptium.Temurin.21.JDK',
+              'Gyan.FFmpeg',
+              'Apache.Ant',
+              '7zip.7zip'
+            )) {
+            winget show --id $id --exact --source winget `
+              --accept-source-agreements --disable-interactivity
+            if ($LASTEXITCODE -ne 0) {
+              throw "WinGet community source does not resolve package: $id"
+            }
+          }
 
       - name: Run Java, transaction, security, GUI and package tests
         shell: pwsh
@@ -84,11 +102,43 @@ jobs:
           try {
             $install = Start-Process msiexec.exe -ArgumentList @('/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "`"$log`"") -Wait -PassThru
             if ($install.ExitCode -notin @(0, 1641, 3010)) { throw "Released MSI install failed: $($install.ExitCode)" }
+
+            $registered = @(
+              Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+                ForEach-Object { Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue } |
+                Where-Object DisplayName -eq 'NicoCache_nl' |
+                Select-Object -ExpandProperty DisplayVersion
+            )
+            if ($registered.Count -ne 1 -or $registered[0] -ne $expected) {
+              throw "Independent MSI registration mismatch: expected=$expected registered=$($registered -join ',')"
+            }
+
+            $cfg = Join-Path $target 'app\NicoCache_nl.cfg'
+            if (-not (Test-Path -LiteralPath $cfg -PathType Leaf)) {
+              throw "Real installed launcher metadata is missing: $cfg"
+            }
             $updater = '.\.test-work\standalone-updater\output\NicoCache_nl Updater\NicoCache_nl Updater.exe'
             $actual = & $updater --installed-version --app-root $target
-            if ($LASTEXITCODE -ne 0) { throw "Updater version detection failed: $actual" }
-            if ($actual.Trim() -ne $expected) {
-              throw "Installed version mismatch: expected=$expected actual=$($actual.Trim()) target=$target"
+            if ($LASTEXITCODE -ne 0 -or $actual.Trim() -ne $registered[0]) {
+              throw "Updater disagrees with independent MSI registration: registered=$($registered[0]) actual=$($actual.Trim())"
+            }
+
+            # Negative control: destroying the only real jpackage version metadata must break detection.
+            $disabledCfg = "$cfg.disabled-by-regression-test"
+            Move-Item -LiteralPath $cfg -Destination $disabledCfg
+            try {
+              $negative = & $updater --installed-version --app-root $target
+              if ($LASTEXITCODE -eq 0 -and $negative.Trim() -eq $expected) {
+                throw 'Negative control failed: updater still reported the real version after metadata removal'
+              }
+            }
+            finally {
+              Move-Item -LiteralPath $disabledCfg -Destination $cfg
+            }
+
+            $restored = & $updater --installed-version --app-root $target
+            if ($LASTEXITCODE -ne 0 -or $restored.Trim() -ne $expected) {
+              throw "Version detection did not recover after restoring real metadata: $restored"
             }
           }
           finally {
