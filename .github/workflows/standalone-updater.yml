@@ -61,11 +61,14 @@ jobs:
             Stop-Transcript
           }
 
-      - name: Install real Bouncy Castle, Ant and 7-Zip releases
+      - name: Install user-wide tools and verify fresh-shell commands
         shell: pwsh
         run: |
-          java -cp .\.test-work\updater-tests\classes dareka.updater.LiveDependencyInstallTest
-          if ($LASTEXITCODE -ne 0) { throw 'Live dependency installation E2E failed' }
+          $log = '.\.test-work\updater-tests\live-user-dependency-e2e.txt'
+          New-Item -ItemType Directory -Force (Split-Path $log) | Out-Null
+          java -cp .\.test-work\updater-tests\classes dareka.updater.LiveDependencyInstallTest 2>&1 |
+            Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) { throw 'User-wide dependency installation E2E failed' }
 
       - name: Upload updater packages and diagnostics
         if: ${{ always() }}
