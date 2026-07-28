@@ -7,6 +7,10 @@
 
 ### Added
 
+- リポジトリ管理の依存関係を安全に保守できるよう、GitHub Actionsを完全な
+  コミットSHAへ固定してDependabotで週次確認し、Bouncy Castleの安定版、
+  公式配布元、ライセンス、実ファイルのSHA-256を検証した更新PRを自動作成する
+  処理と、ロック・更新レポートの回帰テストを追加した。
 - リリースタグのソースと版番号から検証済みMSIを配布できるよう、
   `v<major>.<minor>.<build>` タグでWindowsインストーラーとSHA-256を生成し、
   ZIPおよびJARと同じGitHub Releaseへ自動添付する処理を追加した。

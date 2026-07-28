@@ -29,8 +29,15 @@ try {
         if ($uri.Scheme -ne 'https' -or $uri.Host -ne 'repo.maven.apache.org') {
             throw "公式Maven Central以外のURLを拒否しました: $uri"
         }
-        $expectedPrefix = "/maven2/org/bouncycastle/$($artifact.Name)-jdk18on/$($lock.BouncyCastleVersion)/"
-        if (-not $uri.AbsolutePath.StartsWith($expectedPrefix, [StringComparison]::Ordinal)) {
+        if (-not $uri.IsDefaultPort -or $uri.UserInfo -or $uri.Query -or $uri.Fragment) {
+            throw "公式Maven Centralの標準URL以外を拒否しました: $uri"
+        }
+        $remoteFileName = "$($artifact.Name)-jdk18on-$($lock.BouncyCastleVersion).jar"
+        $expectedPath = (
+            "/maven2/org/bouncycastle/$($artifact.Name)-jdk18on/" +
+            "$($lock.BouncyCastleVersion)/$remoteFileName"
+        )
+        if (-not $uri.AbsolutePath.Equals($expectedPath, [StringComparison]::Ordinal)) {
             throw "版・座標・URLが整合していません: $uri"
         }
         if ([string]$artifact.FileName -ne "$($artifact.Name).jar") {

@@ -32,7 +32,11 @@ function Assert-OfficialUri {
     if ($Uri.Host -ne $RepositoryBaseUri.Host) {
         throw "公式Maven Central以外の配布元を拒否しました: $Uri"
     }
-    if (-not $Uri.AbsolutePath.StartsWith("/$GroupPath/", [StringComparison]::Ordinal)) {
+    if (-not $Uri.IsDefaultPort -or $Uri.UserInfo -or $Uri.Query -or $Uri.Fragment) {
+        throw "公式Maven Centralの標準URL以外を拒否しました: $Uri"
+    }
+    $allowedPathPrefix = "$($RepositoryBaseUri.AbsolutePath)$GroupPath/"
+    if (-not $Uri.AbsolutePath.StartsWith($allowedPathPrefix, [StringComparison]::Ordinal)) {
         throw "Bouncy Castle公式座標外のパスを拒否しました: $Uri"
     }
 }
@@ -202,7 +206,7 @@ function Write-Report {
     $lines.Add('| 名前 | URL | SHA-256 | サイズ |')
     $lines.Add('|---|---|---|---:|')
     foreach ($artifact in $Artifacts) {
-        $lines.Add("| $($artifact.Name) | $($artifact.Url) | `$($artifact.Sha256)` | $($artifact.Size) |")
+        $lines.Add("| $($artifact.Name) | $($artifact.Url) | ``$($artifact.Sha256)`` | $($artifact.Size) |")
     }
     $lines.Add('')
     $lines.Add('プレリリース、ダウングレード、公式座標外URL、ライセンス変更は自動更新対象外です。')
