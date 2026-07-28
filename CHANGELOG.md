@@ -8,6 +8,8 @@
 
 ### Changed
 
+- `build-javac.ps1` で検出できた JDK 17、21、25 の `javac` を選択して本体を
+  ビルドできるようにし、CIなどの無指定実行では検出された最新版を自動選択する。
 - Java 25 LTSを利用者が選べるよう、Windows、Linux、macOSでビルド、基本動作、
   TLS、Extension ABI、初回セットアップを継続検証し、アップデーターの対応
   Temurin一覧へJava 25を追加した。推奨LTSは引き続きJava 21とする。

@@ -2,7 +2,7 @@
 
 ## 前提
 
-- JDK 17 など、`javac --release 11` と `jar` を利用できる JDK
+- JDK 17、21、25 のいずれか（`build-javac.ps1` が検出して選択）
 - Apache Ant 1.9.8 以降（Ant ビルドを確認する場合）
 - PowerShell
 
@@ -22,6 +22,13 @@
 
 ```powershell
 .\build-javac.ps1
+```
+
+複数の対応 JDK がある場合は、既定で検出された最新版を使用する。特定の JDK を
+使う場合は、次のように指定する。
+
+```powershell
+.\build-javac.ps1 -JavaVersion 17
 ```
 
 または Apache Ant を利用する。
