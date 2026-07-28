@@ -31,6 +31,12 @@
 .\build-javac.ps1 -JavaVersion 17
 ```
 
+起動時も同じ選択ができる。無指定時は検出された最新版を使用する。
+
+```powershell
+.\RunNicoCache.ps1 -JavaVersion 21
+```
+
 または Apache Ant を利用する。
 
 ```powershell
