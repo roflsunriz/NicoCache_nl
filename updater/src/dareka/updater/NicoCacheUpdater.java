@@ -453,6 +453,7 @@ public final class NicoCacheUpdater {
         @Override public int hashCode() { return major; }
     }
 
+    @SuppressWarnings("serial")
     private static final class JavaChoiceRenderer extends DefaultListCellRenderer {
         @Override public Component getListCellRendererComponent(javax.swing.JList<?> list,
                 Object value, int index, boolean selected, boolean focus) {
