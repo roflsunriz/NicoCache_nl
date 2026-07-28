@@ -109,8 +109,9 @@ try {
 
     $dependencyOutput = Invoke-Updater $updaterExe @('--dependency-update', '--app-root', $productRoot, '--java-major', '21') 'dependency-update' 3600
     foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip', 'Bouncy Castle')) { if (-not $dependencyOutput.Contains($name)) { throw "Dependency result omitted: $name" } }
-    if (-not $dependencyOutput.Contains('FFmpeg: WinGetで利用可能')) {
-        throw "FFmpeg was successfully installed by WinGet but the updater entered fallback`n$dependencyOutput"
+    $ffmpegRouteLines = @($dependencyOutput -split '\r?\n' | Where-Object { $_ -match '^FFmpeg:' })
+    if ($ffmpegRouteLines.Count -ne 1) {
+        throw "FFmpeg was successfully installed by WinGet but its own route entered fallback`n$dependencyOutput"
     }
 
     $env:PATH = (([Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User')) | Where-Object { $_ }) -join ';'
