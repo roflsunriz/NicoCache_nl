@@ -46,14 +46,19 @@ function Assert-ExecutableHasIcon([string]$Executable) {
 function Invoke-PackagedE2E([string]$Executable, [string]$UpdaterRoot, [string]$TargetRoot) {
     Remove-Item $TargetRoot -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path (Join-Path $TargetRoot 'app') -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $TargetRoot 'app\.jpackage.xml') -Encoding utf8 -Value `
-        '<?xml version="1.0"?><jpackage-state><app-version>1.0.1</app-version><main-launcher>NicoCache_nl</main-launcher></jpackage-state>'
+    Set-Content -LiteralPath (Join-Path $TargetRoot 'app\NicoCache_nl.cfg') -Encoding utf8 -Value @'
+[Application]
+app.mainmodule=NicoCache_nl.jar
+
+[JavaOptions]
+java-options=-Djpackage.app-version=1.0.1
+'@
 
     $version = Invoke-UpdaterCli $Executable @('--installed-version', '--app-root', $TargetRoot)
-    Assert-True ($version.Output.Trim() -eq '1.0.1') "Installed jpackage version was not detected: $($version.Output)"
+    Assert-True ($version.Output.Trim() -eq '1.0.1') "Installed launcher version was not detected: $($version.Output)"
 
     $self = Invoke-UpdaterCli $Executable @('--self-test', '--app-root', $TargetRoot)
-    foreach ($marker in @('SELF_TEST_OK', 'SYSTEM_DEPENDENCY_SELF_TEST_OK', 'winget-first', 'fallback')) {
+    foreach ($marker in @('SELF_TEST_OK', 'SYSTEM_DEPENDENCY_SELF_TEST_OK', 'winget-source', 'winget-first', 'fallback')) {
         Assert-True $self.Output.Contains($marker) "Packaged self-test missing: $marker"
     }
 
@@ -82,15 +87,19 @@ foreach ($testClass in @('dareka.updater.NicoCacheUpdaterTest', 'dareka.updater.
 $updaterSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\NicoCacheUpdater.java') -Raw
 $engineSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\DependencyEngine.java') -Raw
 $systemSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\SystemDependencyManager.java') -Raw
+$versionSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\InstalledVersionDetector.java') -Raw
 $launcherSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\UpdaterLauncher.java') -Raw
 $buildSource = Get-Content (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -Raw
 foreach ($required in @('WinGetを優先', '現在のWindowsユーザー', 'ユーザーPATH', 'Bouncy Castleだけ')) {
     Assert-True $updaterSource.Contains($required) "Updater UI invariant missing: $required"
 }
 foreach ($required in @('EclipseAdoptium.Temurin.', 'Gyan.FFmpeg', 'Apache.Ant', '7zip.7zip',
-        '--scope', 'user', 'resolveTemurin', 'resolveFfmpeg', 'resolveAnt', 'resolveSevenZip',
-        'HKCU\\Environment', 'JAVA_HOME', 'mergePath', 'verifyExecutable')) {
+        '--source', 'winget', '--scope', 'user', 'resolveTemurin', 'resolveFfmpeg', 'resolveAnt', 'resolveSevenZip',
+        'HKCU\Environment', 'JAVA_HOME', 'mergePath', 'verifyExecutable')) {
     Assert-True $systemSource.Contains($required) "System dependency invariant missing: $required"
+}
+foreach ($required in @('NicoCache_nl.cfg', '-Djpackage.app-version=', 'readLauncherVersion')) {
+    Assert-True $versionSource.Contains($required) "Installed-version invariant missing: $required"
 }
 foreach ($required in @('resolveBouncyCastle', 'NicoCache_nl専用')) {
     Assert-True $engineSource.Contains($required) "Bouncy Castle invariant missing: $required"
@@ -141,4 +150,4 @@ if ($BuildMsi) {
     }
     Assert-True (-not (Test-Path $installedRoot)) 'Updater MSI left its install directory behind'
 }
-Write-Output 'Standalone updater winget-first, fallback, localization, icon and packaged E2E tests passed'
+Write-Output 'Standalone updater winget-first, source-pinned, fallback, version, localization, icon and packaged E2E tests passed'
