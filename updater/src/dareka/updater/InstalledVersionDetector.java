@@ -20,18 +20,18 @@ final class InstalledVersionDetector {
         Path app = applicationRoot.resolve("app");
         Path launcherConfig = app.resolve("NicoCache_nl.cfg");
 
-        // In an installed NicoCache_nl app image, the launcher configuration is the
-        // authoritative version record. Falling through to stale compatibility markers
-        // would hide a damaged or incomplete installation.
         String fromLauncher = readLauncherVersion(launcherConfig);
         if (fromLauncher != null) return fromLauncher;
-        if (Files.isRegularFile(applicationRoot.resolve("NicoCache_nl.exe"))
-                || Files.isRegularFile(launcherConfig)) {
+
+        // A real installed app image always contains the launcher executable. In that
+        // layout NicoCache_nl.cfg is authoritative, so missing or malformed launcher
+        // metadata must be surfaced instead of hidden by stale compatibility markers.
+        if (Files.isRegularFile(applicationRoot.resolve("NicoCache_nl.exe"))) {
             return "不明";
         }
 
-        // Compatibility paths are only for legacy/non-installed layouts that do not
-        // contain the real NicoCache_nl launcher.
+        // Legacy and synthetic layouts without the real launcher retain compatibility
+        // with the historical marker files.
         String fromMarker = readPlainVersion(applicationRoot.resolve("version.txt"));
         if (fromMarker != null) return fromMarker;
 
