@@ -37,7 +37,8 @@
 ```
 
 画面を確認する場合は `-KeepWorkDir` を指定し、
-`.test-work/first-run-setup/preview/` の3画面を確認する。証明書ストア、
+`.test-work/first-run-setup/preview/` の4画面を確認する。結果画面は成功時と
+失敗時の両方を確認する。証明書ストア、
 Windowsプロキシー、ログオン時起動の実適用試験はローカルで実行せず、
 一時GitHub Actionsランナーへ限定する。
 
