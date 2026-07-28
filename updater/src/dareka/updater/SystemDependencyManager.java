@@ -115,7 +115,12 @@ final class SystemDependencyManager {
             if (probe(Arrays.asList("command-that-must-not-exist-nicocache", "--version")).exitCode == 0) {
                 throw new IOException("不存在コマンドの自己診断に失敗しました");
             }
-            return "SYSTEM_DEPENDENCY_SELF_TEST_OK winget-first fallback user-path command-verification";
+            List<String> winget = wingetArguments("install", "Example.Package");
+            int source = winget.indexOf("--source");
+            if (source < 0 || source + 1 >= winget.size() || !"winget".equals(winget.get(source + 1))) {
+                throw new IOException("WinGet source固定の自己診断に失敗しました");
+            }
+            return "SYSTEM_DEPENDENCY_SELF_TEST_OK winget-source winget-first fallback user-path command-verification";
         } finally {
             deleteTree(root);
         }
@@ -131,19 +136,29 @@ final class SystemDependencyManager {
                 new Tool("7zip", "7-Zip", "7zip.7zip", Arrays.asList("7z"), "7z.exe", false, 0));
     }
 
+    private static List<String> wingetArguments(String operation, String packageId) {
+        List<String> command = new ArrayList<String>();
+        command.add("winget");
+        command.add(operation);
+        command.add("--id");
+        command.add(packageId);
+        command.add("--exact");
+        command.add("--source");
+        command.add("winget");
+        command.add("--scope");
+        command.add("user");
+        command.add("--silent");
+        command.add("--accept-package-agreements");
+        command.add("--accept-source-agreements");
+        command.add("--disable-interactivity");
+        return command;
+    }
+
     private CommandResult runWinget(Tool tool) throws Exception {
-        List<String> common = Arrays.asList("--id", tool.wingetId, "--exact", "--scope", "user", "--silent",
-                "--accept-package-agreements", "--accept-source-agreements", "--disable-interactivity");
-        List<String> upgrade = new ArrayList<String>();
-        upgrade.add("winget");
-        upgrade.add("upgrade");
-        upgrade.addAll(common);
+        List<String> upgrade = wingetArguments("upgrade", tool.wingetId);
         CommandResult result = run(upgrade, Duration.ofMinutes(20));
         if (result.exitCode == 0 && probe(tool.probe).exitCode == 0) return result;
-        List<String> install = new ArrayList<String>();
-        install.add("winget");
-        install.add("install");
-        install.addAll(common);
+        List<String> install = wingetArguments("install", tool.wingetId);
         install.add("--force");
         return run(install, Duration.ofMinutes(20));
     }
