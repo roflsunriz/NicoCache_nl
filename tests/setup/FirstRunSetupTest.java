@@ -604,7 +604,65 @@ public final class FirstRunSetupTest {
                     "Apply must recover after failure");
 
             panel.getApplyButton().doClick();
-            panel.getCancelButton().doClick();
+            SetupOptions selectedOptions = applied.get();
+            panel.showResult(selectedOptions, null);
+            assertEquals(3, panel.getStep(), "success result step");
+            assertFalse(panel.getBackButton().isVisible(),
+                    "Back must be hidden after success");
+            assertTrue(panel.getFinishButton().isVisible(),
+                    "Finish must be visible on results");
+            assertContains(panel.getResultBody().getText(),
+                    "セットアップが完了しました",
+                    "success result body");
+            assertContains(panel.getResultSummary().getText(),
+                    "HTTPS証明書: 成功",
+                    "HTTPS success result");
+            assertContains(panel.getResultSummary().getText(),
+                    "Windows自動プロキシー: 成功",
+                    "proxy success result");
+            assertContains(panel.getResultSummary().getText(),
+                    "ログオン時自動起動: 未選択",
+                    "auto-start skipped result");
+            render(panel, 600, 430,
+                    previewDirectory.resolve(
+                            "wizard-step4-success-narrow.png"));
+            assertComponentsWithinBounds(panel, panel);
+
+            panel.showResult(
+                    selectedOptions,
+                    new IOException("テスト用の適用エラー"));
+            assertTrue(panel.getBackButton().isVisible(),
+                    "Back must be visible after failure");
+            assertContains(panel.getResultBody().getText(),
+                    "ロールバックしました",
+                    "failure result body");
+            assertContains(panel.getResultSummary().getText(),
+                    "HTTPS証明書: 失敗（ロールバック済み）",
+                    "HTTPS failure result");
+            assertContains(panel.getResultSummary().getText(),
+                    "ログオン時自動起動: 未選択",
+                    "unselected option must not be marked failed");
+            assertContains(panel.getResultSummary().getText(),
+                    "テスト用の適用エラー",
+                    "failure detail");
+            render(panel, 720, 500,
+                    previewDirectory.resolve(
+                            "wizard-step4-failure-standard.png"));
+            assertComponentsWithinBounds(panel, panel);
+
+            panel.getBackButton().doClick();
+            assertEquals(2, panel.getStep(),
+                    "Back from failure results");
+            assertTrue(panel.getApplyButton().isVisible(),
+                    "Apply must be available for retry");
+            assertTrue(panel.getHttpsCheckBox().isEnabled(),
+                    "HTTPS choice must recover for retry");
+            assertTrue(panel.getProxyCheckBox().isEnabled(),
+                    "proxy choice must recover for retry");
+            assertTrue(panel.getAutoStartCheckBox().isEnabled(),
+                    "auto-start choice must recover for retry");
+            panel.showResult(selectedOptions, null);
+            panel.getFinishButton().doClick();
         });
 
         SetupOptions options = applied.get();

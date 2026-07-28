@@ -1,0 +1,135 @@
+name: Standalone Updater
+
+on:
+  pull_request:
+    paths:
+      - 'updater/**'
+      - 'packaging/windows/build-standalone-updater.ps1'
+      - 'packaging/windows/test-standalone-updater.ps1'
+      - 'packaging/windows/test-real-user-updater-e2e.ps1'
+      - '.github/workflows/standalone-updater.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'updater/**'
+      - 'packaging/windows/build-standalone-updater.ps1'
+      - 'packaging/windows/test-standalone-updater.ps1'
+      - 'packaging/windows/test-real-user-updater-e2e.ps1'
+      - '.github/workflows/standalone-updater.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '23 18 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standalone-updater-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  real-user-e2e:
+    runs-on: windows-latest
+    timeout-minutes: 75
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up JDK 17 used only to build updater
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Require healthy WinGet dependency source
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          java --version
+          javac --version
+          jpackage --version
+          if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+            throw 'Strict WinGet success/fallback regression test requires WinGet'
+          }
+          winget --version
+          winget source reset --force
+          if ($LASTEXITCODE -ne 0) { throw 'winget source reset failed' }
+          winget source update
+          if ($LASTEXITCODE -ne 0) { throw 'winget source update failed' }
+          foreach ($id in @('EclipseAdoptium.Temurin.21.JDK', 'Gyan.FFmpeg')) {
+            winget show --id $id --exact --source winget --accept-source-agreements --disable-interactivity
+            if ($LASTEXITCODE -ne 0) { throw "$id is not resolvable from the winget source" }
+          }
+
+      - name: Build and package updater
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force .\.test-work | Out-Null
+          Start-Transcript -Path .\.test-work\standalone-updater-transcript.txt -Force
+          try { .\packaging\windows\test-standalone-updater.ps1 -BuildMsi }
+          finally { Stop-Transcript }
+
+      - name: Run strict real-user E2E
+        shell: pwsh
+        run: .\packaging\windows\test-real-user-updater-e2e.ps1
+
+      - name: Upload updater packages and diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: standalone-updater-${{ github.sha }}
+          if-no-files-found: warn
+          retention-days: 14
+          include-hidden-files: true
+          path: |
+            .test-work/standalone-updater/output/**
+            .test-work/updater-tests/**
+            .test-work/real-user-e2e/**
+            .test-work/standalone-updater-transcript.txt
+
+  live-provider-contracts:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify live release and provider contracts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{ Authorization = "Bearer $env:GITHUB_TOKEN"; Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28'; 'User-Agent' = 'NicoCache_nl updater provider contract test' }
+          $release = Invoke-RestMethod 'https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest' -Headers $headers
+          if ($release.tag_name -notmatch '^v(?<version>\d+(?:\.\d+){2})$') { throw "Unsupported release tag: $($release.tag_name)" }
+          $productMsi = "NicoCache_nl-$($Matches.version).msi"
+          foreach ($name in @($productMsi, "$productMsi.sha256")) {
+            if (@($release.assets | Where-Object name -eq $name).Count -ne 1) {
+              throw "Required release asset is missing or duplicated: $name"
+            }
+          }
+          $classes = Join-Path $env:RUNNER_TEMP 'updater-contract-classes'
+          $target = Join-Path $env:RUNNER_TEMP 'updater-contract-target'
+          New-Item -ItemType Directory -Force $classes, $target | Out-Null
+          Set-Content -LiteralPath (Join-Path $target 'version.txt') -Value '0.0.0' -Encoding ascii
+          $sources = @(Get-ChildItem .\updater\src -Filter '*.java' -Recurse -File | ForEach-Object FullName)
+          javac --release 11 -encoding UTF-8 -Xlint:all -d $classes @sources
+          if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed' }
+          java -cp $classes dareka.updater.UpdaterLauncher --dependency-check --app-root $target --java-major 21
+          if ($LASTEXITCODE -ne 0) { throw 'Provider contract check failed' }
+
+      - name: Reject bundled PowerShell dependency implementation
+        shell: pwsh
+        run: |
+          $forbidden = @(Get-ChildItem .\updater -Recurse -File | Where-Object Extension -in @('.ps1','.psd1','.psm1'))
+          if ($forbidden.Count -ne 0) { throw "PowerShell dependency payload detected: $(@($forbidden.FullName) -join ', ')" }
