@@ -14,6 +14,8 @@ NicoCache_nl本体と管理対象の外部依存関係を、一つの独立GUI�
   - NicoCache_nlで動作確認済みのLTSだけを選択可能にし、未対応LTSはグレー表示
   - WinGet標準のスコープ選択に任せ、既定ではユーザーを優先しつつ、
     パッケージがマシンスコープだけに対応する場合はWindowsの許可後にマシンへ導入
+  - Windows更新後にユーザーPATHからWindowsAppsが欠落していても、登録済みの
+    WinGet App Execution Aliasを絶対パスで検出して使用
   - WinGetパッケージが提供されていないApache Antなどは、公式配布APIから
     現在のWindowsユーザー用ディレクトリへ導入
   - 取得、ハッシュ検証、展開、バックアップ、置換、ロールバックをJava内で実行

@@ -52,6 +52,9 @@
 
 ### Fixed
 
+- Windows更新後にユーザーPATHからWindowsAppsが欠落した環境でもWinGetを
+  利用できるよう、Javaから通常ファイルとしては追跡できないApp Execution Aliasの
+  reparse pointをリンク自体の存在で検出し、絶対パスから起動するよう修正した。
 - WinGetに存在するTemurinを公式配布APIへ誤ってフォールバックさせないよう、
   全パッケージへのユーザースコープ強制をやめ、パッケージが対応するスコープを
   WinGetに選択させるよう修正した。あわせてWinGet未提供のApache Antを

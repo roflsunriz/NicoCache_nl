@@ -11,6 +11,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
@@ -327,11 +328,13 @@ final class SystemDependencyManager {
         return wingetExecutable != null && probe(Arrays.asList(wingetExecutable, "--version")).exitCode == 0;
     }
 
-    private static String resolveWingetExecutable(Map<String, String> environment) {
+    static String resolveWingetExecutable(Map<String, String> environment) {
         String localAppData = environment.get("LOCALAPPDATA");
         if (localAppData != null && !localAppData.isBlank()) {
             Path alias = Path.of(localAppData, "Microsoft", "WindowsApps", "winget.exe");
-            if (Files.exists(alias)) return alias.toString();
+            // App Execution Alias is a reparse point whose target is not exposed to
+            // Files.exists() on some Windows builds, even though CreateProcess can run it.
+            if (Files.exists(alias, LinkOption.NOFOLLOW_LINKS)) return alias.toString();
         }
         return "winget";
     }

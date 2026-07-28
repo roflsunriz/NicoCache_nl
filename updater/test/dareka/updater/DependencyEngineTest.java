@@ -2,9 +2,12 @@ package dareka.updater;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Unit tests for the winget-first dependency policy and automatic install scope selection. */
 public final class DependencyEngineTest {
@@ -28,6 +31,7 @@ public final class DependencyEngineTest {
             int source = winget.indexOf("--source");
             assertTrue(source >= 0 && source + 1 < winget.size() && "winget".equals(winget.get(source + 1)),
                     "WinGet source was not fixed to the community repository: " + winget);
+            assertWingetAppExecutionAliasResolution();
 
             String merged = SystemDependencyManager.mergePath(
                     "C:\\Windows\\System32;C:\\Tools\\bin;C:\\TOOLS\\BIN\\",
@@ -55,6 +59,18 @@ public final class DependencyEngineTest {
 
     private static void assertContains(String value, String expected, String label) {
         assertTrue(value.contains(expected), label + " missing: " + expected + " in " + value);
+    }
+
+    private static void assertWingetAppExecutionAliasResolution() {
+        if (!System.getProperty("os.name", "").toLowerCase().contains("windows")) return;
+        String localAppData = System.getenv("LOCALAPPDATA");
+        if (localAppData == null || localAppData.isBlank()) return;
+        Path alias = Path.of(localAppData, "Microsoft", "WindowsApps", "winget.exe");
+        if (!Files.exists(alias, LinkOption.NOFOLLOW_LINKS)) return;
+        Map<String, String> environment = new LinkedHashMap<String, String>();
+        environment.put("LOCALAPPDATA", localAppData);
+        assertTrue(alias.toString().equals(SystemDependencyManager.resolveWingetExecutable(environment)),
+                "WinGet App Execution Alias reparse point was ignored: " + alias);
     }
 
     private static void assertTrue(boolean condition, String message) {
