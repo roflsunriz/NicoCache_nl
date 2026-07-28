@@ -59,12 +59,12 @@ jobs:
           path: nlFilters
           persist-credentials: false
 
-      - name: Set up JDK 17 for jpackage
+      - name: Set up JDK 25 for jpackage
         if: steps.update.outputs.updated == 'true'
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
 
       - name: Build and test Windows package
         if: steps.update.outputs.updated == 'true'

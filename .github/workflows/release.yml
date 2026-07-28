@@ -119,11 +119,11 @@ jobs:
           $hash = (Get-FileHash -LiteralPath $jarPath -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  NicoCache_nl.jar" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'NicoCache_nl.jar.sha256') -Encoding ascii
 
-      - name: Set up JDK 17 for Windows installer
+      - name: Set up JDK 25 for Windows installer
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
 
       - name: Show Windows packaging tool versions
         shell: pwsh

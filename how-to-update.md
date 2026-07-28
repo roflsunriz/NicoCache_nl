@@ -61,8 +61,8 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 `main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
 JDK 11 で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
 加えてTemurin 25でWindows、Linux、macOSのビルド、機能、TLS、
-Extension ABI、初回セットアップを検証し、WindowsインストーラーはJDK 17と
-JDK 25の両方で生成、隔離起動、修復、更新、アンインストールを確認する。
+Extension ABI、初回セットアップを検証し、WindowsインストーラーはJDK 25で生成、
+隔離起動、修復、更新、アンインストールを確認する。
 さらにリリースワークフローの契約テストで、従来のZIP、JAR、本体MSIと各ハッシュ
 が公開対象に残り、独立アップデーターMSIとハッシュが追加されていることを確認する。
 
@@ -84,7 +84,7 @@ majorとminorは0〜255、buildは0〜65535にする。本体とアップデー�
 まとめた `NicoCache_nl-<タグ名>.zip` が添付される。例外指定で残る配布ファイルと、
 別リポジトリの `nlFilters` にある `01`〜`20` 番台の `.txt` も含まれるが、
 シンボリックリンクは含まれない。ビルドした `NicoCache_nl.jar` と
-`NicoCache_nl.jar.sha256`、タグのソースからJDK 17で生成・検証した
+`NicoCache_nl.jar.sha256`、タグのソースからJDK 25で生成・検証した
 `NicoCache_nl-<版番号>.msi` とそのSHA-256も個別アセットとして添付される。
 同じタグのソースから、`updater/VERSION` で生成した
 `NicoCache_nl-Updater-<アップデーター版>.msi` とそのSHA-256も添付される。
@@ -123,9 +123,9 @@ Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Cen
 
 ## Windows インストーラー
 
-リリースではJDK 17の `jpackage` を使い、Javaランタイムと単一の製品ランチャーを
-含むアプリイメージを生成する。互換性CIではJDK 25でも同じパッケージを生成し、
-日本語設定の読込みに必要な `jdk.charsets` を含む最小ランタイムで起動を検証する。
+リリースとWindowsインストーラーCIではJDK 25の `jpackage` を使い、Java 25の
+ランタイムと単一の製品ランチャーを含むアプリイメージを生成する。日本語設定の
+読込みに必要な `jdk.charsets` を含む最小ランタイムで起動を検証する。
 隔離テストでは同じ製品ランチャーへ内部用の `--headless` を指定する。
 
 Windowsパッケージ版の利用者データは、既定ではWindowsの「ドキュメント」内の
