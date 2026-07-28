@@ -31,10 +31,8 @@ import java.util.zip.ZipInputStream;
 /** Installs command-line dependencies for the current Windows user. */
 final class SystemDependencyManager {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
-    private static final HttpClient HTTP = HttpClient.newBuilder()
-            .connectTimeout(REQUEST_TIMEOUT)
-            .followRedirects(HttpClient.Redirect.NORMAL)
-            .build();
+    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT)
+            .followRedirects(HttpClient.Redirect.NORMAL).build();
     private static final Pattern JSON_NAME = Pattern.compile("\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern JSON_URL = Pattern.compile("\\\"browser_download_url\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern JSON_DIGEST = Pattern.compile("\\\"digest\\\"\\s*:\\s*\\\"sha256:([0-9a-fA-F]{64})\\\"");
@@ -45,7 +43,6 @@ final class SystemDependencyManager {
                     + "\\\"link\\\"\\s*:\\s*\\\"([^\\\"]+)\\\".*?\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"",
             Pattern.DOTALL);
     private static final Pattern ANT_ZIP = Pattern.compile("apache-ant-(\\d+\\.\\d+\\.\\d+)-bin\\.zip");
-    private static final Pattern SHA256 = Pattern.compile("(?i)^[0-9a-f]{64}$");
     private static final Pattern SHA512 = Pattern.compile("(?i)^[0-9a-f]{128}$");
     private static final int MAX_ARCHIVE_ENTRIES = 200_000;
     private static final long MAX_EXPANDED_BYTES = 8L * 1024 * 1024 * 1024;
@@ -64,46 +61,44 @@ final class SystemDependencyManager {
     }
 
     String checkAll(int javaMajor) throws Exception {
-        StringBuilder output = new StringBuilder();
-        output.append("導入方式: WinGet優先、公式配布APIフォールバック").append(System.lineSeparator());
-        output.append("対象スコープ: 現在のWindowsユーザー").append(System.lineSeparator());
-        output.append("WinGet: ").append(isWingetAvailable() ? "利用可能" : "利用不可（フォールバックを使用）")
-                .append(System.lineSeparator());
+        StringBuilder out = new StringBuilder();
+        out.append("導入方式: WinGet優先、公式配布APIフォールバック\n");
+        out.append("対象スコープ: 現在のWindowsユーザー\n");
+        out.append("WinGet: ").append(isWingetAvailable() ? "利用可能" : "利用不可（フォールバックを使用）").append('\n');
         for (Tool tool : tools(javaMajor)) {
-            CommandResult detected = probe(tool.probeArguments);
-            output.append(tool.displayName).append(": ")
-                    .append(detected.exitCode == 0 ? firstLine(detected.output) : "未導入またはPATH未登録")
-                    .append(" [winget id: ").append(tool.wingetId).append(']')
-                    .append(System.lineSeparator());
+            CommandResult result = probe(tool.probe);
+            out.append(tool.displayName).append(": ")
+                    .append(result.exitCode == 0 ? firstLine(result.output) : "未導入またはPATH未登録")
+                    .append(" [winget id: ").append(tool.wingetId).append("]\n");
         }
-        return output.toString();
+        return out.toString();
     }
 
     String updateAll(int javaMajor) throws Exception {
-        StringBuilder output = new StringBuilder();
+        StringBuilder out = new StringBuilder();
         boolean winget = isWingetAvailable();
         for (Tool tool : tools(javaMajor)) {
-            boolean installed = false;
+            boolean ready = false;
             if (winget) {
-                CommandResult result = runWinget(tool);
-                installed = result.exitCode == 0 && probe(tool.probeArguments).exitCode == 0;
-                output.append(tool.displayName).append(": WinGet ")
-                        .append(installed ? "成功" : "不成立")
-                        .append(System.lineSeparator());
-                if (!installed && !result.output.isBlank()) {
-                    output.append(indent(result.output)).append(System.lineSeparator());
+                CommandResult result;
+                try {
+                    result = runWinget(tool);
+                } catch (Exception failure) {
+                    result = new CommandResult(1, failure.getMessage() == null ? failure.toString() : failure.getMessage());
                 }
+                ready = result.exitCode == 0 && probe(tool.probe).exitCode == 0;
+                out.append(tool.displayName).append(ready ? ": WinGetで利用可能\n" : ": WinGet不成立、フォールバックへ移行\n");
+                if (!ready && !result.output.isBlank()) out.append("  ").append(result.output.replace("\n", "\n  ").trim()).append('\n');
             }
-            if (!installed) {
+            if (!ready) {
                 Path command = installFallback(tool);
                 exposeToUser(tool, command);
-                verifyExecutable(command, tool.probeArguments);
-                output.append(tool.displayName).append(": 公式配布APIからユーザー領域へ導入しました: ")
-                        .append(command).append(System.lineSeparator());
+                verifyExecutable(command, tool.probe);
+                out.append(tool.displayName).append(": 公式配布APIから導入しました: ").append(command).append('\n');
             }
         }
-        output.append("新しいCMD/PowerShellを開くと各コマンドを使用できます。").append(System.lineSeparator());
-        return output.toString();
+        out.append("新しいCMD/PowerShellを開くと各コマンドを使用できます。\n");
+        return out.toString();
     }
 
     String selfTest() throws Exception {
@@ -111,15 +106,15 @@ final class SystemDependencyManager {
         try {
             Path bin = root.resolve("bin");
             Files.createDirectories(bin);
-            Path command = bin.resolve("fixture.exe");
-            Files.write(command, new byte[] {0, 1, 2});
-            String original = "C:\\Windows\\System32;" + bin + ";" + bin.toString().toUpperCase(Locale.ROOT) + "\\";
-            String merged = mergePath(original, bin);
-            int occurrences = 0;
+            String merged = mergePath("C:\\Windows\\System32;" + bin + ";" + bin.toString().toUpperCase(Locale.ROOT) + "\\", bin);
+            int count = 0;
             for (String item : merged.split(";")) {
-                if (normalizePathEntry(item).equals(normalizePathEntry(bin.toString()))) occurrences++;
+                if (normalizePathEntry(item).equals(normalizePathEntry(bin.toString()))) count++;
             }
-            if (occurrences != 1) throw new IOException("PATH重複排除の自己診断に失敗しました");
+            if (count != 1) throw new IOException("PATH重複排除の自己診断に失敗しました");
+            if (probe(Arrays.asList("command-that-must-not-exist-nicocache", "--version")).exitCode == 0) {
+                throw new IOException("不存在コマンドの自己診断に失敗しました");
+            }
             return "SYSTEM_DEPENDENCY_SELF_TEST_OK winget-first fallback user-path command-verification";
         } finally {
             deleteTree(root);
@@ -128,16 +123,12 @@ final class SystemDependencyManager {
 
     private List<Tool> tools(int javaMajor) throws IOException {
         if (javaMajor != 17 && javaMajor != 21) throw new IOException("未検証のTemurin LTSです: " + javaMajor);
-        List<Tool> tools = new ArrayList<Tool>();
-        tools.add(new Tool("temurin", "Eclipse Temurin JDK", "EclipseAdoptium.Temurin." + javaMajor + ".JDK",
-                Arrays.asList("java", "-version"), "java.exe", true, javaMajor));
-        tools.add(new Tool("ffmpeg", "FFmpeg", "Gyan.FFmpeg",
-                Arrays.asList("ffmpeg", "-version"), "ffmpeg.exe", false, 0));
-        tools.add(new Tool("ant", "Apache Ant", "Apache.Ant",
-                Arrays.asList("ant", "-version"), "ant.bat", false, 0));
-        tools.add(new Tool("7zip", "7-Zip", "7zip.7zip",
-                Arrays.asList("7z"), "7z.exe", false, 0));
-        return tools;
+        return Arrays.asList(
+                new Tool("temurin", "Eclipse Temurin JDK", "EclipseAdoptium.Temurin." + javaMajor + ".JDK",
+                        Arrays.asList("java", "-version"), "java.exe", true, javaMajor),
+                new Tool("ffmpeg", "FFmpeg", "Gyan.FFmpeg", Arrays.asList("ffmpeg", "-version"), "ffmpeg.exe", false, 0),
+                new Tool("ant", "Apache Ant", "Apache.Ant", Arrays.asList("ant", "-version"), "ant.bat", false, 0),
+                new Tool("7zip", "7-Zip", "7zip.7zip", Arrays.asList("7z"), "7z.exe", false, 0));
     }
 
     private CommandResult runWinget(Tool tool) throws Exception {
@@ -148,7 +139,7 @@ final class SystemDependencyManager {
         upgrade.add("upgrade");
         upgrade.addAll(common);
         CommandResult result = run(upgrade, Duration.ofMinutes(20));
-        if (result.exitCode == 0 && probe(tool.probeArguments).exitCode == 0) return result;
+        if (result.exitCode == 0 && probe(tool.probe).exitCode == 0) return result;
         List<String> install = new ArrayList<String>();
         install.add("winget");
         install.add("install");
@@ -158,60 +149,42 @@ final class SystemDependencyManager {
     }
 
     private Path installFallback(Tool tool) throws Exception {
-        Release release;
-        if ("temurin".equals(tool.id)) release = resolveTemurin(tool.javaMajor);
-        else if ("ffmpeg".equals(tool.id)) release = resolveFfmpeg();
-        else if ("ant".equals(tool.id)) release = resolveAnt();
-        else if ("7zip".equals(tool.id)) release = resolveSevenZip();
-        else throw new IOException("未知の依存関係です: " + tool.id);
-
-        Path toolRoot = userProgramsRoot.resolve(release.id).resolve(sanitize(release.version)).normalize();
-        Path staging = userProgramsRoot.resolve(".staging-" + release.id + "-" + System.nanoTime());
-        deleteTree(staging);
-        Files.createDirectories(staging);
+        Release release = "temurin".equals(tool.id) ? resolveTemurin(tool.javaMajor)
+                : "ffmpeg".equals(tool.id) ? resolveFfmpeg()
+                : "ant".equals(tool.id) ? resolveAnt() : resolveSevenZip();
+        Path destination = userProgramsRoot.resolve(release.id).resolve(sanitize(release.version));
+        Path work = Files.createTempDirectory(userProgramsRoot, ".stage-" + release.id + "-");
         try {
+            Path expanded = work.resolve("expanded");
+            Files.createDirectories(expanded);
             if (release.type == ArchiveType.ZIP) {
-                Path archive = download(release.artifacts.get(0), staging);
-                Path extracted = staging.resolve("expanded");
-                Files.createDirectories(extracted);
-                unzip(archive, extracted);
-                flattenSingleDirectory(extracted);
-                replaceDirectory(extracted, toolRoot);
+                unzip(download(release.artifacts.get(0), work), expanded);
             } else {
-                Path archive = download(release.artifacts.get(0), staging);
-                Path bootstrap = download(release.artifacts.get(1), staging);
-                Path extracted = staging.resolve("expanded");
-                Files.createDirectories(extracted);
-                CommandResult result = run(Arrays.asList(bootstrap.toString(), "x", "-y", "-o" + extracted,
-                        archive.toString()), Duration.ofMinutes(10));
-                if (result.exitCode != 0) throw new IOException("7-Zipフォールバック展開に失敗しました: " + result.output);
-                flattenSingleDirectory(extracted);
-                replaceDirectory(extracted, toolRoot);
+                Path archive = download(release.artifacts.get(0), work);
+                Path bootstrap = download(release.artifacts.get(1), work);
+                CommandResult result = run(Arrays.asList(bootstrap.toString(), "x", "-y", "-o" + expanded, archive.toString()),
+                        Duration.ofMinutes(10));
+                if (result.exitCode != 0) throw new IOException("7-Zip展開に失敗しました: " + result.output);
             }
+            flattenSingleDirectory(expanded);
+            replaceDirectory(expanded, destination);
         } finally {
-            deleteTree(staging);
+            deleteTree(work);
         }
-        Path command = findCommand(toolRoot, tool.commandFileName);
+        Path command = findCommand(destination, tool.commandFileName);
+        if (command == null && "7zip".equals(tool.id)) command = findCommand(destination, "7za.exe");
         if (command == null) throw new IOException(tool.displayName + "のコマンドが配布物内にありません");
         return command;
     }
 
     private void exposeToUser(Tool tool, Path command) throws Exception {
-        Path bin = command.getParent();
-        String userPath = readUserEnvironment("Path");
-        writeUserEnvironment("Path", mergePath(userPath, bin));
-        if (tool.javaTool) writeUserEnvironment("JAVA_HOME", deriveJavaHome(command).toString());
+        writeUserEnvironment("Path", mergePath(readUserEnvironment("Path"), command.getParent()));
+        if (tool.javaTool) writeUserEnvironment("JAVA_HOME", command.getParent().getParent().toString());
         notifyEnvironmentChanged();
     }
 
-    private static Path deriveJavaHome(Path javaExe) {
-        Path bin = javaExe.getParent();
-        return bin != null && bin.getParent() != null ? bin.getParent() : bin;
-    }
-
     private String readUserEnvironment(String name) throws Exception {
-        CommandResult result = run(Arrays.asList("reg.exe", "query", "HKCU\\Environment", "/v", name),
-                Duration.ofSeconds(20));
+        CommandResult result = run(Arrays.asList("reg.exe", "query", "HKCU\\Environment", "/v", name), Duration.ofSeconds(20));
         if (result.exitCode != 0) return "";
         for (String line : result.output.split("\\R")) {
             String trimmed = line.trim();
@@ -227,12 +200,13 @@ final class SystemDependencyManager {
         CommandResult result = run(Arrays.asList("reg.exe", "add", "HKCU\\Environment", "/v", name,
                 "/t", "REG_EXPAND_SZ", "/d", value, "/f"), Duration.ofSeconds(20));
         if (result.exitCode != 0) throw new IOException("ユーザー環境変数" + name + "の保存に失敗しました: " + result.output);
+        environment.put(name, value);
+        if ("Path".equalsIgnoreCase(name)) environment.put("PATH", value);
     }
 
     private static void notifyEnvironmentChanged() {
-        try {
-            new ProcessBuilder("rundll32.exe", "user32.dll,UpdatePerUserSystemParameters", "1", "True").start();
-        } catch (IOException ignored) { }
+        try { new ProcessBuilder("rundll32.exe", "user32.dll,UpdatePerUserSystemParameters", "1", "True").start(); }
+        catch (IOException ignored) { }
     }
 
     static String mergePath(String existing, Path addition) {
@@ -241,9 +215,7 @@ final class SystemDependencyManager {
         if (existing != null && !existing.isBlank()) {
             for (String entry : existing.split(";")) {
                 String trimmed = entry.trim();
-                if (trimmed.isEmpty()) continue;
-                String key = normalizePathEntry(trimmed);
-                if (normalized.add(key)) values.add(trimmed);
+                if (!trimmed.isEmpty() && normalized.add(normalizePathEntry(trimmed))) values.add(trimmed);
             }
         }
         String value = addition.toAbsolutePath().normalize().toString();
@@ -253,9 +225,7 @@ final class SystemDependencyManager {
 
     static String normalizePathEntry(String value) {
         String normalized = value.trim().replace('/', '\\');
-        while (normalized.endsWith("\\") && normalized.length() > 3) {
-            normalized = normalized.substring(0, normalized.length() - 1);
-        }
+        while (normalized.endsWith("\\") && normalized.length() > 3) normalized = normalized.substring(0, normalized.length() - 1);
         return normalized.toLowerCase(Locale.ROOT);
     }
 
@@ -267,47 +237,40 @@ final class SystemDependencyManager {
         if (result.exitCode != 0) throw new IOException("導入したコマンドの実行確認に失敗しました: " + command + "\n" + result.output);
     }
 
-    private CommandResult probe(List<String> arguments) throws Exception {
-        return run(arguments, Duration.ofMinutes(2));
-    }
-
-    private boolean isWingetAvailable() {
+    private CommandResult probe(List<String> arguments) {
         try {
-            return run(Arrays.asList("winget", "--version"), Duration.ofSeconds(30)).exitCode == 0;
-        } catch (Exception unavailable) {
-            return false;
+            return run(arguments, Duration.ofMinutes(2));
+        } catch (Exception missing) {
+            return new CommandResult(127, missing.getMessage() == null ? missing.toString() : missing.getMessage());
         }
     }
 
+    private boolean isWingetAvailable() { return probe(Arrays.asList("winget", "--version")).exitCode == 0; }
+
     private Release resolveTemurin(int major) throws Exception {
-        URI uri = URI.create("https://api.adoptium.net/v3/assets/latest/" + major
-                + "/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse");
-        String json = text(uri, "application/json");
+        String json = text(URI.create("https://api.adoptium.net/v3/assets/latest/" + major
+                + "/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse"), "application/json");
         Matcher semver = ADOPTIUM_SEMVER.matcher(json);
         Matcher pkg = ADOPTIUM_PACKAGE.matcher(json);
         if (!semver.find() || !pkg.find()) throw new IOException("Adoptium APIの応答を解釈できません");
-        return Release.zip("temurin", semver.group(1), URI.create(unescape(pkg.group(2))), pkg.group(3),
-                pkg.group(1), "SHA-256");
+        return Release.zip("temurin", semver.group(1), URI.create(unescape(pkg.group(2))), pkg.group(3), pkg.group(1), "SHA-256");
     }
 
     private Release resolveFfmpeg() throws Exception {
         String json = text(URI.create("https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest"),
                 "application/vnd.github+json");
         Asset zip = findAsset(json, Pattern.compile("^ffmpeg-master-latest-win64-gpl\\.zip$"));
-        Asset checksums = findAsset(json, Pattern.compile("^checksums\\.sha256$"));
-        String checksumText = text(checksums.url, "text/plain");
-        Matcher match = Pattern.compile("(?m)^([0-9a-fA-F]{64})\\s+\\*?" + Pattern.quote(zip.name) + "\\s*$")
-                .matcher(checksumText);
-        if (!match.find()) throw new IOException("FFmpeg SHA-256が見つかりません");
+        Asset sums = findAsset(json, Pattern.compile("^checksums\\.sha256$"));
+        Matcher hash = Pattern.compile("(?m)^([0-9a-fA-F]{64})\\s+\\*?" + Pattern.quote(zip.name) + "\\s*$")
+                .matcher(text(sums.url, "text/plain"));
+        if (!hash.find()) throw new IOException("FFmpeg SHA-256が見つかりません");
         Matcher published = JSON_PUBLISHED.matcher(json);
-        return Release.zip("ffmpeg", published.find() ? published.group(1) : "latest", zip.url, zip.name,
-                match.group(1), "SHA-256");
+        return Release.zip("ffmpeg", published.find() ? published.group(1) : "latest", zip.url, zip.name, hash.group(1), "SHA-256");
     }
 
     private Release resolveAnt() throws Exception {
         URI base = URI.create("https://downloads.apache.org/ant/binaries/");
-        String html = text(base, "text/html");
-        Matcher matcher = ANT_ZIP.matcher(html);
+        Matcher matcher = ANT_ZIP.matcher(text(base, "text/html"));
         String version = null;
         String file = null;
         while (matcher.find()) {
@@ -324,19 +287,17 @@ final class SystemDependencyManager {
     }
 
     private Release resolveSevenZip() throws Exception {
-        String json = text(URI.create("https://api.github.com/repos/ip7z/7zip/releases/latest"),
-                "application/vnd.github+json");
+        String json = text(URI.create("https://api.github.com/repos/ip7z/7zip/releases/latest"), "application/vnd.github+json");
         Asset archive = findAsset(json, Pattern.compile("^7z[0-9]+-extra\\.7z$"));
         Asset bootstrap = findAsset(json, Pattern.compile("^7zr\\.exe$"));
-        if (archive.digest == null || bootstrap.digest == null) throw new IOException("7-Zip配布物のSHA-256がありません");
-        String version = archive.name.replaceAll("^7z([0-9]+)-extra\\.7z$", "$1");
-        return Release.sevenZip("7zip", version,
+        if (archive.digest == null || bootstrap.digest == null) throw new IOException("7-Zip SHA-256がありません");
+        return Release.sevenZip("7zip", archive.name.replaceAll("^7z([0-9]+)-extra\\.7z$", "$1"),
                 new Artifact(archive.url, archive.name, archive.digest, "SHA-256"),
                 new Artifact(bootstrap.url, bootstrap.name, bootstrap.digest, "SHA-256"));
     }
 
     private Path download(Artifact artifact, Path directory) throws Exception {
-        Path destination = directory.resolve(artifact.fileName).normalize();
+        Path destination = directory.resolve(artifact.fileName);
         HttpRequest.Builder builder = HttpRequest.newBuilder(artifact.url).timeout(Duration.ofMinutes(10))
                 .header("User-Agent", "NicoCache_nl Updater");
         addGitHubToken(builder, artifact.url);
@@ -385,10 +346,9 @@ final class SystemDependencyManager {
             while ((entry = zip.getNextEntry()) != null) {
                 if (++entries > MAX_ARCHIVE_ENTRIES) throw new IOException("ZIPエントリ数上限超過");
                 Path output = destination.resolve(entry.getName()).normalize();
-                if (!output.startsWith(destination)) throw new IOException("ZIP traversalを拒否しました: " + entry.getName());
-                if (entry.isDirectory()) {
-                    Files.createDirectories(output);
-                } else {
+                if (!output.startsWith(destination)) throw new IOException("ZIP traversalを拒否しました");
+                if (entry.isDirectory()) Files.createDirectories(output);
+                else {
                     Files.createDirectories(output.getParent());
                     try (OutputStream out = Files.newOutputStream(output)) {
                         byte[] buffer = new byte[8192];
@@ -418,14 +378,12 @@ final class SystemDependencyManager {
     }
 
     private static void replaceDirectory(Path staged, Path destination) throws IOException {
-        Path parent = destination.getParent();
-        Files.createDirectories(parent);
-        Path backup = parent.resolve(destination.getFileName() + ".previous");
+        Files.createDirectories(destination.getParent());
+        Path backup = destination.resolveSibling(destination.getFileName() + ".previous");
         deleteTree(backup);
         if (Files.exists(destination)) Files.move(destination, backup, StandardCopyOption.REPLACE_EXISTING);
-        try {
-            Files.move(staged, destination, StandardCopyOption.REPLACE_EXISTING);
-        } catch (IOException error) {
+        try { Files.move(staged, destination, StandardCopyOption.REPLACE_EXISTING); }
+        catch (IOException error) {
             if (Files.exists(backup)) Files.move(backup, destination, StandardCopyOption.REPLACE_EXISTING);
             throw error;
         }
@@ -433,8 +391,7 @@ final class SystemDependencyManager {
 
     private static Path findCommand(Path root, String name) throws IOException {
         try (java.util.stream.Stream<Path> stream = Files.walk(root)) {
-            return stream.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().equalsIgnoreCase(name))
+            return stream.filter(Files::isRegularFile).filter(path -> path.getFileName().toString().equalsIgnoreCase(name))
                     .findFirst().orElse(null);
         }
     }
@@ -442,16 +399,14 @@ final class SystemDependencyManager {
     private static void verify(Path file, String expected, String algorithm) throws Exception {
         MessageDigest digest = MessageDigest.getInstance(algorithm.replace("-", ""));
         try (InputStream input = Files.newInputStream(file)) {
-            byte[] buffer = new byte[64 * 1024];
+            byte[] buffer = new byte[65536];
             int read;
             while ((read = input.read(buffer)) >= 0) digest.update(buffer, 0, read);
         }
         StringBuilder actual = new StringBuilder();
         for (byte value : digest.digest()) actual.append(String.format("%02x", value & 0xff));
         if (!MessageDigest.isEqual(expected.toLowerCase(Locale.ROOT).getBytes(StandardCharsets.US_ASCII),
-                actual.toString().getBytes(StandardCharsets.US_ASCII))) {
-            throw new IOException("ハッシュが一致しません: " + file.getFileName());
-        }
+                actual.toString().getBytes(StandardCharsets.US_ASCII))) throw new IOException("ハッシュが一致しません: " + file);
     }
 
     private CommandResult run(List<String> command, Duration timeout) throws Exception {
@@ -462,7 +417,7 @@ final class SystemDependencyManager {
         Thread reader = new Thread(() -> {
             try (InputStream input = process.getInputStream()) { input.transferTo(output); }
             catch (IOException ignored) { }
-        }, "tool-output-reader");
+        });
         reader.setDaemon(true);
         reader.start();
         if (!process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
@@ -484,11 +439,8 @@ final class SystemDependencyManager {
     private static String sanitize(String value) { return value.replaceAll("[^0-9A-Za-z._-]", "_"); }
     private static String unescape(String value) { return value.replace("\\/", "/").replace("\\u0026", "&"); }
     private static String firstLine(String value) { return value.lines().findFirst().orElse(value).trim(); }
-    private static String indent(String value) { return "  " + value.replace("\n", "\n  ").trim(); }
-
     private static int compareVersions(String left, String right) {
-        String[] a = left.split("\\.");
-        String[] b = right.split("\\.");
+        String[] a = left.split("\\."); String[] b = right.split("\\.");
         for (int i = 0; i < Math.max(a.length, b.length); i++) {
             int av = i < a.length ? Integer.parseInt(a[i]) : 0;
             int bv = i < b.length ? Integer.parseInt(b[i]) : 0;
@@ -496,7 +448,6 @@ final class SystemDependencyManager {
         }
         return 0;
     }
-
     private static void deleteTree(Path root) throws IOException {
         if (root == null || !Files.exists(root)) return;
         try (java.util.stream.Stream<Path> stream = Files.walk(root)) {
@@ -505,69 +456,37 @@ final class SystemDependencyManager {
     }
 
     private enum ArchiveType { ZIP, SEVEN_ZIP }
-
     private static final class Tool {
-        final String id;
-        final String displayName;
-        final String wingetId;
-        final List<String> probeArguments;
-        final String commandFileName;
-        final boolean javaTool;
-        final int javaMajor;
-        Tool(String id, String displayName, String wingetId, List<String> probeArguments,
-                String commandFileName, boolean javaTool, int javaMajor) {
-            this.id = id;
-            this.displayName = displayName;
-            this.wingetId = wingetId;
-            this.probeArguments = probeArguments;
-            this.commandFileName = commandFileName;
-            this.javaTool = javaTool;
-            this.javaMajor = javaMajor;
+        final String id, displayName, wingetId, commandFileName; final List<String> probe; final boolean javaTool; final int javaMajor;
+        Tool(String id, String displayName, String wingetId, List<String> probe, String commandFileName, boolean javaTool, int javaMajor) {
+            this.id=id; this.displayName=displayName; this.wingetId=wingetId; this.probe=probe;
+            this.commandFileName=commandFileName; this.javaTool=javaTool; this.javaMajor=javaMajor;
         }
     }
-
     private static final class Artifact {
-        final URI url;
-        final String fileName;
-        final String checksum;
-        final String algorithm;
+        final URI url; final String fileName, checksum, algorithm;
         Artifact(URI url, String fileName, String checksum, String algorithm) {
-            this.url = url;
-            this.fileName = fileName;
-            this.checksum = checksum;
-            this.algorithm = algorithm;
+            this.url=url; this.fileName=fileName; this.checksum=checksum; this.algorithm=algorithm;
         }
     }
-
     private static final class Release {
-        final String id;
-        final String version;
-        final List<Artifact> artifacts;
-        final ArchiveType type;
+        final String id, version; final List<Artifact> artifacts; final ArchiveType type;
         Release(String id, String version, List<Artifact> artifacts, ArchiveType type) {
-            this.id = id;
-            this.version = version;
-            this.artifacts = artifacts;
-            this.type = type;
+            this.id=id; this.version=version; this.artifacts=artifacts; this.type=type;
         }
         static Release zip(String id, String version, URI url, String fileName, String checksum, String algorithm) {
-            return new Release(id, version, Arrays.asList(new Artifact(url, fileName, checksum, algorithm)), ArchiveType.ZIP);
+            return new Release(id, version, Arrays.asList(new Artifact(url,fileName,checksum,algorithm)), ArchiveType.ZIP);
         }
         static Release sevenZip(String id, String version, Artifact archive, Artifact bootstrap) {
-            return new Release(id, version, Arrays.asList(archive, bootstrap), ArchiveType.SEVEN_ZIP);
+            return new Release(id, version, Arrays.asList(archive,bootstrap), ArchiveType.SEVEN_ZIP);
         }
     }
-
     private static final class Asset {
-        final String name;
-        final URI url;
-        final String digest;
-        Asset(String name, URI url, String digest) { this.name = name; this.url = url; this.digest = digest; }
+        final String name; final URI url; final String digest;
+        Asset(String name, URI url, String digest) { this.name=name; this.url=url; this.digest=digest; }
     }
-
     private static final class CommandResult {
-        final int exitCode;
-        final String output;
-        CommandResult(int exitCode, String output) { this.exitCode = exitCode; this.output = output; }
+        final int exitCode; final String output;
+        CommandResult(int exitCode, String output) { this.exitCode=exitCode; this.output=output; }
     }
 }
