@@ -163,7 +163,7 @@ final class SystemDependencyManager {
         List<String> upgrade = wingetArguments(wingetExecutable, "upgrade", tool.wingetId);
         CommandResult upgradeResult = run(upgrade, Duration.ofMinutes(20));
         output.append(upgradeResult.output);
-        if (isWingetPackageInstalled(tool.wingetId)) {
+        if (upgradeResult.exitCode == 0 || isWingetPackageInstalled(tool.wingetId)) {
             refreshEnvironmentAfterWinget();
             return new CommandResult(0, output.toString());
         }
@@ -175,12 +175,11 @@ final class SystemDependencyManager {
             if (output.length() > 0 && output.charAt(output.length() - 1) != '\n') output.append('\n');
             output.append(installResult.output);
         }
-        if (isWingetPackageInstalled(tool.wingetId)) {
+        if (installResult.exitCode == 0 || isWingetPackageInstalled(tool.wingetId)) {
             refreshEnvironmentAfterWinget();
             return new CommandResult(0, output.toString());
         }
-        int code = installResult.exitCode != 0 ? installResult.exitCode : upgradeResult.exitCode != 0 ? upgradeResult.exitCode : 1;
-        return new CommandResult(code, output.toString());
+        return new CommandResult(installResult.exitCode, output.toString());
     }
 
     private boolean isWingetPackageInstalled(String packageId) {
