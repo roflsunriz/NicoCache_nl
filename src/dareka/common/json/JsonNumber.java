@@ -6,11 +6,15 @@ public class JsonNumber extends JsonValue {
     double valued;
 
     public JsonNumber(long value) {
-        setLong(value);
+        this.valuel = value;
+        this.valued = value;
+        this.raw = Long.toString(value);
     }
 
     public JsonNumber(double value) {
-        setDouble(value);
+        this.valuel = (long)value;
+        this.valued = value;
+        this.raw = Double.toString(value);
     }
 
     JsonNumber(long value, String raw) {

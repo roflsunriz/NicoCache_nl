@@ -28,16 +28,20 @@ public class HttpRequestHeader extends HttpHeader {
     private String path;
     private String version;
 
+    @SuppressWarnings("this-escape")
     public HttpRequestHeader(InputStream source) throws IOException {
         super(source);
+        // private init と final の解析用アクセサーだけを呼び出す。
         init(false, true);
     }
 
+    @SuppressWarnings("this-escape")
     public HttpRequestHeader(InputStream source, boolean tlsLoopback) throws IOException {
         super(source);
         init(tlsLoopback, true);
     }
 
+    @SuppressWarnings("this-escape")
     public HttpRequestHeader(String source) throws IOException {
         super(source);
         init(false, false);
@@ -49,7 +53,7 @@ public class HttpRequestHeader extends HttpHeader {
         if (validateIncomingRequest) {
             validateFramingHeaders();
         }
-        Matcher m = PROXY_REQUEST_LINE_PATTERN.matcher(getStartLine());
+        Matcher m = PROXY_REQUEST_LINE_PATTERN.matcher(getParsedStartLine());
         if (m.find()) {
             method = m.group(1);
             uri = m.group(2);

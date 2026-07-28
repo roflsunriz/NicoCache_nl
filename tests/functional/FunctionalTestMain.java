@@ -39,6 +39,7 @@ import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import dareka.common.LRUMap;
 import dareka.processor.URLResource;
 import dareka.processor.URLResourceCache;
 import dareka.processor.impl.CmafCachingProcessor;
@@ -48,6 +49,7 @@ public final class FunctionalTestMain {
     private static final Duration START_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration STOP_TIMEOUT = Duration.ofSeconds(20);
     private static final List<String> FAILURES = new ArrayList<>();
+    private static int executedTests;
 
     private final Path repository;
     private final Path sandbox;
@@ -86,6 +88,8 @@ public final class FunctionalTestMain {
             run("URL resource cache response policies", this::testUrlResourceCachePolicies);
             run("template reload and CMAF utility validation",
                     this::testTemplateAndCmafUtility);
+            run("LRU map minimum capacity and eviction",
+                    this::testLruMapCapacity);
             run("forward proxy GET/POST/HEAD and upstream status", this::testForwardProxy);
             run("forward proxy byte range", this::testForwardProxyRange);
             run("HTTPS CONNECT and TLS loopback", this::testHttpsMitmLocalFile);
@@ -128,7 +132,7 @@ public final class FunctionalTestMain {
             }
             throw new AssertionError("functional tests failed");
         }
-        System.out.println("Functional tests passed: 16");
+        System.out.println("Functional tests passed: " + executedTests);
     }
 
     private void prepareSandbox() throws Exception {
@@ -611,6 +615,29 @@ public final class FunctionalTestMain {
         } catch (NumberFormatException expected) {
             // expected
         }
+    }
+
+    private void testLruMapCapacity() {
+        LRUMap<Integer, String> cache = new LRUMap<>(20);
+        for (int index = 0; index < 20; index++) {
+            cache.put(index, "value-" + index);
+        }
+
+        cache.setMaxEntries(1);
+        assertEquals(12, cache.getMaxEntries(),
+                "minimum configured capacity");
+        assertEquals(12, cache.size(),
+                "shrinking below the minimum must retain minimum capacity");
+        assertEquals(null, cache.get(7),
+                "oldest entry must be evicted");
+        assertEquals("value-8", cache.get(8),
+                "first retained entry");
+
+        cache.put(20, "value-20");
+        assertEquals(12, cache.size(),
+                "insertion must preserve normalized capacity");
+        assertEquals(null, cache.get(9),
+                "least recently used entry must be evicted after access");
     }
 
     private static String resourceBody(URLResource resource) throws IOException {
@@ -1176,6 +1203,7 @@ public final class FunctionalTestMain {
     }
 
     private static void run(String name, CheckedRunnable test) {
+        executedTests++;
         try {
             test.run();
             System.out.println("PASS " + name);

@@ -35,7 +35,7 @@ try {
         Select-Object -ExpandProperty FullName
 
     & javac --release 11 --add-modules jdk.httpserver -encoding UTF-8 `
-        '-Xlint:all,-auxiliaryclass' -d $classes `
+        -Xlint:all -Werror -d $classes `
         $productSources $testSources
     if ($LASTEXITCODE -ne 0) {
         throw '本体またはE2Eテストのコンパイルに失敗しました'

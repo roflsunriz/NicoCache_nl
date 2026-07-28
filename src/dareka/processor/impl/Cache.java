@@ -324,6 +324,10 @@ public class Cache extends CacheManager {
 
     // [nl] 動画URLの識別子から拡張子をセットする
     protected void setPostfix(String vType) {
+        applyPostfix(vType);
+    }
+
+    private void applyPostfix(String vType) {
         String postfix = null;
         switch (vType.charAt(0)) {
         case 'v':
@@ -359,14 +363,14 @@ public class Cache extends CacheManager {
     @Deprecated
     public Cache(String cacheId, String postfix) {
         this.video = altIdToVideoDescriptor(cacheId, postfix);
-        setPostfix(postfix);
+        applyPostfix(postfix);
     }
 
     @Deprecated
     public Cache(String cacheId, String postfix, String desc) {
         this.video = altIdToVideoDescriptor(cacheId, postfix);
         this.desc = TextUtil.stripZeroWithChars(desc); // [nl]
-        setPostfix(postfix);
+        applyPostfix(postfix);
     }
 
     public Cache(VideoDescriptor video) {

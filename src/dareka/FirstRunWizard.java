@@ -108,9 +108,7 @@ final class FirstRunWizard {
         }
         return completed.get();
     }
-}
-
-final class FirstRunWizardPanel extends JPanel {
+    static final class FirstRunWizardPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
     interface Listener {
@@ -119,8 +117,8 @@ final class FirstRunWizardPanel extends JPanel {
         void cancel();
     }
 
-    private final SetupMessages messages;
-    private final Listener listener;
+    private final transient SetupMessages messages;
+    private final transient Listener listener;
     private final CardLayout cards = new CardLayout();
     private final JPanel cardPanel = new JPanel(cards);
     private final JButton backButton;
@@ -473,5 +471,6 @@ final class FirstRunWizardPanel extends JPanel {
     private static boolean isRightToLeft(Locale locale) {
         String language = locale.getLanguage();
         return "ar".equals(language) || "ur".equals(language);
+    }
     }
 }

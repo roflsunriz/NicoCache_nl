@@ -49,9 +49,12 @@ public abstract class Config {
         Config.config = config;
     }
 
+    @SuppressWarnings("this-escape")
     public Config(File configFile) {
         this.configFile = configFile;
 
+        // doSetDefaults は公開済みの拡張用テンプレートメソッドであり、
+        // 既存サブクラスとの初期化契約を維持するためここで呼び出す。
         doSetDefaults(defaultProperties); // [nl]
         update();
     }

@@ -376,9 +376,7 @@ public class NLMain {
             Extension2 extension, String prefix, String debugKey) {
         return getExtLogger(extension, prefix, debugKey, false);
     }
-}
-
-class GUILauncher {
+    static class GUILauncher {
     static File propFile    = NicoCachePaths.guiPropertyFile();
     static File extIconFile = NicoCachePaths.userFile("NicoCacheGUI_Icon.gif");
     static ConfigGUI config = new ConfigGUI();
@@ -1197,5 +1195,6 @@ class GUILauncher {
                 return true;
             }
         }
+    }
     }
 }

@@ -22,8 +22,8 @@ import dareka.processor.impl.Cache;
 //flv 2 mp3 converter
 public class Flv2mp3 extends Resource
 {
-    private int fileOffset;
-    private int fileLength;
+    private long fileOffset;
+    private long fileLength;
     private RandomAccessFile raf = null;
     private Cache cache = null;
     private boolean writeFailed = false;
@@ -74,7 +74,7 @@ public class Flv2mp3 extends Resource
         DataOutputStream dout = new DataOutputStream(out);
         try {
             raf = new RandomAccessFile(cache.getCacheFile(), "r");
-            fileLength = (int)cache.getCacheFile().length();
+            fileLength = cache.getCacheFile().length();
             extractMP3impl(dout);
         } catch (FileNotFoundException e) {
         } catch (EOFException e) {
@@ -210,8 +210,9 @@ public class Flv2mp3 extends Resource
         // 音声ストリームで、mp3な時だけ
         if (type == 0x8 && (media >> 4) == 2)
         {
-            byte[] data = new byte[(int)dataSize];
-            raf.read(data, 0, (int)dataSize);
+            int chunkSize = Math.toIntExact(dataSize);
+            byte[] data = new byte[chunkSize];
+            raf.readFully(data);
             try {
                 out.write(data);
             } catch (IOException e) {
@@ -222,7 +223,7 @@ public class Flv2mp3 extends Resource
             seek(fileOffset);
     }
 
-    private void seek(int offset) throws IOException {
+    private void seek(long offset) throws IOException {
         raf.seek(offset);
         fileOffset = offset;
     }

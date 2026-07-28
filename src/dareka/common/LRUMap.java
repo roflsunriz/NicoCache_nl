@@ -36,7 +36,7 @@ public class LRUMap<K, V> extends LinkedHashMap<K, V> {
         super((int)(Math.max(maxEntries, 12) / loadFactor * 1.05f),
               loadFactor,
               true);
-        setMaxEntries(maxEntries);
+        this.maxEntries = normalizeMaxEntries(maxEntries);
     };
 
     /**
@@ -55,15 +55,19 @@ public class LRUMap<K, V> extends LinkedHashMap<K, V> {
      * @param maxEntries 新たに設定する最大エントリ数
      */
     public void setMaxEntries(int maxEntries) {
-        this.maxEntries = Math.max(maxEntries, 12);
-        if (size() > maxEntries) {
+        this.maxEntries = normalizeMaxEntries(maxEntries);
+        if (size() > this.maxEntries) {
             Iterator<K> i = keySet().iterator();
-            while (size() > maxEntries && i.hasNext()) {
+            while (size() > this.maxEntries && i.hasNext()) {
                 i.next();
                 i.remove();
             };
         };
     };
+
+    private static int normalizeMaxEntries(int maxEntries) {
+        return Math.max(maxEntries, 12);
+    }
 
     protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
         return size() > maxEntries;

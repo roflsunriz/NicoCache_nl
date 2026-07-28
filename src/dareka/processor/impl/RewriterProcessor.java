@@ -43,12 +43,12 @@ public class RewriterProcessor implements Processor {
         this.config = config;
 
         // システム用簡易フィルタを登録
-        addRewriter(EasyRewriter.getInstance_sys());
+        rewriterList.add(EasyRewriter.getInstance_sys());
 
         // デフォルトのRewriterを登録
-        addRewriter(new WatchRewriter());
-        addRewriter(new SearchRewriter());
-        addRewriter(new ThumbWatchRewriter());
+        rewriterList.add(new WatchRewriter());
+        rewriterList.add(new SearchRewriter());
+        rewriterList.add(new ThumbWatchRewriter());
     }
 
 // UserFilterの追加用

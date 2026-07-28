@@ -29,7 +29,7 @@ try {
         -File -Filter '*.java' |
         Select-Object -ExpandProperty FullName
 
-    & javac --release 11 -encoding UTF-8 '-Xlint:all,-auxiliaryclass' `
+    & javac --release 11 -encoding UTF-8 -Xlint:all -Werror `
         -d $classes `
         $productSources `
         $testSources

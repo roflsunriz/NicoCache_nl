@@ -30,7 +30,8 @@ try {
         -File -Filter "*.java" |
         Select-Object -ExpandProperty FullName
 
-    & javac --release 11 --add-modules jdk.httpserver -encoding UTF-8 -Xlint:all `
+    & javac --release 11 --add-modules jdk.httpserver -encoding UTF-8 `
+        -Xlint:all -Werror `
         -d $classes $productSources $testSources
     if ($LASTEXITCODE -ne 0) {
         throw "本体または機能テストのコンパイルに失敗しました"
@@ -85,7 +86,8 @@ try {
     $sampleSources = Get-ChildItem -LiteralPath (Join-Path $root "extensions") `
         -File -Filter "*Sample.java" |
         Select-Object -ExpandProperty FullName
-    & javac --release 11 -encoding UTF-8 -Xlint:all -classpath $classes `
+    & javac --release 11 -encoding UTF-8 -Xlint:all -Werror `
+        -classpath $classes `
         -d $sampleClasses $sampleSources
     if ($LASTEXITCODE -ne 0) {
         throw "同梱 Extension サンプルのコンパイルに失敗しました"
@@ -97,7 +99,8 @@ try {
     ) `
         -File -Filter "*.java" |
         Select-Object -ExpandProperty FullName
-    & javac --release 11 -encoding UTF-8 -Xlint:all -classpath $classes `
+    & javac --release 11 -encoding UTF-8 -Xlint:all -Werror `
+        -classpath $classes `
         -d $sandbox $fixtureSource
     if ($LASTEXITCODE -ne 0) {
         throw "機能テスト用 Extension のコンパイルに失敗しました"

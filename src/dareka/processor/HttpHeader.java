@@ -579,6 +579,10 @@ public class HttpHeader {
         return startLine;
     }
 
+    final String getParsedStartLine() {
+        return startLine;
+    }
+
     protected void setStartLine(String startLine) {
         this.startLine = startLine;
     }

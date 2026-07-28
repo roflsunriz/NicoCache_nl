@@ -22,18 +22,21 @@ public class HttpResponseHeader extends HttpHeader {
     private int statusCode;
     private String reason;
 
+    @SuppressWarnings("this-escape")
     public HttpResponseHeader(InputStream source) throws IOException {
         super(source);
+        // private init と final の解析用アクセサーだけを呼び出す。
         init();
     }
 
+    @SuppressWarnings("this-escape")
     public HttpResponseHeader(String source) throws IOException {
         super(source);
         init();
     }
 
     private void init() throws HttpIOException {
-        Matcher m = STATUS_LINE_PATTERN.matcher(getStartLine());
+        Matcher m = STATUS_LINE_PATTERN.matcher(getParsedStartLine());
         if (m.find()) {
             version = m.group(1);
             statusCode = Integer.parseInt(m.group(2));

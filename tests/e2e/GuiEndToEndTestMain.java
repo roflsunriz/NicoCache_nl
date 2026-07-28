@@ -1,5 +1,7 @@
 package dareka;
 
+import dareka.NLMain.GUILauncher;
+
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
@@ -29,7 +31,6 @@ import javax.swing.SwingUtilities;
 /**
  * Real Swing event-dispatch tests for the primary log GUI.
  */
-@SuppressWarnings("auxiliaryclass")
 public final class GuiEndToEndTestMain {
     private static final List<String> FAILURES = new ArrayList<>();
 

@@ -112,3 +112,9 @@ jobs:
           ./build-javac.ps1
           ./test-functional.ps1
           ./test-first-run-setup.ps1
+
+      - name: Run strict end-to-end and GUI tests with Java 25
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: pwsh
+        run: ./test-e2e.ps1

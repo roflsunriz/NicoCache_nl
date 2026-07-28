@@ -1,5 +1,7 @@
 package dareka;
 
+import dareka.FirstRunWizard.FirstRunWizardPanel;
+
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Graphics2D;
@@ -22,7 +24,6 @@ import javax.imageio.ImageIO;
 import javax.swing.JComponent;
 import javax.swing.SwingUtilities;
 
-@SuppressWarnings("auxiliaryclass")
 public final class FirstRunSetupTest {
     private final Path repository;
     private final Path sandbox;
