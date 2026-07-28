@@ -17,16 +17,17 @@ import javax.swing.filechooser.FileSystemView;
  * <li>the default relative location under the user data root.</li>
  * </ol>
  */
-public final class NicoCachePaths {
-    public static final String DATA_ROOT_PROPERTY = "nicocache.dataRoot";
-    public static final String APPLICATION_ROOT_PROPERTY =
+final class NicoCachePaths {
+    static final String DATA_ROOT_PROPERTY = "nicocache.dataRoot";
+    static final String DATA_ROOT_ENVIRONMENT = "NICOCACHE_DATA_ROOT";
+    static final String APPLICATION_ROOT_PROPERTY =
             "nicocache.applicationRoot";
-    public static final String PORTABLE_FLAG = "portable.flag";
+    static final String PORTABLE_FLAG = "portable.flag";
 
     private NicoCachePaths() {
     }
 
-    public static Path applicationRoot() {
+    static Path applicationRoot() {
         String configured = System.getProperty(APPLICATION_ROOT_PROPERTY);
         if (configured != null && !configured.isBlank()) {
             return Path.of(configured).toAbsolutePath().normalize();
@@ -42,16 +43,25 @@ public final class NicoCachePaths {
         return Path.of("").toAbsolutePath().normalize();
     }
 
-    public static boolean isPortable() {
+    static boolean isPackaged() {
+        String launcher = System.getProperty("jpackage.app-path");
+        return launcher != null && !launcher.isBlank();
+    }
+
+    static boolean isPortable() {
         return Files.exists(applicationRoot().resolve(PORTABLE_FLAG));
     }
 
-    public static Path dataRoot() {
+    static Path dataRoot() {
         String configured = System.getProperty(DATA_ROOT_PROPERTY);
+        if (configured == null || configured.isBlank()) {
+            configured = System.getenv(DATA_ROOT_ENVIRONMENT);
+        }
         if (configured != null && !configured.isBlank()) {
             return Path.of(configured).toAbsolutePath().normalize();
         }
-        if (isPortable()) {
+        if (isPortable() || !isPackaged()
+                && System.getProperty(APPLICATION_ROOT_PROPERTY) == null) {
             return applicationRoot();
         }
 
@@ -61,39 +71,83 @@ public final class NicoCachePaths {
                     .getDefaultDirectory()
                     .toPath();
         } catch (RuntimeException error) {
-            documents = Path.of(System.getProperty("user.home"));
+            String userHome = System.getProperty("user.home");
+            documents = userHome == null || userHome.isBlank()
+                    ? applicationRoot()
+                    : Path.of(userHome);
         }
         return documents.resolve("NicoCache_nl").toAbsolutePath().normalize();
     }
 
-    public static Path userPath(String relativePath) {
-        return dataRoot().resolve(relativePath).normalize();
+    static Path applicationPath(String relativePath) {
+        return resolveChild(applicationRoot(), relativePath);
     }
 
-    public static File configFile() {
-        return userPath("config.properties").toFile();
+    static Path userPath(String relativePath) {
+        return resolveChild(dataRoot(), relativePath);
     }
 
-    public static File guiPropertyFile() {
-        return userPath("NicoCacheGUI.property").toFile();
+    private static Path resolveChild(Path root, String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            throw new IllegalArgumentException("relativePath must not be blank");
+        }
+        Path relative = Path.of(relativePath);
+        if (relative.isAbsolute()) {
+            throw new IllegalArgumentException(
+                    "relativePath must not be absolute: " + relativePath);
+        }
+        Path normalizedRoot = root.toAbsolutePath().normalize();
+        Path resolved = normalizedRoot.resolve(relative).normalize();
+        if (!resolved.startsWith(normalizedRoot)) {
+            throw new IllegalArgumentException(
+                    "relativePath escapes its root: " + relativePath);
+        }
+        return resolved;
     }
 
-    public static File proxyPacFile() {
-        return userPath("proxy.pac").toFile();
+    static File applicationFile(String relativePath) {
+        return applicationPath(relativePath).toFile();
     }
 
-    public static File localDirectory() {
-        return userPath("local").toFile();
+    static File userFile(String relativePath) {
+        return userPath(relativePath).toFile();
     }
 
-    public static File nlFiltersDirectory() {
-        return userPath("nlFilters").toFile();
+    static File configFile() {
+        return userFile("config.properties");
     }
 
-    public static File configuredFile(String value, String defaultRelativePath) {
+    static File legacyConfigFile() {
+        return userFile("config.ini");
+    }
+
+    static File defaultConfigFile() {
+        return applicationFile("config.properties.default");
+    }
+
+    static File guiPropertyFile() {
+        return userFile("NicoCacheGUI.property");
+    }
+
+    static File proxyPacFile() {
+        return userFile("proxy.pac");
+    }
+
+    static File localDirectory() {
+        return userFile("local");
+    }
+
+    static File nlFiltersDirectory() {
+        return userFile("nlFilters");
+    }
+
+    static File configuredFile(String value, String defaultRelativePath) {
         String selected = value;
         if (selected == null || selected.isBlank()) {
             selected = defaultRelativePath;
+        }
+        if (selected == null || selected.isBlank()) {
+            return null;
         }
         Path path = Path.of(selected);
         if (!path.isAbsolute()) {
@@ -102,7 +156,7 @@ public final class NicoCachePaths {
         return path.normalize().toFile();
     }
 
-    public static File configuredFile(String propertyKey,
+    static File configuredFile(String propertyKey,
             String defaultRelativePath, boolean readSystemProperty) {
         String value = readSystemProperty
                 ? System.getProperty(propertyKey)
@@ -110,15 +164,15 @@ public final class NicoCachePaths {
         return configuredFile(value, defaultRelativePath);
     }
 
-    public static File cacheDirectory() {
+    static File cacheDirectory() {
         return configuredFile(System.getProperty("cacheFolder"), "cache");
     }
 
-    public static File thumbnailCacheDirectory() {
+    static File thumbnailCacheDirectory() {
         return configuredFile(System.getProperty("thcacheFolder"), "thcache");
     }
 
-    public static File convertedCacheDirectory() {
+    static File convertedCacheDirectory() {
         return configuredFile(System.getProperty("convertedCacheFolder"),
                 "cvcache");
     }

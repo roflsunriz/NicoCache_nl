@@ -44,7 +44,8 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
 
     private static final int THCACHE_SIGNATURE = 1203160629;
     private static final int THCACHE_VERSION = 2;
-    private static final File thcacheFile  = new File("thcache.dat");
+    private static final File thcacheFile =
+            UserDataPaths.userFile("thcache.dat");
     private static final ConcurrentHashMap<Integer, File> thcacheSubFolders =
             new ConcurrentHashMap<>();
     private static final Random rand = new Random();
@@ -185,7 +186,8 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
 
     @Override
     public void update(Config config) {
-        thcacheFolder = new File(System.getProperty("thcacheFolder"));
+        thcacheFolder = UserDataPaths.configuredFile(
+                System.getProperty("thcacheFolder"), "thcache");
         thcacheFolder.mkdir();
         thcacheSubFolders.clear();
         refs = new Refs(thcacheFolder);

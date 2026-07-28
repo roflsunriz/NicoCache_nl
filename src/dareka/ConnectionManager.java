@@ -456,9 +456,11 @@ public class ConnectionManager implements Runnable {
             File localFile;
             String path = requestHeader.getPath();
             if (path.length() > 1 && path.startsWith("/")) {
-                File appDir = new File(".").getCanonicalFile();
-                File certsDir = new File(appDir, "certs");
-                localFile = new File(appDir, path);
+                File appDir = NicoCachePaths.dataRoot().toFile()
+                        .getCanonicalFile();
+                File certsDir = NicoCachePaths.userFile("certs")
+                        .getCanonicalFile();
+                localFile = new File(appDir, path.substring(1));
                 // canonical pathで比較したいがシンボリックリンクが効かなくなるので
                 boolean ok = false;
                 for (File tmp = localFile; tmp != null; tmp = tmp.getParentFile()) {
@@ -477,7 +479,7 @@ public class ConnectionManager implements Runnable {
                     return StringResource.getNotFound();
                 }
             } else {
-                localFile = new File("index.html");
+                localFile = NicoCachePaths.userFile("index.html");
                 if (!localFile.exists()) {
                     Resource r = new StringResource(Main.VER_STRING);
                     r.setResponseHeader(HttpHeader.CONTENT_TYPE,

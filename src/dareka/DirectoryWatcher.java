@@ -4,8 +4,8 @@ import static java.nio.file.StandardWatchEventKinds.*;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
@@ -98,9 +98,18 @@ class DirectoryWatcher extends Thread {
         config_properties = config.getConfigFile().getName();
         try {
             watchService = FileSystems.getDefault().newWatchService();
-            nicoCacheFolder = registerWatcher(Paths.get("."));
-            nlFiltersFolder = registerWatcher(Paths.get("nlFilters"));
-            corsLiarFolder = registerWatcher(Paths.get("data/cors"));
+            Path configDirectory = config.getConfigFile().toPath()
+                    .toAbsolutePath().normalize().getParent();
+            if (configDirectory == null) {
+                configDirectory = NicoCachePaths.dataRoot();
+            }
+            Files.createDirectories(NicoCachePaths.nlFiltersDirectory().toPath());
+            Files.createDirectories(NicoCachePaths.userPath("data/cors"));
+            nicoCacheFolder = registerWatcher(configDirectory);
+            nlFiltersFolder = registerWatcher(
+                    NicoCachePaths.nlFiltersDirectory().toPath());
+            corsLiarFolder = registerWatcher(
+                    NicoCachePaths.userPath("data/cors"));
         } catch (IOException e) {
             Logger.debug(e);
             Logger.warning(e.toString());

@@ -1,6 +1,7 @@
 package dareka;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -11,28 +12,18 @@ import java.util.stream.Stream;
 /**
  * Packaged launcher that separates user-managed files from application files.
  */
-public final class UserDataMain {
+final class UserDataMain {
+    private static final String LAYOUT_VERSION = "1";
+    private static final String LAYOUT_VERSION_FILE = ".data-layout-version";
     private static final List<String> USER_FILES = List.of(
             "config.properties",
+            "config.ini",
             "NicoCacheGUI.property",
             "proxy.pac");
     private static final List<String> USER_DIRECTORIES = List.of(
             "local",
-            "nlFilters");
-    private static final List<String> DISTRIBUTION_DIRECTORIES = List.of(
-            "defaults",
             "extensions",
-            "lib",
-            "setup");
-    private static final List<String> DISTRIBUTION_FILES = List.of(
-            "config.properties.default",
-            "certificate-targets.txt",
-            "NicoCacheCA.jar",
-            "NicoCacheGUI_native.dll",
-            "NicoCacheGUI_native64.dll",
-            "nlFilter_sys.txt",
-            "proxy_sample.pac",
-            "THIRD-PARTY-NOTICES.txt");
+            "nlFilters");
 
     private UserDataMain() {
     }
@@ -53,7 +44,7 @@ public final class UserDataMain {
         System.setProperty(NicoCachePaths.APPLICATION_ROOT_PROPERTY,
                 applicationRoot.toString());
 
-        if (NicoCachePaths.isPortable()) {
+        if (NicoCachePaths.isPortable() && !hasConfiguredDataRoot()) {
             NLMain.main(args);
             return;
         }
@@ -72,7 +63,7 @@ public final class UserDataMain {
                 relaunchFromDataRoot(executable, dataRoot, args);
                 return;
             }
-        } catch (IOException error) {
+        } catch (IOException | RuntimeException error) {
             System.err.println("利用者データ領域の準備に失敗しました: " + error);
             NLMain.main(args);
             return;
@@ -81,29 +72,55 @@ public final class UserDataMain {
         NLMain.main(args);
     }
 
+    private static boolean hasConfiguredDataRoot() {
+        String property = System.getProperty(
+                NicoCachePaths.DATA_ROOT_PROPERTY);
+        if (property != null && !property.isBlank()) {
+            return true;
+        }
+        String environment = System.getenv(
+                NicoCachePaths.DATA_ROOT_ENVIRONMENT);
+        return environment != null && !environment.isBlank();
+    }
+
     static void prepareDataRoot(Path applicationRoot, Path dataRoot)
             throws IOException {
-        Files.createDirectories(dataRoot);
+        Path normalizedApplicationRoot =
+                applicationRoot.toAbsolutePath().normalize();
+        Path normalizedDataRoot = dataRoot.toAbsolutePath().normalize();
+        if (normalizedApplicationRoot.equals(normalizedDataRoot)) {
+            return;
+        }
+        Files.createDirectories(normalizedDataRoot);
 
         for (String name : USER_FILES) {
-            migrateIfMissing(applicationRoot.resolve(name),
-                    NicoCachePaths.userPath(name));
+            migrateIfMissing(normalizedApplicationRoot.resolve(name),
+                    normalizedDataRoot.resolve(name));
         }
         for (String name : USER_DIRECTORIES) {
-            migrateDirectoryIfMissing(applicationRoot.resolve(name),
-                    NicoCachePaths.userPath(name));
+            migrateDirectoryIfMissing(normalizedApplicationRoot.resolve(name),
+                    normalizedDataRoot.resolve(name));
         }
 
-        for (String name : DISTRIBUTION_FILES) {
-            copyIfMissing(applicationRoot.resolve(name),
-                    NicoCachePaths.userPath(name));
+        Path versionFile = normalizedDataRoot.resolve(LAYOUT_VERSION_FILE);
+        Path temporary = normalizedDataRoot.resolve(
+                LAYOUT_VERSION_FILE + ".tmp");
+        Files.writeString(
+                temporary,
+                LAYOUT_VERSION + System.lineSeparator(),
+                StandardCharsets.US_ASCII);
+        try {
+            Files.move(
+                    temporary,
+                    versionFile,
+                    StandardCopyOption.REPLACE_EXISTING,
+                    StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException error) {
+            Files.move(
+                    temporary,
+                    versionFile,
+                    StandardCopyOption.REPLACE_EXISTING);
         }
-        for (String name : DISTRIBUTION_DIRECTORIES) {
-            copyDirectoryIfMissing(applicationRoot.resolve(name),
-                    NicoCachePaths.userPath(name));
-        }
-
-        Files.writeString(dataRoot.resolve(".data-layout-version"), "3\n");
     }
 
     private static void migrateIfMissing(Path source, Path destination)
@@ -112,7 +129,19 @@ public final class UserDataMain {
             return;
         }
         Files.createDirectories(destination.getParent());
-        Files.copy(source, destination, StandardCopyOption.COPY_ATTRIBUTES);
+        Path temporary = migrationTemporary(destination);
+        Files.deleteIfExists(temporary);
+        try {
+            Files.copy(
+                    source,
+                    temporary,
+                    StandardCopyOption.COPY_ATTRIBUTES);
+            moveMigrationResult(temporary, destination);
+        } catch (IOException error) {
+            Files.deleteIfExists(temporary);
+            throw error;
+        }
+        logMigration(source, destination);
     }
 
     private static void migrateDirectoryIfMissing(Path source, Path destination)
@@ -121,24 +150,50 @@ public final class UserDataMain {
             return;
         }
         if (Files.isDirectory(source)) {
-            copyTree(source, destination);
+            Path temporary = migrationTemporary(destination);
+            deleteTreeIfExists(temporary);
+            try {
+                copyTree(source, temporary);
+                moveMigrationResult(temporary, destination);
+            } catch (IOException error) {
+                deleteTreeIfExists(temporary);
+                throw error;
+            }
+            logMigration(source, destination);
         } else {
             Files.createDirectories(destination);
         }
     }
 
-    private static void copyIfMissing(Path source, Path destination)
+    private static Path migrationTemporary(Path destination) {
+        return destination.resolveSibling(
+                destination.getFileName() + ".migration.tmp");
+    }
+
+    private static void moveMigrationResult(Path source, Path destination)
             throws IOException {
-        if (!Files.exists(destination) && Files.isRegularFile(source)) {
-            Files.createDirectories(destination.getParent());
-            Files.copy(source, destination, StandardCopyOption.COPY_ATTRIBUTES);
+        try {
+            Files.move(source, destination, StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException atomicError) {
+            try {
+                Files.move(source, destination);
+            } catch (IOException moveError) {
+                moveError.addSuppressed(atomicError);
+                throw moveError;
+            }
         }
     }
 
-    private static void copyDirectoryIfMissing(Path source, Path destination)
-            throws IOException {
-        if (!Files.exists(destination) && Files.isDirectory(source)) {
-            copyTree(source, destination);
+    private static void deleteTreeIfExists(Path root) throws IOException {
+        if (!Files.exists(root)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(root)) {
+            Path[] entries = paths.sorted(java.util.Comparator.reverseOrder())
+                    .toArray(Path[]::new);
+            for (Path entry : entries) {
+                Files.deleteIfExists(entry);
+            }
         }
     }
 
@@ -159,6 +214,11 @@ public final class UserDataMain {
                 }
             }
         }
+    }
+
+    private static void logMigration(Path source, Path destination) {
+        System.out.println("利用者データを移行しました: "
+                + source + " -> " + destination);
     }
 
     private static void relaunchFromDataRoot(

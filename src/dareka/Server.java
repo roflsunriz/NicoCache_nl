@@ -412,11 +412,11 @@ public class Server {
     private void initClassLoader() {
         URL[] urls = new URL[1];
         try {
-            urls[0] = new File("").toURI().toURL();
+            urls[0] = NicoCachePaths.dataRoot().toUri().toURL();
         } catch (MalformedURLException e) { }
         extLoader = new URLClassLoader(urls);
 
-        File extDir = new File("extensions");
+        File extDir = NicoCachePaths.userFile("extensions");
         File[] files = extDir.listFiles((File dir, String name) -> {
             return name.endsWith(".class") && !name.contains("$") &&
                     // マージしたエクステンションは除外

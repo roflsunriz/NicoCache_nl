@@ -59,17 +59,20 @@ public class LocalDirProcessor implements Processor {
             String path = m.group(1);
             if (path.equals("flvplayer_wrapper.swf")) {
 // 常にlocalから返すように変更(swfConvert04)
-                file = new File("local", path);
+                file = new File(UserDataPaths.userFile("local"), path);
             }
             //ローカルにnicoplayer.swfがある時はそれを利用する(夏.07)
             else if (path.equals("flv_booster.swf") || path.equals("nicoplayer.swf")) {
                 // booster
-                file = new File("local", path);
+                file = new File(UserDataPaths.userFile("local"), path);
             }
             else if ("/list.js".equals(m.group(2))) {
-                file = new File("local", m.group(2));
+                file = new File(
+                        UserDataPaths.userFile("local"), m.group(2));
                 if (!file.exists()) {
-                    file = new File("local", "list.js.default");
+                    file = new File(
+                            UserDataPaths.userFile("local"),
+                            "list.js.default");
                 };
             }
             else if (m.group(2) != null && !m.group(2).equals("")
@@ -119,10 +122,10 @@ public class LocalDirProcessor implements Processor {
         }
         catch (UnsupportedEncodingException e) {
             Logger.warning("(LocalDirProcessor)failed to decode url: " + path);
-            return new File("local", path);
+            return new File(UserDataPaths.userFile("local"), path);
         };
 
-        File file = new File("local");
+        File file = UserDataPaths.userFile("local");
         for (int i = 0, end = list.length; i < end; ++i) {
             file = new File(file, list[i]);
         };

@@ -8,29 +8,34 @@ final class FirstRunSetup {
     private FirstRunSetup() {
     }
 
-    static boolean runIfRequired(Path appDirectory) {
-        Path normalized = appDirectory.toAbsolutePath().normalize();
-        if (!isRequired(normalized)) {
+    static boolean runIfRequired(Path appDirectory, Path dataDirectory) {
+        Path normalizedApp = appDirectory.toAbsolutePath().normalize();
+        Path normalizedData = dataDirectory.toAbsolutePath().normalize();
+        if (!isRequired(normalizedApp, normalizedData)) {
             return true;
         }
-        return runInteractive(normalized);
+        return runInteractive(normalizedApp, normalizedData);
     }
 
-    static boolean runInteractive(Path appDirectory) {
-        Path normalized = appDirectory.toAbsolutePath().normalize();
+    static boolean runInteractive(Path appDirectory, Path dataDirectory) {
+        Path normalizedApp = appDirectory.toAbsolutePath().normalize();
+        Path normalizedData = dataDirectory.toAbsolutePath().normalize();
         FirstRunSetupService service =
-                FirstRunSetupService.production(normalized);
+                FirstRunSetupService.production(normalizedApp, normalizedData);
         return FirstRunWizard.showAndApply(service, Locale.getDefault());
     }
 
-    static int runHeadless(Path appDirectory, SetupOptions options) {
-        Path normalized = appDirectory.toAbsolutePath().normalize();
-        if (Files.exists(normalized.resolve("config.properties"))) {
+    static int runHeadless(Path appDirectory, Path dataDirectory,
+            SetupOptions options) {
+        Path normalizedApp = appDirectory.toAbsolutePath().normalize();
+        Path normalizedData = dataDirectory.toAbsolutePath().normalize();
+        if (Files.exists(normalizedData.resolve("config.properties"))) {
             System.out.println("初回セットアップは既に完了しています。");
             return 0;
         }
         try {
-            FirstRunSetupService.production(normalized).apply(options);
+            FirstRunSetupService.production(
+                    normalizedApp, normalizedData).apply(options);
             System.out.println("初回セットアップが完了しました。");
             return 0;
         } catch (Exception error) {
@@ -40,7 +45,7 @@ final class FirstRunSetup {
         }
     }
 
-    static boolean isRequired(Path appDirectory) {
+    static boolean isRequired(Path appDirectory, Path dataDirectory) {
         if (Boolean.getBoolean("dareka.setup.disable")) {
             return false;
         }
@@ -49,9 +54,14 @@ final class FirstRunSetup {
         if (!packaged && !forced) {
             return false;
         }
-        Path normalized = appDirectory.toAbsolutePath().normalize();
-        return !Files.exists(normalized.resolve("config.properties"))
+        Path normalizedApp = appDirectory.toAbsolutePath().normalize();
+        Path normalizedData = dataDirectory.toAbsolutePath().normalize();
+        return !Files.exists(normalizedData.resolve("config.properties"))
                 && Files.isRegularFile(
-                        normalized.resolve("config.properties.default"));
+                        normalizedApp.resolve("config.properties.default"));
+    }
+
+    static boolean isRequired(Path appDirectory) {
+        return isRequired(appDirectory, appDirectory);
     }
 }

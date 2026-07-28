@@ -240,7 +240,25 @@ if ([string]::IsNullOrWhiteSpace($StatePath)) {
     $installRoot = [System.IO.Path]::GetFullPath(
         (Join-Path $PSScriptRoot '..\..')
     )
-    $StatePath = Join-Path $installRoot 'data\setup-system-state.json'
+    $configuredDataRoot = $env:NICOCACHE_DATA_ROOT
+    if ([string]::IsNullOrWhiteSpace($configuredDataRoot)) {
+        if (Test-Path -LiteralPath (
+                Join-Path $installRoot 'portable.flag'
+            ) -PathType Leaf) {
+            $configuredDataRoot = $installRoot
+        } else {
+            $documents = [Environment]::GetFolderPath(
+                [Environment+SpecialFolder]::MyDocuments
+            )
+            if ([string]::IsNullOrWhiteSpace($documents)) {
+                $documents = Join-Path $env:USERPROFILE 'Documents'
+            }
+            $configuredDataRoot = Join-Path $documents 'NicoCache_nl'
+        }
+    }
+    $StatePath = Join-Path (
+        [System.IO.Path]::GetFullPath($configuredDataRoot)
+    ) 'data\setup-system-state.json'
 }
 if ($Action -eq 'Rollback' -and
         [string]::IsNullOrWhiteSpace($ErrorPath)) {

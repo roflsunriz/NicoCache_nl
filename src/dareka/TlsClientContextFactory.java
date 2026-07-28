@@ -17,7 +17,8 @@ import javax.net.ssl.X509TrustManager;
 import dareka.common.Logger;
 
 public class TlsClientContextFactory {
-    private final static File CACERTS_KEYSTORE_FILE = new File("data/tlsclient/cacerts2");
+    private final static File CACERTS_KEYSTORE_FILE =
+            NicoCachePaths.userFile("data/tlsclient/cacerts2");
     private final static String KEYSTORE_PASSPHRASE = "NicoCache";
 
     private static SSLContext context;
