@@ -18,7 +18,6 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
@@ -63,20 +62,17 @@ final class FirstRunWizard {
                                     try {
                                         get();
                                         completed.set(true);
-                                        dialog.dispose();
+                                        dialog.setDefaultCloseOperation(
+                                                WindowConstants.DISPOSE_ON_CLOSE);
+                                        panelReference[0].showResult(
+                                                options, null);
                                     } catch (Exception error) {
                                         dialog.setDefaultCloseOperation(
                                                 WindowConstants.DISPOSE_ON_CLOSE);
-                                        panelReference[0].setBusy(false);
                                         Throwable cause = error.getCause() == null
                                                 ? error : error.getCause();
-                                        JOptionPane.showMessageDialog(
-                                                dialog,
-                                                messages.text("error.apply")
-                                                        + System.lineSeparator()
-                                                        + cause.getMessage(),
-                                                messages.text("error.title"),
-                                                JOptionPane.ERROR_MESSAGE);
+                                        panelReference[0].showResult(
+                                                options, cause);
                                     }
                                 }
                             }.execute();
@@ -131,10 +127,13 @@ final class FirstRunWizardPanel extends JPanel {
     private final JButton nextButton;
     private final JButton cancelButton;
     private final JButton applyButton;
+    private final JButton finishButton;
     private final JCheckBox httpsCheckBox;
     private final JCheckBox proxyCheckBox;
     private final JCheckBox autoStartCheckBox;
     private final JTextArea summary;
+    private final JTextArea resultBody;
+    private final JTextArea resultSummary;
     private final JLabel stepLabel;
     private final JLabel busyLabel;
     private int step;
@@ -185,19 +184,31 @@ final class FirstRunWizardPanel extends JPanel {
         summary.setOpaque(false);
         summary.setFont(summary.getFont().deriveFont(15.0f));
 
+        resultBody = paragraph("");
+        resultBody.setName("setup.result.body");
+        resultSummary = new JTextArea();
+        resultSummary.setName("setup.result.summary");
+        resultSummary.setEditable(false);
+        resultSummary.setLineWrap(true);
+        resultSummary.setWrapStyleWord(true);
+        resultSummary.setFont(resultSummary.getFont().deriveFont(15.0f));
+
         cardPanel.add(welcomePanel(), "0");
         cardPanel.add(optionsPanel(), "1");
         cardPanel.add(summaryPanel(), "2");
+        cardPanel.add(resultPanel(), "3");
         add(cardPanel, BorderLayout.CENTER);
 
         backButton = button("setup.back", messages.text("button.back"));
         nextButton = button("setup.next", messages.text("button.next"));
         cancelButton = button("setup.cancel", messages.text("button.cancel"));
         applyButton = button("setup.apply", messages.text("button.apply"));
+        finishButton = button("setup.finish", messages.text("button.finish"));
         backButton.addActionListener(event -> showStep(step - 1));
         nextButton.addActionListener(event -> showStep(step + 1));
         cancelButton.addActionListener(event -> listener.cancel());
         applyButton.addActionListener(event -> listener.apply(options()));
+        finishButton.addActionListener(event -> listener.cancel());
 
         busyLabel = new JLabel(" ");
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, 8, 0));
@@ -206,6 +217,7 @@ final class FirstRunWizardPanel extends JPanel {
         buttons.add(backButton);
         buttons.add(nextButton);
         buttons.add(applyButton);
+        buttons.add(finishButton);
         add(buttons, BorderLayout.SOUTH);
         applyComponentOrientation(isRightToLeft(locale)
                 ? ComponentOrientation.RIGHT_TO_LEFT
@@ -239,6 +251,15 @@ final class FirstRunWizardPanel extends JPanel {
         JPanel panel = new JPanel(new BorderLayout());
         panel.add(paragraph(messages.text("summary.body")), BorderLayout.NORTH);
         JScrollPane scroll = new JScrollPane(summary);
+        scroll.setBorder(BorderFactory.createEmptyBorder(16, 0, 0, 0));
+        panel.add(scroll, BorderLayout.CENTER);
+        return panel;
+    }
+
+    private JPanel resultPanel() {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(resultBody, BorderLayout.NORTH);
+        JScrollPane scroll = new JScrollPane(resultSummary);
         scroll.setBorder(BorderFactory.createEmptyBorder(16, 0, 0, 0));
         panel.add(scroll, BorderLayout.CENTER);
         return panel;
@@ -288,9 +309,12 @@ final class FirstRunWizardPanel extends JPanel {
         }
         cards.show(cardPanel, Integer.toString(step));
         stepLabel.setText(messages.text("step." + (step + 1)));
+        backButton.setVisible(true);
         backButton.setEnabled(step > 0);
         nextButton.setVisible(step < 2);
+        cancelButton.setVisible(true);
         applyButton.setVisible(step == 2);
+        finishButton.setVisible(false);
     }
 
     private void updateSummary() {
@@ -328,11 +352,70 @@ final class FirstRunWizardPanel extends JPanel {
                 autoStartCheckBox.isSelected());
     }
 
+    void showResult(SetupOptions appliedOptions, Throwable error) {
+        boolean successful = error == null;
+        setBusy(false);
+        resultBody.setText(messages.text(successful
+                ? "result.body.success"
+                : "result.body.failure"));
+        resultBody.setCaretPosition(0);
+
+        StringBuilder text = new StringBuilder();
+        appendResult(text, messages.text("result.option.https"),
+                appliedOptions.isHttpsEnabled(), successful);
+        appendResult(text, messages.text("result.option.proxy"),
+                appliedOptions.isProxyConfigured(), successful);
+        appendResult(text, messages.text("result.option.autostart"),
+                appliedOptions.isAutoStartEnabled(), successful);
+        if (!successful) {
+            String detail = error.getMessage();
+            if (detail == null || detail.isBlank()) {
+                detail = error.getClass().getSimpleName();
+            }
+            text.append(System.lineSeparator())
+                    .append(System.lineSeparator())
+                    .append(messages.text("result.error"))
+                    .append(' ')
+                    .append(detail);
+        }
+        resultSummary.setText(text.toString());
+        resultSummary.setCaretPosition(0);
+
+        step = 3;
+        cards.show(cardPanel, "3");
+        stepLabel.setText(messages.text("step.4"));
+        busyLabel.setText(" ");
+        backButton.setVisible(!successful);
+        backButton.setEnabled(!successful);
+        nextButton.setVisible(false);
+        cancelButton.setVisible(false);
+        applyButton.setVisible(false);
+        finishButton.setVisible(true);
+        finishButton.setEnabled(true);
+    }
+
+    private void appendResult(StringBuilder text, String option,
+            boolean selected, boolean successful) {
+        if (text.length() > 0) {
+            text.append(System.lineSeparator());
+        }
+        String status;
+        if (!selected) {
+            status = messages.text("result.status.skipped");
+        } else if (successful) {
+            status = messages.text("result.status.success");
+        } else {
+            status = messages.text("result.status.failure");
+        }
+        text.append(option).append(": ").append(status);
+    }
+
     void setBusy(boolean busy) {
         backButton.setEnabled(!busy && step > 0);
         nextButton.setEnabled(!busy);
         cancelButton.setEnabled(!busy);
         applyButton.setEnabled(!busy);
+        finishButton.setEnabled(!busy);
         httpsCheckBox.setEnabled(!busy);
         proxyCheckBox.setEnabled(!busy && httpsCheckBox.isSelected());
         autoStartCheckBox.setEnabled(!busy);
@@ -359,6 +442,10 @@ final class FirstRunWizardPanel extends JPanel {
         return applyButton;
     }
 
+    JButton getFinishButton() {
+        return finishButton;
+    }
+
     JCheckBox getHttpsCheckBox() {
         return httpsCheckBox;
     }
@@ -373,6 +460,14 @@ final class FirstRunWizardPanel extends JPanel {
 
     JTextArea getSummary() {
         return summary;
+    }
+
+    JTextArea getResultBody() {
+        return resultBody;
+    }
+
+    JTextArea getResultSummary() {
+        return resultSummary;
     }
 
     private static boolean isRightToLeft(Locale locale) {

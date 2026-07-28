@@ -54,7 +54,8 @@ public class ReEncodingInfo {
             Collections.synchronizedMap(new LinkedHashMap<String, Entry>());
     private final static ConcurrentHashMap<String, String> num2id =
             new ConcurrentHashMap<>();
-    private final static File DATA_FILE = new File("data/reencoded.csv");
+    private final static File DATA_FILE =
+            UserDataPaths.userFile("data/reencoded.csv");
     private final static Pattern VERSION_LINE_PATTERN = Pattern.compile("version,(-?\\d+)");
     private final static Pattern DATA_LINE_PATTERN_VER1 = Pattern.compile("(\\w+),(true|false)");
     private final static Pattern DATA_LINE_PATTERN_VER2 = Pattern.compile("(\\w+),(true|false),(\\d+)");

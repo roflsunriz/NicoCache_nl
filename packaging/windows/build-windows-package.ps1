@@ -244,7 +244,7 @@ Get-ChildItem -LiteralPath (Join-Path $root 'src\dareka') `
 $packageManifest = Join-Path $buildRoot 'manifest-package.mf'
 @(
     'Manifest-Version: 1.0'
-    'Main-Class: dareka.NLMain'
+    'Main-Class: dareka.UserDataMain'
     'Class-Path: sqlite-jdbc.jar igo.jar library.jar NicoCacheCA.jar lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar'
     ''
 ) | Set-Content -LiteralPath $packageManifest -Encoding ascii
@@ -382,7 +382,7 @@ $jpackageArguments = @(
     '--input', $inputRoot,
     '--dest', $outputRoot,
     '--main-jar', 'NicoCache_nl.jar',
-    '--main-class', 'dareka.NLMain',
+    '--main-class', 'dareka.UserDataMain',
     '--icon', (Join-Path $root 'niconico-0.ico')
 )
 foreach ($javaOption in $sharedJavaOptions) {

@@ -40,7 +40,7 @@ class CorsLiarManager {
 
     private AtomicReference<Configuration> configRef = new AtomicReference<>();
     private static final String CHARTEST_LINE = "// CORS設定ファイル";
-    private static final Path CONF_DIR = Paths.get("data/cors");
+    private static final Path CONF_DIR = NicoCachePaths.userPath("data/cors");
     private static final Pattern BACKREFERENCE_PATTERN = Pattern.compile("\\\\[k1-9]");
 
     public void load() {

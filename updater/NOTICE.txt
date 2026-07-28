@@ -1,0 +1,1 @@
+The updater is packaged with its own Java runtime and is not launched through NicoCache_nl's main class.

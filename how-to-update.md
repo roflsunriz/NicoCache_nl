@@ -37,7 +37,8 @@
 ```
 
 画面を確認する場合は `-KeepWorkDir` を指定し、
-`.test-work/first-run-setup/preview/` の3画面を確認する。証明書ストア、
+`.test-work/first-run-setup/preview/` の4画面を確認する。結果画面は成功時と
+失敗時の両方を確認する。証明書ストア、
 Windowsプロキシー、ログオン時起動の実適用試験はローカルで実行せず、
 一時GitHub Actionsランナーへ限定する。
 
@@ -53,6 +54,8 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 
 `main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
 JDK 11 で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
+さらにリリースワークフローの契約テストで、従来のZIP、JAR、本体MSIと各ハッシュ
+が公開対象に残り、独立アップデーターMSIとハッシュが追加されていることを確認する。
 
 リリースは `v<major>.<minor>.<build>` 形式のタグをpushすると開始する。MSIの
 版番号制約に合わせ、majorとminorは0〜255、buildは0〜65535にする。例えば次の
@@ -63,12 +66,19 @@ git tag v1.0.1
 git push origin v1.0.1
 ```
 
+独立アップデーターを変更したリリースでは、タグを作成する前に
+`updater/VERSION` を `<major>.<minor>.<build>` 形式で更新する。この版番号も
+majorとminorは0〜255、buildは0〜65535にする。本体とアップデーターは別々に
+版管理するため、本体だけを変更したときにアップデーター版を合わせて上げない。
+
 テストに合格すると、GitHub Release に `.gitignore` で除外されていないファイルを
 まとめた `NicoCache_nl-<タグ名>.zip` が添付される。例外指定で残る配布ファイルと、
 別リポジトリの `nlFilters` にある `01`〜`20` 番台の `.txt` も含まれるが、
 シンボリックリンクは含まれない。ビルドした `NicoCache_nl.jar` と
 `NicoCache_nl.jar.sha256`、タグのソースからJDK 17で生成・検証した
 `NicoCache_nl-<版番号>.msi` とそのSHA-256も個別アセットとして添付される。
+同じタグのソースから、`updater/VERSION` で生成した
+`NicoCache_nl-Updater-<アップデーター版>.msi` とそのSHA-256も添付される。
 既存タグから再実行する場合は、Release workflow の手動実行でタグ名を指定する。
 
 ## リポジトリ依存関係
@@ -107,6 +117,19 @@ Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Cen
 JDK 17 の `jpackage` を使い、Javaランタイムと単一の製品ランチャーを含む
 アプリイメージを生成する。隔離テストでは同じ製品ランチャーへ内部用の
 `--headless` を指定する。
+
+Windowsパッケージ版の利用者データは、既定ではWindowsの「ドキュメント」内の
+`NicoCache_nl` に保存する。更新前にアプリ本体と同じ場所へあった
+`config.properties`、`config.ini`、`NicoCacheGUI.property`、`proxy.pac`、
+`local/`、`nlFilters/`、`extensions/` は、新配置に同名の項目がない場合だけ
+初回起動時にコピーする。移行元と、設定で絶対パスを指定したキャッシュは削除・
+移動しない。
+
+一時的な検証や管理された配備では、環境変数 `NICOCACHE_DATA_ROOT` または
+Javaシステムプロパティ `nicocache.dataRoot` で保存先を上書きできる。
+実行ファイル横に `portable.flag` を置いた場合は、明示ルートがない限り従来どおり
+アプリ本体を利用者データルートにする。復旧時は利用者データを削除せず、
+`.data-layout-version` と移行元・移行先を確認する。
 
 ```powershell
 .\packaging\windows\build-windows-package.ps1 -PackageType AppImage

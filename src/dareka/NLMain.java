@@ -75,9 +75,6 @@ public class NLMain {
     private static Thread mainThread;
 
     public static void main(String[] args) {
-        if (relaunchFromApplicationDirectory(args)) {
-            return;
-        }
         LaunchOptions launchOptions = LaunchOptions.parse(args);
         if (launchOptions.getError() != null) {
             System.err.println(launchOptions.getError());
@@ -87,11 +84,13 @@ public class NLMain {
         if (launchOptions.isHeadless()) {
             System.setProperty("dareka.gui", "false");
         }
-        Path appDirectory = applicationDirectory();
-        System.setProperty("user.dir", appDirectory.toString());
+        Path appDirectory = NicoCachePaths.applicationRoot();
+        Path dataDirectory = NicoCachePaths.dataRoot();
+        System.setProperty("user.dir", dataDirectory.toString());
         if (launchOptions.isSetup()) {
             int exitCode = FirstRunSetup.runHeadless(
                     appDirectory,
+                    dataDirectory,
                     launchOptions.getSetupOptions());
             if (exitCode != 0) {
                 System.exit(exitCode);
@@ -101,7 +100,7 @@ public class NLMain {
         args = launchOptions.getForwardedArgs();
         boolean startGUI = isStartGUI();
         if (startGUI && !FirstRunSetup.runIfRequired(
-                appDirectory)) {
+                appDirectory, dataDirectory)) {
             return;
         }
         if (startGUI) {
@@ -130,49 +129,6 @@ public class NLMain {
                 System.exit(0);
             }
         }
-    }
-
-    private static boolean relaunchFromApplicationDirectory(String[] args) {
-        String packagedLauncher = System.getProperty("jpackage.app-path");
-        if (packagedLauncher == null || packagedLauncher.isBlank()) {
-            return false;
-        }
-        Path appDirectory = applicationDirectory();
-        Path currentDirectory = Path.of("").toAbsolutePath().normalize();
-        if (appDirectory.equals(currentDirectory)) {
-            return false;
-        }
-
-        String[] command = new String[args.length + 1];
-        command[0] = Path.of(packagedLauncher)
-                .toAbsolutePath()
-                .normalize()
-                .toString();
-        System.arraycopy(args, 0, command, 1, args.length);
-        try {
-            new ProcessBuilder(command)
-                    .directory(appDirectory.toFile())
-                    .inheritIO()
-                    .start();
-        } catch (IOException error) {
-            error.printStackTrace();
-            System.exit(-1);
-        }
-        return true;
-    }
-
-    private static Path applicationDirectory() {
-        String packagedLauncher = System.getProperty("jpackage.app-path");
-        if (packagedLauncher != null && !packagedLauncher.isBlank()) {
-            Path parent = Path.of(packagedLauncher)
-                    .toAbsolutePath()
-                    .normalize()
-                    .getParent();
-            if (parent != null) {
-                return parent;
-            }
-        }
-        return Path.of("").toAbsolutePath().normalize();
     }
 
     static boolean isStartGUI() {
@@ -419,8 +375,8 @@ public class NLMain {
 }
 
 class GUILauncher {
-    static File propFile    = new File("NicoCacheGUI.property");
-    static File extIconFile = new File("NicoCacheGUI_Icon.gif");
+    static File propFile    = NicoCachePaths.guiPropertyFile();
+    static File extIconFile = NicoCachePaths.userFile("NicoCacheGUI_Icon.gif");
     static ConfigGUI config = new ConfigGUI();
     static Image iconImage;
     static {
@@ -488,9 +444,11 @@ class GUILauncher {
             if (System.getProperty("os.arch").equals("amd64")) {
                 libname += "64";
             }
-            if (new File(libname + ".dll").exists()) {
+            File nativeLibrary =
+                    NicoCachePaths.applicationFile(libname + ".dll");
+            if (nativeLibrary.exists()) {
                 try {
-                    System.loadLibrary(libname);
+                    System.load(nativeLibrary.getAbsolutePath());
                     String params = config.getKeyValue("DisableSuspend");
                     NLMain.setNativeWindowProc(logWindow.frame, params);
                     Logger.debug(libname + " loaded");
@@ -705,6 +663,10 @@ class GUILauncher {
 
             addMenuItem("キャッシュフォルダを開く", (ActionEvent e) -> {
                 openFolder(new File(Cache.getCacheDir()));
+            }, popup);
+
+            addMenuItem("利用者データフォルダーを開く", (ActionEvent e) -> {
+                openFolder(NicoCachePaths.dataRoot().toFile());
             }, popup);
 
             popup.addSeparator();

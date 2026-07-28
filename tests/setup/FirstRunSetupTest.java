@@ -50,6 +50,9 @@ public final class FirstRunSetupTest {
     private void run() throws Exception {
         Files.createDirectories(sandbox);
         Files.createDirectories(previewDirectory);
+        testPathResolution();
+        testUserDataMigration();
+        testSeparatedSetupFiles();
         testRequirementDetection();
         testHeadlessLaunchOptions();
         testSuccessfulFileSetup();
@@ -60,7 +63,157 @@ public final class FirstRunSetupTest {
         testCertificateTargets();
         testLocalizedKeysMatch();
         testWizardControlsAndRender();
-        System.out.println("First-run setup tests passed: 10");
+        System.out.println("First-run setup tests passed: 13");
+    }
+
+    private void testPathResolution() throws Exception {
+        Path app = freshSandbox("paths/application");
+        Path data = freshSandbox("paths/data");
+        Path absoluteCache = freshSandbox("paths/absolute-cache");
+        String oldApplication = System.getProperty(
+                NicoCachePaths.APPLICATION_ROOT_PROPERTY);
+        String oldData = System.getProperty(
+                NicoCachePaths.DATA_ROOT_PROPERTY);
+        String oldLauncher = System.getProperty("jpackage.app-path");
+        String oldCache = System.getProperty("cacheFolder");
+        String oldThumbnail = System.getProperty("thcacheFolder");
+        String oldConverted = System.getProperty("convertedCacheFolder");
+        try {
+            System.setProperty(
+                    NicoCachePaths.APPLICATION_ROOT_PROPERTY,
+                    app.toString());
+            System.setProperty(
+                    NicoCachePaths.DATA_ROOT_PROPERTY,
+                    data.toString());
+            System.setProperty("jpackage.app-path",
+                    app.resolve("NicoCache_nl.exe").toString());
+
+            System.setProperty("cacheFolder", absoluteCache.toString());
+            assertEquals(
+                    absoluteCache,
+                    NicoCachePaths.cacheDirectory().toPath(),
+                    "absolute cache path must be preserved");
+            System.setProperty("thcacheFolder", "thumbnail/custom");
+            assertEquals(
+                    data.resolve("thumbnail/custom"),
+                    NicoCachePaths.thumbnailCacheDirectory().toPath(),
+                    "relative thumbnail path must use data root");
+            System.clearProperty("convertedCacheFolder");
+            assertEquals(
+                    data.resolve("cvcache"),
+                    NicoCachePaths.convertedCacheDirectory().toPath(),
+                    "default converted cache path must use data root");
+            assertEquals(
+                    app.resolve("defaults"),
+                    NicoCachePaths.applicationPath("defaults"),
+                    "distribution path must use application root");
+
+            boolean rejected = false;
+            try {
+                NicoCachePaths.userPath("../outside");
+            } catch (IllegalArgumentException expected) {
+                rejected = true;
+            }
+            assertTrue(rejected, "path traversal must be rejected");
+
+            System.clearProperty(NicoCachePaths.DATA_ROOT_PROPERTY);
+            Files.writeString(
+                    app.resolve(NicoCachePaths.PORTABLE_FLAG),
+                    "portable");
+            assertEquals(
+                    app,
+                    NicoCachePaths.dataRoot(),
+                    "portable mode must use application root");
+        } finally {
+            restoreProperty(
+                    NicoCachePaths.APPLICATION_ROOT_PROPERTY,
+                    oldApplication);
+            restoreProperty(NicoCachePaths.DATA_ROOT_PROPERTY, oldData);
+            restoreProperty("jpackage.app-path", oldLauncher);
+            restoreProperty("cacheFolder", oldCache);
+            restoreProperty("thcacheFolder", oldThumbnail);
+            restoreProperty("convertedCacheFolder", oldConverted);
+        }
+        System.out.println("PASS application, user, configured, and portable paths");
+    }
+
+    private void testUserDataMigration() throws Exception {
+        Path app = freshSandbox("migration/application");
+        Path data = freshSandbox("migration/data");
+        Files.writeString(app.resolve("config.properties"), "legacy=true");
+        Files.writeString(app.resolve("NicoCacheGUI.property"), "HideWindow=true");
+        Files.createDirectories(app.resolve("local/sub"));
+        Files.writeString(app.resolve("local/sub/custom.js"), "legacy-local");
+        Files.createDirectories(app.resolve("nlFilters"));
+        Files.writeString(app.resolve("nlFilters/01_legacy.txt"), "legacy-filter");
+        Files.createDirectories(app.resolve("cache"));
+        Files.writeString(app.resolve("cache/sm1.mp4"), "do-not-migrate");
+
+        Files.writeString(data.resolve("config.properties"), "keep=true");
+        UserDataMain.prepareDataRoot(app, data);
+
+        assertEquals(
+                "keep=true",
+                Files.readString(data.resolve("config.properties")),
+                "existing destination config must be preserved");
+        assertEquals(
+                "legacy-local",
+                Files.readString(data.resolve("local/sub/custom.js")),
+                "local directory must migrate");
+        assertEquals(
+                "legacy-filter",
+                Files.readString(data.resolve("nlFilters/01_legacy.txt")),
+                "filter directory must migrate");
+        assertFalse(
+                Files.exists(data.resolve("cache/sm1.mp4")),
+                "cache must not be migrated implicitly");
+        assertEquals(
+                "1",
+                Files.readString(data.resolve(".data-layout-version")).trim(),
+                "migration version must be recorded");
+
+        Files.writeString(
+                data.resolve("local/sub/custom.js"),
+                "user-edited");
+        UserDataMain.prepareDataRoot(app, data);
+        assertEquals(
+                "user-edited",
+                Files.readString(data.resolve("local/sub/custom.js")),
+                "repeat migration must not overwrite user data");
+        assertTrue(
+                Files.isRegularFile(app.resolve("config.properties")),
+                "migration source must remain intact");
+        System.out.println("PASS safe user-data migration and idempotency");
+    }
+
+    private void testSeparatedSetupFiles() throws Exception {
+        Path app = freshSandbox("separated-setup/application");
+        Path data = freshSandbox("separated-setup/data");
+        copyTemplateFiles(app);
+        FirstRunSetupService.SetupFiles files =
+                new FirstRunSetupService.SetupFiles(app, data);
+        FakeCertificateGenerator certificates =
+                new FakeCertificateGenerator(data, false);
+        FakeSystemIntegration integration = new FakeSystemIntegration(false);
+        FirstRunSetupService service = new FirstRunSetupService(
+                files, certificates, integration);
+
+        service.apply(new SetupOptions(false, false, true, false));
+
+        assertTrue(
+                Files.isRegularFile(data.resolve("config.properties")),
+                "config must be created in data root");
+        assertTrue(
+                Files.isRegularFile(data.resolve("proxy.pac")),
+                "proxy PAC must be created in data root");
+        assertTrue(
+                Files.isRegularFile(
+                        data.resolve("data/first-run-setup.properties")),
+                "setup state must be created in data root");
+        assertFalse(
+                Files.exists(app.resolve("config.properties")),
+                "application root must remain read-only");
+        System.out.println("PASS separated first-run setup files");
     }
 
     private void testHeadlessLaunchOptions() {
@@ -451,7 +604,65 @@ public final class FirstRunSetupTest {
                     "Apply must recover after failure");
 
             panel.getApplyButton().doClick();
-            panel.getCancelButton().doClick();
+            SetupOptions selectedOptions = applied.get();
+            panel.showResult(selectedOptions, null);
+            assertEquals(3, panel.getStep(), "success result step");
+            assertFalse(panel.getBackButton().isVisible(),
+                    "Back must be hidden after success");
+            assertTrue(panel.getFinishButton().isVisible(),
+                    "Finish must be visible on results");
+            assertContains(panel.getResultBody().getText(),
+                    "セットアップが完了しました",
+                    "success result body");
+            assertContains(panel.getResultSummary().getText(),
+                    "HTTPS証明書: 成功",
+                    "HTTPS success result");
+            assertContains(panel.getResultSummary().getText(),
+                    "Windows自動プロキシー: 成功",
+                    "proxy success result");
+            assertContains(panel.getResultSummary().getText(),
+                    "ログオン時自動起動: 未選択",
+                    "auto-start skipped result");
+            render(panel, 600, 430,
+                    previewDirectory.resolve(
+                            "wizard-step4-success-narrow.png"));
+            assertComponentsWithinBounds(panel, panel);
+
+            panel.showResult(
+                    selectedOptions,
+                    new IOException("テスト用の適用エラー"));
+            assertTrue(panel.getBackButton().isVisible(),
+                    "Back must be visible after failure");
+            assertContains(panel.getResultBody().getText(),
+                    "ロールバックしました",
+                    "failure result body");
+            assertContains(panel.getResultSummary().getText(),
+                    "HTTPS証明書: 失敗（ロールバック済み）",
+                    "HTTPS failure result");
+            assertContains(panel.getResultSummary().getText(),
+                    "ログオン時自動起動: 未選択",
+                    "unselected option must not be marked failed");
+            assertContains(panel.getResultSummary().getText(),
+                    "テスト用の適用エラー",
+                    "failure detail");
+            render(panel, 720, 500,
+                    previewDirectory.resolve(
+                            "wizard-step4-failure-standard.png"));
+            assertComponentsWithinBounds(panel, panel);
+
+            panel.getBackButton().doClick();
+            assertEquals(2, panel.getStep(),
+                    "Back from failure results");
+            assertTrue(panel.getApplyButton().isVisible(),
+                    "Apply must be available for retry");
+            assertTrue(panel.getHttpsCheckBox().isEnabled(),
+                    "HTTPS choice must recover for retry");
+            assertTrue(panel.getProxyCheckBox().isEnabled(),
+                    "proxy choice must recover for retry");
+            assertTrue(panel.getAutoStartCheckBox().isEnabled(),
+                    "auto-start choice must recover for retry");
+            panel.showResult(selectedOptions, null);
+            panel.getFinishButton().doClick();
         });
 
         SetupOptions options = applied.get();

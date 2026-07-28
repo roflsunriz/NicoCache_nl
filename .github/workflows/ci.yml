@@ -59,6 +59,10 @@ jobs:
         shell: pwsh
         run: .\packaging\windows\test-windows-setup-script.ps1
 
+      - name: Run release workflow contract tests
+        shell: pwsh
+        run: .\tests\release\test-release-workflow.ps1
+
       - name: Check the working tree
         shell: pwsh
         run: |

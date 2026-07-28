@@ -199,7 +199,12 @@ public abstract class Config {
     }
 
     private void setDefaultsFromFiles(Properties p) throws IOException {
-        File defaultsDir = new File("defaults");
+        String applicationRoot =
+                System.getProperty("nicocache.applicationRoot");
+        File defaultsDir = applicationRoot == null
+                || applicationRoot.isBlank()
+                ? new File("defaults")
+                : new File(applicationRoot, "defaults");
 
         File[] files = defaultsDir.listFiles(new FilenameFilter() {
             public boolean accept(File dir, String name) {

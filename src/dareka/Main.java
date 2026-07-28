@@ -3,6 +3,8 @@ package dareka;
 import java.io.File;
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 import dareka.common.Config;
 import dareka.common.DefaultLoggerHandler;
@@ -78,16 +80,23 @@ public class Main {
 
     private static void mainBody() throws IOException {
         // [nl] iniにしたい人用。でも正確にはiniファイルじゃないよ
-        File configFile = new File("config.ini");
+        File configFile = NicoCachePaths.legacyConfigFile();
         if (configFile.exists() == false) {
-            configFile = new File("config.properties");
+            configFile = NicoCachePaths.configFile();
         }
 
-        // 設定ファイルがなくてデフォルト設定ファイルがあるならリネームして使う
+        // 設定ファイルがなくてデフォルト設定ファイルがあるならコピーして使う
         if (configFile.exists() == false) {
-            File defFile = new File("config.properties.default");
+            File defFile = NicoCachePaths.defaultConfigFile();
             if (defFile.exists()) {
-                defFile.renameTo(configFile);
+                File parent = configFile.getParentFile();
+                if (parent != null) {
+                    Files.createDirectories(parent.toPath());
+                }
+                Files.copy(
+                        defFile.toPath(),
+                        configFile.toPath(),
+                        StandardCopyOption.COPY_ATTRIBUTES);
             }
         }
 
@@ -188,8 +197,8 @@ public class Main {
             Logger.info("Storing Folder Filter: On");
 
         // [nl] キャッシュフォルダの指定
-        String cacheFolder = System.getProperty("cacheFolder");
-        if (!cacheFolder.equals("cache")) {
+        File cacheFolder = NicoCachePaths.cacheDirectory();
+        if (!"cache".equals(System.getProperty("cacheFolder"))) {
             Logger.info("Cache Folder: " + cacheFolder);
         }
 
@@ -199,7 +208,7 @@ public class Main {
             Logger.info("total cache size = %s", TextUtil.bytesToString(Cache.size()));
 
         // [nl] ディスク空き容量の表示
-        long freeSize = DiskFreeSpace.get(cacheFolder);
+        long freeSize = DiskFreeSpace.get(cacheFolder.getPath());
         if (freeSize != Long.MAX_VALUE) {
             int neededSize = Integer.getInteger("needFreeSpace");
             Logger.info("cache folder free space = %s (at least %,d MB)",
@@ -222,7 +231,7 @@ public class Main {
                 ThumbProcessor.init();
             } else {
                 Logger.info(String.format("%s (folder=%s)",
-                        message, System.getProperty("thcacheFolder")));
+                        message, NicoCachePaths.thumbnailCacheDirectory()));
                 ThumbProcessor2.init();
             }
         }

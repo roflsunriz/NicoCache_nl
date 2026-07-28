@@ -25,6 +25,7 @@ jobs:
     outputs:
       tag: ${{ steps.release-tag.outputs.tag }}
       app_version: ${{ steps.release-tag.outputs.app_version }}
+      updater_version: ${{ steps.updater-version.outputs.updater_version }}
 
     steps:
       - name: Check out release tag
@@ -73,6 +74,22 @@ jobs:
           }
           "tag=$env:RELEASE_TAG" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           "app_version=$($env:RELEASE_TAG.Substring(1))" |
+            Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Validate standalone updater version
+        id: updater-version
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw -LiteralPath .\updater\VERSION).Trim()
+          if ($version -notmatch '^(?<major>\d+)\.(?<minor>\d+)\.(?<build>\d+)$') {
+            throw "アップデーター版は <major>.<minor>.<build> 形式で指定してください: $version"
+          }
+          if ([int]$Matches.major -gt 255 -or
+              [int]$Matches.minor -gt 255 -or
+              [int]$Matches.build -gt 65535) {
+            throw "MSIで利用できるアップデーター版の範囲を超えています: $version"
+          }
+          "updater_version=$version" |
             Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Build NicoCache_nl.jar
@@ -231,6 +248,33 @@ jobs:
           "$hash  $(Split-Path -Leaf $releaseMsi)" |
             Out-File -LiteralPath "$releaseMsi.sha256" -Encoding ascii
 
+      - name: Build standalone updater MSI
+        shell: pwsh
+        env:
+          UPDATER_VERSION: ${{ steps.updater-version.outputs.updater_version }}
+        run: |
+          .\packaging\windows\build-standalone-updater.ps1 `
+            -PackageType Msi `
+            -AppVersion $env:UPDATER_VERSION
+
+      - name: Create standalone updater MSI checksum
+        shell: pwsh
+        env:
+          UPDATER_VERSION: ${{ steps.updater-version.outputs.updater_version }}
+        run: |
+          $output = Join-Path $env:GITHUB_WORKSPACE '.test-work\standalone-updater\output'
+          $packages = @(Get-ChildItem -LiteralPath $output -File -Filter '*.msi')
+          if ($packages.Count -ne 1) {
+            throw "アップデーターMSI成果物は1件である必要があります: $($packages.Count)"
+          }
+          $assetName = "NicoCache_nl-Updater-$env:UPDATER_VERSION.msi"
+          $releaseMsi = Join-Path $env:GITHUB_WORKSPACE $assetName
+          Copy-Item -LiteralPath $packages[0].FullName -Destination $releaseMsi -Force
+          $hash = (Get-FileHash -LiteralPath $releaseMsi -Algorithm SHA256).
+            Hash.ToLowerInvariant()
+          "$hash  $assetName" |
+            Out-File -LiteralPath "$releaseMsi.sha256" -Encoding ascii
+
       - name: Upload release assets
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -242,6 +286,8 @@ jobs:
             NicoCache_nl.jar.sha256
             NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi
             NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi.sha256
+            NicoCache_nl-Updater-${{ steps.updater-version.outputs.updater_version }}.msi
+            NicoCache_nl-Updater-${{ steps.updater-version.outputs.updater_version }}.msi.sha256
 
   publish:
     needs: build
@@ -252,6 +298,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
       APP_VERSION: ${{ needs.build.outputs.app_version }}
+      UPDATER_VERSION: ${{ needs.build.outputs.updater_version }}
 
     steps:
       - name: Download release assets
@@ -269,6 +316,8 @@ jobs:
             "release-assets/NicoCache_nl.jar.sha256" \
             "release-assets/NicoCache_nl-$APP_VERSION.msi" \
             "release-assets/NicoCache_nl-$APP_VERSION.msi.sha256" \
+            "release-assets/NicoCache_nl-Updater-$UPDATER_VERSION.msi" \
+            "release-assets/NicoCache_nl-Updater-$UPDATER_VERSION.msi.sha256" \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \
