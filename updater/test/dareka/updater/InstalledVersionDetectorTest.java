@@ -5,7 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 
-/** Verifies real jpackage metadata version detection and marker precedence. */
+/** Verifies the real NicoCache_nl jpackage launcher layout and compatibility fallbacks. */
 public final class InstalledVersionDetectorTest {
     private InstalledVersionDetectorTest() {}
 
@@ -14,16 +14,27 @@ public final class InstalledVersionDetectorTest {
         try {
             Path app = root.resolve("app");
             Files.createDirectories(app);
-            Files.writeString(app.resolve(".jpackage.xml"),
-                    "<?xml version=\"1.0\"?><jpackage-state><app-version>1.0.1</app-version></jpackage-state>",
+            Files.writeString(app.resolve("NicoCache_nl.cfg"),
+                    "[Application]\n"
+                            + "app.mainmodule=NicoCache_nl.jar\n"
+                            + "\n[JavaOptions]\n"
+                            + "java-options=-Djpackage.app-version=1.0.1\n",
                     StandardCharsets.UTF_8);
-            assertEquals("1.0.1", InstalledVersionDetector.detect(root), "jpackage version");
+            assertEquals("1.0.1", InstalledVersionDetector.detect(root), "real launcher config version");
 
-            Files.writeString(root.resolve("version.txt"), "1.0.2\n", StandardCharsets.US_ASCII);
-            assertEquals("1.0.2", InstalledVersionDetector.detect(root), "version marker precedence");
+            Files.writeString(root.resolve("version.txt"), "9.9.9\n", StandardCharsets.US_ASCII);
+            assertEquals("1.0.1", InstalledVersionDetector.detect(root), "launcher config precedence");
 
-            Files.writeString(root.resolve("version.txt"), "broken", StandardCharsets.US_ASCII);
-            assertEquals("1.0.1", InstalledVersionDetector.detect(root), "invalid marker fallback");
+            Files.writeString(app.resolve("NicoCache_nl.cfg"),
+                    "[JavaOptions]\njava-options=-Djpackage.app-version=broken\n",
+                    StandardCharsets.UTF_8);
+            assertEquals("9.9.9", InstalledVersionDetector.detect(root), "invalid launcher fallback");
+
+            Files.delete(root.resolve("version.txt"));
+            Files.writeString(app.resolve(".jpackage.xml"),
+                    "<?xml version=\"1.0\"?><jpackage-state><app-version>1.0.2</app-version></jpackage-state>",
+                    StandardCharsets.UTF_8);
+            assertEquals("1.0.2", InstalledVersionDetector.detect(root), "jpackage xml compatibility fallback");
             System.out.println("Installed version detection tests passed");
         } finally {
             deleteTree(root);
