@@ -8,7 +8,7 @@
 
 ### Changed
 
-- ビルド経路を `build-javac.ps1` に統一し、旧Ant用ビルドスクリプトを廃止した。
+- ビルド経路を `build-javac.ps1` に統一し、旧Ant用ビルドスクリプトとバッチを廃止した。
 - GUI起動経路をJDK選択とJAR検証を備えた `RunNicoCache.ps1` に統一し、旧Starter
   バッチと旧CUIバッチを廃止した。現行ツリーに存在しないオーバーレイ用ビルド
   スクリプトも削除した。
