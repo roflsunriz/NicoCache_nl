@@ -50,6 +50,9 @@ foreach ($requiredPath in @(
         (Join-Path $internalAppDirectory 'lib\bcutil.jar'),
         (Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'),
         (Join-Path $appDirectory 'defaults\00_NicoCache.properties'),
+        (Join-Path $appDirectory 'data\cors\99_sample.conf'),
+        (Join-Path $appDirectory 'data\tlsclient\cacerts2'),
+        (Join-Path $appDirectory 'list\NGtitle.txt'),
         (Join-Path $appDirectory 'local\mime.types.default'),
         (Join-Path $appDirectory 'documents\tls.md'),
         (Join-Path $internalAppDirectory 'development\build-javac.ps1'),
@@ -70,7 +73,7 @@ try {
             'dareka/NicoCachePaths.class',
             'dareka/FirstRunSetup.class',
             'dareka/FirstRunWizard.class',
-            'dareka/FirstRunWizardPanel.class',
+            'dareka/FirstRunWizard$FirstRunWizardPanel.class',
             'dareka/setup_messages.properties',
             'dareka/setup_messages_ja.properties'
         )) {
@@ -80,6 +83,14 @@ try {
     }
 } finally {
     $archive.Dispose()
+}
+$keytool = (Get-Command keytool -ErrorAction Stop).Source
+& $keytool -list `
+    -keystore (Join-Path $appDirectory 'data\tlsclient\cacerts2') `
+    -storepass NicoCache |
+    Out-Null
+if ($LASTEXITCODE -ne 0) {
+    throw 'パッケージのTLSクライアント用トラストストアを読み込めません'
 }
 if (Test-Path -LiteralPath $separateHeadlessLauncherPath) {
     throw "GUI用とヘッドレス用の製品ランチャーが分離されています: $separateHeadlessLauncherPath"

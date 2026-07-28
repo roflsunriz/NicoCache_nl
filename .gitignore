@@ -26,8 +26,10 @@ Uninstall.exe
 /certs/**
 !/certs/readme.txt
 /data/**
+!/data/cors/
 !/data/cors/99_sample.conf
 !/data/readme.txt
+!/data/tlsclient/
 !/data/tlsclient/cacerts2
 
 # Runtime extension files (keep only the distributed samples)
@@ -46,6 +48,7 @@ Uninstall.exe
 
 # User-maintained lists (keep the distributed default)
 /list/**
+!/list/
 !/list/NGtitle.txt
 
 # Locally served/generated files (keep the distributed defaults)

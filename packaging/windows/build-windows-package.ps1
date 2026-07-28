@@ -430,9 +430,7 @@ foreach ($relativePath in $writableDirectories) {
 foreach ($relativePath in @('certs\readme.txt', 'data\readme.txt',
         'data\cors\99_sample.conf', 'data\tlsclient\cacerts2',
         'list\NGtitle.txt')) {
-    if (Test-Path -LiteralPath (Join-Path $root $relativePath) -PathType Leaf) {
-        Copy-DistributionFile -RelativePath $relativePath
-    }
+    Copy-DistributionFile -RelativePath $relativePath
 }
 
 if ($NlFiltersSource) {
