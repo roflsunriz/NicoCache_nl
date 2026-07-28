@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -113,11 +114,12 @@ public class WatchVars {
     private JsonObject json;
     private JsonObject dmcInfo;
     private JsonObject domandInfo; // dms(domand). CMAF. 2023-11からの動画仕様.
-    private boolean isDmc;
-    private boolean isDomand;
-    // TODO: classic, dmc, domandの3状態だからフラグ2つは不適切.
-    //       しかしそもそもclassicはもうない. 従って上記どちらかは必ずtrue.
-    //       コードの分離が分からないから泥実装を継続.
+    private enum DeliveryType {
+        CLASSIC,
+        DMC,
+        DOMAND
+    }
+    private DeliveryType deliveryType = DeliveryType.CLASSIC;
     private String videoId, videoTitle;
     private int videoIdNumber;
     private boolean deleted;
@@ -178,8 +180,9 @@ public class WatchVars {
                 dmcInfo = json.getObject("media", "delivery"); // 廃止済み. 消すこと.
                 // 2024-08仕様.
                 domandInfo = json.getObject("media", "domand");
-                isDmc = dmcInfo != null;
-                isDomand = domandInfo != null;
+                deliveryType = domandInfo != null ? DeliveryType.DOMAND
+                        : dmcInfo != null ? DeliveryType.DMC
+                        : DeliveryType.CLASSIC;
                 videoId = json.getString("video", "id");
                 if (videoId != null) {
                     // titleとoriginalTitleの違いは何だろう
@@ -194,7 +197,7 @@ public class WatchVars {
                     isPeakTime = json.getBoolean("system", "isPeakTime");
                     isPremium = json.getBoolean("viewer", "isPremium");
 
-                    if (isDmc) {
+                    if (isDmcDelivery()) {
                         recipe_id = dmcInfo.getString("movie", "session", "recipeId");
 
                         // domandなら"video-h264-480p"みたいな要素の、
@@ -204,7 +207,7 @@ public class WatchVars {
                         qualityVideos = getQualityAvailability(dmcInfo.getArray("movie", "videos"));
                         qualityAudios = getQualityAvailability(dmcInfo.getArray("movie", "audios"));
                     }
-                    if (isDomand) {
+                    if (isDomandDelivery()) {
                         qualityVideos = getQualityAvailability(domandInfo.getArray("videos"));
                         qualityAudios = getQualityAvailability(domandInfo.getArray("audios"));
                     }
@@ -252,7 +255,7 @@ public class WatchVars {
         Logger.info("WatchVars: INFO " + videoId + " "
                 + (type != Type.None ? type.toString() + " " : "")
                 + (rawJson ? "RawJson " : "")
-                + (isDomand ? "domand" : (isDmc ? "dmc" : "classic")) + " " + videoTitle);
+                + deliveryType.name().toLowerCase(Locale.ROOT) + " " + videoTitle);
         Logger.info("WatchVars: INFO2"
                 + (isPremium ? " Premium" : " !Premium")
                 + (isPeakTime ? " PeakTime" : " !PeakTime"));
@@ -264,9 +267,9 @@ public class WatchVars {
     }
 
     private void dumpDmcVars() {
-        if (isDmc || isDomand) {
+        if (deliveryType != DeliveryType.CLASSIC) {
             String dmcType="undefined", dmcId="undefined";
-            if (isDmc) {
+            if (isDmcDelivery()) {
                 Logger.info("WatchVars: dmcInfo.recipe_id=" + recipe_id);
                 Matcher m = null;
                 if (recipe_id != null) {
@@ -281,7 +284,7 @@ public class WatchVars {
                     dmcId = videoId.substring(2);
                 }
             }
-            else if (isDomand) {
+            else if (isDomandDelivery()) {
                 dmcType = videoId.substring(0, 2);
                 dmcId = videoId.substring(2);
             }
@@ -351,7 +354,7 @@ public class WatchVars {
                     + "smile\\?(\\w)=([^.]+)\\.\\d+(as3)?(low)?$");
 
     private void analyzeDomand() {
-        if (!(isDomand
+        if (!(isDomandDelivery()
               // && videos != null
               // && audios != null
               && videoId != null)) {
@@ -395,7 +398,7 @@ public class WatchVars {
     // - 動画番号とキャッシュ用動画番号の紐づけをキャッシュする.
     // - deletedVideoIdってサイト側APIのgetflv(廃止済み)の問題だからもう関係ないよね？
     private void analyzeDmc() {
-        if (isDmc
+        if (isDmcDelivery()
             // && videos != null
             // && audios != null
             && recipe_id != null) {
@@ -556,7 +559,15 @@ public class WatchVars {
      * @return 新形式なら true
      */
     public boolean isDmc() {
-        return isDmc;
+        return isDmcDelivery();
+    }
+
+    private boolean isDmcDelivery() {
+        return deliveryType == DeliveryType.DMC;
+    }
+
+    private boolean isDomandDelivery() {
+        return deliveryType == DeliveryType.DOMAND;
     }
 
     /**

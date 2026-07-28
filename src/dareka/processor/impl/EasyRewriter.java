@@ -1130,7 +1130,8 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         if (u.addVariable != null) {
             String value = fc.getReplace();
             if (value != null && value.length() > 0) {
-                // TODO セパレータを設定
+                // AddVariableは従来仕様どおり区切りなしで連結する。
+                // 区切りが必要な場合はReplace側で値に含める。
                 String newValue = fc.appendVariable(u.addVariable, value, "");
                 debugLog(u, 2, "AddVariable(" + u.addVariable + ")", newValue);
             }
@@ -1695,7 +1696,8 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
 
     static class UserFilter {
         static final String REPLACE = "[Replace]";
-        static final String CONFIG = "[Config]"; // TODO 廃止
+        // 既存nlFilterの設定参照との互換性のため残す。
+        static final String CONFIG = "[Config]";
         static final String REQUEST_HEADER = "[RequestHeader]";
         static final String STYLE  = "[Style]";
         static final String SCRIPT = "[Script]";

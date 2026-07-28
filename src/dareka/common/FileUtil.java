@@ -369,7 +369,7 @@ public class FileUtil {
         }
     }
 
-    // TODO いろいろ整理
+    // テキストファイルの文字コード・改行判定結果を読み書き双方で共有する。
     public static class Info {
         public long lastModified;
         public String startline, line_separator;

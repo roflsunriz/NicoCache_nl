@@ -39,6 +39,11 @@ import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
+import dareka.processor.URLResource;
+import dareka.processor.URLResourceCache;
+import dareka.processor.impl.CmafCachingProcessor;
+import dareka.processor.util.LocalFlvTemplate;
+
 public final class FunctionalTestMain {
     private static final Duration START_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration STOP_TIMEOUT = Duration.ofSeconds(20);
@@ -78,6 +83,9 @@ public final class FunctionalTestMain {
             startUpstream();
             startNicoCache();
 
+            run("URL resource cache response policies", this::testUrlResourceCachePolicies);
+            run("template reload and CMAF utility validation",
+                    this::testTemplateAndCmafUtility);
             run("forward proxy GET/POST/HEAD and upstream status", this::testForwardProxy);
             run("forward proxy byte range", this::testForwardProxyRange);
             run("HTTPS CONNECT and TLS loopback", this::testHttpsMitmLocalFile);
@@ -120,7 +128,7 @@ public final class FunctionalTestMain {
             }
             throw new AssertionError("functional tests failed");
         }
-        System.out.println("Functional tests passed: 14");
+        System.out.println("Functional tests passed: 16");
     }
 
     private void prepareSandbox() throws Exception {
@@ -156,6 +164,12 @@ public final class FunctionalTestMain {
                 "#EXTM3U\n#EXT-X-VERSION:7\nsegment.ts\n", StandardCharsets.UTF_8);
         Files.writeString(hls.resolve("segment.ts"),
                 "legacy-hls-segment", StandardCharsets.UTF_8);
+        Path lowerHls = sandbox.resolve("cache/sm900003[360p,64]_Functional.hls");
+        Files.createDirectories(lowerHls);
+        Files.writeString(lowerHls.resolve("master.m3u8"),
+                "#EXTM3U\n#EXT-X-VERSION:7\nsegment.ts\n", StandardCharsets.UTF_8);
+        Files.writeString(lowerHls.resolve("segment.ts"),
+                "lower-quality-hls-segment", StandardCharsets.UTF_8);
 
         KeyStore keyStore = KeyStore.getInstance("JKS");
         keyStore.load(null, "NicoCache".toCharArray());
@@ -223,8 +237,24 @@ public final class FunctionalTestMain {
     private void handleUpstream(HttpExchange exchange) throws IOException {
         try {
             String path = exchange.getRequestURI().getPath();
-            upstreamRequests.computeIfAbsent(path, ignored -> new AtomicInteger())
+            int requestNumber = upstreamRequests
+                    .computeIfAbsent(path, ignored -> new AtomicInteger())
                     .incrementAndGet();
+            if (path.startsWith("/resource-cache/")) {
+                if (path.endsWith("/max-age")) {
+                    exchange.getResponseHeaders().set("Cache-Control", "max-age=60");
+                } else if (path.endsWith("/no-store")) {
+                    exchange.getResponseHeaders().set("Cache-Control", "no-store");
+                } else if (path.endsWith("/stale-age")) {
+                    exchange.getResponseHeaders().set("Cache-Control", "max-age=60");
+                    exchange.getResponseHeaders().set("Age", "120");
+                }
+                byte[] body = (path + "-" + requestNumber)
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
             if ("/conditional".equals(path)) {
                 if ("\"functional-etag\"".equals(
                         exchange.getRequestHeaders().getFirst("If-None-Match"))) {
@@ -502,6 +532,94 @@ public final class FunctionalTestMain {
         assertEquals("upstream-teapot", teapot.bodyText(), "upstream error body");
     }
 
+    private void testUrlResourceCachePolicies() throws Exception {
+        String oldProxyHost = System.getProperty("proxyHost");
+        String oldProxyPort = System.getProperty("proxyPort");
+        String oldReadTimeout = System.getProperty("readTimeout");
+        try {
+            System.setProperty("proxyHost", "");
+            System.setProperty("proxyPort", "0");
+            System.setProperty("readTimeout", "10000");
+
+            URLResourceCache cache = new URLResourceCache(10, 10 * 60 * 1000);
+            String base = "http://127.0.0.1:" + upstreamPort + "/resource-cache/";
+
+            URLResource maxAgeFirst = cache.cacheAndGet("max-age", base + "max-age");
+            assertContains(resourceBody(maxAgeFirst), "max-age-1",
+                    "max-age initial response");
+            URLResource maxAgeSecond = cache.cacheAndGet("max-age", base + "max-age");
+            assertContains(resourceBody(maxAgeSecond), "max-age-1",
+                    "max-age cached response");
+            assertEquals(1, upstreamRequestCount("/resource-cache/max-age"),
+                    "max-age upstream request count");
+
+            URLResource noStoreFirst = cache.cacheAndGet("no-store", base + "no-store");
+            assertContains(resourceBody(noStoreFirst), "no-store-1",
+                    "no-store initial response");
+            assertFalse(cache.isCached("no-store"),
+                    "no-store response must not remain cached");
+            URLResource noStoreSecond = cache.cacheAndGet("no-store", base + "no-store");
+            assertContains(resourceBody(noStoreSecond), "no-store-2",
+                    "no-store repeated response");
+            assertEquals(2, upstreamRequestCount("/resource-cache/no-store"),
+                    "no-store upstream request count");
+
+            URLResource staleFirst = cache.cacheAndGet("stale-age", base + "stale-age");
+            assertContains(resourceBody(staleFirst), "stale-age-1",
+                    "stale Age initial response");
+            assertFalse(cache.isCached("stale-age"),
+                    "stale Age response must not remain cached");
+            URLResource staleSecond = cache.cacheAndGet("stale-age", base + "stale-age");
+            assertContains(resourceBody(staleSecond), "stale-age-2",
+                    "stale Age repeated response");
+        } finally {
+            restoreProperty("proxyHost", oldProxyHost);
+            restoreProperty("proxyPort", oldProxyPort);
+            restoreProperty("readTimeout", oldReadTimeout);
+        }
+    }
+
+    private static void restoreProperty(String name, String value) {
+        if (value == null) {
+            System.clearProperty(name);
+        } else {
+            System.setProperty(name, value);
+        }
+    }
+
+    private void testTemplateAndCmafUtility() throws Exception {
+        Path templatePath = sandbox.resolve("local/template-functional.html");
+        Files.writeString(templatePath, "first-${value}", StandardCharsets.UTF_8);
+        LocalFlvTemplate template = new LocalFlvTemplate(templatePath.toFile());
+        assertEquals(true, template.assign("value", "resolved"),
+                "template variable assignment");
+        assertContains(template.execute(), "first-resolved", "initial template");
+
+        Files.writeString(templatePath, "second-${value}", StandardCharsets.UTF_8);
+        assertContains(template.execute(), "second-resolved",
+                "updated template must invalidate cache");
+        Files.writeString(templatePath, "trailing-$", StandardCharsets.UTF_8);
+        assertContains(template.execute(), "trailing-$",
+                "trailing dollar must remain literal");
+
+        assertEquals(true, Arrays.equals(new byte[] { 0x01, (byte)0xaf },
+                CmafCachingProcessor.hexStringToByteArray("01af")),
+                "hex conversion");
+        try {
+            CmafCachingProcessor.hexStringToByteArray("abc");
+            throw new AssertionError("odd-length hex must be rejected");
+        } catch (NumberFormatException expected) {
+            // expected
+        }
+    }
+
+    private static String resourceBody(URLResource resource) throws IOException {
+        if (resource == null || resource.getResponseBody() == null) {
+            throw new AssertionError("URLResource body is missing");
+        }
+        return new String(resource.getResponseBody(), StandardCharsets.UTF_8);
+    }
+
     private void testForwardProxyRange() throws Exception {
         Response response = request("GET http://example.invalid/range HTTP/1.1\r\n"
                 + "Host: example.invalid\r\nRange: bytes=2-5\r\nConnection: close\r\n\r\n");
@@ -699,6 +817,24 @@ public final class FunctionalTestMain {
         Response hlsSegment = request(nicoRequest("GET", hlsBase + "segment.ts", ""));
         assertEquals(200, hlsSegment.status, "legacy HLS segment status");
         assertEquals("legacy-hls-segment", hlsSegment.bodyText(), "legacy HLS segment body");
+
+        String exactHlsBase = "/cache/file/nicocachenl_refcache="
+                + "sm900003[360p,64].hls//";
+        Response exactHlsSegment = request(nicoRequest(
+                "GET", exactHlsBase + "segment.ts", ""));
+        assertEquals(200, exactHlsSegment.status, "quality-specific HLS status");
+        assertEquals("lower-quality-hls-segment", exactHlsSegment.bodyText(),
+                "quality-specific HLS body");
+
+        String exactHlsWithoutPostfix = "/cache/file/nicocachenl_refcache="
+                + "sm900003[360p,64]//segment.ts";
+        Response exactHlsWithoutPostfixResponse = request(nicoRequest(
+                "GET", exactHlsWithoutPostfix, ""));
+        assertEquals(200, exactHlsWithoutPostfixResponse.status,
+                "quality-specific HLS status without postfix");
+        assertEquals("lower-quality-hls-segment",
+                exactHlsWithoutPostfixResponse.bodyText(),
+                "quality-specific HLS body without postfix");
     }
 
     private void testCmafMasterFlow() throws Exception {
@@ -858,6 +994,8 @@ public final class FunctionalTestMain {
                 "DMC MP4 cache must be removed");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900003[720p,128]_Functional.hls")),
                 "legacy HLS cache must be removed");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900003[360p,64]_Functional.hls")),
+                "lower-quality HLS cache must be removed");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900004_Functional.flv")),
                 "FLV cache must be removed");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900005_Functional.swf")),

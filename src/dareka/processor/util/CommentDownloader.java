@@ -112,7 +112,8 @@ public class CommentDownloader {
         } catch (NumberFormatException e) {
             Logger.error(e);
         }
-        // TODO optional_thread の扱いを検討
+        // 旧XMLコメントAPIではoptional_thread_idが指定済みなら、
+        // owner threadを重ねて要求しない。現行nvcommentは別Processorで扱う。
 
         String thread_id = map.get("thread_id");
         String user_id = map.get("user_id");

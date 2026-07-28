@@ -3,10 +3,10 @@ package dareka.processor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collections;
-import java.util.ConcurrentModificationException;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -43,6 +43,11 @@ public class URLResourceCache {
 
     private static final int MAX_ENTRIES_DEFAULT = 10;
     private static final long EXPIRE_TIME_DEFAULT = 10 * 60 * 1000; // 10分
+    private static final long ERROR_EXPIRE_TIME = 30 * 1000;
+    private static final String CACHE_CONTROL = "Cache-Control";
+    private static final String AGE = "Age";
+    private static final Pattern MAX_AGE_PATTERN = Pattern.compile(
+            "(?i)(?:^|,)\\s*max-age\\s*=\\s*\"?(\\d+)\"?\\s*(?=,|$)");
     private static final NLShared NLSHARED = NLShared.getInstance();
     private int maxEntries;
     private long expireTime;
@@ -227,16 +232,21 @@ public class URLResourceCache {
                 receiverIn, requestHeader);
         if (responseHeader != null) {
             String date = responseHeader.getMessageHeader(HttpHeader.DATE);
-            if (date == null) {
+            if (date == null || HttpHeader.parseDateString(date) < 0) {
                 // ExpireのためにDateヘッダを付加する
                 date = HttpHeader.getDateString(System.currentTimeMillis());
                 responseHeader.setMessageHeader(HttpHeader.DATE, date);
             }
             r.getResponseBody();
 
-            debugMes("url cached", key, r);
+            boolean retained = remainTime(r) > 0;
+            debugMes(retained ? "url cached" : "url not cached", key, r);
+            if (!retained) {
+                // no-store/no-cache/max-age=0 の応答は呼出元には返すが保持しない。
+                resources.remove(key, r);
+            }
 
-            if (NLSHARED.countSystemEventListeners() > 0) {
+            if (retained && NLSHARED.countSystemEventListeners() > 0) {
                 NLSHARED.notifySystemEvent(
                         SystemEventListener.URL_MEMCACHED,
                         new NLEventSource(url, requestHeader, r), false);
@@ -290,38 +300,111 @@ public class URLResourceCache {
      *
      */
     public synchronized void expires() {
-        try {
-            Set<Map.Entry<String, URLResource>> s = resources.entrySet();
-            for (Map.Entry<String, URLResource> e : s) {
+        synchronized (resources) {
+            Iterator<Map.Entry<String, URLResource>> entries =
+                    resources.entrySet().iterator();
+            while (entries.hasNext()) {
+                Map.Entry<String, URLResource> e = entries.next();
                 if (remainTime(e.getValue()) == 0) {
                     debugMes("url cache expired", e.getKey(), e.getValue());
-                    s.remove(e);
+                    entries.remove();
                 }
             }
-        } catch (ConcurrentModificationException e) {
-            // 並行操作があった場合は次回に持ち越し
         }
     }
 
     private long remainTime(URLResource resource) {
-        long et = updateExpireTime();
-        if (et > 0 && resource != null) {
-            // TODO キャッシュ制御ヘッダを考慮する
-            HttpResponseHeader rh = getResponseHeader(resource);
-            if (rh != null) {
-                long tm = -1;
-                String date = rh.getMessageHeader(HttpHeader.DATE);
-                if (date != null) {
-                    tm = HttpHeader.parseDateString(date);
+        long configuredLifetime = updateExpireTime();
+        if (configuredLifetime <= 0 || resource == null) {
+            return 0;
+        }
+        HttpResponseHeader rh = getResponseHeader(resource);
+        if (rh == null) {
+            return 0;
+        }
+
+        List<String> cacheControls = rh.getMessageHeadersOfName(CACHE_CONTROL);
+        if (hasCacheDirective(cacheControls, "no-store")
+                || hasCacheDirective(cacheControls, "no-cache")) {
+            return 0;
+        }
+
+        long responseTime = HttpHeader.parseDateString(
+                rh.getMessageHeader(HttpHeader.DATE));
+        if (responseTime < 0) {
+            return 0;
+        }
+
+        long freshnessLifetime = configuredLifetime;
+        if (rh.getStatusCode() != 200) {
+            freshnessLifetime = Math.min(freshnessLifetime, ERROR_EXPIRE_TIME);
+        }
+
+        Long maxAgeMillis = getMaxAgeMillis(cacheControls);
+        if (maxAgeMillis != null) {
+            freshnessLifetime = Math.min(freshnessLifetime, maxAgeMillis);
+        } else {
+            String expires = rh.getMessageHeader(HttpHeader.EXPIRES);
+            if (expires != null) {
+                long expiresAt = HttpHeader.parseDateString(expires);
+                if (expiresAt < 0) {
+                    return 0;
                 }
-                if (rh.getStatusCode() != 200) {
-                    et = 30000; // ステータスが200以外なら30秒で破棄する
-                }
-                long remain = et + tm - System.currentTimeMillis();
-                if (remain > 0) return remain;
+                freshnessLifetime = Math.min(
+                        freshnessLifetime, Math.max(0, expiresAt - responseTime));
             }
         }
-        return 0;
+
+        long now = System.currentTimeMillis();
+        long currentAge = Math.max(0, now - responseTime);
+        String age = rh.getMessageHeader(AGE);
+        if (age != null) {
+            try {
+                currentAge = Math.max(currentAge,
+                        secondsToMillis(Long.parseLong(age.trim())));
+            } catch (NumberFormatException e) {
+                // 不正なAgeはDateから計算した経過時間だけを使う。
+            }
+        }
+        return Math.max(0, freshnessLifetime - currentAge);
+    }
+
+    private static boolean hasCacheDirective(List<String> headerValues,
+            String expectedDirective) {
+        for (String headerValue : headerValues) {
+            for (String directive : headerValue.split(",")) {
+                String name = directive.trim();
+                int equals = name.indexOf('=');
+                if (equals >= 0) {
+                    name = name.substring(0, equals).trim();
+                }
+                if (expectedDirective.equalsIgnoreCase(name)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static Long getMaxAgeMillis(List<String> headerValues) {
+        for (String headerValue : headerValues) {
+            Matcher matcher = MAX_AGE_PATTERN.matcher(headerValue);
+            if (matcher.find()) {
+                try {
+                    return secondsToMillis(Long.parseLong(matcher.group(1)));
+                } catch (NumberFormatException e) {
+                    return 0L;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static long secondsToMillis(long seconds) {
+        if (seconds > Long.MAX_VALUE / 1000) {
+            return Long.MAX_VALUE;
+        }
+        return seconds * 1000;
     }
 
     private HttpResponseHeader getResponseHeader(URLResource r) {

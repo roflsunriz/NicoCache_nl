@@ -68,6 +68,11 @@ public class LocalFlvTemplate {
     private HashMap<String, Object> objectTable = new HashMap<>();
     /** キーワード⇒メソッド 変換テーブル */
     private HashMap<String, MethodInfo> methodTable = new HashMap<>();
+    /** 読み込み済みテンプレート。ファイル更新時に破棄する。 */
+    private String cachedTemplate;
+    private long cachedLastModified = Long.MIN_VALUE;
+    private long cachedLength = Long.MIN_VALUE;
+    private String cachedEncoding;
 
     /**
      * コンストラクタ
@@ -85,26 +90,44 @@ public class LocalFlvTemplate {
      * @throws IOException テンプレートファイルの読み込みに失敗した場合
      */
     public String execute() throws IOException {
-        File f = templateFile;
-        StringBuilder templateFile = new StringBuilder("");
+        return replaceAll(loadTemplate());
+    }
+
+    private synchronized String loadTemplate() throws IOException {
+        File file = templateFile;
+        if (!file.isFile()) {
+            throw new IOException("template file is not readable: " + file);
+        }
+        long lastModified = file.lastModified();
+        long length = file.length();
+        if (cachedTemplate != null
+                && lastModified == cachedLastModified
+                && length == cachedLength
+                && fileEncoding.equals(cachedEncoding)) {
+            return cachedTemplate;
+        }
+
+        StringBuilder contents = new StringBuilder(
+                length > Integer.MAX_VALUE ? 8192 : (int)length);
         BufferedReader br = null;
 
         try {
-            String str = null;
+            String line;
             String sep = System.getProperty("line.separator");
-
-            // TODO ファイルをキャッシュする
-            br = new BufferedReader(new InputStreamReader(new FileInputStream(f), fileEncoding));
-            while ((str = br.readLine()) != null) {
-                templateFile.append(str).append(sep);
+            br = new BufferedReader(new InputStreamReader(
+                    new FileInputStream(file), fileEncoding));
+            while ((line = br.readLine()) != null) {
+                contents.append(line).append(sep);
             }
-        } catch (IOException e) {
-            throw e;
         } finally {
             CloseUtil.close(br);
         }
 
-        return replaceAll(templateFile.toString());
+        cachedTemplate = contents.toString();
+        cachedLastModified = file.lastModified();
+        cachedLength = file.length();
+        cachedEncoding = fileEncoding;
+        return cachedTemplate;
     }
 
     /**
@@ -147,6 +170,7 @@ public class LocalFlvTemplate {
      * @return キーワード。見つからない場合はnull。
      */
     protected String getKeyword(String contents, int pos) {
+        if (pos + 1 >= contents.length()) return null;
         if (contents.charAt(pos+1) != '{') return null;
 
         int start = pos + 2;
@@ -286,6 +310,10 @@ public class LocalFlvTemplate {
      * @param fileEncoding 文字コード
      */
     public void setFileEncoding(String fileEncoding) {
-        this.fileEncoding = fileEncoding;
+        synchronized (this) {
+            this.fileEncoding = fileEncoding;
+            cachedTemplate = null;
+            cachedEncoding = null;
+        }
     }
 }

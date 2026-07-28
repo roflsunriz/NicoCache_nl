@@ -268,7 +268,7 @@ public class NLShared implements ConfigObserver {
         return false;
     }
 
-    // TODO ファイルを与えてマップを返すように
+    // vid2cid専用形式として検証と差し替えを一体で行う。
     private void loadJson() {
         if (vid2cidFile == null || !vid2cidFile.isFile() ||
                 vid2cidFile.lastModified() <= vid2cidLastModified) {
@@ -295,7 +295,7 @@ public class NLShared implements ConfigObserver {
         }
     }
 
-    // TODO ファイルとマップを与えるように
+    // vid2cidのバックアップ作成と保存を一体で行う。
     private void saveJson() {
         if (vid2cidFile == null) {
             return;

@@ -553,7 +553,8 @@ public class ConnectionManager implements Runnable {
             if (!m.lookingAt()) {
                 return false;
             }
-            // TODO マッチ結果をProcessorで再利用できるようにして高速化
+            // Processor APIへMatcherを持ち込むとExtension ABIが変わるため、
+            // ここでは登録条件の判定だけを行う。
         }
 
         return true;

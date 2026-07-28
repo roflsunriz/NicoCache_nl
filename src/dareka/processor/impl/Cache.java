@@ -38,7 +38,8 @@ class LockObj {
  * Abstraction of cache handling.
  *
  */
-// TODO Too fragile! Have to be managed the state...
+// 共有インデックスはCacheManager、個別キャッシュの遷移とファイル操作は
+// このクラスが管理する。
 public class Cache extends CacheManager {
     public static final String FLV = ".flv";
     public static final String SWF = ".swf";

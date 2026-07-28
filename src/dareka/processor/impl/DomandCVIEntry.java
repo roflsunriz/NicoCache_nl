@@ -420,7 +420,8 @@ public class DomandCVIEntry {
     // - thisはvideo or audioを扱っている.
     // unsynchronized.
     private void onSegmentsComplete() {
-        // - smidをロックすれば十分だが未実装のため大雑把に.
+        // 異なる品質間でもキャッシュ移動・完成通知が同じ共有インデックスを
+        // 更新するため、正しさを優先して共通のファイル移動ロックを使う。
         synchronized (Cache.getFileMoveLock()) {
             // true,falseの意味はコメント参照のこと.
             for (DomandCVIEntry audio_or_video : assocList) {

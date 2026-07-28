@@ -153,20 +153,10 @@ public class AudioExtractor {
 
     private BufferedReader execCommand(String[] args, boolean showError) {
         StringBuilder sb = new StringBuilder();
-//      for (String s : args) {
-//          if (sb.length() > 0) sb.append(" ");
-//          if (s.contains(" ")) sb.append('"');
-//          sb.append(s);
-//          if (s.contains(" ")) sb.append('"');
-//      }
-//      String commandLine = sb.toString();
-//      sb.delete(0, sb.length());
-// TODO ソース整理
         String commandLine = TextUtil.join(args, " ");
         Process proc = null;
         BufferedReader in = null;
         try {
-//          proc = Runtime.getRuntime().exec(args);
             ProcessBuilder pb = new ProcessBuilder(args);
             pb.redirectErrorStream(true);
             proc = pb.start();
@@ -176,7 +166,15 @@ public class AudioExtractor {
                 sb.append(line);
                 sb.append('\n');
             }
-            proc.waitFor();
+            int exitCode = proc.waitFor();
+            if (exitCode != 0) {
+                Logger.debug(commandLine + " [EXIT " + exitCode + "]");
+                if (showError) {
+                    info("Command failed: `" + args[0] + "' (exit "
+                            + exitCode + ").");
+                }
+                return null;
+            }
         } catch (IOException e) {
             Logger.debug(commandLine + " [FAILED]");
             if (showError) {
@@ -184,7 +182,9 @@ public class AudioExtractor {
             }
             return null;
         } catch (InterruptedException e) {
-            Logger.error(e);
+            Thread.currentThread().interrupt();
+            Logger.debug(commandLine + " [INTERRUPTED]");
+            return null;
         } finally {
             if (proc != null) {
                 CloseUtil.close(in);

@@ -1454,8 +1454,9 @@ public class CmafCachingProcessor implements Processor {
         // - これをトリガーにnltmp_smXXX*.hlsが作られm3u8が保存される.
         movieInfo.chunkLoadStart();
 
-        // TODO: 判定がとても雑. しかし正当に対応するにはm3u8のパースをして、
-        //       ファイル名と属性の管理をしなければならない.
+        // 現行配信では EXT-X-MAP の初期化チャンク名が init で始まり、
+        // media segment だけが暗号化される。この命名規約から外れる応答は
+        // 復号処理の長さ・padding検証で保存を中止する。
         // - init以降には数値1. 左0パディングは動画チャンク数の桁数で決まる.
         //   例: init1.cmfa, init01.cmfv, init001.cmfv
         // - trueになる想定filenameは01.cmfv, 999.cmfv, 01.cmfa, 123.cmfaなど.
@@ -1494,12 +1495,15 @@ public class CmafCachingProcessor implements Processor {
     }
 
     // "0x"で始まらない16進数文字列をバイト配列へ.
-    // TODO: utility関数は適切な場所へ移動すること.
+    // Extension からも参照可能な既存APIなので、このクラスに残してABIを維持する。
     // based on https://stackoverflow.com/questions/140131/
     //          author: https://stackoverflow.com/users/3093/dave-l
     public static byte[] hexStringToByteArray(String s)
         throws NumberFormatException {
 
+        if (s == null || (s.length() & 1) != 0) {
+            throw new NumberFormatException("hex string must contain pairs of digits");
+        }
         int len = s.length();
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
@@ -1587,7 +1591,8 @@ class ChunkListener implements TransferListener, Runnable {
     (DomandCVIEntry movieInfo, AV av, String filename, boolean needDecrypt
      , NLEventSource eventSource, Executor executor) {
 
-        // TODO: errorOccuredを繰り返しifに入れるよりもreturnした方がいい.
+        // 必須フィールドを初期化した上で無効なlistenerをno-opにするため、
+        // 段階ごとにerrorOccurredを確認する。
 
         this.errorOccurred = av.isUnspecified();
         this.av = av;
@@ -1752,7 +1757,8 @@ class ChunkListener implements TransferListener, Runnable {
         , InvalidKeyException, InvalidAlgorithmParameterException
     {
         if (av == AV.UNSPECIFIED) {
-            return null; // TODO: nullよりも例外を飛ばすべき.
+            throw new IllegalArgumentException(
+                    "audio/video type is required for decryption");
         };
         if (ivbytes == null || keybytes == null) {
             return null;
@@ -1980,12 +1986,16 @@ class ChunkListener implements TransferListener, Runnable {
         };
 
         try {
-            if (partIStream.available() != contentLength) {
+            long partLength = partIChannel.size();
+            if (partLength != contentLength) {
                 String s = String.format(
                     "%s: データ長不一致;コーディングミス. "
                     + "content-length[%d] ファイル長[%d]"
-                    , filenameRel, contentLength, decrypterInputCounter);
+                    , filenameRel, contentLength, partLength);
                 errorwarning(s);
+                CloseUtil.close(partIChannel);
+                CloseUtil.close(partIStream);
+                return;
             };
         } catch (IOException e) {
             errorwarning("入力ファイルチェック失敗");
@@ -2032,9 +2042,6 @@ class ChunkListener implements TransferListener, Runnable {
             return;
         };
 
-        // TODO: 別プロセスが過剰に書き込み、decryptedFileがサイズ過剰だった
-        ///      場合の判定をここに.
-
         // 復号終了処理.
         byte[] deced;
         try {
@@ -2077,7 +2084,18 @@ class ChunkListener implements TransferListener, Runnable {
             // do nothing
         } else {
             errorwarning(decryptedFile + ": close失敗");
+            decryptedFile.delete();
+            return;
         };
+
+        long decryptedLength = decryptedFile.length();
+        if (decryptedLength > contentLength) {
+            errorwarning(String.format(
+                    "%s: 復号後データが暗号文より長いため保存を中止: %d > %d",
+                    filenameRel, decryptedLength, contentLength));
+            decryptedFile.delete();
+            return;
+        }
 
         decryptedFile.renameTo(file);
         if (!file.exists()) {

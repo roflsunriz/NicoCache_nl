@@ -122,7 +122,7 @@ public class VideoDescriptor implements Comparable<VideoDescriptor> {
 
     // - キャッシュファイル名がdmc以降の仕様ならばtrue.
     // - dmc, dms(domand)でtrueであるはず.
-    // - TODO: 役割と名前を一致させること.
+    // - isDmcという既存名はExtension ABI互換のため維持する.
     public boolean isDmc() {
         return dmc;
     }

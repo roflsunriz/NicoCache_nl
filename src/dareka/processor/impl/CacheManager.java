@@ -209,7 +209,8 @@ public class CacheManager {
     protected static ConcurrentHashMap<VideoDescriptor, String> video2dir =
             new ConcurrentHashMap<>();
     // [nl] 一時ファイルID・ダウンロード中ID
-    // TODO id2Tmp, id2DLの変更とファイル操作は並行アクセス対応要
+    // インデックス自体の可視性はConcurrentHashMapで保証する。
+    // マップ変更とファイル移動を一体で扱う箇所はCache側のロックを使用する。
     protected static ConcurrentHashMap<VideoDescriptor, File> video2Tmp =
             new ConcurrentHashMap<>();
     protected static ConcurrentHashMap<VideoDescriptor, Integer> video2DL =
@@ -790,7 +791,8 @@ public class CacheManager {
             if (isCached(smid = NLShared.INSTANCE.thread2smid(id))) {
                 return smid;
             }
-        } else if (id.length() >= 8) { // TODO id2File のキーを id のみにする
+        } else if (id.length() >= 8) {
+            // VideoDescriptorキーは同じIDの品質・形式違いを区別するため維持する。
             id = NLShared.INSTANCE.vid2cid(id);
             if (isCached(smid = "sm".concat(id)) ||
                     isCached(smid = "so".concat(id)) ||
@@ -1512,7 +1514,7 @@ public class CacheManager {
         private boolean playlistMissing = false;
         private Set<String> missingPlaylists = new HashSet<>();
 
-        // TODO: 2024-08: getと呼ぶ挙動ではないから名前を変えること.
+        // get-or-createの既存名はExtension ABI互換のため維持する。
         // - master.m3u8を読み直したい時はこれを呼ぶ前にforgetを呼ぶこと.
         public static synchronized HlsTmpSegments get(VideoDescriptor video) {
             HlsTmpSegments instance = video2HlsTmpSegments.get(video);

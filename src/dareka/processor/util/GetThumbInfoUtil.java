@@ -76,11 +76,8 @@ public class GetThumbInfoUtil {
             return null;
         }
         String content = new String(responseBody, "UTF-8");
-//      String content = Main.getRewriterProcessor().stringRewriter(
-//              NicoApiUtil.getThumbURL("", id),
-//              new String(responseBody, "UTF-8"),
-//              null, r.getResponseHeader(null, null));
-// TODO Rewriter内から呼ばれると無限ループに陥る可能性あり、要検討
+        // このユーティリティーはRewriterからも呼ばれるため、取得したAPI応答を
+        // 再度Rewriterへ渡さず、生のXMLを解析する。
         String smid = getSmid(content);
         if (smid != null) {
             if (id.matches("\\d+")) {

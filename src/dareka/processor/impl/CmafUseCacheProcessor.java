@@ -231,8 +231,24 @@ public class CmafUseCacheProcessor implements Processor {
         // - altid: "sm9[360p,128]"のようなクオリティ付きの表現.
         // - コンプリートしたキャッシュのみを対象とする(部分キャッシュを
         //   無視する).
-        // - 本来は画質音質部分による指定を出来るようにするべきだが、未実装.
-        // - 下記はスタブ的部分実装.
+        VideoDescriptor requested = Cache.altIdToVideoDescriptor(altid);
+        if (requested == null && altid.indexOf('[') >= 0) {
+            // nicocachenl_refcacheの従来表現は拡張子を省略できる。
+            requested = Cache.altIdToVideoDescriptor(altid + Cache.HLS);
+        }
+        if (requested != null && requested.isDmc()
+                && Cache.HLS.equals(requested.getPostfix())) {
+            VideoDescriptor registered =
+                    Cache.getRegisteredVideoDescriptor(requested);
+            if (registered != null && new Cache(registered).exists()) {
+                return registered;
+            }
+            // 品質指定があるのに一致するキャッシュがない場合、別品質へ
+            // 暗黙にフォールバックすると要求と異なる映像を返すため失敗させる。
+            return null;
+        }
+
+        // 品質指定のない従来URLは、これまでどおり最適なHLSを選ぶ。
         Matcher m = SMID_PATTERN.matcher(altid);
         if (!m.find()) {
             return null;

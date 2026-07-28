@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
  * template methods named doXXX(). Each application should set its own subclass
  * via {@link Config#setConfig(Config)}.
  */
-// TODO eventually support runtime configuration via GUI.
+// GUIへ依存せず、ConfigObserverとreloadを通じて実行時設定を提供する。
 public abstract class Config {
     private static volatile Config config;
     private static final CopyOnWriteArrayList<ConfigObserver> observers =

@@ -9,7 +9,8 @@ import dareka.processor.HttpResponseHeader;
  * nlFilter を拡張する Extension のインターフェース<br>
  * <b>まだ仕様確定じゃないので使う時は互換性が無くなっても文句を言わないこと</b>
  * @since NicoCache_nl+110411mod
- * TODO EventListenerに合わせた形に仕様を変更
+ * EventListener はマーカーとして使用する。コールバック形式は配布済み
+ * Extension とのABI互換性を維持する。
  */
 public interface NLFilterListener extends EventListener {
 

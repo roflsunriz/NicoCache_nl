@@ -15,12 +15,6 @@ public class NicoCachingTitleRetriever implements Callable<String> {
     /**
      * 動画タイトルの正規表現
      */
-    private static final Pattern HTML_H1_PATTERN = Pattern.compile(
-            "<h1[^>]*>(.+?)</h1>");
-    private static final Pattern HTML_TITLE_CLASS_PATTERN = Pattern.compile(
-            "<p (?:class|id)=\"video_title\"[^>]*>(.+?)(?:<a|</p)");
-    private static final Pattern HTML_TITLE_VIDEO_PATTERN = Pattern.compile(
-            "var Video = \\{[^\\}]+title:\\s*'(.+?)',\\s");
     private static final Pattern STRIP_TAGS_PATTERN = Pattern.compile(
             "<.+?>");
     private static final Pattern API_TITLE_PATTERN = Pattern.compile(
@@ -160,26 +154,6 @@ public class NicoCachingTitleRetriever implements Callable<String> {
             if (vars.getVideoTitle() != null) {
                 return vars.getVideoTitle();
             }
-// // TODO これ以降に辿り着くことは無いはずなのでそのうち削除
-//             Logger.warning("WatchVars failed, use old code...");
-//
-// // 2010/10/14の仕様変更でH1でヘッディングされなくなった
-// // 念のため <p class="video_title"→Video.title→H1 の順に取得を試みる
-//             Matcher mTitle = HTML_TITLE_CLASS_PATTERN.matcher(htmlSource);
-//             if (mTitle.find()) {
-//                 return unescape(TextUtil.stripTags(mTitle.group(1)));
-//             } else {
-//                 Logger.debug("no title matched, use alternative matching...");
-//             }
-//             mTitle = HTML_TITLE_VIDEO_PATTERN.matcher(htmlSource);
-//             if (mTitle.find()) {
-//                 return TextUtil.ascii2native(mTitle.group(1));
-//             }
-//             mTitle = HTML_H1_PATTERN.matcher(htmlSource);
-//             if (mTitle.find()) {
-//                 return unescape(TextUtil.stripTags(mTitle.group(1)));
-//             }
-//             Logger.warning("title matching failed");
         }
         return null;
     }

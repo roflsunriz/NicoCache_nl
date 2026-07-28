@@ -281,7 +281,8 @@ public class Server {
     private ConnectionManager setupConnectionManager(Socket client, boolean tlsLoopback) {
         ConnectionManager worker;
         worker = new ConnectionManager(config, client, tlsLoopback);
-        // TODO コーディングレスで登録できるようにする。
+        // 登録順がstopper、Extension、Rewriterの優先順位を決めるため、
+        // 自動検出ではなく明示的な順序で登録する。
 
         boolean videoCacheEnabled = !Boolean.getBoolean("disableVideoCacheSystem");
 
