@@ -136,8 +136,9 @@ public final class NicoCacheUpdater {
         header.add(javaChoice);
         header.add(new JLabel("WinGetを優先し、利用できない場合は公式配布APIへフォールバックします。"));
         panel.add(header, BorderLayout.NORTH);
-        dependencyOutput.setText("Temurin、FFmpeg、Apache Ant、7-Zipは現在のWindowsユーザーへ導入し、"
+        dependencyOutput.setText("Temurin、FFmpeg、Apache Ant、7-ZipはWinGetが対応するスコープへ導入し、"
                 + "新しいCMD/PowerShellから利用可能にします。\n"
+                + "WinGetパッケージがない場合は現在のWindowsユーザー用に導入します。\n"
                 + "Bouncy CastleだけはNicoCache_nl専用ライブラリとして管理します。\n");
         panel.add(new JScrollPane(dependencyOutput), BorderLayout.CENTER);
         JPanel buttons = new JPanel();
@@ -229,8 +230,9 @@ public final class NicoCacheUpdater {
         }
         if (update) {
             int answer = JOptionPane.showConfirmDialog(frame,
-                    "Temurin、FFmpeg、Apache Ant、7-Zipを現在のWindowsユーザーへ導入・更新します。\n"
+                    "Temurin、FFmpeg、Apache Ant、7-Zipを導入・更新します。\n"
                             + "WinGetを優先し、失敗または利用不可の場合は公式配布APIを使用します。\n"
+                            + "WinGetがマシン全体への導入を必要とする場合は、Windowsの許可画面が表示されます。\n"
                             + "ユーザーPATHとJAVA_HOMEが必要に応じて更新されます。",
                     "外部依存関係のインストール", JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.QUESTION_MESSAGE);

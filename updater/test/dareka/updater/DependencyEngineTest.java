@@ -4,8 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 
-/** Unit tests for the winget-first user dependency policy. */
+/** Unit tests for the winget-first dependency policy and automatic install scope selection. */
 public final class DependencyEngineTest {
     private DependencyEngineTest() {}
 
@@ -17,7 +18,16 @@ public final class DependencyEngineTest {
             String result = engine.selfTestTransactions();
             assertContains(result, "SYSTEM_DEPENDENCY_SELF_TEST_OK", "system dependency self-test");
             assertContains(result, "winget-first", "winget priority");
+            assertContains(result, "winget-auto-scope", "winget automatic scope selection");
             assertContains(result, "fallback", "fallback policy");
+
+            List<String> winget = SystemDependencyManager.wingetArguments(
+                    "winget", "install", "EclipseAdoptium.Temurin.21.JDK");
+            assertTrue(!winget.contains("--scope"),
+                    "WinGet user scope requirement rejected machine-only packages: " + winget);
+            int source = winget.indexOf("--source");
+            assertTrue(source >= 0 && source + 1 < winget.size() && "winget".equals(winget.get(source + 1)),
+                    "WinGet source was not fixed to the community repository: " + winget);
 
             String merged = SystemDependencyManager.mergePath(
                     "C:\\Windows\\System32;C:\\Tools\\bin;C:\\TOOLS\\BIN\\",

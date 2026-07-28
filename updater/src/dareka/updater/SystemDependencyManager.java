@@ -65,13 +65,14 @@ final class SystemDependencyManager {
     String checkAll(int javaMajor) throws Exception {
         StringBuilder out = new StringBuilder();
         out.append("導入方式: WinGet優先、公式配布APIフォールバック\n");
-        out.append("対象スコープ: 現在のWindowsユーザー\n");
+        out.append("対象スコープ: WinGetはユーザー優先（パッケージに応じてマシン）、公式配布APIは現在のWindowsユーザー\n");
         out.append("WinGet: ").append(isWingetAvailable() ? "利用可能" : "利用不可（フォールバックを使用）").append('\n');
         for (Tool tool : tools(javaMajor)) {
             CommandResult result = probe(tool.probe);
             out.append(tool.displayName).append(": ")
-                    .append(result.exitCode == 0 ? firstLine(result.output) : "未導入またはPATH未登録")
-                    .append(" [winget id: ").append(tool.wingetId).append("]\n");
+                    .append(result.exitCode == 0 ? firstLine(result.output) : "未導入またはPATH未登録");
+            if (tool.wingetId == null) out.append(" [WinGetパッケージ未提供]\n");
+            else out.append(" [winget id: ").append(tool.wingetId).append("]\n");
         }
         return out.toString();
     }
@@ -81,7 +82,7 @@ final class SystemDependencyManager {
         boolean winget = isWingetAvailable();
         for (Tool tool : tools(javaMajor)) {
             boolean ready = false;
-            if (winget) {
+            if (winget && tool.wingetId != null) {
                 CommandResult result;
                 try {
                     result = runWinget(tool);
@@ -93,6 +94,8 @@ final class SystemDependencyManager {
                 if (!ready && !result.output.isBlank()) {
                     out.append("  ").append(result.output.replace("\n", "\n  ").trim()).append('\n');
                 }
+            } else if (winget) {
+                out.append(tool.displayName).append(": WinGetパッケージ未提供、公式配布APIを使用\n");
             }
             if (!ready) {
                 Path command = installFallback(tool);
@@ -124,7 +127,10 @@ final class SystemDependencyManager {
             if (source < 0 || source + 1 >= winget.size() || !"winget".equals(winget.get(source + 1))) {
                 throw new IOException("WinGet source固定の自己診断に失敗しました");
             }
-            return "SYSTEM_DEPENDENCY_SELF_TEST_OK winget-source winget-first fallback user-path command-verification";
+            if (winget.contains("--scope")) {
+                throw new IOException("WinGetスコープ自動選択の自己診断に失敗しました");
+            }
+            return "SYSTEM_DEPENDENCY_SELF_TEST_OK winget-source winget-auto-scope winget-first fallback user-path command-verification";
         } finally {
             deleteTree(root);
         }
@@ -136,11 +142,11 @@ final class SystemDependencyManager {
                 new Tool("temurin", "Eclipse Temurin JDK", "EclipseAdoptium.Temurin." + javaMajor + ".JDK",
                         Arrays.asList("java", "-version"), "java.exe", true, javaMajor),
                 new Tool("ffmpeg", "FFmpeg", "Gyan.FFmpeg", Arrays.asList("ffmpeg", "-version"), "ffmpeg.exe", false, 0),
-                new Tool("ant", "Apache Ant", "Apache.Ant", Arrays.asList("ant", "-version"), "ant.bat", false, 0),
+                new Tool("ant", "Apache Ant", null, Arrays.asList("ant", "-version"), "ant.bat", false, 0),
                 new Tool("7zip", "7-Zip", "7zip.7zip", Arrays.asList("7z"), "7z.exe", false, 0));
     }
 
-    private static List<String> wingetArguments(String executable, String operation, String packageId) {
+    static List<String> wingetArguments(String executable, String operation, String packageId) {
         List<String> command = new ArrayList<String>();
         command.add(executable);
         command.add(operation);
@@ -149,8 +155,6 @@ final class SystemDependencyManager {
         command.add("--exact");
         command.add("--source");
         command.add("winget");
-        command.add("--scope");
-        command.add("user");
         command.add("--silent");
         command.add("--accept-package-agreements");
         command.add("--accept-source-agreements");
