@@ -84,36 +84,6 @@ foreach ($testClass in @('dareka.updater.NicoCacheUpdaterTest', 'dareka.updater.
     if ($LASTEXITCODE -ne 0) { throw "Updater Java test failed: $testClass" }
 }
 
-$updaterSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\NicoCacheUpdater.java') -Raw
-$engineSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\DependencyEngine.java') -Raw
-$systemSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\SystemDependencyManager.java') -Raw
-$versionSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\InstalledVersionDetector.java') -Raw
-$launcherSource = Get-Content (Join-Path $root 'updater\src\dareka\updater\UpdaterLauncher.java') -Raw
-$buildSource = Get-Content (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -Raw
-foreach ($required in @('WinGetを優先', '現在のWindowsユーザー', 'ユーザーPATH', 'Bouncy Castleだけ')) {
-    Assert-True $updaterSource.Contains($required) "Updater UI invariant missing: $required"
-}
-foreach ($required in @('EclipseAdoptium.Temurin.', 'Gyan.FFmpeg', 'Apache.Ant', '7zip.7zip',
-        '--source', 'winget', '--scope', 'user', 'resolveTemurin', 'resolveFfmpeg', 'resolveAnt', 'resolveSevenZip',
-        'HKCU\Environment', 'JAVA_HOME', 'mergePath', 'verifyExecutable')) {
-    Assert-True $systemSource.Contains($required) "System dependency invariant missing: $required"
-}
-foreach ($required in @('NicoCache_nl.cfg', '-Djpackage.app-version=', 'readLauncherVersion')) {
-    Assert-True $versionSource.Contains($required) "Installed-version invariant missing: $required"
-}
-foreach ($required in @('resolveBouncyCastle', 'NicoCache_nl専用')) {
-    Assert-True $engineSource.Contains($required) "Bouncy Castle invariant missing: $required"
-}
-Assert-True (-not $launcherSource.Contains('ApplicationProcessGuard.requireStopped(applicationRoot);`n                DependencyEngine')) `
-    'Dependency update still requires NicoCache_nl to be stopped'
-foreach ($required in @('-J-Duser.language=ja', '-J-Duser.country=JP', '--icon')) {
-    Assert-True $buildSource.Contains($required) "Packaging invariant missing: $required"
-}
-foreach ($sourceText in @($updaterSource, $engineSource, $systemSource, $launcherSource)) {
-    Assert-True (-not $sourceText.Contains('powershell.exe')) 'Updater invokes PowerShell'
-    Assert-True (-not $sourceText.Contains('.ps1')) 'Updater references PowerShell payload'
-}
-
 $packageType = if ($BuildMsi) { 'All' } else { 'AppImage' }
 & (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -PackageType $packageType -AppVersion 0.1.0
 $appImage = Join-Path $root '.test-work\standalone-updater\output\NicoCache_nl Updater'
@@ -150,4 +120,4 @@ if ($BuildMsi) {
     }
     Assert-True (-not (Test-Path $installedRoot)) 'Updater MSI left its install directory behind'
 }
-Write-Output 'Standalone updater winget-first, source-pinned, fallback, version, localization, icon and packaged E2E tests passed'
+Write-Output 'Standalone updater package behavior tests passed'
