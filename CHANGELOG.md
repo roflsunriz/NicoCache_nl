@@ -1,9 +1,16 @@
 # 変更履歴
 
-このファイルでは現在の開発系列を記録する。過去の履歴は
-`ChangeLog.txt` を参照する。
+このファイルでは現在の開発系列と、現行利用者に影響する変更を記録する。
+旧形式の履歴は `documents/archive/ChangeLog.txt` と
+`documents/archive/変更点.txt` に保存している。
 
 ## [Unreleased]
+
+### Changed
+
+- 現行の利用手順と変更履歴を見つけやすくするため、`README.md` と
+  `CHANGELOG.md` を正規の入口に統一し、旧版の README、変更履歴、開発メモを
+  `documents/archive/` へ整理した。HTTPS MitM の手順は `documents/tls.md` に集約した。
 
 ### Added
 

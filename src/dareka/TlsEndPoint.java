@@ -31,7 +31,7 @@ public class TlsEndPoint {
     boolean init() {
         if (!SITE_KEYSTORE_FILE.exists()) {
             Logger.warning("Key store " + SITE_KEYSTORE_FILE.getPath() + " does not exist.");
-            Logger.warning("TLS MitMの有効化手順は documents/Readme_TLS.txt を参照してください．");
+            Logger.warning("TLS MitMの有効化手順は documents/tls.md を参照してください．");
             return false;
         }
         try {

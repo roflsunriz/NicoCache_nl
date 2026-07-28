@@ -293,10 +293,9 @@ $distributionFiles = @(
     'niconico-0.ico',
     'nlFilter_sys.txt',
     'proxy_sample.pac',
-    'Readme.txt',
-    'Readme_dms.txt',
-    'ChangeLog.txt',
-    '変更点.txt'
+    'README.md',
+    'CHANGELOG.md',
+    'documents/tls.md'
 )
 foreach ($relativePath in $distributionFiles) {
     Copy-DistributionFile -RelativePath $relativePath

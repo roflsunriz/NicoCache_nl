@@ -25,7 +25,7 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 - `extensions/`: Java 拡張のサンプルとローカル拡張。生成された `.class` は管理しない。
 - `local/`: ブラウザーへ配信する JavaScript、CSS、画像など。NicoCache_nl 起動中は `/local/` 以下として配信される。
 - `defaults/`: 本体が参照する既定設定群。
-- `documents/`, `Readme.txt`, `Readme_dms.txt`, `変更点.txt`, `ChangeLog.txt`: 利用方法と変更履歴。
+- `README.md`, `CHANGELOG.md`, `documents/`, `how-to-update.md`: 利用方法と変更履歴。旧版資料は `documents/archive/` に保存する。
 - `cache/`, `cvcache/`, `thcache/`: 動画、変換済み動画、サムネイルのキャッシュ。生成物なので管理しない。
 - `certs/`: 生成された認証局・サイト証明書などの秘密情報。内容を表示・コミットしない。
 - `data/`, `list/`: 実行時データとユーザー設定。配布用サンプル以外は管理しない。
