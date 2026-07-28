@@ -18,15 +18,23 @@ final class InstalledVersionDetector {
 
     static String detect(Path applicationRoot) {
         Path app = applicationRoot.resolve("app");
+        Path launcherConfig = app.resolve("NicoCache_nl.cfg");
 
-        // The NicoCache_nl MSI/app-image records the product version here.
-        String fromLauncher = readLauncherVersion(app.resolve("NicoCache_nl.cfg"));
+        // In an installed NicoCache_nl app image, the launcher configuration is the
+        // authoritative version record. Falling through to stale compatibility markers
+        // would hide a damaged or incomplete installation.
+        String fromLauncher = readLauncherVersion(launcherConfig);
         if (fromLauncher != null) return fromLauncher;
+        if (Files.isRegularFile(applicationRoot.resolve("NicoCache_nl.exe"))
+                || Files.isRegularFile(launcherConfig)) {
+            return "不明";
+        }
 
+        // Compatibility paths are only for legacy/non-installed layouts that do not
+        // contain the real NicoCache_nl launcher.
         String fromMarker = readPlainVersion(applicationRoot.resolve("version.txt"));
         if (fromMarker != null) return fromMarker;
 
-        // Retained for compatibility with other jpackage layouts and older test packages.
         String fromPackage = readJpackageVersion(app.resolve(".jpackage.xml"));
         if (fromPackage != null) return fromPackage;
         fromPackage = readJpackageVersion(applicationRoot.resolve(".jpackage.xml"));
