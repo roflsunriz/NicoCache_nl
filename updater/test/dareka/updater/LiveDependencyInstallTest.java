@@ -74,29 +74,42 @@ public final class LiveDependencyInstallTest {
     }
 
     private static void verifyFreshShell(List<String> command, String path, String javaHome) throws Exception {
-        StringBuilder line = new StringBuilder();
-        for (String value : command) {
-            if (line.length() > 0) line.append(' ');
-            line.append('"').append(value.replace("\"", "\\\"")).append('"');
+        Path script = Files.createTempFile("dependency-command-probe-", ".cmd");
+        try {
+            StringBuilder commandLine = new StringBuilder();
+            for (String value : command) {
+                if (commandLine.length() > 0) commandLine.append(' ');
+                commandLine.append(quoteBatchArgument(value));
+            }
+            String scriptText = "@echo off\r\n" + commandLine + "\r\nexit /b %errorlevel%\r\n";
+            Files.writeString(script, scriptText, StandardCharsets.UTF_8);
+
+            ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/d", "/c", script.toString())
+                    .redirectErrorStream(true);
+            builder.environment().put("PATH", path);
+            if (!javaHome.isBlank()) builder.environment().put("JAVA_HOME", javaHome);
+            Process process = builder.start();
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            Thread reader = new Thread(() -> {
+                try (InputStream input = process.getInputStream()) { input.transferTo(output); }
+                catch (Exception ignored) { }
+            });
+            reader.start();
+            if (!process.waitFor(Duration.ofMinutes(3).toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                process.destroyForcibly();
+                throw new AssertionError("Fresh-shell command timed out: " + command);
+            }
+            reader.join(5000);
+            assertTrue(process.exitValue() == 0,
+                    "Fresh-shell command failed: " + command + "\n" + output.toString(StandardCharsets.UTF_8));
+        } finally {
+            Files.deleteIfExists(script);
         }
-        ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/d", "/c", line.toString())
-                .redirectErrorStream(true);
-        builder.environment().put("PATH", path);
-        if (!javaHome.isBlank()) builder.environment().put("JAVA_HOME", javaHome);
-        Process process = builder.start();
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-        Thread reader = new Thread(() -> {
-            try (InputStream input = process.getInputStream()) { input.transferTo(output); }
-            catch (Exception ignored) { }
-        });
-        reader.start();
-        if (!process.waitFor(Duration.ofMinutes(3).toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
-            process.destroyForcibly();
-            throw new AssertionError("Fresh-shell command timed out: " + command);
-        }
-        reader.join(5000);
-        assertTrue(process.exitValue() == 0,
-                "Fresh-shell command failed: " + command + "\n" + output.toString(StandardCharsets.UTF_8));
+    }
+
+    private static String quoteBatchArgument(String value) {
+        if (value.matches("[A-Za-z0-9._:/\\\\-]+")) return value;
+        return "\"" + value.replace("\"", "\"\"") + "\"";
     }
 
     private static void assertContains(String value, String expected, String label) {
