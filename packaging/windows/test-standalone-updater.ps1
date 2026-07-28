@@ -105,7 +105,9 @@ if ($BuildMsi) {
     Assert-True ($null -ne $msi -and $msi.Length -gt 0) 'Updater MSI was not generated'
     $jpackageLog = Get-Content (Join-Path $root '.test-work\standalone-updater\jpackage.log') -Raw
     Assert-True $jpackageLog.Contains('MsiInstallerStrings_ja.wxl') 'Japanese MSI localization resource was not linked'
-    Assert-True $jpackageLog.Contains('-cultures:ja-JP') 'Japanese MSI culture was not selected'
+    Assert-True (
+        $jpackageLog.IndexOf('-cultures:ja-JP', [StringComparison]::OrdinalIgnoreCase) -ge 0
+    ) 'Japanese MSI culture was not selected'
     $installedRoot = Join-Path $env:ProgramFiles 'NicoCache_nl Updater'
     try {
         Invoke-MsiExec @('/i', $msi.FullName, '/qn', '/norestart', '/l*v', (Join-Path $work 'updater-msi.log')) 'Updater MSI install failed'
