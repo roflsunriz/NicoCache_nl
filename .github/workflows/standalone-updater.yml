@@ -37,11 +37,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up JDK 17 used only to build updater
+      - name: Set up JDK 25 used to build updater
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
 
       - name: Require healthy WinGet dependency source
         shell: pwsh
@@ -99,11 +99,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up JDK 17
+      - name: Set up JDK 25
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '25'
 
       - name: Verify live release and provider contracts
         shell: pwsh

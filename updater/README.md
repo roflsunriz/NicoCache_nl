@@ -50,6 +50,9 @@ if ($actual -ne $expected) { throw 'アップデーターMSIのSHA-256が一致�
 
 ## ビルド
 
+独立アップデーターのビルドと `jpackage` にはJDK 25を使用します。ソースの
+互換性ターゲットは引き続きJava 11（`--release 11`）です。
+
 ```powershell
 ./packaging/windows/build-standalone-updater.ps1 -PackageType All
 ```
