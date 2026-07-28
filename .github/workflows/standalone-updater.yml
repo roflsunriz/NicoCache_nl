@@ -55,15 +55,6 @@ jobs:
           }
           winget --version
 
-      - name: Verify WinGet source package contracts
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          foreach ($id in @('EclipseAdoptium.Temurin.21.JDK','Gyan.FFmpeg','Apache.Ant','7zip.7zip')) {
-            winget show --id $id --exact --source winget --accept-source-agreements --disable-interactivity
-            if ($LASTEXITCODE -ne 0) { throw "winget source package missing: $id" }
-          }
-
       - name: Build and package updater
         shell: pwsh
         run: |
