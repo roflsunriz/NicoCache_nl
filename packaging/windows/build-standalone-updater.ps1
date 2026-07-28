@@ -16,14 +16,14 @@ $classesRoot = Join-Path $workRoot 'classes'
 $inputRoot = Join-Path $workRoot 'input'
 $outputRoot = Join-Path $workRoot 'output'
 $buildLog = Join-Path $workRoot 'jpackage.log'
-$icon = Join-Path $root 'niconico-0.ico'
+$icon = Join-Path $root 'packaging\windows\assets\nicocache-updater.ico'
 
 if (Test-Path -LiteralPath $workRoot) {
     Remove-Item -LiteralPath $workRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Path $classesRoot, $inputRoot, $outputRoot | Out-Null
 if (-not (Test-Path -LiteralPath $icon -PathType Leaf)) {
-    throw "Updaterアイコンが見つかりません: $icon"
+    throw "独立アップデーター用アイコンが見つかりません: $icon"
 }
 
 $java = (Get-Command java -ErrorAction Stop).Source

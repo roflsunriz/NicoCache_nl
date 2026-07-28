@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'updater/**'
+      - 'packaging/windows/assets/nicocache-updater.ico'
       - 'packaging/windows/build-standalone-updater.ps1'
       - 'packaging/windows/test-standalone-updater.ps1'
       - 'packaging/windows/test-real-user-updater-e2e.ps1'
@@ -12,6 +13,7 @@ on:
     branches: [main]
     paths:
       - 'updater/**'
+      - 'packaging/windows/assets/nicocache-updater.ico'
       - 'packaging/windows/build-standalone-updater.ps1'
       - 'packaging/windows/test-standalone-updater.ps1'
       - 'packaging/windows/test-real-user-updater-e2e.ps1'

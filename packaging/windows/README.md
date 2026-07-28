@@ -13,6 +13,12 @@ Java、PowerShell 7、Apache Ant、7-Zip には依存しない。
 - `NicoCache_nl-<version>.msi`: 対話・無人インストール兼用パッケージ
 - `NicoCache_nl-<version>.zip`: MSIと同じアプリイメージを展開した開発・検証用ZIP
 
+本体インストーラーと本体ランチャーには、アプリ本体を受け皿へ収める意匠の
+`assets/nicocache-installer.ico` を使う。独立アップデーターには、更新対象を
+2本の軌道が循環する別意匠の `assets/nicocache-updater.ico` を使う。
+どちらも16～256ピクセルの表示サイズを収録し、従来の `niconico-0.ico` とは
+役割とシルエットを分けている。
+
 ZIPとMSIは同じアプリイメージを共通の入力として生成する。ZIPにはMSIと同じ実行環境、
 既定設定、ローカル配信用ファイルに加え、`development/` 以下へソース、テスト、
 ビルド・検証スクリプト、開発資料を収録する。`.git`、CI管理ファイル、キャッシュ、
