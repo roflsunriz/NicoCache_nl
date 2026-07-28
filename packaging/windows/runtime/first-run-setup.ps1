@@ -26,6 +26,8 @@ $proxyRegistryPath =
 $runRegistryPath =
     'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValueName = 'NicoCache_nl'
+$stateLocatorRegistryPath = 'HKCU:\Software\NicoCache_nl'
+$stateLocatorValueName = 'SetupStatePath'
 $proxyValueNames = @(
     'AutoConfigURL',
     'AutoDetect',
@@ -131,6 +133,27 @@ function Restore-RegistryValue {
     }
 }
 
+function Restore-StateLocator {
+    param([Parameter(Mandatory)]$State)
+
+    $locatorProperty = $State.PSObject.Properties['StateLocator']
+    if (-not $locatorProperty) {
+        return
+    }
+    Restore-RegistryValue `
+        -Path $stateLocatorRegistryPath `
+        -Name $stateLocatorValueName `
+        -State $State.StateLocator.Value
+    if (-not $State.StateLocator.KeyExisted -and
+            (Test-Path -LiteralPath $stateLocatorRegistryPath)) {
+        $locatorKey = Get-Item -LiteralPath $stateLocatorRegistryPath
+        if ($locatorKey.GetValueNames().Count -eq 0 -and
+                $locatorKey.GetSubKeyNames().Count -eq 0) {
+            Remove-Item -LiteralPath $stateLocatorRegistryPath -Force
+        }
+    }
+}
+
 function Notify-ProxyChanged {
     if (-not ('NicoCache.WinInet' -as [type])) {
         Add-Type @'
@@ -230,6 +253,7 @@ function Restore-State {
             $certificateStore.Close()
         }
     }
+    Restore-StateLocator -State $State
 }
 
 $script:CurrentStage = 'Windows設定の保存先を確認'
@@ -237,28 +261,38 @@ if ([string]::IsNullOrWhiteSpace($StatePath)) {
     if ($Action -ne 'Rollback') {
         throw '適用時はWindows設定の状態保存先が必要です'
     }
-    $installRoot = [System.IO.Path]::GetFullPath(
-        (Join-Path $PSScriptRoot '..\..')
-    )
-    $configuredDataRoot = $env:NICOCACHE_DATA_ROOT
-    if ([string]::IsNullOrWhiteSpace($configuredDataRoot)) {
-        if (Test-Path -LiteralPath (
-                Join-Path $installRoot 'portable.flag'
-            ) -PathType Leaf) {
-            $configuredDataRoot = $installRoot
-        } else {
-            $documents = [Environment]::GetFolderPath(
-                [Environment+SpecialFolder]::MyDocuments
-            )
-            if ([string]::IsNullOrWhiteSpace($documents)) {
-                $documents = Join-Path $env:USERPROFILE 'Documents'
+    $registeredState = Get-RegistryValueState `
+        -Path $stateLocatorRegistryPath `
+        -Name $stateLocatorValueName
+    if ($registeredState.Exists -and
+            -not [string]::IsNullOrWhiteSpace(
+                [string]$registeredState.Value
+            )) {
+        $StatePath = [string]$registeredState.Value
+    } else {
+        $installRoot = [System.IO.Path]::GetFullPath(
+            (Join-Path $PSScriptRoot '..\..')
+        )
+        $configuredDataRoot = $env:NICOCACHE_DATA_ROOT
+        if ([string]::IsNullOrWhiteSpace($configuredDataRoot)) {
+            if (Test-Path -LiteralPath (
+                    Join-Path $installRoot 'portable.flag'
+                ) -PathType Leaf) {
+                $configuredDataRoot = $installRoot
+            } else {
+                $documents = [Environment]::GetFolderPath(
+                    [Environment+SpecialFolder]::MyDocuments
+                )
+                if ([string]::IsNullOrWhiteSpace($documents)) {
+                    $documents = Join-Path $env:USERPROFILE 'Documents'
+                }
+                $configuredDataRoot = Join-Path $documents 'NicoCache_nl'
             }
-            $configuredDataRoot = Join-Path $documents 'NicoCache_nl'
         }
+        $StatePath = Join-Path (
+            [System.IO.Path]::GetFullPath($configuredDataRoot)
+        ) 'data\setup-system-state.json'
     }
-    $StatePath = Join-Path (
-        [System.IO.Path]::GetFullPath($configuredDataRoot)
-    ) 'data\setup-system-state.json'
 }
 if ($Action -eq 'Rollback' -and
         [string]::IsNullOrWhiteSpace($ErrorPath)) {
@@ -321,6 +355,12 @@ $state = [ordered]@{
     AutoStart = Get-RegistryValueState `
         -Path $runRegistryPath `
         -Name $runValueName
+    StateLocator = [ordered]@{
+        KeyExisted = Test-Path -LiteralPath $stateLocatorRegistryPath
+        Value = Get-RegistryValueState `
+            -Path $stateLocatorRegistryPath `
+            -Name $stateLocatorValueName
+    }
     Certificate = [ordered]@{
         Thumbprint = $certificateThumbprint
         ImportedNew = $EnableCertificate -and -not $certificateWasPresent
@@ -331,6 +371,18 @@ $state | ConvertTo-Json -Depth 6 |
     Set-Content -LiteralPath $fullStatePath -Encoding UTF8
 
 try {
+    $script:CurrentStage = 'Windows設定状態の保存先を登録'
+    Write-SetupStageMarker
+    if (-not (Test-Path -LiteralPath $stateLocatorRegistryPath)) {
+        New-Item -Path $stateLocatorRegistryPath -Force | Out-Null
+    }
+    New-ItemProperty `
+        -Path $stateLocatorRegistryPath `
+        -Name $stateLocatorValueName `
+        -PropertyType String `
+        -Value $fullStatePath `
+        -Force | Out-Null
+
     if ($EnableCertificate -and -not $certificateWasPresent) {
         $script:CurrentStage = 'CA証明書を現在のユーザーへ登録'
         Write-SetupStageMarker

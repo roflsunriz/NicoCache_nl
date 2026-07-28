@@ -15,6 +15,25 @@ $standardErrorPath = Join-Path $testRoot 'powershell.stderr.txt'
 $missingLauncher = Join-Path $testRoot 'missing-launcher.exe'
 $defaultLayoutScriptPath =
     Join-Path $testRoot 'product\setup\windows\first-run-setup.ps1'
+$stateLocatorRegistryPath = 'HKCU:\Software\NicoCache_nl'
+$stateLocatorValueName = 'SetupStatePath'
+
+function Get-StateLocatorSnapshot {
+    $keyExists = Test-Path -LiteralPath $stateLocatorRegistryPath
+    $value = Get-ItemProperty `
+        -LiteralPath $stateLocatorRegistryPath `
+        -Name $stateLocatorValueName `
+        -ErrorAction SilentlyContinue
+    return [PSCustomObject]@{
+        KeyExists = $keyExists
+        ValueExists = $null -ne $value
+        Value = if ($value) {
+            $value.PSObject.Properties[$stateLocatorValueName].Value
+        } else {
+            $null
+        }
+    } | ConvertTo-Json -Compress
+}
 
 if (-not (Test-Path -LiteralPath $scriptSource -PathType Leaf)) {
     throw "Windows設定スクリプトがありません: $scriptSource"
@@ -92,6 +111,7 @@ if ($scriptBytes.Length -lt 3 -or
     throw 'Windows PowerShell 5.1向けスクリプトにUTF-8 BOMがありません'
 }
 
+$initialStateLocator = Get-StateLocatorSnapshot
 $apply = Start-Process `
     -FilePath 'powershell.exe' `
     -ArgumentList @(
@@ -133,6 +153,9 @@ if ($state.Changes.Certificate -or $state.Changes.Proxy -or
         $state.Changes.AutoStart) {
     throw '変更開始前の失敗なのにWindows設定が変更済みとして記録されました'
 }
+if ((Get-StateLocatorSnapshot) -ne $initialStateLocator) {
+    throw '失敗後にWindows設定状態の保存先登録が復元されませんでした'
+}
 
 $rollbackErrorPath = Join-Path $testRoot 'data\rollback-error.txt'
 $rollback = Start-Process `
@@ -161,6 +184,60 @@ if ($rollback.ExitCode -ne 0) {
 }
 if (Test-Path -LiteralPath $statePath) {
     throw "ロールバック後も状態ファイルが残っています: $statePath"
+}
+
+$registeredStatePath = Join-Path $testRoot (
+    'registered-data\setup-system-state.json'
+)
+New-Item -ItemType Directory -Path (
+    Split-Path -Parent $registeredStatePath
+) -Force | Out-Null
+$stateLocatorBefore = Get-StateLocatorSnapshot
+$registeredApply = Start-Process `
+    -FilePath 'powershell.exe' `
+    -ArgumentList @(
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $scriptPath,
+        '-Action', 'Apply',
+        '-StatePath', $registeredStatePath
+    ) `
+    -Wait `
+    -PassThru `
+    -RedirectStandardOutput $standardOutputPath `
+    -RedirectStandardError $standardErrorPath
+if ($registeredApply.ExitCode -ne 0) {
+    throw "状態保存先の登録に失敗しました (ExitCode: $($registeredApply.ExitCode))"
+}
+$registeredValue = Get-ItemProperty `
+    -LiteralPath $stateLocatorRegistryPath `
+    -Name $stateLocatorValueName |
+    Select-Object -ExpandProperty $stateLocatorValueName
+if ($registeredValue -ne $registeredStatePath) {
+    throw "登録した状態保存先が一致しません: $registeredValue"
+}
+$registeredRollback = Start-Process `
+    -FilePath 'powershell.exe' `
+    -ArgumentList @(
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $scriptPath,
+        '-Action', 'Rollback'
+    ) `
+    -Wait `
+    -PassThru `
+    -RedirectStandardOutput $standardOutputPath `
+    -RedirectStandardError $standardErrorPath
+if ($registeredRollback.ExitCode -ne 0) {
+    throw "登録済み状態保存先からの復元に失敗しました (ExitCode: $($registeredRollback.ExitCode))"
+}
+if (Test-Path -LiteralPath $registeredStatePath) {
+    throw "登録済み保存先の状態ファイルが復元後も残っています: $registeredStatePath"
+}
+if ((Get-StateLocatorSnapshot) -ne $stateLocatorBefore) {
+    throw 'Windows設定状態の保存先登録が復元されませんでした'
 }
 
 $missingStatePath = Join-Path $testRoot (

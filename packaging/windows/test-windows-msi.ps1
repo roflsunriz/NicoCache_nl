@@ -50,6 +50,8 @@ $desktopShortcut = Join-Path (
 $runRegistryPath =
     'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValueName = 'NicoCache_nl'
+$stateLocatorRegistryPath = 'HKCU:\Software\NicoCache_nl'
+$stateLocatorValueName = 'SetupStatePath'
 
 if (-not $installRoot.StartsWith(
         $testRoot + [System.IO.Path]::DirectorySeparatorChar,
@@ -233,6 +235,12 @@ function Get-OsIntegrationState {
         UninstallEntries = $uninstallEntries
         StartMenuShortcutExists = Test-Path -LiteralPath $startMenuShortcut
         DesktopShortcutExists = Test-Path -LiteralPath $desktopShortcut
+        StateLocator = Get-ItemProperty `
+            -LiteralPath $stateLocatorRegistryPath `
+            -Name $stateLocatorValueName `
+            -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty $stateLocatorValueName `
+                -ErrorAction SilentlyContinue
     } | ConvertTo-Json -Depth 5 -Compress
 }
 
@@ -396,6 +404,14 @@ try {
     if ($savedState.Status -ne 'Applied') {
         throw "Windows連携状態がAppliedではありません: $($savedState.Status)"
     }
+    $registeredStatePath = Get-ItemProperty `
+        -LiteralPath $stateLocatorRegistryPath `
+        -Name $stateLocatorValueName `
+        -ErrorAction Stop |
+        Select-Object -ExpandProperty $stateLocatorValueName
+    if ($registeredStatePath -ne $setupStatePath) {
+        throw "Windows設定状態の保存先登録が一致しません: $registeredStatePath"
+    }
     $proxy = Get-ItemProperty -LiteralPath (
         'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
     )
@@ -468,7 +484,10 @@ if (Test-Path -LiteralPath $desktopShortcut) {
 }
 $osStateAfter = Get-OsIntegrationState
 if ($osStateAfter -ne $osStateBefore) {
-    throw 'MSI試験の前後でOS統合状態が変化しました'
+    throw (
+        "MSI試験の前後でOS統合状態が変化しました`n" +
+        "変更前: $osStateBefore`n変更後: $osStateAfter"
+    )
 }
 if (-not (Test-Path -LiteralPath $userStatePath -PathType Leaf)) {
     throw 'アンインストール後に利用者データが失われました'
