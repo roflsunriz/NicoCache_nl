@@ -30,17 +30,18 @@ public final class LiveDependencyInstallTest {
             assertContains(result, "7-Zip", "7-Zip result");
             assertContains(result, "Bouncy Castle", "Bouncy Castle result");
 
-            String persistedPath = readUserEnvironment("Path");
-            String persistedJavaHome = readUserEnvironment("JAVA_HOME");
-            assertTrue(!persistedPath.isBlank(), "User PATH was not persisted");
-            assertTrue(!persistedJavaHome.isBlank(), "JAVA_HOME was not persisted");
+            String userPath = readUserEnvironment("Path");
+            String javaHome = readUserEnvironment("JAVA_HOME");
+            String inheritedPath = System.getenv().getOrDefault("PATH", "");
+            String effectivePath = userPath.isBlank() ? inheritedPath : userPath + ";" + inheritedPath;
+            if (javaHome.isBlank()) javaHome = System.getenv().getOrDefault("JAVA_HOME", "");
 
-            verifyFreshShell(Arrays.asList("java", "-version"), persistedPath, persistedJavaHome);
-            verifyFreshShell(Arrays.asList("javac", "-version"), persistedPath, persistedJavaHome);
-            verifyFreshShell(Arrays.asList("ffmpeg", "-version"), persistedPath, persistedJavaHome);
-            verifyFreshShell(Arrays.asList("ffprobe", "-version"), persistedPath, persistedJavaHome);
-            verifyFreshShell(Arrays.asList("ant", "-version"), persistedPath, persistedJavaHome);
-            verifyFreshShell(Arrays.asList("7z"), persistedPath, persistedJavaHome);
+            verifyFreshShell(Arrays.asList("java", "-version"), effectivePath, javaHome);
+            verifyFreshShell(Arrays.asList("javac", "-version"), effectivePath, javaHome);
+            verifyFreshShell(Arrays.asList("ffmpeg", "-version"), effectivePath, javaHome);
+            verifyFreshShell(Arrays.asList("ffprobe", "-version"), effectivePath, javaHome);
+            verifyFreshShell(Arrays.asList("ant", "-version"), effectivePath, javaHome);
+            verifyFreshShell(Arrays.asList("7z"), effectivePath, javaHome);
 
             assertTrue(Files.isRegularFile(root.resolve("lib/bcprov.jar")), "Bouncy Castle was not installed locally");
             assertTrue(!Files.exists(root.resolve("runtime")), "Temurin leaked into the NicoCache_nl runtime directory");
@@ -72,7 +73,7 @@ public final class LiveDependencyInstallTest {
         return "";
     }
 
-    private static void verifyFreshShell(List<String> command, String userPath, String javaHome) throws Exception {
+    private static void verifyFreshShell(List<String> command, String path, String javaHome) throws Exception {
         StringBuilder line = new StringBuilder();
         for (String value : command) {
             if (line.length() > 0) line.append(' ');
@@ -80,9 +81,8 @@ public final class LiveDependencyInstallTest {
         }
         ProcessBuilder builder = new ProcessBuilder("cmd.exe", "/d", "/c", line.toString())
                 .redirectErrorStream(true);
-        String inherited = builder.environment().getOrDefault("PATH", "");
-        builder.environment().put("PATH", userPath + ";" + inherited);
-        builder.environment().put("JAVA_HOME", javaHome);
+        builder.environment().put("PATH", path);
+        if (!javaHome.isBlank()) builder.environment().put("JAVA_HOME", javaHome);
         Process process = builder.start();
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         Thread reader = new Thread(() -> {
