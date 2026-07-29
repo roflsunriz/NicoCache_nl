@@ -153,6 +153,21 @@ public final class GuiEndToEndTestMain {
                         "HideWindow=false",
                         "MaxLines=-3",
                         "MaxLinesHard=5",
+                        "LogSearchHistory.Version=1",
+                        "LogSearchHistory.Tab.bWFpbg.Count=1",
+                        "LogSearchHistory.Tab.bWFpbg.0.Query=legacy-query",
+                        "LogSearchHistory.Tab.bWFpbg.0.Timestamp=1700000000000",
+                        "LogSearchHistory.Tab.bWFpbg.0.Regex=false",
+                        "LogSearchHistory.Tab.bWFpbg.0.CaseSensitive=false",
+                        ""),
+                StandardCharsets.ISO_8859_1);
+        Files.writeString(
+                data.resolve("NicoCacheGUI.search-history.properties"),
+                String.join("\n",
+                        "LogSearchHistory.Version=0",
+                        "LogSearchHistory.Tab.aW52YWxpZA.Count=1",
+                        "LogSearchHistory.Tab.aW52YWxpZA.0.Query=obsolete-query",
+                        "LogSearchHistory.Tab.aW52YWxpZA.0.Timestamp=1",
                         ""),
                 StandardCharsets.ISO_8859_1);
         Files.writeString(
@@ -174,6 +189,13 @@ public final class GuiEndToEndTestMain {
             assertEquals("log.debug-file",
                     GUILauncher.logWindow.debugLoggingCheckBox.getName(),
                     "debug file checkbox identity");
+            LogSearchPanel mainSearch =
+                    GUILauncher.logWindow.mainPane.searchPanel;
+            assertEquals(1, mainSearch.historyCombo.getItemCount(),
+                    "legacy search history migration count");
+            assertEquals("legacy-query",
+                    mainSearch.historyCombo.getItemAt(0).getQuery(),
+                    "legacy search history migration value");
             assertEquals("log.main.text",
                     GUILauncher.logWindow.mainPane.textArea.getName(),
                     "main text identity");
@@ -523,6 +545,8 @@ public final class GuiEndToEndTestMain {
 
     private void testPersistenceAndCleanup() throws Exception {
         Path propertyFile = sandbox.resolve("data/NicoCacheGUI.property");
+        Path historyFile = sandbox.resolve(
+                "data/NicoCacheGUI.search-history.properties");
         onEdt(() ->
                 GUILauncher.logWindow.frame.setBounds(40, 50, 700, 500));
         launcher.close();
@@ -536,17 +560,36 @@ public final class GuiEndToEndTestMain {
         assertEquals("500", saved.getProperty("LogWindowH"), "saved height");
         assertEquals(null, saved.getProperty("DebugLog"),
                 "legacy custom debug path must be removed");
-        assertEquals("1", saved.getProperty("LogSearchHistory.Version"),
-                "search history schema version");
-        boolean savedQuery = saved.stringPropertyNames().stream()
+        assertFalse(saved.stringPropertyNames().stream()
+                        .anyMatch(name ->
+                                name.startsWith("LogSearchHistory.")),
+                "GUI properties must not contain search history");
+
+        Properties history = new Properties();
+        try (InputStream input = Files.newInputStream(historyFile)) {
+            history.load(input);
+        }
+        assertEquals("1", history.getProperty("LogSearchHistory.Version"),
+                "dedicated search history schema version");
+        boolean migratedQuery = history.stringPropertyNames().stream()
                 .filter(name -> name.endsWith(".Query"))
-                .map(saved::getProperty)
+                .map(history::getProperty)
+                .anyMatch(value -> "legacy-query".equals(value));
+        boolean obsoleteQuery = history.stringPropertyNames().stream()
+                .filter(name -> name.endsWith(".Query"))
+                .map(history::getProperty)
+                .anyMatch(value -> "obsolete-query".equals(value));
+        boolean savedQuery = history.stringPropertyNames().stream()
+                .filter(name -> name.endsWith(".Query"))
+                .map(history::getProperty)
                 .anyMatch(value -> "error-\\d+".equals(value));
-        boolean savedTimestamp = saved.stringPropertyNames().stream()
+        boolean savedTimestamp = history.stringPropertyNames().stream()
                 .filter(name -> name.endsWith(".Timestamp"))
-                .map(saved::getProperty)
+                .map(history::getProperty)
                 .anyMatch(value -> value != null
                         && value.matches("\\d{10,}"));
+        assertTrue(migratedQuery, "legacy search query migration");
+        assertFalse(obsoleteQuery, "obsolete history schema recovery");
         assertTrue(savedQuery, "search query persistence");
         assertTrue(savedTimestamp, "search timestamp persistence");
         assertTrue(GUILauncher.logWindow.frame == null,

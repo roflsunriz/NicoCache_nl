@@ -168,6 +168,10 @@ final class NicoCachePaths {
         return userFile("NicoCacheGUI.property");
     }
 
+    static File logSearchHistoryFile() {
+        return userFile("NicoCacheGUI.search-history.properties");
+    }
+
     static File debugLogFile() {
         return applicationFile("debug.log");
     }

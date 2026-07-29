@@ -20,6 +20,7 @@ debug.log
 /config.properties
 proxy.pac
 NicoCacheGUI.property
+NicoCacheGUI.search-history.properties
 Uninstall.exe
 /cache/**
 /cvcache/**

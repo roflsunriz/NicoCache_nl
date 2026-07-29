@@ -6,7 +6,8 @@
 - PowerShell
 
 作業前に `git status --short --branch` を確認する。`cache/`、`certs/`、
-`data/`、ローカル `extensions/`、`NicoCacheGUI.property` はバックアップや
+`data/`、ローカル `extensions/`、`NicoCacheGUI.property`、
+`NicoCacheGUI.search-history.properties` はバックアップや
 検証対象として明示された場合を除き変更しない。
 
 ## 検証

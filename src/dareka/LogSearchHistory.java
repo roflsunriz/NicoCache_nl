@@ -1,6 +1,14 @@
 package dareka;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -8,8 +16,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
 
+import dareka.common.Logger;
+
 /**
- * タブ別のログ検索履歴をNicoCacheGUI.propertyへ保存する。
+ * タブ別のログ検索履歴を専用ファイルへ保存する。
  */
 final class LogSearchHistory {
     private static final String PREFIX = "LogSearchHistory.";
@@ -18,23 +28,41 @@ final class LogSearchHistory {
     private static final int MAXIMUM_ENTRIES = 30;
     private static final int MAXIMUM_QUERY_LENGTH = 4096;
 
-    private final NLMain.GUILauncher.ConfigGUI config;
+    private final Path historyFile;
+    private final Properties properties = new Properties();
 
     LogSearchHistory(NLMain.GUILauncher.ConfigGUI config) {
-        this.config = config;
-        ensureCurrentVersion();
+        historyFile = NicoCachePaths.logSearchHistoryFile()
+                .toPath().toAbsolutePath().normalize();
+        boolean changed = load();
+        changed |= ensureCurrentVersion();
+        Properties legacy = copyPropertiesWithPrefix(
+                config.properties, PREFIX);
+        if (!hasStoredEntries() && !legacy.isEmpty()) {
+            for (String key : legacy.stringPropertyNames()) {
+                properties.setProperty(key, legacy.getProperty(key));
+            }
+            changed = true;
+        }
+        boolean persisted = !changed || save();
+        if (persisted && !legacy.isEmpty()
+                && removePropertiesWithPrefix(
+                        config.properties, PREFIX)) {
+            config.changed = true;
+            config.save();
+        }
     }
 
-    List<Entry> load(String tabKey) {
+    synchronized List<Entry> load(String tabKey) {
         String keyPrefix = tabPrefix(tabKey);
         int count = parseBoundedCount(
-                config.getProperty(keyPrefix + "Count"));
+                properties.getProperty(keyPrefix + "Count"));
         List<Entry> entries = new ArrayList<>();
         for (int index = 0; index < count; index++) {
             String itemPrefix = keyPrefix + index + ".";
-            String query = config.getProperty(itemPrefix + "Query");
+            String query = properties.getProperty(itemPrefix + "Query");
             long timestamp = parseTimestamp(
-                    config.getProperty(itemPrefix + "Timestamp"));
+                    properties.getProperty(itemPrefix + "Timestamp"));
             if (query == null || query.isBlank()
                     || query.length() > MAXIMUM_QUERY_LENGTH
                     || timestamp < 0L) {
@@ -44,9 +72,10 @@ final class LogSearchHistory {
                     query,
                     timestamp,
                     Boolean.parseBoolean(
-                            config.getProperty(itemPrefix + "Regex")),
+                            properties.getProperty(itemPrefix + "Regex")),
                     Boolean.parseBoolean(
-                            config.getProperty(itemPrefix + "CaseSensitive"))));
+                            properties.getProperty(
+                                    itemPrefix + "CaseSensitive"))));
         }
         entries.sort(Comparator.comparingLong(Entry::getTimestamp).reversed());
         if (entries.size() > MAXIMUM_ENTRIES) {
@@ -55,7 +84,7 @@ final class LogSearchHistory {
         return entries;
     }
 
-    void record(String tabKey, String query,
+    synchronized void record(String tabKey, String query,
             boolean regularExpression, boolean caseSensitive) {
         if (query == null || query.isBlank()
                 || query.length() > MAXIMUM_QUERY_LENGTH) {
@@ -75,43 +104,129 @@ final class LogSearchHistory {
                     entries.subList(0, MAXIMUM_ENTRIES));
         }
         write(tabKey, entries);
-        config.save();
+        save();
     }
 
     private void write(String tabKey, List<Entry> entries) {
         String keyPrefix = tabPrefix(tabKey);
-        config.setProperty(keyPrefix + "Count",
+        List<String> previousKeys = new ArrayList<>();
+        for (String key : properties.stringPropertyNames()) {
+            if (key.startsWith(keyPrefix)) {
+                previousKeys.add(key);
+            }
+        }
+        for (String key : previousKeys) {
+            properties.remove(key);
+        }
+        properties.setProperty(keyPrefix + "Count",
                 Integer.toString(entries.size()));
         for (int index = 0; index < entries.size(); index++) {
             Entry entry = entries.get(index);
             String itemPrefix = keyPrefix + index + ".";
-            config.setProperty(itemPrefix + "Query", entry.getQuery());
-            config.setProperty(itemPrefix + "Timestamp",
+            properties.setProperty(itemPrefix + "Query", entry.getQuery());
+            properties.setProperty(itemPrefix + "Timestamp",
                     Long.toString(entry.getTimestamp()));
-            config.setProperty(itemPrefix + "Regex",
+            properties.setProperty(itemPrefix + "Regex",
                     Boolean.toString(entry.isRegularExpression()));
-            config.setProperty(itemPrefix + "CaseSensitive",
+            properties.setProperty(itemPrefix + "CaseSensitive",
                     Boolean.toString(entry.isCaseSensitive()));
         }
     }
 
-    private void ensureCurrentVersion() {
-        String existingVersion = config.getProperty(VERSION_KEY);
+    private boolean ensureCurrentVersion() {
+        String existingVersion = properties.getProperty(VERSION_KEY);
         if (VERSION.equals(existingVersion)) {
-            return;
+            return false;
         }
 
-        Properties properties = config.properties;
-        List<String> obsoleteKeys = new ArrayList<>();
-        for (String key : properties.stringPropertyNames()) {
-            if (key.startsWith(PREFIX)) {
-                obsoleteKeys.add(key);
+        properties.clear();
+        properties.setProperty(VERSION_KEY, VERSION);
+        return true;
+    }
+
+    private boolean hasStoredEntries() {
+        String tabPrefix = PREFIX + "Tab.";
+        return properties.stringPropertyNames().stream()
+                .anyMatch(key -> key.startsWith(tabPrefix));
+    }
+
+    private static Properties copyPropertiesWithPrefix(
+            Properties source, String prefix) {
+        Properties copied = new Properties();
+        for (String key : source.stringPropertyNames()) {
+            if (key.startsWith(prefix)) {
+                copied.setProperty(key, source.getProperty(key));
             }
         }
-        for (String key : obsoleteKeys) {
-            properties.remove(key);
+        return copied;
+    }
+
+    private static boolean removePropertiesWithPrefix(
+            Properties target, String prefix) {
+        List<String> matchedKeys = new ArrayList<>();
+        for (String key : target.stringPropertyNames()) {
+            if (key.startsWith(prefix)) {
+                matchedKeys.add(key);
+            }
         }
-        config.setProperty(VERSION_KEY, VERSION);
+        for (String key : matchedKeys) {
+            target.remove(key);
+        }
+        return !matchedKeys.isEmpty();
+    }
+
+    private boolean load() {
+        if (!Files.isRegularFile(historyFile)) {
+            return false;
+        }
+        try (InputStream input = Files.newInputStream(historyFile)) {
+            properties.load(input);
+            return false;
+        } catch (IOException | IllegalArgumentException error) {
+            Logger.error(error);
+            properties.clear();
+            return true;
+        }
+    }
+
+    private boolean save() {
+        Path parent = historyFile.getParent();
+        Path temporary = historyFile.resolveSibling(
+                historyFile.getFileName() + ".tmp");
+        try {
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            try (OutputStream output = Files.newOutputStream(
+                    temporary,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE)) {
+                properties.store(
+                        output, "NicoCache_nl Log Search History");
+            }
+            try {
+                Files.move(
+                        temporary,
+                        historyFile,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException error) {
+                Files.move(
+                        temporary,
+                        historyFile,
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
+        } catch (IOException error) {
+            try {
+                Files.deleteIfExists(temporary);
+            } catch (IOException cleanupError) {
+                error.addSuppressed(cleanupError);
+            }
+            Logger.error(error);
+            return false;
+        }
     }
 
     private static String tabPrefix(String tabKey) {
