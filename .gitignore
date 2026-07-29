@@ -48,10 +48,8 @@ Uninstall.exe
 /lib/**
 !/lib/readme.txt
 
-# User-maintained lists (keep the distributed default)
+# User-maintained lists
 /list/**
-!/list/
-!/list/NGtitle.txt
 
 # Locally served/generated files (keep the distributed defaults)
 /local/**

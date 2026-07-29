@@ -52,7 +52,6 @@ foreach ($requiredPath in @(
         (Join-Path $appDirectory 'defaults\00_NicoCache.properties'),
         (Join-Path $appDirectory 'data\cors\99_sample.conf'),
         (Join-Path $appDirectory 'data\tlsclient\cacerts2'),
-        (Join-Path $appDirectory 'list\NGtitle.txt'),
         (Join-Path $appDirectory 'local\mime.types.default'),
         (Join-Path $appDirectory 'documents\tls.md'),
         (Join-Path $internalAppDirectory 'development\build-javac.ps1'),

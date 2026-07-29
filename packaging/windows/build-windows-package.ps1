@@ -195,7 +195,6 @@ function Copy-DevelopmentPayload {
         'defaults/',
         'extensions/',
         'lib/',
-        'list/',
         'local/',
         'nlFilters/',
         'thcache/',
@@ -442,8 +441,7 @@ foreach ($relativePath in $writableDirectories) {
         -Force | Out-Null
 }
 foreach ($relativePath in @('data\readme.txt',
-        'data\cors\99_sample.conf', 'data\tlsclient\cacerts2',
-        'list\NGtitle.txt')) {
+        'data\cors\99_sample.conf', 'data\tlsclient\cacerts2')) {
     Copy-DistributionFile -RelativePath $relativePath
 }
 

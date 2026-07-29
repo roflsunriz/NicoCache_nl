@@ -118,8 +118,7 @@ final class FirstRunSetupService {
             }
             for (String relativePath : List.of(
                     "data/cors/99_sample.conf",
-                    "data/tlsclient/cacerts2",
-                    "list/NGtitle.txt")) {
+                    "data/tlsclient/cacerts2")) {
                 Path source = appDirectory.resolve(relativePath);
                 if (Files.isRegularFile(source)) {
                     copyIfMissing(
