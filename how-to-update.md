@@ -67,13 +67,14 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 
 ## GitHub Actions とリリース
 
-### v1.1.0への更新手順（2026-07-30）
+### リリース版への更新手順
 
-開発版からv1.1.0へ更新してリリースする場合は、次の順序で作業する。
+開発版からリリース版へ更新する場合は、対象の版番号とリリース日を決め、次の順序で作業する。
+以下では、版番号を`<version>`、リリース日を`<release-date>`として表記する。
 
 1. `src/dareka/Main.java` の `Main.VER_STRING` を
-   `NicoCache_nl version 2026-07-30 (v1.1.0)` に更新する。
-2. `CHANGELOG.md` の対象変更を `## [1.1.0] - 2026-07-30` の下へ整理する。
+   `NicoCache_nl version <release-date> (v<version>)` に更新する。
+2. `CHANGELOG.md` の対象変更を `## [<version>] - <release-date>` の下へ整理する。
 3. 機能テストとExtension ABI互換テストを実行する。
 
    ```powershell
@@ -89,19 +90,20 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 5. `git status --short --branch` と `git diff --check` で、生成物や無関係な
    差分がないことを確認する。テストまたはビルドが失敗した場合はタグを作成せず、
    `.test-work/` のログを確認して原因を修正する。
-6. ソース、変更履歴、テスト結果を確認したコミットを作成してから、`v1.1.0` タグを
-   作成・pushする。
+6. ソース、変更履歴、テスト結果を確認したコミットを作成してから、リリースタグを
+   作成・pushする。タグは `v<major>.<minor>.<build>` 形式にする。
 
    ```powershell
+   $ReleaseVersion = Read-Host 'リリース版（例: 1.2.3）'
    git add src/dareka/Main.java CHANGELOG.md how-to-update.md
-   git commit -m "release: v1.1.0を公開"
-   git tag v1.1.0
+   git commit -m "release: v$ReleaseVersionを公開"
+   git tag "v$ReleaseVersion"
    git push origin main
-   git push origin v1.1.0
+   git push origin "v$ReleaseVersion"
    ```
 
 7. GitHub Actionsのリリースワークフロー完了後、GitHub Releaseに
-   `NicoCache_nl-1.1.0.zip`、`NicoCache_nl-1.1.0.msi`、そのSHA-256、
+   `NicoCache_nl-<version>.zip`、`NicoCache_nl-<version>.msi`、そのSHA-256、
    および `updater/VERSION` に基づく独立アップデーターMSIが生成されていることを確認する。
 
 タグを作成した後に検証失敗や内容間違いが判明した場合は、リリースを公開せず、
