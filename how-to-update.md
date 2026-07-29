@@ -67,20 +67,46 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 
 ## GitHub Actions とリリース
 
-### v1.1.0（2026-07-30）
+### v1.1.0への更新手順（2026-07-30）
 
-今回のリリースは `v1.1.0` として公開する。本体ソースのバージョン文字列は
-`NicoCache_nl version 2026-07-30 (v1.1.0)` とする。機能テストと本体ビルドを実行し、
-生成物や無関係な差分がないことを確認してから、次のタグを作成・pushする。
+開発版からv1.1.0へ更新してリリースする場合は、次の順序で作業する。
 
-```powershell
-git tag v1.1.0
-git push origin v1.1.0
-```
+1. `src/dareka/Main.java` の `Main.VER_STRING` を
+   `NicoCache_nl version 2026-07-30 (v1.1.0)` に更新する。
+2. `CHANGELOG.md` の対象変更を `## [1.1.0] - 2026-07-30` の下へ整理する。
+3. 機能テストとExtension ABI互換テストを実行する。
 
-GitHub Actionsのリリースワークフロー完了後、GitHub Releaseに
-`NicoCache_nl-1.1.0.zip`、`NicoCache_nl-1.1.0.msi`、そのSHA-256、
-および `updater/VERSION` に基づく独立アップデーターMSIが生成されていることを確認する。
+   ```powershell
+   .\test-functional.ps1
+   ```
+
+4. 正規ビルドスクリプトで本体をビルドする。
+
+   ```powershell
+   .\build-javac.ps1
+   ```
+
+5. `git status --short --branch` と `git diff --check` で、生成物や無関係な
+   差分がないことを確認する。テストまたはビルドが失敗した場合はタグを作成せず、
+   `.test-work/` のログを確認して原因を修正する。
+6. ソース、変更履歴、テスト結果を確認したコミットを作成してから、`v1.1.0` タグを
+   作成・pushする。
+
+   ```powershell
+   git add src/dareka/Main.java CHANGELOG.md how-to-update.md
+   git commit -m "release: v1.1.0を公開"
+   git tag v1.1.0
+   git push origin main
+   git push origin v1.1.0
+   ```
+
+7. GitHub Actionsのリリースワークフロー完了後、GitHub Releaseに
+   `NicoCache_nl-1.1.0.zip`、`NicoCache_nl-1.1.0.msi`、そのSHA-256、
+   および `updater/VERSION` に基づく独立アップデーターMSIが生成されていることを確認する。
+
+タグを作成した後に検証失敗や内容間違いが判明した場合は、リリースを公開せず、
+修正コミットを作成してから新しいタグ名でやり直す。既存タグの付け替えや削除は、
+GitHub Releaseの状態を確認して管理者が明示的に判断する。
 
 `main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
 JDK 11 で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
