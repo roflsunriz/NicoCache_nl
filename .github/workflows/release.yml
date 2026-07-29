@@ -37,11 +37,11 @@ jobs:
         shell: pwsh
         run: git show -s --format="commit=%H%ncommitted=%cI%nsubject=%s" HEAD
 
-      - name: Set up JDK 11
+      - name: Set up JDK 17 for compatibility build
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
-          java-version: '11'
+          java-version: '17'
 
       - name: Validate release tag
         id: release-tag
@@ -82,7 +82,7 @@ jobs:
 
       - name: Build NicoCache_nl.jar
         shell: pwsh
-        run: .\build-javac.ps1
+        run: .\build-javac.ps1 -JavaVersion 17
 
       - name: Run functional and Extension ABI tests
         shell: pwsh

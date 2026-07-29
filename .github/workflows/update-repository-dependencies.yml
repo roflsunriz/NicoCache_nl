@@ -34,18 +34,18 @@ jobs:
             -ReportFile "$env:RUNNER_TEMP\dependency-update-report.md"
           .\packaging\windows\test-dependency-lock.ps1
 
-      - name: Set up JDK 11 for compatibility build
+      - name: Set up JDK 17 for compatibility build
         if: steps.update.outputs.updated == 'true'
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
-          java-version: '11'
+          java-version: '17'
 
       - name: Run Java build and functional tests
         if: steps.update.outputs.updated == 'true'
         shell: pwsh
         run: |
-          .\build-javac.ps1
+          .\build-javac.ps1 -JavaVersion 17
           .\test-functional.ps1
           .\test-first-run-setup.ps1
           .\packaging\windows\test-windows-setup-script.ps1
@@ -92,7 +92,7 @@ jobs:
             '- dependency-lock.psd1のURL・版・ファイル名整合性'
             '- 公式Maven Centralから取得した実体のSHA-256'
             '- POMのライセンス名と公式ライセンスURL'
-            '- Java 11コンパイルと機能テスト'
+            '- Java 17コンパイルと機能テスト'
             '- Windows AppImage・MSI生成'
             '- AppImageスモークテストとMSI構造テスト'
             ''

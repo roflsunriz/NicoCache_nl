@@ -111,7 +111,7 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 GitHub Releaseの状態を確認して管理者が明示的に判断する。
 
 `main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
-JDK 11 で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
+最小サポート版のJDK 17で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
 加えてTemurin 25でWindows、Linux、macOSのビルド、機能、TLS、
 Extension ABI、初回セットアップを検証し、WindowsインストーラーはJDK 25で生成、
 隔離起動、修復、更新、アンインストールを確認する。

@@ -24,11 +24,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up JDK 11
+      - name: Set up JDK 17 for compatibility build
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
           distribution: temurin
-          java-version: '11'
+          java-version: '17'
 
       - name: Show tool versions
         shell: pwsh
@@ -45,7 +45,7 @@ jobs:
 
       - name: Build NicoCache_nl.jar
         shell: pwsh
-        run: .\build-javac.ps1
+        run: .\build-javac.ps1 -JavaVersion 17
 
       - name: Run functional and Extension ABI tests
         shell: pwsh

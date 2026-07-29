@@ -9,6 +9,7 @@ $workflowPath = Join-Path $root '.github\workflows\release.yml'
 $lines = @(Get-Content -LiteralPath $workflowPath)
 $workflowPaths = @(
     $workflowPath
+    (Join-Path $root '.github\workflows\ci.yml')
     (Join-Path $root '.github\workflows\windows-installer.yml')
     (Join-Path $root '.github\workflows\update-repository-dependencies.yml')
 )
@@ -21,21 +22,24 @@ foreach ($path in $workflowPaths) {
 }
 
 function Get-StepBlock {
-    param([Parameter(Mandatory)][string]$Name)
+    param(
+        [Parameter(Mandatory)][string]$Name,
+        [string[]]$WorkflowLines = $lines
+    )
 
     $heading = "      - name: $Name"
-    $start = [Array]::IndexOf($lines, $heading)
+    $start = [Array]::IndexOf($WorkflowLines, $heading)
     if ($start -lt 0) {
         throw "Release workflow step is missing: $Name"
     }
-    $end = $lines.Count
-    for ($index = $start + 1; $index -lt $lines.Count; $index++) {
-        if ($lines[$index] -match '^      - name: ') {
+    $end = $WorkflowLines.Count
+    for ($index = $start + 1; $index -lt $WorkflowLines.Count; $index++) {
+        if ($WorkflowLines[$index] -match '^      - name: ') {
             $end = $index
             break
         }
     }
-    return @($lines[$start..($end - 1)])
+    return @($WorkflowLines[$start..($end - 1)])
 }
 
 function Assert-ContainsLine {
@@ -72,6 +76,36 @@ foreach ($step in @(
         'Create MSI checksum'
     )) {
     Get-StepBlock -Name $step | Out-Null
+}
+
+$compatibilityBuilds = @(
+    @{
+        Path = $workflowPath
+        BuildStep = 'Build NicoCache_nl.jar'
+        BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17'
+    }
+    @{
+        Path = Join-Path $root '.github\workflows\ci.yml'
+        BuildStep = 'Build NicoCache_nl.jar'
+        BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17'
+    }
+    @{
+        Path = Join-Path $root '.github\workflows\update-repository-dependencies.yml'
+        BuildStep = 'Run Java build and functional tests'
+        BuildLine = '.\build-javac.ps1 -JavaVersion 17'
+    }
+)
+foreach ($compatibilityBuild in $compatibilityBuilds) {
+    $compatibilityLines = @(Get-Content -LiteralPath $compatibilityBuild.Path)
+    $setup = Get-StepBlock `
+        -Name 'Set up JDK 17 for compatibility build' `
+        -WorkflowLines $compatibilityLines
+    Assert-ContainsLine $setup "java-version: '17'" 'Compatibility JDK setup'
+    $build = Get-StepBlock `
+        -Name $compatibilityBuild.BuildStep `
+        -WorkflowLines $compatibilityLines
+    Assert-ContainsLine $build $compatibilityBuild.BuildLine `
+        "Compatibility Java build in $($compatibilityBuild.Path)"
 }
 
 $buildApplication = Get-StepBlock -Name 'Build release app image and MSI'
