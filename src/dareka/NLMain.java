@@ -1,6 +1,7 @@
 package dareka;
 
 import java.awt.AWTException;
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Desktop;
@@ -25,13 +26,10 @@ import java.awt.event.MouseWheelEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.nio.file.Path;
@@ -42,10 +40,12 @@ import java.util.Properties;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
+import javax.swing.JCheckBox;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JFrame;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
+import javax.swing.JPanel;
 import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
@@ -193,6 +193,15 @@ public class NLMain {
         return debugMode;
     }
 
+    static synchronized void setDebugMode(boolean enabled) {
+        debugMode = enabled;
+        System.setProperty("dareka.debug", String.valueOf(enabled));
+        DefaultLoggerHandler.setDebug(enabled);
+        if (extLoggerHandler != null) {
+            extLoggerHandler.setFileLogging(enabled);
+        }
+    }
+
     /**
      * GUI起動しているか？
      * @return GUI起動しているならtrue
@@ -220,28 +229,65 @@ public class NLMain {
     }
 
     static class ExtLoggerHandler extends DefaultLoggerHandler {
-        static PrintWriter writer;
+        static BoundedLogFile writer;
 
         public ExtLoggerHandler() {
-            if (writer == null) reset();
+            if (writer == null
+                    && (guiLauncher == null || NLMain.isDebugMode())) {
+                reset();
+            }
         }
 
         void reset() {
-            close();
-            String logfile = System.getProperty("dareka.logfile");
-            if (logfile != null && logfile.length() > 0) {
-                try {
-                    writer = new PrintWriter(new BufferedWriter(
-                            new FileWriter(logfile)), true);
-                } catch (IOException e) {
-                    e.printStackTrace();
+            synchronized (ExtLoggerHandler.class) {
+                closeWriter();
+                String logfile = System.getProperty("dareka.logfile");
+                if (logfile != null && logfile.length() > 0) {
+                    try {
+                        writer = new BoundedLogFile(Path.of(logfile));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }
 
         void close() {
+            synchronized (ExtLoggerHandler.class) {
+                closeWriter();
+            }
+        }
+
+        void setFileLogging(boolean enabled) {
+            if (enabled) {
+                reset();
+            } else {
+                close();
+            }
+        }
+
+        private static void closeWriter() {
             if (writer != null) {
-                writer.close(); writer = null;
+                try {
+                    writer.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                writer = null;
+            }
+        }
+
+        private static void writeLine(String message) {
+            synchronized (ExtLoggerHandler.class) {
+                if (writer == null) {
+                    return;
+                }
+                try {
+                    writer.println(message);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    closeWriter();
+                }
             }
         }
 
@@ -250,7 +296,7 @@ public class NLMain {
             super.debug(message);
             if (NLMain.isDebugMode()) {
                 String debugMes = "DEBUG: " + message;
-                if (writer != null) writer.println(withTimestamp(debugMes));
+                writeLine(withTimestamp(debugMes));
                 GUILauncher.appendDebug(debugMes);
             }
         }
@@ -262,14 +308,14 @@ public class NLMain {
 
         protected void info(String message, boolean appendGUI) {
             super.info(message);
-            if (writer != null) writer.println(withTimestamp(message));
+            writeLine(withTimestamp(message));
             if (appendGUI) GUILauncher.append(message);
         }
 
         @Override
         public void warning(String message) {
             super.warning(message);
-            if (writer != null) writer.println(withTimestamp(message));
+            writeLine(withTimestamp(message));
             GUILauncher.append(message);
         }
 
@@ -414,11 +460,12 @@ public class NLMain {
         if (System.getProperty("dareka.debug") != null) { // コマンドライン優先
             debugMode = Boolean.getBoolean("dareka.debug");
         }
+        if (System.getProperty("dareka.logfile") == null) {
+            System.setProperty("dareka.logfile",
+                    NicoCachePaths.debugLogFile().getAbsolutePath());
+        }
         if (debugMode) {
             System.setProperty("dareka.debug", "true");
-            if (System.getProperty("dareka.logfile") == null) {
-                System.setProperty("dareka.logfile", config.getProperty("DebugLog"));
-            }
         }
         try {
             final boolean debugModeLocal = debugMode;
@@ -485,7 +532,7 @@ public class NLMain {
 
     void activatePrimaryTab() {
         Runnable f = () -> {
-            if (logWindow.debugPane != null) {
+            if (NLMain.isDebugMode()) {
                 getTabbedPane().setSelectedIndex(1);
                 logWindow.debugPane.setBackLog(false);
             } else {
@@ -588,7 +635,6 @@ public class NLMain {
             defaults.setProperty("LogWindowAlwaysOnTop", "true");
             defaults.setProperty("LogWindowLineWrap", "true");
             defaults.setProperty("DebugMode", "false");
-            defaults.setProperty("DebugLog", "debug.log");
             defaults.setProperty("ExitOnClose", "false");
             defaults.setProperty("FlipColor", "false");
             defaults.setProperty("FontName", Font.MONOSPACED);
@@ -605,6 +651,9 @@ public class NLMain {
             }
             if (propFile.exists()) {
                 load();
+            }
+            if (properties.remove("DebugLog") != null) {
+                changed = true;
             }
         }
 
@@ -777,6 +826,7 @@ public class NLMain {
         LinkedHashMap<String, Integer> extensionTitleOccurrences =
                 new LinkedHashMap<>();
         LogSearchHistory searchHistory = new LogSearchHistory(config);
+        JCheckBox debugLoggingCheckBox;
         LogPane mainPane, debugPane;
         String windowTitle = "NicoCache_nl";
 
@@ -787,6 +837,19 @@ public class NLMain {
                     .setAccessibleName("log.frame");
             tabbedPane.setName("log.tabs");
             tabbedPane.getAccessibleContext().setAccessibleName("log.tabs");
+            debugLoggingCheckBox = new JCheckBox(
+                    "デバッグログを debug.log に記録", debugMode);
+            debugLoggingCheckBox.setName("log.debug-file");
+            debugLoggingCheckBox.getAccessibleContext()
+                    .setAccessibleName("log.debug-file");
+            debugLoggingCheckBox.setToolTipText(
+                    "アプリケーションフォルダーの debug.log に記録します");
+            debugLoggingCheckBox.addActionListener((ActionEvent event) -> {
+                boolean enabled = debugLoggingCheckBox.isSelected();
+                config.setBoolean("DebugMode", enabled);
+                NLMain.setDebugMode(enabled);
+                setDebugModeTitle(enabled);
+            });
             mainPane = addTab("main", "通常ログ", maxLines,
                     Boolean.getBoolean("dedupeLogMessage"));
             // このタイミングではconfigが読み込まれていない可能性が高いので
@@ -798,10 +861,8 @@ public class NLMain {
                     Config.removeObserver(this);
                 }
             });
-            if (debugMode) {
-                debugPane = addTab("debug", "デバッグログ", maxLines * 10, false);
-                windowTitle += "：デバッグモード";
-            }
+            debugPane = addTab("debug", "デバッグログ", maxLines * 10, false);
+            setDebugModeTitle(debugMode);
             tabbedPane.addChangeListener((ChangeEvent e) -> {
                 LogPane pane = tabs.get(tabbedPane.getSelectedIndex());
                 if (pane != null) {
@@ -810,7 +871,10 @@ public class NLMain {
                     appendTitle(null); // Extension独自タブ
                 }
             });
-            frame.add(tabbedPane);
+            JPanel content = new JPanel(new BorderLayout());
+            content.add(debugLoggingCheckBox, BorderLayout.NORTH);
+            content.add(tabbedPane, BorderLayout.CENTER);
+            frame.add(content);
             frame.addWindowListener(new WindowAdapter() {
                 @Override
                 public void windowClosing(WindowEvent e) {
@@ -943,6 +1007,13 @@ public class NLMain {
             menuItem.getAccessibleContext().setAccessibleName(componentName);
             menuItem.addChangeListener(listener);
             popup.add(menuItem);
+        }
+
+        private void setDebugModeTitle(boolean enabled) {
+            windowTitle = enabled
+                    ? "NicoCache_nl：デバッグモード"
+                    : "NicoCache_nl";
+            appendTitle(null);
         }
 
         private static String menuComponentName(String key) {

@@ -168,6 +168,10 @@ final class NicoCachePaths {
         return userFile("NicoCacheGUI.property");
     }
 
+    static File debugLogFile() {
+        return applicationFile("debug.log");
+    }
+
     static File proxyPacFile() {
         return userFile("proxy.pac");
     }

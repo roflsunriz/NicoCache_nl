@@ -14,6 +14,7 @@ import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -28,6 +29,8 @@ import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
+
+import dareka.common.Logger;
 
 /**
  * Real Swing event-dispatch tests for the primary log GUI.
@@ -64,6 +67,9 @@ public final class GuiEndToEndTestMain {
         prepare();
         try {
             launcher = new GUILauncher();
+            NLMain.setDebugMode(Boolean.getBoolean("dareka.debug"));
+            NLMain.extLoggerHandler = new NLMain.ExtLoggerHandler();
+            Logger.setHandler(NLMain.extLoggerHandler);
             launcher.init();
             Thread.setDefaultUncaughtExceptionHandler(
                     (thread, error) -> {
@@ -71,6 +77,8 @@ public final class GuiEndToEndTestMain {
                         error.printStackTrace(System.err);
                     });
             run("GUI stable component identities", this::testComponentIdentity);
+            run("GUI debug file logging and retention",
+                    this::testDebugFileLogging);
             run("GUI geometry and responsive rendering",
                     this::testGeometryAndRendering);
             run("GUI menus, tabs, and state transitions",
@@ -82,6 +90,10 @@ public final class GuiEndToEndTestMain {
             run("GUI persistence and resource cleanup",
                     this::testPersistenceAndCleanup);
         } finally {
+            if (NLMain.extLoggerHandler != null) {
+                NLMain.extLoggerHandler.close();
+                NLMain.extLoggerHandler = null;
+            }
             if (launcher != null && GUILauncher.logWindow != null
                     && GUILauncher.logWindow.frame != null) {
                 launcher.close();
@@ -104,7 +116,7 @@ public final class GuiEndToEndTestMain {
             }
             throw new AssertionError("GUI end-to-end tests failed");
         }
-        System.out.println("GUI end-to-end tests passed: 6");
+        System.out.println("GUI end-to-end tests passed: 7");
     }
 
     private void prepare() throws IOException {
@@ -133,6 +145,7 @@ public final class GuiEndToEndTestMain {
                         "LogWindowAlwaysOnTop=false",
                         "LogWindowLineWrap=invalid",
                         "DebugMode=true",
+                        "DebugLog=legacy-custom.log",
                         "ExitOnClose=false",
                         "FlipColor=false",
                         "FontName=Monospaced",
@@ -142,6 +155,12 @@ public final class GuiEndToEndTestMain {
                         "MaxLinesHard=5",
                         ""),
                 StandardCharsets.ISO_8859_1);
+        Files.writeString(
+                application.resolve("debug.log"),
+                "PREEXISTING_OLDEST\n"
+                        + "x".repeat((int) BoundedLogFile.DEFAULT_MAX_BYTES + 4096)
+                        + "\nPREEXISTING_NEWEST\n",
+                Charset.defaultCharset());
     }
 
     private void testComponentIdentity() throws Exception {
@@ -152,6 +171,9 @@ public final class GuiEndToEndTestMain {
             assertEquals("log.tabs",
                     GUILauncher.logWindow.tabbedPane.getName(),
                     "tab identity");
+            assertEquals("log.debug-file",
+                    GUILauncher.logWindow.debugLoggingCheckBox.getName(),
+                    "debug file checkbox identity");
             assertEquals("log.main.text",
                     GUILauncher.logWindow.mainPane.textArea.getName(),
                     "main text identity");
@@ -185,6 +207,63 @@ public final class GuiEndToEndTestMain {
                         "log.hide-on-start", "log.exit-on-close");
             }
         });
+    }
+
+    private void testDebugFileLogging() throws Exception {
+        Path debugLog = sandbox.resolve("application/debug.log");
+        assertTrue(Files.isRegularFile(debugLog),
+                "debug.log must be created beside the application JAR");
+        assertTrue(Files.size(debugLog) <= BoundedLogFile.DEFAULT_MAX_BYTES,
+                "oversized debug.log must be trimmed when debug mode starts");
+        String retained = Files.readString(debugLog, Charset.defaultCharset());
+        assertFalse(retained.contains("PREEXISTING_OLDEST"),
+                "oldest debug history must be trimmed");
+        assertTrue(retained.contains("PREEXISTING_NEWEST"),
+                "newest debug history must be retained");
+
+        onEdt(() -> {
+            assertTrue(GUILauncher.logWindow.debugLoggingCheckBox.isSelected(),
+                    "DebugMode=true must select the checkbox");
+            GUILauncher.logWindow.debugLoggingCheckBox.doClick();
+        });
+        assertFalse(NLMain.isDebugMode(),
+                "clearing the checkbox must disable debug mode");
+        assertFalse(GUILauncher.config.getBoolean("DebugMode"),
+                "clearing the checkbox must update GUI properties");
+        long disabledSize = Files.size(debugLog);
+        Logger.debug("DISABLED_DEBUG_MARKER");
+        assertEquals(disabledSize, Files.size(debugLog),
+                "disabled debug logging must not append to debug.log");
+
+        onEdt(() -> GUILauncher.logWindow.debugLoggingCheckBox.doClick());
+        assertTrue(NLMain.isDebugMode(),
+                "selecting the checkbox must enable debug mode");
+        assertTrue(GUILauncher.config.getBoolean("DebugMode"),
+                "selecting the checkbox must update GUI properties");
+        Logger.debug("ENABLED_DEBUG_MARKER");
+        String enabled = Files.readString(debugLog, Charset.defaultCharset());
+        assertTrue(enabled.contains("ENABLED_DEBUG_MARKER"),
+                "enabled debug logging must append to debug.log");
+        assertFalse(enabled.contains("DISABLED_DEBUG_MARKER"),
+                "disabled debug messages must not appear after reopening");
+        assertTrue(Files.size(debugLog) <= BoundedLogFile.DEFAULT_MAX_BYTES,
+                "debug.log must remain within the 1 MiB limit");
+
+        Path rolloverLog = sandbox.resolve("application/rollover-test.log");
+        try (BoundedLogFile rollover = new BoundedLogFile(
+                rolloverLog, StandardCharsets.UTF_8, 256)) {
+            for (int index = 0; index < 40; index++) {
+                rollover.println("history-" + index + "-"
+                        + "z".repeat(24));
+            }
+            assertTrue(rollover.size() <= 256,
+                    "repeated appends must remain within the byte limit");
+            rollover.println("🙂".repeat(200));
+            assertTrue(rollover.size() <= 256,
+                    "a single oversized entry must remain within the byte limit");
+        }
+        assertTrue(Files.size(rolloverLog) <= 256,
+                "closed rollover log must remain within the byte limit");
     }
 
     private void testGeometryAndRendering() throws Exception {
@@ -455,6 +534,8 @@ public final class GuiEndToEndTestMain {
         assertEquals("50", saved.getProperty("LogWindowY"), "saved Y");
         assertEquals("700", saved.getProperty("LogWindowW"), "saved width");
         assertEquals("500", saved.getProperty("LogWindowH"), "saved height");
+        assertEquals(null, saved.getProperty("DebugLog"),
+                "legacy custom debug path must be removed");
         assertEquals("1", saved.getProperty("LogSearchHistory.Version"),
                 "search history schema version");
         boolean savedQuery = saved.stringPropertyNames().stream()
