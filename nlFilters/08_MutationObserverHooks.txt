@@ -1,0 +1,401 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 23/07/17
+
+# moHooks.addEarly(callback[, options])
+#   callback(elem)
+#     DOMに動画等アイテムの要素及び内容が追加されて完成したときに呼ばれる
+#       elem: アイテムのroot要素
+#   options.all
+#     trueの時，動画以外のアイテムも対象にする
+#
+# moHooks.addLazy(callback[, options])
+#   callback(elem, info)
+#     DOMに動画等アイテムの要素及び内容が追加されて完成した後に、
+#     動画キャッシュの情報と共に呼ばれる
+#       elem: アイテムのroot要素
+#       info: 動画キャッシュの情報(info/v2), 動画以外の時null
+#   options.all
+#     trueの時，動画以外のアイテムも対象にする
+
+#----------------------------------------------------------------------------------------
+[Script]
+Name = MutationObserverHooks (マイページ・ユーザーページ)
+URL = www\.nicovideo\.jp/(?:my|user/\d+)(?:/|\?|$)
+ContentType = text/html
+Append<
+if (!document.querySelector(".userDetail")) {
+window.NicoCache_nl.moHooks = {
+  _earlyHooks: [],
+  _lazyHooks: [],
+  addEarly: function(f, options) {
+    if (options == null) options = {};
+    this._earlyHooks.push({f: f, all: options.all});
+  },
+  addLazy: function(f, options) {
+    if (options == null) options = {};
+    this._lazyHooks.push({f: f, all: options.all});
+  },
+};
+document.addEventListener("DOMContentLoaded", function() {
+"use strict";
+
+var infoCache = {};
+const DEBUG = false;
+
+function AbstractPageProcessor() {
+  var instance = Object.create(AbstractPageProcessor.prototype);
+  instance._observers = new Set();
+  return instance;
+}
+AbstractPageProcessor.prototype = {
+  _waitMain: function(once, parent, selector, options, callback) {
+    const
+      F1 = function(mutations) {
+        var elem = selector ? parent.querySelector(selector) : parent;
+        if (elem && (!options.pred || options.pred(elem))) {
+          if (once) {
+            this._observers.delete(observer);
+            observer.disconnect();
+          }
+          callback(elem);
+        }
+      }.bind(this),
+      observer = new MutationObserver(F1);
+    this._observers.add(observer);
+    observer.observe(parent, {
+      childList: !options.attributes,
+      attributes: options.attributes,
+      subtree: options.subtree,
+    });
+    F1();
+  },
+  waitOnce: function(parent, selector, options, callback) {
+    this._waitMain(true, parent, selector, options, callback);
+  },
+  waitOnChanged: function(parent, selector, options, callback) {
+    if (options.subtree) {
+      throw "waitOnChanged with subtree option is bad idea";
+    }
+    this._waitMain(false, parent, selector, options, callback);
+  },
+
+  _invokeLazyHooks: function(item, predVideo, idResolver) {
+    if (item._moHooksLazy) return;
+    item._moHooksLazy = true;
+
+    if (predVideo(item)) {
+      const id = idResolver(item);
+      if (DEBUG) console.log("invokeLazyHooks", id);
+      if (id == null) return;
+
+      if (!this._invokeLazyHooks_queue) this._invokeLazyHooks_queue = [];
+      this._invokeLazyHooks_queue.push([id, item]);
+      if (this._invokeLazyHooks_running) return;
+      this._invokeLazyHooks_running = true;
+      setTimeout(function() {
+        this._invokeLazyHooks_running = false;
+        const myQueue = this._invokeLazyHooks_queue;
+        this._invokeLazyHooks_queue = [];
+        const invoker = function() {
+          NicoCache_nl.moHooks._lazyHooks.forEach(function(hook) {
+            setTimeout(function() {
+              for (var i in myQueue) {
+                var id = myQueue[i][0];
+                var item = myQueue[i][1];
+                hook.f(item, infoCache[id]);
+              }
+            }, 0);
+          });
+        };
+        var dup = {};
+        var ids = myQueue.map(function(x) { return x[0] })
+          .filter(function(el, i, a) { return !(el in infoCache) && !(el in dup) && (dup[el] = 1) });
+        if (ids.length > 0) {
+          NicoCache_nl.get("/cache/info/v2?" + ids.join(","), function(resp) {
+            if (resp.status != 200) return;
+            var json = JSON.parse(resp.responseText);
+            for (var id in json) { infoCache[id] = json[id] }
+            invoker();
+          });
+        } else {
+          invoker();
+        }
+      }.bind(this), 0);
+    } else {
+      NicoCache_nl.moHooks._lazyHooks.forEach(function(hook) {
+        if (hook.all) {
+          setTimeout(function() { hook.f(item, null) }, 0);
+        }
+      });
+    }
+  },
+  // itemに内容が詰められたらitemProcessorを呼び出し
+  _itemProcessor: function(item, predVideo) {
+    if (DEBUG) console.log("itemProcessor", item);
+    if (item == null) {
+      console.log("itemProcessor: item == null");
+      return;
+    }
+
+    // Early
+    if (!item._moHooksEarly) {
+      item._moHooksEarly = true;
+      var isVideo = predVideo(item);
+
+      NicoCache_nl.moHooks._earlyHooks.forEach(function(hook) {
+        setTimeout(function() {
+          if (hook.all)
+            hook.f(item);
+          else if (isVideo)
+            hook.f(item);
+        }, 0);
+      });
+    }
+
+    // Lazy
+    this.invokeLazyHooks(item);
+  },
+  // itemに内容が詰められたらitemProcessorを呼び出し
+  _itemObserver: function(item, thumbnailQuery) {
+    if (DEBUG) console.log("itemObserver", item);
+    this.waitOnce(item, thumbnailQuery, {
+      subtree: true,
+    }, function(thumbnail) {
+      this.waitOnce(thumbnail, null, {
+        attributes: true,
+        pred: function(thumbnail) { return thumbnail.style.backgroundImage },
+      }, function(thumbnail) {
+        this.itemProcessor(item);
+      }.bind(this));
+    }.bind(this));
+  },
+  // リストを監視して新しいitemについて処理を呼び出し
+  _itemsContainerObserver: function(timeline, itemQuery) {
+    if (DEBUG) console.log("itemsContainerObserver", timeline);
+    var
+      F1 = function(mutation) {
+        var items = timeline.querySelectorAll(itemQuery);
+        for (var i = 0; i < items.length; i++) {
+          if (items[i]._itemsContainerObserver_touched) continue;
+          items[i]._itemsContainerObserver_touched = true;
+          this.itemObserver(items[i]);
+        }
+      }.bind(this),
+      observer = new MutationObserver(F1);
+    this._observers.add(observer);
+    // subtree: true: 履歴ページ等で items が無名 div に包まれている場合にも対応
+    observer.observe(timeline, {childList: true, subtree: true});
+    F1();
+  },
+  // 左側の表示対象を切り替えるたびに.*Page-contentの中身が差し替わるので
+  // .*Page-contentを監視して表示内容の監視ルーチンを呼び出す
+  _pageContentObserver: function(pageContent, containerQuery, listQuery) {
+    if (DEBUG) console.log("pageContentObserver", pageContent);
+    this.waitOnChanged(pageContent, containerQuery, {}, function(container) {
+      if (DEBUG) console.log("pageContentObserver-content", container);
+      // React が非同期でリストを追加する場合を考慮し subtree: true で監視
+      // WeakSet でリスト要素の重複観察を防ぐ
+      var observedLists = new WeakSet();
+      var F = function() {
+        var itemsContainer = listQuery ? container.querySelector(listQuery) : container;
+        if (itemsContainer && !observedLists.has(itemsContainer)) {
+          observedLists.add(itemsContainer);
+          if (DEBUG) console.log("pageContentObserver-list", itemsContainer);
+          this.itemsContainerObserver(itemsContainer);
+        }
+      }.bind(this);
+      var listObs = new MutationObserver(F);
+      this._observers.add(listObs);
+      listObs.observe(container, {childList: true, subtree: true});
+      F();
+    }.bind(this));
+  },
+  // .*Page-contentが生成されるのを待つ
+  _pageObserver: function(nicorepoPage, pageContentQuery) {
+    if (DEBUG) console.log("nicorepoPageObserver", nicorepoPage);
+    this.waitOnce(nicorepoPage, pageContentQuery, {subtree: true}, function(pageContent) {
+      this.pageContentObserver(pageContent);
+    }.bind(this));
+  },
+
+  invokeLazyHooks: function(item) {
+    this._invokeLazyHooks(item, this.predVideo, function(item) {
+      var thumbnail = item.querySelector(this.thumbnailQuery);
+      if (thumbnail == null || !thumbnail.style.backgroundImage) return;
+      var m = thumbnail.style.backgroundImage.match(/https?:\/\/(?:tn.*?\/smile\?i=|.*?\/thumbnails\/\d+\/)(\d+)/);
+      if (m == null) return;
+      var id = m[1];
+      return id;
+    }.bind(this));
+  },
+  itemProcessor: function(item) {
+    this._itemProcessor(item, this.predVideo);
+  },
+  itemObserver: function(item) {
+    this._itemObserver(item, this.thumbnailQuery);
+  },
+  itemsContainerObserver: function(timeline) {
+    this._itemsContainerObserver(timeline, this.itemQuery);
+  },
+  pageContentObserver: function(pageContent) {
+    this._pageContentObserver(pageContent, this.containerQuery, this.listQuery);
+  },
+  pageObserver: function(nicorepoPage) {
+    this._pageObserver(nicorepoPage, this.pageContentQuery);
+  },
+
+  disconnect: function() {
+    // 本当はitemsContainerの切り替えごとにdisconnectするべきだけど
+    // 面倒なのでページ切り替えだけ
+    this._observers.forEach(function(observer) {
+      observer.disconnect();
+    });
+    this._observers.clear();
+  },
+};
+
+
+// タイムライン (ニコレポ・タグレポ統合: NicorepoPage/FollowPage → TimelinePage)
+function TimelinePageProcessor() {
+  var instance = Object.create(TimelinePageProcessor.prototype);
+  Object.assign(instance, AbstractPageProcessor());
+  return instance;
+}
+TimelinePageProcessor.prototype = {
+  predVideo: function(item) { return item.classList.contains("TimelineItem_video") },
+  thumbnailQuery: ".TimelineItem-contentThumbnail .Thumbnail-image",
+  pageContentQuery: ".TimelinePage-content",
+  containerQuery: ".TimelineContainer",
+  listQuery: ".Timeline",
+  itemQuery: ".TimelineItem.Timeline-item",
+};
+Object.setPrototypeOf(TimelinePageProcessor.prototype, AbstractPageProcessor.prototype);
+
+// VideoMediaを使っているページの抽象化
+function AbstractVideoMediaObjectPageProcessor() {
+  var instance = Object.create(AbstractVideoMediaObjectPageProcessor.prototype);
+  Object.assign(instance, AbstractPageProcessor());
+  return instance;
+}
+AbstractVideoMediaObjectPageProcessor.prototype = {
+  predVideo: function(item) { return item.classList.contains("NC-VideoMediaObject") },
+  thumbnailQuery: ".NC-Thumbnail-image",
+  listQuery: ".VideoMediaObjectList",
+};
+Object.setPrototypeOf(AbstractVideoMediaObjectPageProcessor.prototype, AbstractPageProcessor.prototype);
+
+// マイリスト
+function MylistPageProcessor() {
+  var instance = Object.create(MylistPageProcessor.prototype);
+  Object.assign(instance, AbstractVideoMediaObjectPageProcessor());
+  return instance;
+}
+MylistPageProcessor.prototype = {
+  pageContentQuery: ".MylistPage-content",
+  containerQuery: ".MylistContainer",
+  itemQuery: ".NC-VideoMediaObject.MylistItem",
+};
+Object.setPrototypeOf(MylistPageProcessor.prototype, AbstractVideoMediaObjectPageProcessor.prototype);
+
+// あとで見る
+function WatchLaterPageProcessor() {
+  var instance = Object.create(WatchLaterPageProcessor.prototype);
+  Object.assign(instance, AbstractVideoMediaObjectPageProcessor());
+  return instance;
+}
+WatchLaterPageProcessor.prototype = {
+  pageContentQuery: ".WatchLaterPage-content",
+  containerQuery: ".WatchLaterContainer",
+  itemQuery: ".NC-VideoMediaObject.WatchLaterListItem",
+};
+Object.setPrototypeOf(WatchLaterPageProcessor.prototype, AbstractVideoMediaObjectPageProcessor.prototype);
+
+// 履歴
+function HistoryPageProcessor() {
+  var instance = Object.create(HistoryPageProcessor.prototype);
+  Object.assign(instance, AbstractVideoMediaObjectPageProcessor());
+  return instance;
+}
+HistoryPageProcessor.prototype = {
+  pageContentQuery: ".HistoryPage-content",
+  containerQuery: ".VideoWatchHistoryContainer",
+  // listQuery は親クラスの ".VideoMediaObjectList" を継承
+  // (.InfiniteList は廃止: VideoWatchHistoryContainer-dayChunks/.VideoMediaObjectList 構造に変更)
+  itemQuery: ".NC-VideoMediaObject.VideoWatchHistoryContainer-item",
+};
+Object.setPrototypeOf(HistoryPageProcessor.prototype, AbstractVideoMediaObjectPageProcessor.prototype);
+
+// 投稿動画、シリーズ
+function VideoPageProcessor() {
+  var instance = Object.create(VideoPageProcessor.prototype);
+  Object.assign(instance, AbstractVideoMediaObjectPageProcessor());
+  return instance;
+}
+VideoPageProcessor.prototype = {
+  pageContentQuery: ".VideoPage-content",
+  // 投稿動画: .VideoContainer
+  // シリーズ: .SeriesDetailContainer
+  containerQuery: ".VideoContainer, .SeriesDetailContainer",
+  itemQuery: ".NC-VideoMediaObject",
+};
+Object.setPrototypeOf(VideoPageProcessor.prototype, AbstractVideoMediaObjectPageProcessor.prototype);
+
+const
+  // タブを切り替えるたびに.UserPage-mainの中身が差し替わるので
+  // .UserPage-mainを監視して各ページの監視ルーチンを呼び出す
+  userPageMainObserver = function(userPageMain) {
+    if (DEBUG) console.log("userPageMainObserver", userPageMain);
+    var
+      processor = null,
+      F1 = function(mutation) {
+        var page, newProcessor;
+        if (page = userPageMain.querySelector(".TimelinePage")) {
+          newProcessor = new TimelinePageProcessor();
+        } else if (page = userPageMain.querySelector(".MylistPage")) {
+          newProcessor = new MylistPageProcessor();
+        } else if (page = userPageMain.querySelector(".HistoryPage")) {
+          newProcessor = new HistoryPageProcessor();
+        } else if (page = userPageMain.querySelector(".WatchLaterPage")) {
+          newProcessor = new WatchLaterPageProcessor();
+        } else if (page = userPageMain.querySelector(".VideoPage")) {
+          newProcessor = new VideoPageProcessor();
+        }
+        if (page) {
+          if (processor) processor.disconnect();
+          processor = newProcessor;
+          processor.pageObserver(page);
+        }
+      },
+      observer = new MutationObserver(F1);
+    observer.observe(userPageMain, {childList: true});
+    F1();
+  },
+  // ページに最初からある#UserPage-appを監視して.UserPage-mainが生成されるのを待つ
+  setup = function() {
+    var
+      userPageApp = document.querySelector("#UserPage-app"),
+      F1 = function(mutation) {
+        var userPageMain = userPageApp.querySelector(".UserPage-main");
+        if (userPageMain) {
+          observer.disconnect();
+          userPageMainObserver(userPageMain);
+          return true;
+        }
+        return false;
+      },
+      observer = new MutationObserver(F1);
+    if (userPageApp == null) return;
+    if (!F1()) {
+      observer.observe(userPageApp, {childList: true, subtree: true});
+    }
+  };
+setup();
+
+if (DEBUG) {
+  NicoCache_nl.moHooks.addEarly(function(item) { console.log("Early: " + item) });
+  NicoCache_nl.moHooks.addLazy(function(item, info) { console.log("Lazy: " + item + JSON.stringify(info)) });
+}
+
+});
+}
+>

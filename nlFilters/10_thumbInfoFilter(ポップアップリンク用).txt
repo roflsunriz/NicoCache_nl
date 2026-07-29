@@ -1,0 +1,178 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 22/04/17
+
+#----------------------------------------------------------------------------------------
+# ポップアップ用スクリプト埋め込み
+[Replace]
+Name = ポップアップ用スクリプト埋め込み
+#URL = (?:www|ch|com)\.nicovideo\.jp/(?:$|category_recent.php|\?g|tag/|search/|thumb/|newarrival|recent|api/getthumbinfo/|ranking|hotlist|channel/|search_video/|watch/|video/|top/)
+FullURL = (https?)://(?!ads|.*api)[^/]+\.nicovideo\.jp/(?!api/|thumb[_/]|embed/)
+ContentType = text/html
+Match<
+(?=</head>)
+>
+Replace<
+<script type="text/javascript" src="$URL1://www.nicovideo.jp/local/overlib_mini.js"></script>
+<script type="text/javascript" src="$URL1://www.nicovideo.jp/$TS(local/popThumb.js)"></script><CRLF>
+>
+
+#----------------------------------------------------------------------------------------
+# 上から順に、
+# コミュニティ(co)をリンク、それ以外のsmid系、
+# mylist/userへのリンク、視聴履歴内動画タイトル、静画
+#
+# - 【縮退実装2024-08-08】
+# - 元URL = (?!www\.nicovideo\.jp/ranking(?:$|\?))(?:www|ext|ch|com)\.nicovideo\.jp/(?:$|category_recent\.php|\?|tag/|search/|newarrival|recent|ranking|history|hotlist|channel/|search_video/|video/|top/|video_top)
+# - 検索結果でサムネとタイトルが表示されないから対象URLから外す. 外しても検索結果でポップアップは動作した.
+# - ついでにもう存在しないURLを除外する.
+# - https://www.nicovideo.jp/video_top でポップアップが動作する動画リンクと動作しない動画リンクが混在する.
+#
+[Replace] 
+Name = ポップアップリンク置換(検索系)
+# 2026-03-10: URLから com を除去(com.nicovideo.jp 廃止), co\d+ の match/replace 行を削除.
+URL = (?!www\.nicovideo\.jp/ranking(?:$|\?))(?:www|ext|ch)\.nicovideo\.jp/(?:$|\?|newarrival|recent|hotlist|channel/)
+ContentType = text/(?:html|xml)
+Multi = TRUE
+EachLine = TRUE
+Match<
+(?<![a-z])(?:sm|nm|so|ca|ax|yo|nl|ig|na|cw|z[a-e]|om|sk|yk)\d{1,8}+(?!["\\'?.]|&quot;|low|</[vw]|[^<]*>|(?:(?!<a\s).)*</a>|[^>]*(?:</title>|class="search"|style="width:200px;"></td>|unescapeHTML|">[\r\n])|.+\}\);|.+,cc:\d+.*\}|.*'\);)
+(?:mylist|user)/\d{1,8}+(?:/\d++|)(?!["\\'?.]|&quot;|.+</(?:form|title)>|.*">[\r\n]|[^<]*>|(?:(?!<a\s).)*</a>|<\\|.+\}\);|.+,cc:\d+.*\})
+(?<![a-z])im\d{1,8}+(?!["\\'?.]|&quot;|</[vw]|[^<]*>|(?:(?!<a\s).)*</a>|[^>]*(?:</(?:a|title)>|class="search"|style="width:200px;"></td>|unescapeHTML|">[\r\n])|.+\}\);|.+,cc:\d+.*\}|.*'\);)
+>
+Replace<
+<a class="watch" target="_top" href="/watch/$0" onMouseOver="return popThumb2('$0', 0)" onMouseOut="return nd()">$0</a>
+<a class="watch" target="_top" href="/$0" onMouseOver="return popThumb2('$0', 0)" onMouseOut="return nd()">$0</a>
+<a class="watch" target="_top" href="http://seiga.nicovideo.jp/seiga/$0" onMouseOver="return popThumb2('$0', 0)" onMouseOut="return nd()">$0</a>
+>
+
+#----------------------------------------------------------------------------------------
+# APIパラメータに nlFilter を付加した時のみ有効になるフィルタ群
+
+# getthumbinfo のパラメータに ?nlFilter を付加した場合、ポップアップリンクの有無に関わらず
+# <description><tag>内の実体参照が必ず二重置換されるようになる (video.array と同じ仕様)
+[Replace]
+Name = 実体参照の仕様を video.array に合わせる(getthumbinfo)
+URL = ext\.nicovideo\.jp/api/getthumbinfo/\w{2}\d+\?nlFilter
+Multi = TRUE
+EachLine = TRUE
+Match<
+&amp;((?:amp|lt|gt);)(?![^<>]*</(?!description))
+&quot;(?![^<>]*</(?!description))
+&apos;(?![^<>]*</(?!description))
+&(?![^<>]*</(?!description|tag))
+>
+Replace<
+&$1
+"
+'
+&amp;
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = ポップアップ追加(wwwドメイン汎用)
+URL = www\.nicovideo\.jp/
+ContentType = text/(?:html|plain|xml)
+Multi = TRUE
+Match<
+(<a\s[^>]*href="\s*(?:|/|[^"]+?(?:video|live)_?id=|
+[^"]*?https?://(?:www|live|ch|com|seiga)\.nicovideo\.jp/(?:gate/)?|
+https?://rd\.nicovideo\.jp/cc/[^/]+/|/ch[^/]+/video/)
+((?:watch/|mylist/|user/|channel/|community/|seiga/)?(?:(?!nw|pk|ap|gm)\w{2}\d++|#id#|%id%))(?:|\?(?!playlist_type)[^"]++)"
+(?:(?!popThumb|title=)[^>])*(?: title="[^"]+"(?:(?!vocaloid_top)[^>])*)?)(>\s*+)
+(?!<img|<span class="time"|(?:一般|プレミアム)回線で視聴)
+>
+Replace<
+$1 onMouseOver="return popThumb2('$2', 0)" onMouseOut="return nd()"$3
+>
+
+#----------------------------------------------------------------------------------------
+# kakorokuRecorderが誤パースするのでwatch/lv〜を対象から外す
+[Replace]
+Name = ポップアップ追加(wwwドメイン以外汎用)
+URL = (?!www|ads)[^/]+\.nicovideo\.jp/(?!api/|thumb[_/]|embed/|watch/lv\d+)
+ContentType = text/html
+Multi = TRUE
+Match<
+(<a [^>]*href="\s*(?:[^"]+?(?:video|live)_?id=|
+[^"]*?https?://(?:www|live|ch|com|seiga)\.nicovideo\.jp/(?:gate/)?|
+https?://rd\.nicovideo\.jp/cc/nicotop_[^/]+/|/ch[^/]+/video/)
+((?:watch/|mylist/|user/|channel/|community/|seiga/)?(?:\w{2}\d+|#id#|%id%))(?:[\?&][^"]*)?"
+(?:(?!popThumb|timeshift_watch|title=)[^>])*(?: title="[^"]+"[^>]*)?)(>\s*)(?!<img)
+>
+Replace<
+$1 onMouseOver="return popThumb2('$2', 0)" onMouseOut="return nd()"$3
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = ポップアップ追加(静画)
+URL = seiga\.nicovideo\.jp/
+ContentType = text/html
+Multi = TRUE
+Match<
+<a [^>]*href="(?:https?://seiga\.nicovideo.jp/|/|)(?:bbs|watch|seiga)/((?:sg|im|mg)\d+)[^"]*"
+>
+Replace<
+$0 onMouseOver="return popThumb2('$1', 0)" onMouseOut="return nd()"
+>
+
+#----------------------------------------------------------------------------------------
+[Script]
+Name = ポップアップ追加(マイページ・ユーザーページ)
+URL = www\.nicovideo\.jp/(?:my|user/\d+)(?:/|\?|$)
+ContentType = text/html
+Append<
+NicoCache_nl.moHooks.addLazy(function(item) {
+  "use strict";
+  var anchors = item.querySelectorAll("a");
+  for (var i = 0; i < anchors.length; i++) {
+    var anchor = anchors[i];
+    if (!anchor.href) continue;
+    var m = anchor.href.match(new RegExp("/((?:watch/|mylist/|user/|channel/|community/|seiga/)?(?:(?!nw|pk|ap|gm)\\\\w{2}\\\\d+))"));
+    if (!m) continue;
+    var id = m[1];
+    (function(id) {
+      anchor.addEventListener("mouseover", function() { return popThumb2(id, 0) });
+      anchor.addEventListener("mouseout", function() { return nd() });
+    })(id);
+  }
+}, {all: true});
+>
+
+#----------------------------------------------------------------------------------------
+[Script]
+Name = ポップアップ追加(静画タグ)
+URL = seiga\.nicovideo\.jp/seiga/
+ContentType = text/html
+Append<
+document.addEventListener("DOMContentLoaded", function() {
+  "use strict";
+  const pattern = /((?:sg|im|mg|sm|nm|so)\d+)/g;
+  // ログイン時は .illust_tag.static (Knockout.js), 未ログイン時は .lg_box_tag
+  var tags_ul = document.querySelector(".illust_tag.static") || document.querySelector(".lg_box_tag");
+  if (!tags_ul) return;
+  var anchorSelector = tags_ul.classList.contains("illust_tag") ? "li.tag a.text" : "a.tag";
+  var processAnchors = function() {
+    var anchors = tags_ul.querySelectorAll(anchorSelector);
+    for (var i = 0; i < anchors.length; i++) {
+      var anchor = anchors[i];
+      if (anchor.querySelector("span")) continue;
+      var m = anchor.innerHTML.match(pattern);
+      if (m) {
+        anchor.innerHTML = anchor.innerHTML.replace(pattern, '<span>\$1</span>');
+        var spans = anchor.querySelectorAll("span");
+        for (var j = 0; j < spans.length; j++) {
+          var id = spans[j].innerText;
+          (function(span, id) {
+            span.addEventListener("mouseover", function() { return popThumb2(id, 0) });
+            span.addEventListener("mouseout", function() { return nd() });
+          })(spans[j], id);
+        }
+      }
+    }
+  };
+  processAnchors();
+  new MutationObserver(processAnchors).observe(tags_ul, {childList: true, subtree: true});
+});
+>

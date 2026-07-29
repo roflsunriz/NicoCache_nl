@@ -1,0 +1,106 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+
+[Script]
+Name = キャッシュアイコン追加(Nアニメ/FREE)
+URL = anime\.nicovideo\.jp/(?:free)?(?:/.*)?
+Append<
+
+(() => {
+    const watchAnchorSelector = 'a[href*="www.nicovideo.jp/watch/"]';
+    const checkedAnchors = new WeakSet();
+    const pendingAnchors = new Map();
+    let flushTimer = null;
+
+    // caches のうち、実際に完成している最良のキャッシュをアイコン種別に変換する。
+    function getCacheIconClass(info) {
+        if (!info || !Array.isArray(info.completes) || info.completes.length === 0) {
+            return null;
+        }
+
+        let best = 0;
+        Object.values(info.caches || {}).forEach(cache => {
+            if (!cache.complete) return;
+            if (cache.dmc && !cache.economy) best = Math.max(best, 4);
+            else if (!cache.dmc && !cache.economy) best = Math.max(best, 3);
+            else if (cache.dmc && cache.economy) best = Math.max(best, 2);
+            else best = Math.max(best, 1);
+        });
+
+        // 古い API 応答など caches の詳細が無い場合も、completes があれば通常アイコンを出す。
+        return [null, 'economyIconImg', 'dmcEconomyIconImg', 'cacheIconImg', 'dmcCacheIconImg'][best || 3];
+    }
+
+    async function flushPendingAnchors() {
+        flushTimer = null;
+        const batch = new Map(pendingAnchors);
+        pendingAnchors.clear();
+        if (batch.size === 0) return;
+
+        let data;
+        try {
+            const response = await fetch(`/cache/info/v2?${Array.from(batch.keys()).join(',')}`, {
+                cache: 'no-cache'
+            });
+            if (!response.ok) throw new Error(`cache info: ${response.status}`);
+            data = await response.json();
+        } catch (error) {
+            // 一時的な失敗なら次の DOM 更新時に再試行できるようにする。
+            batch.forEach(anchors => anchors.forEach(anchor => checkedAnchors.delete(anchor)));
+            console.warn('Nアニメのキャッシュ情報を取得できませんでした', error);
+            return;
+        }
+
+        batch.forEach((anchors, videoId) => {
+            const iconClass = getCacheIconClass(data[videoId]);
+            if (!iconClass) return;
+
+            anchors.forEach(anchor => {
+                if (!anchor.isConnected || anchor.querySelector('.cacheIcon')) return;
+                const img = anchor.querySelector('img[src*="/thumbnails/"]');
+                if (!img) return;
+
+                const cacheIcon = document.createElement('div');
+                cacheIcon.className = `cacheIcon ${iconClass}`;
+                img.insertAdjacentElement('afterend', cacheIcon);
+            });
+        });
+    }
+
+    function enqueueAnchor(anchor) {
+        if (checkedAnchors.has(anchor) || anchor.querySelector('.cacheIcon')) return;
+        // Vue が a と img を別々の Mutation で組み立てる場合は、img が来るまで保留する。
+        if (!anchor.querySelector('img[src*="/thumbnails/"]')) return;
+
+        const videoId = anchor.href.match(/\/watch\/(\w{2}\d+)/)?.[1];
+        if (!videoId) return;
+
+        checkedAnchors.add(anchor);
+        if (!pendingAnchors.has(videoId)) pendingAnchors.set(videoId, new Set());
+        pendingAnchors.get(videoId).add(anchor);
+
+        if (flushTimer === null) flushTimer = setTimeout(flushPendingAnchors, 0);
+    }
+
+    function scan(root) {
+        if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_NODE) return;
+        if (root.matches?.(watchAnchorSelector)) enqueueAnchor(root);
+        const parentAnchor = root.closest?.(watchAnchorSelector);
+        if (parentAnchor) enqueueAnchor(parentAnchor);
+        root.querySelectorAll(watchAnchorSelector).forEach(enqueueAnchor);
+    }
+
+    function start() {
+        // MutationObserver 登録前に存在する SSR／初期描画済みの動画も必ず処理する。
+        scan(document);
+
+        new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(scan);
+            });
+        }).observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.body) start();
+    else document.addEventListener('DOMContentLoaded', start, { once: true });
+})();
+>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja" data-fixture="search">
+<head>
+  <meta charset="utf-8">
+  <title>nlFilter Lab - 検索ページ</title>
+  <style>
+    :root { color-scheme: light; font-family: "Yu Gothic UI", sans-serif; color: #20242d; background: #f6f7f9; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { padding: 16px max(20px, calc((100% - 1100px) / 2)); background: white; border-bottom: 1px solid #dfe3e8; }
+    main { width: min(1100px, calc(100% - 28px)); margin: 24px auto; }
+    .search-box { width: min(100%, 640px); border: 2px solid #b8c1cc; border-radius: 999px; padding: 12px 18px; }
+    .results { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+    .video-card { position: relative; overflow: hidden; border: 1px solid #dfe3e8; border-radius: 10px; background: white; }
+    .video-card a { display: block; color: #242a33; text-decoration: none; }
+    .video-card img { width: 100%; aspect-ratio: 16 / 9; display: block; object-fit: cover; background: #20242d; }
+    .video-card span { display: block; padding: 12px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <header><input class="search-box" value="nlFilter" aria-label="検索キーワード"></header>
+  <main>
+    <h1>「nlFilter」の検索結果</h1>
+    <section class="results" data-lab-spa-target>
+      <article class="video-card">
+        <a data-anchor-area="main" href="/watch/sm9" class="hover:c_action primaryAzure"><img src="/thumbnails/sm9.svg" alt=""><span>動画 sm9</span></a>
+      </article>
+      <article class="video-card">
+        <a data-anchor-detail="nicoad" data-anchor-area="main" href="/watch/sm83"><img src="/thumbnails/sm83.svg" alt=""><span>ニコニ広告 sm83</span></a>
+      </article>
+      <article class="video-card">
+        <a data-anchor-area="main" href="/watch/sm2057168"><img src="/thumbnails/sm2057168.svg" alt=""><span>動画 sm2057168</span></a>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

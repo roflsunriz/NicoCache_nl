@@ -1,0 +1,91 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 21/03/20
+
+#-----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュ済動画のリンク色変更(watch)
+URL = (?:www|news)\.nicovideo\.jp/watch/
+Multi = TRUE
+idGroup = 2
+Match<
+(href="(?:|/|https?://www\.nicovideo\.jp/)watch/([a-z]{2}\d+)[^"]*"[^>]*)(>\s*)(?!<img|(?:一般|プレミアム)回線で視聴)
+>
+Replace<
+$1 style="color:#<C00000$$C08000$$008000$$808000>;"$3
+>
+
+#-----------------------------------------------------------------------------------------
+# watchページのURLをリンク化
+[Replace]
+Name = watchURLtoLink
+URL = www\.nicovideo\.jp/watch/
+Multi = TRUE
+Match<
+(?i)h?(ttps?://(?:[a-z0-9:./?!&\-~#=_%;+*'@$,]|\([a-z0-9:./?!&\-~#=_%;+*'@$,]++\))++)(?![^<>]*>|[^<>]*</(?:a|textarea|script)>)
+>
+Replace<
+<a href="h$1" target="_blank">$0</a>
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン位置(watchページ HTML5)
+URL = www\.nicovideo\.jp/watch/
+# 2026-03-10: .RouterLink 廃止 → .Pressable[data-decoration-video-id] ベースに更新
+Append<
+	.Pressable[data-decoration-video-id] .cacheIcon { position:absolute; bottom:4px; left:4px; }
+	.Pressable[data-decoration-video-id] .cacheInfo {
+		position:absolute; bottom:0px; padding:0 4px 0 4px; background-color:rgba(0,0,0,.6); color:white;
+	}
+>
+
+
+# - 2024-09-06
+# - server-responseには動画情報(apiData)が入っている.
+# - server-responseのタグは公式jsが削除してしまう.
+# - スクリプトファイル内で取得すると安定しない.
+# - 当該metaタグの直後で取得する方法で安定した.
+# - これをlocal/nllib_watch.jsが利用する. 利用後はundefined.
+[Replace]
+Name = server-response確保
+URL = www\.nicovideo\.jp/watch/
+ContentType = text/html
+Match<
+<meta name="server-response" content=".*?>
+>
+Replace<
+$0
+<script type="text/javascript"><!--
+var NicoCache_nl = window.NicoCache_nl || {};
+NicoCache_nl._metaServerResponseTag = document.querySelector('meta[name="server-response"]');
+//--></script><CRLF>
+>
+
+
+#----------------------------------------------------------------------------------------
+# - 2024-09-03: 従来は試聴可能な動画かどうかを判定するRequire項が設定されていたが廃止する.
+#   それらの判定はjavascript側で行う.
+[Replace]
+Name = javascriptライブラリ埋め込み(watchページ HTML5)
+URL = www\.nicovideo\.jp/watch/
+ContentType = text/html
+Match<
+(?=<!--nicocachenl-head-->)
+>
+Replace<
+<script type="text/javascript" src="/$TS(local/nllib_watch.js)"></script><CRLF>
+>
+
+
+#-----------------------------------------------------------------------------------------
+# watchページ 再生リスト のキャッシュアイコンの表示＆色変え＆進捗表示
+[Replace]
+Name = javascript埋め込み(watchページ HTML5)
+URL = www\.nicovideo\.jp/watch/
+ContentType = text/html
+Match<
+(?=<!--nicocachenl-head-->)
+>
+Replace<
+<script type="text/javascript" src="/$TS(local/20_watchpage.js)"></script><CRLF>
+>

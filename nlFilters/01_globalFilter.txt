@@ -1,0 +1,39 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 18/02/07
+
+# - 2024-09-06.
+# - スクリプトなどを順番に配置したい場合の基準に使うコメントタグ.
+# - スクリプトを</head>の前に配置する方法でも、nlfilterの実行順序とスクリプトの
+#   配置順序を一致させることは出来るが、サイトスクリプトよりも前に配置したい場合
+#   には使えない.
+# - そこで(?=<!--nicocachenl-head-->)に対してスクリプトを挿入することで、
+#   実行順序を配置順序にする.
+[Replace]
+Name = 順序用コメントタグ追加
+ContentType = text/html
+URL = .*
+Match<
+<head>
+>
+Replace<
+<head>
+<!--nicocachenl-head-->
+>
+
+[Replace]
+Name = グローバルオブジェクトを追加
+FullURL = (https?)://(?!ads|.*api)[^/]+\.nicovideo\.jp/(?!api/)
+ContentType = text/html
+Match<
+(?=<!--nicocachenl-head-->)
+>
+Replace<
+
+<script type="text/javascript" src="$URL1://www.nicovideo.jp/$TS(local/nllib.js)"></script>
+<script type="text/javascript"><!--
+
+NicoCache_nl.VERSION = "<nlVar:VERSION>";
+
+//--></script>
+
+>

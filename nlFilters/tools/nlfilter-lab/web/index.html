@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>nlFilter Lab</title>
+  <link rel="stylesheet" href="/lab/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">NicoCache_nl developer tool</p>
+      <h1>nlFilter Lab</h1>
+      <p>追跡中フィルターの構文と、ローカルfixtureへの疑似適用結果を確認します。</p>
+    </div>
+    <div id="summary" class="summary" aria-live="polite">読み込み中…</div>
+  </header>
+
+  <main>
+    <form id="controls" class="panel controls">
+      <div class="control-grid">
+        <label>Fixture
+          <select id="fixture" name="fixture"></select>
+        </label>
+        <label>疑似キャッシュ状態
+          <select id="cache-state" name="cacheState">
+            <option value="NONE">キャッシュなし</option>
+            <option value="NORMAL">通常</option>
+            <option value="ECONOMY">エコノミー</option>
+            <option value="DMC">DMC 通常</option>
+            <option value="DMC_ECONOMY">DMC エコノミー</option>
+          </select>
+        </label>
+        <label class="wide">仮想URL
+          <input id="virtual-url" name="url" type="url" required spellcheck="false">
+        </label>
+        <label>Content-Type
+          <input id="content-type" name="contentType" required spellcheck="false">
+        </label>
+        <label>再エンコード状態
+          <select id="reencoded" name="reencoded">
+            <option value="null">不明</option>
+            <option value="true">再エンコード済み</option>
+            <option value="false">未再エンコード</option>
+          </select>
+        </label>
+        <label>再エンコード bitrate
+          <input id="reencoded-bitrate" name="reencodedBitrate" type="number" min="0" value="0">
+        </label>
+        <label class="switch"><input id="api-failure" name="cacheApiFailure" type="checkbox" value="true"> キャッシュAPIを503にする</label>
+      </div>
+
+      <fieldset>
+        <legend>適用フィルター</legend>
+        <div class="filter-actions">
+          <button id="select-all" type="button" class="secondary">すべて選択</button>
+          <button id="select-none" type="button" class="secondary">すべて解除</button>
+        </div>
+        <div id="filter-list" class="filter-list"></div>
+      </fieldset>
+
+      <div class="actions">
+        <button id="render" type="submit">疑似適用する</button>
+        <button id="spa-add" type="button" class="secondary" disabled>SPA要素を追加</button>
+      </div>
+    </form>
+
+    <section class="workspace">
+      <article class="panel preview-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Sandbox preview</p>
+            <h2>ページ</h2>
+          </div>
+          <div id="dom-stats" class="dom-stats">未実行</div>
+        </div>
+        <iframe id="preview" title="nlFilter適用後プレビュー" sandbox="allow-scripts"></iframe>
+      </article>
+
+      <aside class="panel inspection">
+        <div class="tabs" role="tablist" aria-label="検査結果">
+          <button type="button" role="tab" aria-selected="true" data-tab="traces">適用結果</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="diagnostics">診断</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="source">HTML</button>
+          <button type="button" role="tab" aria-selected="false" data-tab="logs">Console</button>
+        </div>
+        <div id="traces" class="tab-panel"></div>
+        <div id="diagnostics" class="tab-panel" hidden></div>
+        <div id="source" class="tab-panel source-view" hidden>
+          <label>変換前<textarea id="source-before" readonly spellcheck="false"></textarea></label>
+          <label>変換後<textarea id="source-after" readonly spellcheck="false"></textarea></label>
+        </div>
+        <div id="logs" class="tab-panel" hidden></div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="/lab/app.js"></script>
+</body>
+</html>

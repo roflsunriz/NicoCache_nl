@@ -1,0 +1,20 @@
+.vscode/
+COMMON-AGENTS.md
+dmcキャッシュのアイコンと色を変えないやつ/
+evac/
+100_features.txt
+101_disable_official_function.txt
+105_premium_hide.txt
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+subagents/
+
+# Logs
+*.log

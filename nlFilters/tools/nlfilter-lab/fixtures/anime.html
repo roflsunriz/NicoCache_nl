@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ja" data-fixture="anime">
+<head>
+  <meta charset="utf-8">
+  <title>nlFilter Lab - Nアニメ FREE</title>
+  <style>
+    :root { color-scheme: light; font-family: "Yu Gothic UI", sans-serif; color: #fff; background: #111725; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: linear-gradient(145deg, #111725, #25213d); min-height: 100vh; }
+    header { padding: 26px max(20px, calc((100% - 1080px) / 2)); background: #090d15aa; }
+    header strong { color: #78efe2; }
+    main { width: min(1080px, calc(100% - 28px)); margin: 28px auto; }
+    .anime-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 20px; }
+    .video-card { position: relative; overflow: hidden; border: 1px solid #ffffff24; border-radius: 12px; background: #ffffff10; }
+    .video-card a { display: block; position: relative; color: white; text-decoration: none; }
+    .video-card img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+    .video-card span { display: block; padding: 13px; font-weight: 700; }
+    .cacheIcon { position: absolute; left: 8px; top: 8px; z-index: 2; }
+  </style>
+</head>
+<body>
+  <header><strong>Nアニメ FREE</strong> 風ローカルfixture</header>
+  <main>
+    <h1>無料配信中</h1>
+    <section class="anime-grid" data-lab-spa-target>
+      <article class="video-card"><a href="https://www.nicovideo.jp/watch/sm9"><img src="/thumbnails/sm9.svg" alt=""><span>第1話 sm9</span></a></article>
+      <article class="video-card"><a href="https://www.nicovideo.jp/watch/sm83"><img src="/thumbnails/sm83.svg" alt=""><span>第2話 sm83</span></a></article>
+      <article class="video-card"><a href="https://www.nicovideo.jp/watch/sm2057168"><img src="/thumbnails/sm2057168.svg" alt=""><span>第3話 sm2057168</span></a></article>
+    </section>
+  </main>
+</body>
+</html>

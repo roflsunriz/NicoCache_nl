@@ -1,0 +1,26 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 23/07/04
+
+[Replace]
+Name = 空き容量警告を追加
+URL = www\.nicovideo\.jp/
+ContentType = text/html
+Match<
+(?=</head>)
+>
+Replace<
+<script type="text/javascript">
+if (<freeSpace> < 3) alert("キャッシュフォルダの空き容量が3GBを下回っています！");
+</script>
+>
+
+[Replace]
+Name = キャッシュ削除ボタンを追加
+URL = www\.nicovideo\.jp/watch/
+ContentType = text/html
+Match<
+(?=<!--nicocachenl-head-->)
+>
+Replace<
+<script type="text/javascript" src="/$TS(local/05_cache_remove_button.js)"></script><CRLF>
+>

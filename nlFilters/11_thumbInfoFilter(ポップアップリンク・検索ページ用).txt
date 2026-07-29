@@ -1,0 +1,104 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 26/03/10
+
+#----------------------------------------------------------------------------------------
+# 新検索・タグページ(React SSR/SPA)向けポップアップリンク追加
+#
+# [変更履歴]
+#   2026-06-25: SPAで視聴ページへ遷移したときに残留ポップアップを自動消去
+#   2026-03-10: 新検索ページ対応
+#
+# [背景]
+#   検索ページが新バージョン(React SSR/SPA)に移行し、10_thumbInfoFilter の下記が機能しなくなった:
+#     - ポップアップ追加(wwwドメイン汎用):
+#         <a> タグに data-anchor-href 等の新属性が加わったことで HTML 置換がマッチ失敗
+#     - ポップアップ追加(検索系埋込みニコニ広告):
+#         .nicoadVideoItem / .itemTitle a / .count.ads .value a 等の旧セレクタが消滅し、
+#         moHooksAds.addEarly フックが一度も呼ばれない状態になっている
+#
+# [新ページのリンク構造]
+#   動画 (サムネ):  <a data-anchor-area="main" href="/watch/smXXX" class="hover:c_action.primaryAzure">
+#   動画 (タイトル):<a data-anchor-area="main" href="/watch/smXXX" class="... fw_bold ...">
+#   ニコニ広告:     <a data-anchor-detail="nicoad" data-anchor-area="main" href="/watch/smXXX">
+#   → 全ての動画リンクが href="/watch/(ID)" (相対 URL) を共通識別子として持つ
+#
+# [対応方針]
+#   DOMContentLoaded + MutationObserver で /watch/ リンクを検索して popThumb2 を登録。
+#   data-ncnl-pop 属性でマーク済みリンクの重複追加を防止。
+#   ページネーション・フィルタ/ソート変更によるクライアントサイド更新にも対応。
+#
+# [ロールバック]
+#   このファイルを削除すれば元の状態に戻る(10_thumbInfoFilter は変更なし)。
+
+#----------------------------------------------------------------------------------------
+[Script]
+Name = ポップアップ追加(新検索・タグページ)
+URL = www\.nicovideo\.jp/(?:search|tag)/
+ContentType = text/html
+Append<
+document.addEventListener("DOMContentLoaded", function() {
+  "use strict";
+  var hidePopup = function() {
+    if (typeof nd === "function") {
+      nd();
+    }
+  };
+  var isWatchPage = function() {
+    return /\/watch\/[a-z]{2}\d+/i.test(location.pathname);
+  };
+  var hidePopupIfWatchPage = function() {
+    if (isWatchPage()) {
+      hidePopup();
+    }
+  };
+  var setupNavigationWatcher = function() {
+    var patchHistoryMethod = function(methodName) {
+      var original = history[methodName];
+      if (typeof original !== "function" || original.__ncnlPopPatched) return;
+      var patched = function() {
+        var result = original.apply(this, arguments);
+        setTimeout(hidePopupIfWatchPage, 0);
+        return result;
+      };
+      patched.__ncnlPopPatched = true;
+      history[methodName] = patched;
+    };
+    patchHistoryMethod("pushState");
+    patchHistoryMethod("replaceState");
+    window.addEventListener("popstate", function() {
+      setTimeout(hidePopupIfWatchPage, 0);
+    });
+    document.addEventListener("click", function(event) {
+      var target = event.target && event.target.closest ? event.target.closest('a[href^="/watch/"]') : null;
+      if (target) {
+        hidePopup();
+      }
+    }, true);
+  };
+  var addPopups = function(root) {
+    var anchors = root.querySelectorAll('a[href^="/watch/"]:not([data-ncnl-pop])');
+    for (var i = 0; i < anchors.length; i++) {
+      var anchor = anchors[i];
+      var href = anchor.getAttribute("href");
+      var m = href && href.match(/^\/watch\/([a-z]{2}\d+)/);
+      if (!m) continue;
+      anchor.setAttribute("data-ncnl-pop", "");
+      var id = m[1];
+      (function(anchor, id) {
+        anchor.addEventListener("mouseover", function() { return popThumb2(id, 0); });
+        anchor.addEventListener("mouseout", function() { return nd(); });
+      })(anchor, id);
+    }
+  };
+  setupNavigationWatcher();
+  addPopups(document.body);
+  new MutationObserver(function(mutations) {
+    for (var i = 0; i < mutations.length; i++) {
+      if (mutations[i].addedNodes.length > 0) {
+        addPopups(document.body);
+        return;
+      }
+    }
+  }).observe(document.body, {childList: true, subtree: true});
+});
+>

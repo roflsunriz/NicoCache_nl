@@ -1,0 +1,330 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 22/04/17
+
+# idGroupを指定することで、キャッシュがあるときのみ置換される
+#  ID取得用に、idGroupに動画ID(sm〜)、サムネID(数字部分のみ)への参照番号を
+#  ","区切りで2つ指定する
+#  "idGroup = 1,2"とすれば、$1,$2が参照され、キャッシュがあれば置換される
+#  1つだけ指定することも可能
+#
+#  2つ指定しているのは、マイメモリやチャンネルで数字のみ10桁の動画IDの時、
+#  サムネIDから検索して表示するため
+#  リンクの色変えなどでIDが1つしかない時は、1つ指定してあればよい
+#
+# また、Replace中にセパレータとして"<$>"を入れる事で、
+# キャッシュが通常/エコノミーでReplaceのパターンを変えることが出来る
+#  "<$>"以前が通常キャッシュ用、以後がエコノミーキャッシュ用となる。
+#  改行は入れなくても良いし、EachLineで使用することも出来る
+#  "<$>"が無いときは通常/エコノミーで同じ置換が行われる
+#  Replace中の一部分だけ変えたい場合は"cache<icon$economy>.gif"と記述出来る
+#  \w+以外の文字列を記述するとセパレータとして認識しない、複数記述も不可
+#
+# dmc/エコノミーを同時に判定して切り替えたい場合は次の記法が利用できる。
+#   <非dmc通常$$非dmcエコノミー$$dmc通常$$dmcエコノミー>
+#   非dmc通常<$>非dmcエコノミー<$>dmc通常<$>dmcエコノミー
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュアイコン追加(img)
+URL = (?:www|ext|live|ch|com|uad|news|ex|dic)\.nicovideo\.jp/(?!thumb_|openlist/)
+ContentType = text/(?:html|plain|xml)
+Multi = TRUE
+idGroup = 1,2
+Match<
+href="(?:
+(?:(?:|/|[^"]*https?://www\.nicovideo\.jp/)watch/|[^"]+video_id=)(\w{2}\d+)|https?://(?:rd|ch)\.nicovideo\.jp/|/ch\d+
+)[^"]*"[^>]*>(?:(?!</a\s*>)[\s\S])*?
+<img [^>]*(?:src|title|longdesc|data-original)="[^"]+(?:(?:smile\?i=|/thumbnails/\d+/)(\d+)(?:\.\d+)?(?:\.[SML])?|video_deleted[^.]*\.jpg|del_img\.jpg)\s*"[^>]*>
+(?:(?!</a\s*>)[\s\S])*?</a\s*>(?:\s*</p\s*>)?
+>
+Replace<
+$0
+<div class="cacheIcon <cache$$economy$$dmcCache$$dmcEconomy>IconImg"></div>
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュアイコン追加(Thumbnail-image)
+URL = www\.nicovideo\.jp/
+ContentType = text/(?:html|plain|xml)
+Multi = TRUE
+idGroup = 2,3
+Match<
+(
+href="(?:
+(?:(?:|/|[^"]*https?://www\.nicovideo\.jp/)watch/|[^"]+video_id=)(\w{2}\d+)|https?://(?:rd|ch)\.nicovideo\.jp/|/ch\d+
+)[^"]*"[^>]*>(?:(?!</a\s*>)[\s\S])*?
+<div\s[^>]*class="(?:NC-)?Thumbnail-image"(?:[^>]*data-background-image="[^"]+(?:smile\?i=|/thumbnails/\d++/)(\d++)(?:\.\d++)?(?:\.[SML])?+")?+[^>]*+></div>
+)(
+(?:(?!</a\s*>)[\s\S])*?</a\s*>(?:\s*</p\s*>)?
+)
+>
+Replace<
+$1
+<div class="cacheIcon <cache$$economy$$dmcCache$$dmcEconomy>IconImg"></div>
+$4
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュ済動画のリンク色変更(検索系)
+URL = (?!www\.nicovideo\.jp/ranking(?:$|\?))(?:www|ext|ch|news)\.nicovideo\.jp/(?:$|category_recent.php$|\?|tag/|search/|thumb/|ranking|history|newarrival|random|recent|api/getthumbinfo/\w{2}\d+\?nlFilter|(?:|api/my/tlget)user/|hotlist|channel/|community/|search_video/|video/c[ho]\d+|my/top|video_top|my/history|series/)
+ContentType = text/(?:html|plain|xml)
+Multi = TRUE
+idGroup = 2
+Match<
+(href="(?:(?:|/|https?://www\.nicovideo\.jp/)watch/|[^"]+video_id=)((?:[a-z]{2})?\d++)(?:\?(?!playlist_type)[^"]++)?"(?:(?!title|playlist)[^>])*?(?: title="[^"]+"[^>]*)?)(>\s*+)(?!<img)
+>
+Replace<
+$1 style="color:#<C00000$$C08000$$008000$$808000>;"$3
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュアイコン位置(共通 CSS)
+FullURL = (https?)://(?:www|ext|live|ch|com|uad|news|ex|dic|anime)\.nicovideo\.jp/(?!thumb_|openlist/)
+ContentType = text/html
+Match<
+(?=</head>)
+>
+Replace<
+<link rel="stylesheet" type="text/css" charset="utf-8" href="$URL1://www.nicovideo.jp/$TS(local/nl_cacheIcon.css)"><CRLF>
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュ済動画のリンク色変更(ランキングTop)
+URL = www\.nicovideo\.jp/ranking(?:$|\?)
+ContentType = text/(?:html|plain|xml)
+Multi = TRUE
+idGroup = 2
+Match<
+(href="(?:(?:|/|https?://www\.nicovideo\.jp/)watch/|[^"]+video_id=)((?:[a-z]{2})?\d++)(?:\?[^"]+)?"
+[^>]*>\s*+<p class="itemTitle">\s*+<span(?:(?!title)[^>])*? title="[^"]+")
+>
+Replace<
+$1 style="color:#<C00000$$C08000$$008000$$808000>;"
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン位置(世界の新着動画)
+URL = live\.nicovideo\.jp/newworld
+Append<
+	#box_b .box_b02 { position:relative;}
+	#box_b .box_b02 .cacheIcon { position:absolute; top:calc(96px + 5px + 3px + 15px); bottom:auto;}
+	#box_b .box_b02 .cacheIcon::after { left:auto; right:8px;}
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン位置(ボカロ音楽)
+URL = ex\.nicovideo\.jp/vocaloid
+Append<
+	/* vocaloid */
+	.thumb_94 .cacheIcon
+	,.thumb_120 .cacheIcon
+	,.thumb_360 .cacheIcon { position:absolute; top:0; bottom:auto;}
+	.thumb_94 .cacheIcon::after { top:2px; bottom:auto; left:2px; width:20px; background-position-x:-58px;}
+	.thumb_120 .cacheIcon::after { top:2px; bottom:auto; left:auto; right:2px;}
+	.thumb_360 .cacheIcon::after { top:5px; bottom:auto; left:5px;}
+	/* vocaloid/new */
+	.new_list .left_box { position:relative;}
+	.new_list .cacheIcon { position:absolute;}
+	.new_list .cacheIcon::after { bottom:6px; left:6px; width:20px; background-position-x:-58px;}
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン位置(チャンネル トップ)
+URL = ch\.nicovideo\.jp/$
+Append<
+	#column_main .cacheIcon { bottom:54px;}
+	#column_main .cacheIcon::after { left:auto; right:0; width:20px; background-position-x:-58px;}
+	#popularity .cacheIcon::after { left:0; right:auto; width:59px; background-position-x:0px;}
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン位置(チャンネル/映画・ドラマ)
+URL = ch\.nicovideo\.jp/portal/movie
+Append<
+	#sec_ranking_comment .cacheIcon::after
+	,#sec_ranking_viewed .cacheIcon::after { left:auto; right:0;}
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン位置(チャンネル/社会・言論)
+URL = ch\.nicovideo\.jp/portal/media
+Append<
+	#contents_main .cacheIcon { bottom:4px;}
+	#contents_side .cacheIcon { position:absolute; bottom:2px;}
+	#contents_side .cacheIcon::after { width:20px; background-position-x:-58px;}
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン位置(チャンネル/特撮)
+URL = ch\.nicovideo\.jp/portal/tokusatsu
+Append<
+	.pager .cacheIcon { top:100px; bottom:auto;}
+	#column_main .cacheIcon { bottom:38px;}
+	#column_main .cacheIcon::after { left:auto; right:0;}
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン位置(チャンネル/上記以外)
+URL = ch\.nicovideo\.jp/portal/(?!anime|movie|media|tokusatsu)
+Append<
+	.pager { position:relative;}
+	.pager .cacheIcon { position:absolute; top:100px; bottom:auto;}
+	.pager .cacheIcon::after { left:auto; right:8px;}
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュ済動画のリンク色変更(チャンネル)
+URL = ch\.nicovideo\.jp/
+ContentType = text/(?:html|plain|xml)
+Multi = TRUE
+idGroup = 2
+Match<
+(href="https?://www\.nicovideo\.jp/watch/((?:[a-z]{2})?\d++)"(?:(?!title=)[^>])*(?: title="[^"]+"[^>]*)?)(>\s*+)(?!<img)
+>
+Replace<
+$1 style="color:#<C00000$$C08000$$008000$$808000>;"$3
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュ情報を付加(getthumbinfo)
+URL = ext\.nicovideo\.jp/api/getthumbinfo(?:\?v=|/)\w{2}\d+
+idGroup = 1
+Match<
+<video_id>([a-z]{2}\d+)</video_id>(\s*)
+>
+Replace<
+$0<cache><cache$$economy$$dmcCache$$dmcEconomy></cache>$2
+>
+
+#----------------------------------------------------------------------------------------
+[Script]
+Name = キャッシュアイコン追加&キャッシュ済動画のリンク色変更(マイページ・ユーザーページ)
+URL = www\.nicovideo\.jp/(?:my|user/\d+)(?:/|\?|$)
+ContentType = text/html
+Append<
+NicoCache_nl.moHooks.addLazy(function(item, info) {
+  "use strict";
+  var thumbQuery, titleQuery, minIcon = false;
+  if (item.classList.contains("NicorepoItem")) {
+    thumbQuery = ".NicorepoItem-contentThumbnailImage";
+    titleQuery = ".NicorepoItem-contentDetailTitle";
+    minIcon = true;
+  } else if (item.classList.contains("TagrepoItem")) {
+    thumbQuery = ".TagrepoItem-contentThumbnail";
+    titleQuery = ".TagrepoItem-contentTitle";
+  } else if (item.classList.contains("NC-VideoMediaObject")) {
+    thumbQuery = ".NC-Thumbnail-image";
+    titleQuery = ".NC-VideoMediaObject-title";
+  } else {
+    return;
+  }
+  if (info == null || info.preferred == null) return;
+  var cacheData = info.caches[info.preferred];
+
+  var cache = !cacheData.dmc ?
+    !cacheData.economy ? 'cache' : 'economy':
+    !cacheData.economy ? 'dmcCache' : 'dmcEconomy';
+  var auxClass = !cacheData.dmc ?
+    !cacheData.economy ? 'nl-cached-smile-normal' : 'nl-cached-smile-economy':
+    !cacheData.economy ? 'nl-cached-dmc-normal' : 'nl-cached-dmc-economy';
+
+  item.classList.add(auxClass);
+
+  var thumb = item.querySelector(thumbQuery);
+  var title = item.querySelector(titleQuery);
+  if (thumb != null) {
+    thumb.insertAdjacentHTML("afterEnd",
+      '<div class="cacheIcon ' + cache + (minIcon ? 'IconImgMin' : 'IconImg') + '"></div>');
+  }
+  if (title != null) {
+    title.classList.add('nl-cached-title');
+  }
+});
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン追加&キャッシュ済動画のリンク色CSS(マイページ・ユーザーページ)
+URL = www\.nicovideo\.jp/(?:my|user/\d+)(?:/|\?|$)
+ContentType = text/html
+Append<
+.nl-cached-smile-normal  a:link:not(:hover)    .nl-cached-title,
+.nl-cached-smile-normal  a.nl-cached-title:link:not(:hover)    { color: #C00000; }
+.nl-cached-smile-normal  a:visited:not(:hover) .nl-cached-title,
+.nl-cached-smile-normal  .NC-MediaObject-contents.NC-Link:visited:not(:hover) .nl-cached-title,
+.nl-cached-smile-normal  a.nl-cached-title:visited:not(:hover) { color: #C00000; }
+
+.nl-cached-smile-economy a:link:not(:hover)    .nl-cached-title,
+.nl-cached-smile-economy a.nl-cached-title:link:not(:hover)    { color: #C08000; }
+.nl-cached-smile-economy a:visited:not(:hover) .nl-cached-title,
+.nl-cached-smile-economy .NC-MediaObject-contents.NC-Link:visited:not(:hover) .nl-cached-title,
+.nl-cached-smile-economy a.nl-cached-title:visited:not(:hover) { color: #C08000; }
+
+.nl-cached-dmc-normal    a:link:not(:hover)    .nl-cached-title,
+.nl-cached-dmc-normal    a.nl-cached-title:link:not(:hover)    { color: #008000; }
+.nl-cached-dmc-normal    a:visited:not(:hover) .nl-cached-title,
+.nl-cached-dmc-normal    .NC-MediaObject-contents.NC-Link:visited:not(:hover) .nl-cached-title,
+.nl-cached-dmc-normal    a.nl-cached-title:visited:not(:hover) { color: #008000; }
+
+.nl-cached-dmc-economy   a:link:not(:hover)    .nl-cached-title,
+.nl-cached-dmc-economy   a.nl-cached-title:link:not(:hover)    { color: #808000; }
+.nl-cached-dmc-economy   a:visited:not(:hover) .nl-cached-title,
+.nl-cached-dmc-economy   .NC-MediaObject-contents.NC-Link:visited:not(:hover) .nl-cached-title,
+.nl-cached-dmc-economy   a.nl-cached-title:visited:not(:hover) { color: #808000; }
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュ済動画のリンク色変更(シリーズ)
+URL = www\.nicovideo\.jp/(?:series/)
+Multi = TRUE
+idGroup = 3
+Match<
+(class="[^"]*?NC-Link[^"]*)("[^>]*href="https://www\.nicovideo\.jp/watch/((?:[a-z]{2})?\d++)"[^>]*?>)
+>
+Replace<
+$1 <nl-cached-smile-normal$$nl-cached-smile-economy$$nl-cached-dmc-normal$$nl-cached-dmc-economy>$2
+>
+
+#----------------------------------------------------------------------------------------
+[Style]
+Name = キャッシュアイコン追加&キャッシュ済動画のリンク色CSS(シリーズ)
+URL = www\.nicovideo\.jp/(?:series)(?:/|\?|$)
+ContentType = text/html
+Append<
+.nl-cached-smile-normal.NC-MediaObject-contents.NC-Link:link:not(:hover) .NC-MediaObjectTitle,
+.nl-cached-smile-normal.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #C00000; }
+
+.nl-cached-smile-economy.NC-MediaObject-contents.NC-Link:link:not(:hover) .NC-MediaObjectTitle,
+.nl-cached-smile-economy.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #C08000; }
+
+.nl-cached-dmc-normal.NC-MediaObject-contents.NC-Link:link:not(:hover) .NC-MediaObjectTitle,
+.nl-cached-dmc-normal.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #008000; }
+
+.nl-cached-dmc-economy.NC-MediaObject-contents.NC-Link:link:not(:hover) .NC-MediaObjectTitle,
+.nl-cached-dmc-economy.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #808000; }
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = キャッシュ済動画のリンク色変更(with js,visitedあり)
+URL = (?:www|ext|live|ch|com|uad|news|ex|dic)\.nicovideo\.jp/(?!thumb_|openlist/)
+ContentType = text/html
+Match<
+(?=<!--nicocachenl-head-->)
+>
+Replace<
+<script type="text/javascript" async src="/$TS(local/15_cached_link_color.js)"></script><CRLF>
+>
