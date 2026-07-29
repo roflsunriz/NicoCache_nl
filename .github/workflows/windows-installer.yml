@@ -20,6 +20,7 @@ on:
       - 'NicoCacheGUI_native*.dll'
       - 'niconico-0.ico'
       - 'nlFilter_sys.txt'
+      - 'nlFilters/**'
       - 'proxy_sample.pac'
   pull_request:
     branches:
@@ -40,6 +41,7 @@ on:
       - 'NicoCacheGUI_native*.dll'
       - 'niconico-0.ico'
       - 'nlFilter_sys.txt'
+      - 'nlFilters/**'
       - 'proxy_sample.pac'
   workflow_dispatch:
 
@@ -71,18 +73,6 @@ jobs:
       - name: Show packaging source revision
         shell: pwsh
         run: git show -s --format="commit=%H%ncommitted=%cI%nsubject=%s" HEAD
-
-      - name: Check out nlFilters 01-20 source files
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: roflsunriz/nlFilters
-          ref: main
-          path: nlFilters
-          persist-credentials: false
-
-      - name: Show nlFilters source revision
-        shell: pwsh
-        run: git -C nlFilters show -s --format="commit=%H%ncommitted=%cI%nsubject=%s" HEAD
 
       - name: Set up JDK 25
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0

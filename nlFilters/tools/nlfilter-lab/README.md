@@ -4,12 +4,13 @@
 
 ## 構文チェック
 
-リポジトリ直下で実行します。引数を省略すると、Git が追跡している `.txt` だけを辞書順で検査します。
+NicoCache_nl リポジトリ直下で実行します。引数を省略すると、Git が追跡している
+`nlFilters/*.txt` だけを辞書順で検査します。
 
 ```powershell
-.\tools\nlfilter-lab\nlfilter-lab.ps1 check
-.\tools\nlfilter-lab\nlfilter-lab.ps1 check .\20_watchFilter.txt
-.\tools\nlfilter-lab\nlfilter-lab.ps1 check --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check .\nlFilters\20_watchFilter.txt
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check --json
 ```
 
 終了コードは、エラーなしなら `0`、構文エラーまたは本体パーサーソースとの差異があれば `1` です。警告だけでは失敗しません。`--json` はコーディングエージェントやCI向けに、診断と本体ソース互換状態を標準出力へJSONだけで返します。
@@ -17,9 +18,9 @@
 NicoCache_nl 本体の関連ソースだけを確認する場合は次を使います。
 
 ```powershell
-.\tools\nlfilter-lab\nlfilter-lab.ps1 source-check
-.\tools\nlfilter-lab\nlfilter-lab.ps1 source-check --json
-.\tools\nlfilter-lab\nlfilter-lab.ps1 compatibility --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 source-check
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 source-check --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 compatibility --json
 ```
 
 `check` はLab独自解析に加え、同じファイルを稼働中の `NicoCache_nl.jar` に含まれる実際の `EasyRewriter.parseFilterFile` でも解析し、ルール数・セクション・正規表現・置換・全オプションの内部表現を照合します。JARが利用できる環境では、本体の構文受理結果そのものをオラクルにします。
@@ -29,7 +30,7 @@ NicoCache_nl 本体の関連ソースだけを確認する場合は次を使い�
 ## ローカルテスター
 
 ```powershell
-.\tools\nlfilter-lab\nlfilter-lab.ps1 serve
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 serve
 ```
 
 表示された `http://127.0.0.1:8765/` をブラウザーで開きます。ポートを変える場合は `serve --port 9000` のように指定します。
@@ -51,7 +52,7 @@ NicoCache_nl 本体の関連ソースだけを確認する場合は次を使い�
 Chrome または Edge の headless モードでプレビューを実行し、結果をコーディングエージェントから直接読める形で保存します。
 
 ```powershell
-.\tools\nlfilter-lab\nlfilter-lab.ps1 headless `
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 headless `
   --fixture search `
   --cache-state DMC `
   --spa-add 1 `
@@ -65,7 +66,7 @@ Chrome または Edge の headless モードでプレビューを実行し、結
 ## 自動テスト
 
 ```powershell
-.\tools\nlfilter-lab\nlfilter-lab.ps1 test
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 test
 ```
 
 ## 再現範囲
@@ -100,4 +101,4 @@ Chrome または Edge の headless モードでプレビューを実行し、結
 
 最終確認では、通常どおり NicoCache_nl 経由の対象ページでも動作を確認してください。
 
-`parser-baseline.properties` は `EasyRewriter.java` と関連する Java/Nest 正規表現実装、およびJAR内の対応classのSHA-256を保持します。本体ソースは変更頻度が低くても変更され得るため、差異を検出したら先に実装内容とLabの互換性を再監査し、必要なコードとテストを直した後にだけ基準値を更新してください。ハッシュだけを合わせて警告を消してはいけません。
+`parser-baseline.properties` は `EasyRewriter.java` と関連する Java/Nest 正規表現実装、およびJAR内の対応classのSHA-256を保持します。JAR側の基準値は、リポジトリ標準の `.\build-javac.ps1 -JavaVersion 25` で作成したJARを使用します。本体ソースは変更頻度が低くても変更され得るため、差異を検出したら先に実装内容とLabの互換性を再監査し、必要なコードとテストを直した後にだけ基準値を更新してください。ハッシュだけを合わせて警告を消してはいけません。

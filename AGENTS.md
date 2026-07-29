@@ -17,13 +17,18 @@ Get-Content -Raw -LiteralPath .\COMMON-AGENTS.md
 
 NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキシー兼キャッシュサーバーである。Java の本体ソース、実行 JAR、設定例、GUI、ローカル配信用ファイル、拡張機構をこのリポジトリに含む。
 
-`nlFilters/` は別リポジトリで管理しているため、このリポジトリでは変更・コミットしない。シンボリックリンクやハードリンクも管理対象外とし、リンクの作成、置換、削除前には `LinkType` と `Target` を確認する。
+`nlFilters/` の標準フィルターと検証ツールはこのリポジトリで管理する。
+`nlFilters/AGENTS.md` の追加規律にも従う。100番台と`COMMON-AGENTS.md`は
+他リポジトリ・共通指示を参照するシンボリックリンクなので管理対象外とし、
+リンクの作成、置換、削除前には `LinkType` と `Target` を確認する。
 
 ## 主要な構成
 
 - `src/`: NicoCache_nl 本体の Java ソース。ビルド時にクラスファイルが生成されることがある。
 - `extensions/`: Java 拡張のサンプルとローカル拡張。生成された `.class` は管理しない。
 - `local/`: ブラウザーへ配信する JavaScript、CSS、画像など。NicoCache_nl 起動中は `/local/` 以下として配信される。
+- `nlFilters/`: NicoCache_nlが直接読み込む標準フィルターと、構文・互換性を確認する
+  nlFilter Lab。外部管理リンクとローカル生成領域は追跡しない。
 - `defaults/`: 本体が参照する既定設定群。
 - `README.md`, `CHANGELOG.md`, `documents/`, `how-to-update.md`: 利用方法と変更履歴。旧版資料は `documents/archive/` に保存する。
 - `cache/`, `cvcache/`, `thcache/`: 動画、変換済み動画、サムネイルのキャッシュ。生成物なので管理しない。

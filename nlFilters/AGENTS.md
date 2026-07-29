@@ -3,9 +3,11 @@
 共通ルールは `COMMON-AGENTS.md` を必ず確認し、上位方針として扱う。
 このファイルでは、`C:\NicoCache_nl\nlFilters` で管理する nlFilter 固有の補足だけを記載する。
 
-## このリポジトリの役割
+## このディレクトリの役割
 
-- NicoCache_nl が実際に読み込む `nlFilters` ディレクトリそのものを Git 管理している。ここで追跡中の `.txt` を変更すると、作業用コピーではなく稼働環境のフィルターが変わる。
+- NicoCache_nl本体リポジトリが、実際に読み込む`nlFilters`ディレクトリを
+  直接Git管理している。独立した`.git`は置かない。ここで追跡中の`.txt`を
+  変更すると、作業用コピーではなく稼働環境のフィルターが変わる。
 - nlFilter は、対象 URL と Content-Type に応じてレスポンス本文、HTML、JavaScript、CSS、リクエストヘッダーを変更する NicoCache_nl 専用 DSL である。
 - 現在 Git 管理している主なフィルターは次のとおり。
   - `01_globalFilter.txt`: 共通の head 挿入位置と `NicoCache_nl` グローバルを用意する。
@@ -20,20 +22,21 @@
 
 ## 作業前に確認するもの
 
-- 最初にこのリポジトリ直下で `git status --short --branch` を実行し、ユーザーの未コミット変更を把握する。
+- 最初に`C:\NicoCache_nl`で`git status --short --branch`を実行し、
+  本体を含むユーザーの未コミット変更を把握する。
 - 対象ファイル内の説明、変更履歴、依存するフィルターを先に読む。名前が近い `10` と `11`、`15` と `15_02` は役割を分担しているため、片方だけを見て重複実装しない。
-- 公式同梱フィルターの背景と運用は `C:\NicoCache_nl\documents\Readme_nl+mod.txt`、現在の実装は `C:\NicoCache_nl\src\dareka\processor\impl\EasyRewriter.java` を参照する。本体ソースはこのリポジトリの変更対象ではない。
+- 公式同梱フィルターの背景と運用は `C:\NicoCache_nl\documents\Readme_nl+mod.txt`、現在の実装は `C:\NicoCache_nl\src\dareka\processor\impl\EasyRewriter.java` を参照する。本体ソースも同じリポジトリにあるが、必要性を確認せずフィルター変更へ混在させない。
 - JavaScript や CSS が参照する `/local/*` の実体、`window.NicoCache_nl`、`/cache/*` API を変更・利用するときは、`C:\NicoCache_nl\local`、本体実装、呼び出し元を検索して契約を確認する。
-- 追跡中の nlFilter を編集する前に `.\tools\nlfilter-lab\nlfilter-lab.ps1 source-check` と `.\tools\nlfilter-lab\nlfilter-lab.ps1 check` を実行し、本体パーサーソースとの基準一致と既存構文の正常性を確認する。
+- 追跡中の nlFilter を編集する前に `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 source-check` と `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check` を本体リポジトリ直下から実行し、本体パーサーソースとの基準一致と既存構文の正常性を確認する。
 
 ## nlFilter Lab の使用
 
-- 追跡中の `.txt` を変更した作業では、最低限 `.\tools\nlfilter-lab\nlfilter-lab.ps1 check <対象ファイル>` と `.\tools\nlfilter-lab\nlfilter-lab.ps1 test` を実行する。コーディングエージェントから結果を扱う場合は `check --json` を使ってよい。
-- HTML、JavaScript、CSS、SPA挙動へ影響する変更では `.\tools\nlfilter-lab\nlfilter-lab.ps1 headless` を使う。対象に応じて `watch`、`search`、`anime` のfixture、5種類のキャッシュ状態、`--spa-add` を選び、`result.json`、`final.html`、`console.json`、`screenshot.png` を確認する。生成物は `.cache/nlfilter-lab/` 配下に置き、Gitへ追加しない。
-- 対話的な調査が必要なら `.\tools\nlfilter-lab\nlfilter-lab.ps1 serve` を使う。Labは疑似実装なので、最終的な実環境確認が必要な変更では NicoCache_nl 経由の検証も省略しない。
+- 追跡中の `.txt` を変更した作業では、最低限 `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check <対象ファイル>` と `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 test` を実行する。コーディングエージェントから結果を扱う場合は `check --json` を使ってよい。
+- HTML、JavaScript、CSS、SPA挙動へ影響する変更では `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 headless` を使う。対象に応じて `watch`、`search`、`anime` のfixture、5種類のキャッシュ状態、`--spa-add` を選び、`result.json`、`final.html`、`console.json`、`screenshot.png` を確認する。生成物は `nlFilters/.cache/nlfilter-lab/` 配下に置き、Gitへ追加しない。
+- 対話的な調査が必要なら `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 serve` を使う。Labは疑似実装なので、最終的な実環境確認が必要な変更では NicoCache_nl 経由の検証も省略しない。
 - NicoCache_nl の nlFilter パーサーは滅多に変わらないが、変更される可能性はある。`source-check` または `check` がソース差異を報告した場合や、新しい構文・マクロを扱う場合は、`C:\NicoCache_nl\src\dareka\processor\impl\EasyRewriter.java`、`C:\NicoCache_nl\src\dareka\common\regex\JavaPattern.java`、`JavaMatcher.java`、`NestPattern.java`、`NestMatcher.java` を確認し、必要に応じて構文チェッカー、ローカルテスター、互換テストを修正する。
-- `tools\nlfilter-lab\parser-baseline.properties` のハッシュだけを更新して差異を解消してはいけない。本体の変更内容を監査し、Lab側の修正とテストが完了した後に基準値を更新する。
-- Lab自体または本体パーサーとの互換処理を変更した場合は `.\tools\nlfilter-lab\nlfilter-lab.ps1 compatibility --json` も実行し、`source.status` と `productionOracle.status` がともに `matched` であること、残る差が `externalBoundaries` に限定されることを確認する。
+- `nlFilters\tools\nlfilter-lab\parser-baseline.properties` のハッシュだけを更新して差異を解消してはいけない。本体の変更内容を監査し、Lab側の修正とテストが完了した後に基準値を更新する。
+- Lab自体または本体パーサーとの互換処理を変更した場合は `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 compatibility --json` も実行し、`source.status` と `productionOracle.status` がともに `matched` であること、残る差が `externalBoundaries` に限定されることを確認する。
 
 ## 詳細リファレンス
 
@@ -48,7 +51,7 @@
 
 - 変更前に `git ls-files` で Git 管理対象か確認する。現在の `100_features.txt`、`101_disable_official_function.txt`、`105_premium_hide.txt` は `.gitignore` 対象であり、`C:\filter-matome\nlFilters` を参照するシンボリックリンクである。
 - リンクは見かけ上このディレクトリにあっても、編集は参照先を直接変更する。`100` 番台を依頼された場合は `Get-Item -Force <path> | Format-List FullName,LinkType,Target` で毎回リンク先を確認し、`C:\filter-matome` 側の `AGENTS.md` と `nlFilters\nlFilters_編集ガイド.md` に従う。
-- リンクを通常ファイルへ置換したり、参照先の内容をこのリポジトリへコピーしたりしない。作成、削除、張り替えが必要なら、ユーザーの依頼範囲と参照先を確認してから行う。
+- リンクを通常ファイルへ置換したり、参照先の内容をNicoCache_nlリポジトリへコピーしたりしない。作成、削除、張り替えが必要なら、ユーザーの依頼範囲と参照先を確認してから行う。
 - `01`、`05`、`10`、`15`、`20` には NicoCache_nl の標準フィルターを基にしたものが含まれる。上流版との差分を意図せず消さない。大きな独自機能を加える場合は、既存ファイルへ詰め込む前に、適用順が分かる別番号ファイルに分離できるか検討する。
 
 ## 読み込み順とファイル名
@@ -107,8 +110,8 @@
 - 依頼された不具合に対して、まず対象 URL、期待する変換、実際のレスポンスまたは DOM、既存フィルターがマッチしない理由を特定する。
 - 既存機能の修正は、可能な限り対象セクションだけを小さく変更する。古いページ向け処理を、現行ページで再現できないという理由だけで削除しない。
 - サイト仕様変更への対応では、確認日、旧構造、新構造、対応方針を対象ファイルのコメントへ簡潔に残す。長い調査ログやエージェント向け検証手順はソースへ埋め込まない。
-- このリポジトリには依存管理、ビルド、テストランナーがない。小規模なフィルター変更のたびに形式だけの `package.json`、README、`how-to-update.md`、`CHANGELOG.md` を新設しない。重要な利用者影響は対象ファイルの変更履歴コメントと日本語 Conventional Commit に残し、独立文書が必要な規模になった時点でユーザーと配置を決める。
-- `C:\NicoCache_nl\src`、`config.properties`、`local`、`nlFilter_sys.txt` は別の管理境界である。フィルター修正のついでに変更しない。本体変更が必要だと判明した場合は、根拠と変更候補を報告して範囲を確認する。
+- nlFilter自体には外部依存やビルド工程を追加しない。小規模なフィルター変更のたびに形式だけの `package.json` や独立文書を新設せず、利用者影響は本体ルートの`CHANGELOG.md`、対象ファイルの変更履歴コメント、日本語Conventional Commitへ記録する。
+- `C:\NicoCache_nl\src`、`config.properties`、`local`、`nlFilter_sys.txt` も同じGit管理下だが責務は異なる。フィルター修正のついでに変更せず、本体変更が必要なら根拠と検証範囲を明確にして別コミットにする。
 
 ## 検証
 
@@ -129,7 +132,7 @@
 ## NicoCache_nl の起動・終了が必要な場合
 
 - フィルターの通常再読込で足りないことを確認してから再起動する。
-- 終了前に `& "C:\filter-matome\stop-nicocache.ps1" -ListOnly` で対象PIDと `NicoCache_nl.jar` の指紋を確認する。Javaプロセスを名前だけで一括終了しない。
-- 通常終了は `C:\filter-matome\stop-nicocache.ps1`、起動は存在確認後に `C:\NicoCache_nl\RunNicoCache.ps1` または `C:\NicoCache_nl\NicoCache_nl Starter.bat` を使う。
+- 終了前に `C:\NicoCache_nl\stop-nicocache.ps1 -ListOnly` で対象PIDと `NicoCache_nl.jar` の指紋を確認する。Javaプロセスを名前だけで一括終了しない。
+- 通常終了は `C:\NicoCache_nl\stop-nicocache.ps1`、起動は存在確認後に `C:\NicoCache_nl\RunNicoCache.ps1` を使う。
 - 強制終了はユーザーが現在の依頼で明示的に許可した場合だけ行う。終了確認が取れない状態で新しいプロセスを重ねて起動しない。
 - 起動後は新しいPID、フィルター読込ログ、対象ページでの動作まで確認し、起動コマンドが成功しただけで完了としない。

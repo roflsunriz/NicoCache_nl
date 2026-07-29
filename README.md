@@ -20,6 +20,9 @@ main、debug、Extensionの各ログタブには独立した検索欄があり�
 
 ビルド、機能テスト、Windows パッケージの検証は[更新・検証手順](how-to-update.md) にまとめています。
 
+標準nlFilterと検証用nlFilter Labは`nlFilters/`で本体と同じGit履歴に管理しています。
+フィルター変更時は[nlFilters固有の更新手順](nlFilters/how-to-update.md)も確認してください。
+
 Windows インストーラーの詳細は [Windows パッケージの説明](packaging/windows/README.md)、
 
 テストの範囲は[テスト概要](tests/README.md) を参照してください。

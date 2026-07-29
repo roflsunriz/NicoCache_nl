@@ -50,15 +50,6 @@ jobs:
           .\test-first-run-setup.ps1
           .\packaging\windows\test-windows-setup-script.ps1
 
-      - name: Check out nlFilters packaging sources
-        if: steps.update.outputs.updated == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: roflsunriz/nlFilters
-          ref: main
-          path: nlFilters
-          persist-credentials: false
-
       - name: Set up JDK 25 for jpackage
         if: steps.update.outputs.updated == 'true'
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0

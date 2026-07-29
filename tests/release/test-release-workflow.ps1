@@ -7,6 +7,18 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $workflowPath = Join-Path $root '.github\workflows\release.yml'
 $lines = @(Get-Content -LiteralPath $workflowPath)
+$workflowPaths = @(
+    $workflowPath
+    (Join-Path $root '.github\workflows\windows-installer.yml')
+    (Join-Path $root '.github\workflows\update-repository-dependencies.yml')
+)
+
+foreach ($path in $workflowPaths) {
+    $content = Get-Content -Raw -LiteralPath $path
+    if ($content -match 'repository:\s*roflsunriz/nlFilters') {
+        throw "統合済みnlFiltersの外部checkoutが残っています: $path"
+    }
+}
 
 function Get-StepBlock {
     param([Parameter(Mandatory)][string]$Name)
@@ -61,6 +73,19 @@ foreach ($step in @(
         'Create MSI checksum'
     )) {
     Get-StepBlock -Name $step | Out-Null
+}
+
+$buildApplication = Get-StepBlock -Name 'Build release app image and MSI'
+Assert-ContainsLine $buildApplication '-NlFiltersSource .\nlFilters `' `
+    'Bundled nlFilters source'
+
+$installerWorkflow = Get-Content -Raw -LiteralPath (
+    Join-Path $root '.github\workflows\windows-installer.yml'
+)
+if (($installerWorkflow.Split(
+        [string[]]@("      - 'nlFilters/**'"),
+        [System.StringSplitOptions]::None).Count - 1) -ne 2) {
+    throw 'Windows Installer workflow must run for push and PR nlFilters changes'
 }
 
 $validateUpdaterVersion = Get-StepBlock -Name 'Validate standalone updater version'

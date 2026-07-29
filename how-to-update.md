@@ -90,7 +90,7 @@ majorとminorは0〜255、buildは0〜65535にする。本体とアップデー�
 
 テストに合格すると、GitHub Release に `.gitignore` で除外されていないファイルを
 まとめた `NicoCache_nl-<タグ名>.zip` が添付される。例外指定で残る配布ファイルと、
-別リポジトリの `nlFilters` にある `01`〜`20` 番台の `.txt` も含まれるが、
+同じタグの `nlFilters` にある `01`〜`20` 番台の `.txt` も含まれるが、
 シンボリックリンクは含まれない。ビルドした `NicoCache_nl.jar` と
 `NicoCache_nl.jar.sha256`、タグのソースからJDK 25で生成・検証した
 `NicoCache_nl-<版番号>.msi` とそのSHA-256も個別アセットとして添付される。

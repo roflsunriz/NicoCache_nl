@@ -69,9 +69,12 @@ Uninstall.exe
 !/local/popThumb.js
 !/local/url_injection_sys.js
 
-# Managed by separate repositories or linked from outside this repository.
+# Files linked from outside this repository.
 # Git cannot ignore by link type, so every known link path is listed here.
-/nlFilters/
+/nlFilters/100_features.txt
+/nlFilters/101_disable_official_function.txt
+/nlFilters/105_premium_hide.txt
+/nlFilters/COMMON-AGENTS.md
 /scripts
 /nico-cache-gui-launcher.bat
 /nico-cache-nl-starter.bat

@@ -43,18 +43,6 @@ jobs:
           distribution: temurin
           java-version: '11'
 
-      - name: Check out nlFilters 01-20 source files
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: roflsunriz/nlFilters
-          ref: main
-          path: nlFilters
-          persist-credentials: false
-
-      - name: Show nlFilters source revision
-        shell: pwsh
-        run: git -C nlFilters show -s --format="commit=%H%ncommitted=%cI%nsubject=%s" HEAD
-
       - name: Validate release tag
         id: release-tag
         shell: pwsh
