@@ -114,9 +114,15 @@ public final class GuiEndToEndTestMain {
         Files.createDirectories(data);
         Files.createDirectories(preview);
         System.setProperty("nicocache.applicationRoot", application.toString());
-        System.setProperty("nicocache.dataRoot", data.toString());
+        System.setProperty("nicocache.userDataRoot", data.toString());
         System.setProperty("dareka.debug", "true");
         System.setProperty("shutdownTimeout", "1000");
+        Files.writeString(
+                application.resolve("config.properties"),
+                "userDataRoot="
+                        + data.toString().replace("\\", "\\\\")
+                        + System.lineSeparator(),
+                StandardCharsets.ISO_8859_1);
 
         Files.writeString(data.resolve("NicoCacheGUI.property"),
                 String.join("\n",

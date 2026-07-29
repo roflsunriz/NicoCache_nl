@@ -8,6 +8,7 @@ import java.util.Map;
 final class LaunchOptions {
     private static final String USAGE =
             "Usage: NicoCache_nl.exe --setup --headless "
+            + "--user-data-root=<absolute-path> "
             + "--https=<true|false> "
             + "--trust-certificate=<true|false> "
             + "--proxy=<true|false> "
@@ -33,6 +34,7 @@ final class LaunchOptions {
         boolean setup = false;
         List<String> forwarded = new ArrayList<>();
         Map<String, Boolean> values = new HashMap<>();
+        String userDataRoot = null;
 
         for (String arg : args) {
             if ("--headless".equals(arg)) {
@@ -54,13 +56,24 @@ final class LaunchOptions {
                     return error(headless, setup,
                             "オプションが重複しています: --" + name);
                 }
+            } else if (arg.startsWith("--user-data-root=")) {
+                if (userDataRoot != null) {
+                    return error(headless, setup,
+                            "オプションが重複しています: --user-data-root");
+                }
+                userDataRoot = arg.substring(
+                        "--user-data-root=".length());
+                if (userDataRoot.isBlank()) {
+                    return error(headless, setup,
+                            "--user-data-root は空にできません");
+                }
             } else {
                 forwarded.add(arg);
             }
         }
 
         if (!setup) {
-            if (!values.isEmpty()) {
+            if (!values.isEmpty() || userDataRoot != null) {
                 return error(headless, false,
                         "初回セットアップの選択には --setup が必要です");
             }
@@ -79,6 +92,21 @@ final class LaunchOptions {
         if (!forwarded.isEmpty()) {
             return error(true, true,
                     "不明なセットアップオプションです: " + forwarded.get(0));
+        }
+        if (userDataRoot == null) {
+            return error(true, true,
+                    "必須オプションがありません: --user-data-root");
+        }
+        java.nio.file.Path dataRoot;
+        try {
+            dataRoot = java.nio.file.Path.of(userDataRoot);
+        } catch (java.nio.file.InvalidPathException error) {
+            return error(true, true,
+                    "--user-data-root のパスが不正です");
+        }
+        if (!dataRoot.isAbsolute()) {
+            return error(true, true,
+                    "--user-data-root には絶対パスを指定してください");
         }
         for (String required : new String[] {
                 "https", "trust-certificate", "proxy", "autostart" }) {
@@ -100,6 +128,7 @@ final class LaunchOptions {
                     "--proxy=true には --https=true が必要です");
         }
         SetupOptions options = new SetupOptions(
+                dataRoot,
                 https,
                 trustCertificate,
                 proxy,

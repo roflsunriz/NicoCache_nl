@@ -8,6 +8,8 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Window;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -17,10 +19,12 @@ import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JDialog;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.WindowConstants;
@@ -31,7 +35,8 @@ final class FirstRunWizard {
     private FirstRunWizard() {
     }
 
-    static boolean showAndApply(FirstRunSetupService service, Locale locale) {
+    static boolean showAndApply(
+            Path appDirectory, Path defaultDataDirectory, Locale locale) {
         AtomicBoolean completed = new AtomicBoolean(false);
         Runnable show = () -> {
             SetupMessages messages = new SetupMessages(locale);
@@ -44,6 +49,7 @@ final class FirstRunWizard {
             FirstRunWizardPanel panel = new FirstRunWizardPanel(
                     messages,
                     locale,
+                    defaultDataDirectory,
                     new FirstRunWizardPanel.Listener() {
                         @Override
                         public void apply(SetupOptions options) {
@@ -53,7 +59,10 @@ final class FirstRunWizard {
                             new SwingWorker<Void, Void>() {
                                 @Override
                                 protected Void doInBackground() throws Exception {
-                                    service.apply(options);
+                                    FirstRunSetupService.production(
+                                            appDirectory,
+                                            options.getUserDataRoot())
+                                            .apply(options);
                                     return null;
                                 }
 
@@ -126,6 +135,9 @@ final class FirstRunWizard {
     private final JButton cancelButton;
     private final JButton applyButton;
     private final JButton finishButton;
+    private final JButton browseButton;
+    private final JTextField dataRootField;
+    private final JLabel dataRootError;
     private final JCheckBox httpsCheckBox;
     private final JCheckBox proxyCheckBox;
     private final JCheckBox autoStartCheckBox;
@@ -137,6 +149,7 @@ final class FirstRunWizard {
     private int step;
 
     FirstRunWizardPanel(SetupMessages messages, Locale locale,
+            Path defaultDataDirectory,
             Listener listener) {
         super(new BorderLayout(16, 16));
         setName("setup.root");
@@ -153,6 +166,18 @@ final class FirstRunWizard {
         heading.add(title, BorderLayout.NORTH);
         heading.add(stepLabel, BorderLayout.SOUTH);
         add(heading, BorderLayout.NORTH);
+
+        dataRootField = new JTextField(
+                defaultDataDirectory.toAbsolutePath().normalize().toString());
+        dataRootField.setName("setup.dataRoot");
+        dataRootField.getAccessibleContext().setAccessibleName(
+                "setup.dataRoot");
+        browseButton = button(
+                "setup.dataRoot.browse",
+                messages.text("button.browse"));
+        browseButton.addActionListener(event -> chooseDataRoot());
+        dataRootError = new JLabel(" ");
+        dataRootError.setName("setup.dataRoot.error");
 
         httpsCheckBox = checkBox(
                 "setup.https",
@@ -192,9 +217,10 @@ final class FirstRunWizard {
         resultSummary.setFont(resultSummary.getFont().deriveFont(15.0f));
 
         cardPanel.add(welcomePanel(), "0");
-        cardPanel.add(optionsPanel(), "1");
-        cardPanel.add(summaryPanel(), "2");
-        cardPanel.add(resultPanel(), "3");
+        cardPanel.add(dataRootPanel(), "1");
+        cardPanel.add(optionsPanel(), "2");
+        cardPanel.add(summaryPanel(), "3");
+        cardPanel.add(resultPanel(), "4");
         add(cardPanel, BorderLayout.CENTER);
 
         backButton = button("setup.back", messages.text("button.back"));
@@ -203,7 +229,7 @@ final class FirstRunWizard {
         applyButton = button("setup.apply", messages.text("button.apply"));
         finishButton = button("setup.finish", messages.text("button.finish"));
         backButton.addActionListener(event -> showStep(step - 1));
-        nextButton.addActionListener(event -> showStep(step + 1));
+        nextButton.addActionListener(event -> showNextStep());
         cancelButton.addActionListener(event -> listener.cancel());
         applyButton.addActionListener(event -> listener.apply(options()));
         finishButton.addActionListener(event -> listener.cancel());
@@ -228,6 +254,26 @@ final class FirstRunWizard {
         panel.add(paragraph(messages.text("welcome.body")));
         panel.add(Box.createVerticalStrut(18));
         panel.add(paragraph(messages.text("welcome.safety")));
+        panel.add(Box.createVerticalGlue());
+        return panel;
+    }
+
+    private JPanel dataRootPanel() {
+        JPanel panel = verticalPanel();
+        panel.add(paragraph(messages.text("dataRoot.body")));
+        panel.add(Box.createVerticalStrut(16));
+        JLabel label = new JLabel(messages.text("dataRoot.label"));
+        label.setLabelFor(dataRootField);
+        panel.add(label);
+        panel.add(Box.createVerticalStrut(6));
+        JPanel input = new JPanel(new BorderLayout(8, 0));
+        input.setAlignmentX(LEFT_ALIGNMENT);
+        input.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        input.add(dataRootField, BorderLayout.CENTER);
+        input.add(browseButton, BorderLayout.LINE_END);
+        panel.add(input);
+        panel.add(Box.createVerticalStrut(6));
+        panel.add(dataRootError);
         panel.add(Box.createVerticalGlue());
         return panel;
     }
@@ -300,23 +346,64 @@ final class FirstRunWizard {
         return button;
     }
 
+    private void chooseDataRoot() {
+        JFileChooser chooser = new JFileChooser(dataRootField.getText());
+        chooser.setDialogTitle(messages.text("dataRoot.dialog"));
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+        chooser.setAcceptAllFileFilterUsed(false);
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            dataRootField.setText(
+                    chooser.getSelectedFile().toPath()
+                            .toAbsolutePath().normalize().toString());
+            validateDataRoot();
+        }
+    }
+
+    private void showNextStep() {
+        if (step == 1 && !validateDataRoot()) {
+            return;
+        }
+        showStep(step + 1);
+    }
+
+    private boolean validateDataRoot() {
+        try {
+            Path selected = Path.of(dataRootField.getText().trim());
+            if (!selected.isAbsolute()) {
+                dataRootError.setText(
+                        messages.text("dataRoot.error.absolute"));
+                return false;
+            }
+            dataRootField.setText(
+                    selected.toAbsolutePath().normalize().toString());
+            dataRootError.setText(" ");
+            return true;
+        } catch (InvalidPathException error) {
+            dataRootError.setText(messages.text("dataRoot.error.invalid"));
+            return false;
+        }
+    }
+
     private void showStep(int requestedStep) {
-        step = Math.max(0, Math.min(2, requestedStep));
-        if (step == 2) {
+        step = Math.max(0, Math.min(3, requestedStep));
+        if (step == 3) {
             updateSummary();
         }
         cards.show(cardPanel, Integer.toString(step));
         stepLabel.setText(messages.text("step." + (step + 1)));
         backButton.setVisible(true);
         backButton.setEnabled(step > 0);
-        nextButton.setVisible(step < 2);
+        nextButton.setVisible(step < 3);
         cancelButton.setVisible(true);
-        applyButton.setVisible(step == 2);
+        applyButton.setVisible(step == 3);
         finishButton.setVisible(false);
     }
 
     private void updateSummary() {
         StringBuilder text = new StringBuilder();
+        text.append(messages.text("summary.dataRoot"))
+                .append(' ')
+                .append(dataRootField.getText());
         appendChoice(text, httpsCheckBox.isSelected(),
                 messages.text("summary.https.on"),
                 messages.text("summary.https.off"));
@@ -344,6 +431,7 @@ final class FirstRunWizard {
 
     private SetupOptions options() {
         return new SetupOptions(
+                Path.of(dataRootField.getText().trim()),
                 httpsCheckBox.isSelected(),
                 httpsCheckBox.isSelected(),
                 proxyCheckBox.isSelected(),
@@ -379,9 +467,9 @@ final class FirstRunWizard {
         resultSummary.setText(text.toString());
         resultSummary.setCaretPosition(0);
 
-        step = 3;
-        cards.show(cardPanel, "3");
-        stepLabel.setText(messages.text("step.4"));
+        step = 4;
+        cards.show(cardPanel, "4");
+        stepLabel.setText(messages.text("step.5"));
         busyLabel.setText(" ");
         backButton.setVisible(!successful);
         backButton.setEnabled(!successful);
@@ -417,6 +505,8 @@ final class FirstRunWizard {
         httpsCheckBox.setEnabled(!busy);
         proxyCheckBox.setEnabled(!busy && httpsCheckBox.isSelected());
         autoStartCheckBox.setEnabled(!busy);
+        dataRootField.setEnabled(!busy);
+        browseButton.setEnabled(!busy);
         busyLabel.setText(busy ? messages.text("status.applying") : " ");
     }
 
@@ -454,6 +544,14 @@ final class FirstRunWizard {
 
     JCheckBox getAutoStartCheckBox() {
         return autoStartCheckBox;
+    }
+
+    JTextField getDataRootField() {
+        return dataRootField;
+    }
+
+    JLabel getDataRootError() {
+        return dataRootError;
     }
 
     JTextArea getSummary() {

@@ -90,6 +90,7 @@ public class NLMain {
         }
         Path appDirectory = NicoCachePaths.applicationRoot();
         Path dataDirectory = NicoCachePaths.dataRoot();
+        NicoCachePaths.publishDataRoot(dataDirectory);
         System.setProperty("user.dir", dataDirectory.toString());
         if (launchOptions.isSetup()) {
             int exitCode = FirstRunSetup.runHeadless(
@@ -107,6 +108,10 @@ public class NLMain {
                 appDirectory, dataDirectory)) {
             return;
         }
+        dataDirectory = NicoCachePaths.dataRoot();
+        NicoCachePaths.publishDataRoot(dataDirectory);
+        System.setProperty("user.dir", dataDirectory.toString());
+        GUILauncher.refreshUserFiles();
         if (startGUI) {
             try {
                 guiLauncher = new GUILauncher();
@@ -377,11 +382,11 @@ public class NLMain {
         return getExtLogger(extension, prefix, debugKey, false);
     }
     static class GUILauncher {
-    static File propFile    = NicoCachePaths.guiPropertyFile();
-    static File extIconFile = NicoCachePaths.userFile("NicoCacheGUI_Icon.gif");
-    static ConfigGUI config = new ConfigGUI();
+    static File propFile;
+    static File extIconFile;
     static Image iconImage;
     static {
+        refreshUserFiles();
         if (extIconFile.exists()) {
             ImageIcon icon = new ImageIcon(extIconFile.getPath());
             if (icon.getIconWidth() > 0) {
@@ -392,6 +397,12 @@ public class NLMain {
             URL url = GUILauncher.class.getResource("GUILauncherIcon.gif");
             iconImage = new ImageIcon(url).getImage();
         }
+    }
+    static ConfigGUI config = new ConfigGUI();
+
+    static void refreshUserFiles() {
+        propFile = NicoCachePaths.guiPropertyFile();
+        extIconFile = NicoCachePaths.userFile("NicoCacheGUI_Icon.gif");
     }
 
     static LauncherTray tray;

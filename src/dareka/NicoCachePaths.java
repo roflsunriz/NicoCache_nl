@@ -1,8 +1,12 @@
 package dareka;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.util.Properties;
 
 import javax.swing.filechooser.FileSystemView;
 
@@ -10,16 +14,16 @@ import javax.swing.filechooser.FileSystemView;
  * Central path resolver for application files, user-managed files and
  * configurable storage locations.
  *
- * <p>Path precedence is:</p>
+ * <p>User data root precedence is:</p>
  * <ol>
- * <li>an explicit absolute path from configuration,</li>
- * <li>an explicit relative path resolved from the user data root,</li>
- * <li>the default relative location under the user data root.</li>
+ * <li>the {@code userDataRoot} value in the application config,</li>
+ * <li>the application directory for portable and development launches,</li>
+ * <li>the platform user-documents directory for packaged launches.</li>
  * </ol>
  */
 final class NicoCachePaths {
-    static final String DATA_ROOT_PROPERTY = "nicocache.dataRoot";
-    static final String DATA_ROOT_ENVIRONMENT = "NICOCACHE_DATA_ROOT";
+    static final String USER_DATA_ROOT_KEY = "userDataRoot";
+    static final String USER_DATA_ROOT_PROPERTY = "nicocache.userDataRoot";
     static final String APPLICATION_ROOT_PROPERTY =
             "nicocache.applicationRoot";
     static final String PORTABLE_FLAG = "portable.flag";
@@ -53,13 +57,26 @@ final class NicoCachePaths {
     }
 
     static Path dataRoot() {
-        String configured = System.getProperty(DATA_ROOT_PROPERTY);
-        if (configured == null || configured.isBlank()) {
-            configured = System.getenv(DATA_ROOT_ENVIRONMENT);
-        }
+        String configured = readConfiguredDataRoot();
         if (configured != null && !configured.isBlank()) {
-            return Path.of(configured).toAbsolutePath().normalize();
+            Path selected;
+            try {
+                selected = Path.of(configured);
+            } catch (InvalidPathException error) {
+                throw new IllegalStateException(
+                        USER_DATA_ROOT_KEY + " のパスが不正です: "
+                                + configured,
+                        error);
+            }
+            if (!selected.isAbsolute()) {
+                selected = applicationRoot().resolve(selected);
+            }
+            return selected.toAbsolutePath().normalize();
         }
+        return defaultDataRoot();
+    }
+
+    static Path defaultDataRoot() {
         if (isPortable() || !isPackaged()
                 && System.getProperty(APPLICATION_ROOT_PROPERTY) == null) {
             return applicationRoot();
@@ -77,6 +94,28 @@ final class NicoCachePaths {
                     : Path.of(userHome);
         }
         return documents.resolve("NicoCache_nl").toAbsolutePath().normalize();
+    }
+
+    private static String readConfiguredDataRoot() {
+        File config = configFile();
+        if (!Files.isRegularFile(config.toPath())) {
+            return null;
+        }
+        Properties properties = new Properties();
+        try (FileInputStream input = new FileInputStream(config)) {
+            properties.load(input);
+            return properties.getProperty(USER_DATA_ROOT_KEY);
+        } catch (IOException error) {
+            throw new IllegalStateException(
+                    "設定ファイルを読み取れません: " + config,
+                    error);
+        }
+    }
+
+    static void publishDataRoot(Path root) {
+        System.setProperty(
+                USER_DATA_ROOT_PROPERTY,
+                root.toAbsolutePath().normalize().toString());
     }
 
     static Path applicationPath(String relativePath) {
@@ -114,11 +153,11 @@ final class NicoCachePaths {
     }
 
     static File configFile() {
-        return userFile("config.properties");
+        return applicationFile("config.properties");
     }
 
     static File legacyConfigFile() {
-        return userFile("config.ini");
+        return applicationFile("config.ini");
     }
 
     static File defaultConfigFile() {
@@ -137,8 +176,16 @@ final class NicoCachePaths {
         return userFile("local");
     }
 
+    static File systemLocalDirectory() {
+        return applicationFile("local");
+    }
+
     static File nlFiltersDirectory() {
         return userFile("nlFilters");
+    }
+
+    static File systemNlFiltersDirectory() {
+        return applicationFile("nlFilters");
     }
 
     static File configuredFile(String value, String defaultRelativePath) {
@@ -176,4 +223,5 @@ final class NicoCachePaths {
         return configuredFile(System.getProperty("convertedCacheFolder"),
                 "cvcache");
     }
+
 }

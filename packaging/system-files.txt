@@ -1,0 +1,32 @@
+# NicoCache_nl配布物としてアプリケーションフォルダーから読み込む資材。
+# 追加・削除時は、実行時の二層読み込みテストと配布物検証も更新する。
+extensions/addTabSample.java
+extensions/build.cmd
+extensions/completeCacheSample.java
+extensions/eventListenerSample.java
+extensions/extLoggerSample.java
+extensions/makedoc.cmd
+extensions/readme.txt
+local/05_cache_remove_button.js
+local/15_cached_link_color.js
+local/20_watchpage.js
+local/cacheeconomy.gif
+local/cacheicon.gif
+local/list.js.default
+local/mime.types.default
+local/nl_cacheIcon.css
+local/nllib_watch.js
+local/nllib_xsStorage.html
+local/nllib.js
+local/nlThumbInfoRewriter.js
+local/overlib_mini.js
+local/popThumb.js
+local/url_injection_sys.js
+nlFilters/01_globalFilter.txt
+nlFilters/05_topBarFilter.txt
+nlFilters/08_MutationObserverHooks.txt
+nlFilters/10_thumbInfoFilter(ポップアップリンク用).txt
+nlFilters/11_thumbInfoFilter(ポップアップリンク・検索ページ用).txt
+nlFilters/15_02_thumbInfoFilter(Nアニメfreeのみ).txt
+nlFilters/15_thumbInfoFilter(基本).txt
+nlFilters/20_watchFilter.txt

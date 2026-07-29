@@ -76,8 +76,15 @@ foreach ($step in @(
 }
 
 $buildApplication = Get-StepBlock -Name 'Build release app image and MSI'
-Assert-ContainsLine $buildApplication '-NlFiltersSource .\nlFilters `' `
-    'Bundled nlFilters source'
+if ($buildApplication -match 'NlFiltersSource') {
+    throw 'Release workflow must use the shared system-files manifest'
+}
+$packageScript = Get-Content -LiteralPath (
+    Join-Path $root 'packaging\windows\build-windows-package.ps1'
+)
+Assert-ContainsLine $packageScript `
+    '$systemFilesManifest = Join-Path $root ''packaging\system-files.txt''' `
+    'Shared system-files manifest'
 
 $installerWorkflow = Get-Content -Raw -LiteralPath (
     Join-Path $root '.github\workflows\windows-installer.yml'

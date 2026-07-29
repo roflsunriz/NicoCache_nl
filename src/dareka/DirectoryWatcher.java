@@ -39,7 +39,8 @@ class DirectoryWatcher extends Thread {
     private int jarExitStatus = Integer.getInteger("exitStatusIfJarModified", 0);
     private String jarName = getJarName();
     private WatchService watchService;
-    private WatchKey nicoCacheFolder, nlFiltersFolder, corsLiarFolder;
+    private WatchKey nicoCacheFolder, systemNlFiltersFolder,
+            nlFiltersFolder, corsLiarFolder;
 
     private static String getJarName() {
         String name = null;
@@ -106,8 +107,13 @@ class DirectoryWatcher extends Thread {
             Files.createDirectories(NicoCachePaths.nlFiltersDirectory().toPath());
             Files.createDirectories(NicoCachePaths.userPath("data/cors"));
             nicoCacheFolder = registerWatcher(configDirectory);
-            nlFiltersFolder = registerWatcher(
-                    NicoCachePaths.nlFiltersDirectory().toPath());
+            Path systemFilters = NicoCachePaths.systemNlFiltersDirectory()
+                    .toPath().toAbsolutePath().normalize();
+            Path userFilters = NicoCachePaths.nlFiltersDirectory()
+                    .toPath().toAbsolutePath().normalize();
+            systemNlFiltersFolder = registerWatcher(systemFilters);
+            nlFiltersFolder = systemFilters.equals(userFilters)
+                    ? systemNlFiltersFolder : registerWatcher(userFilters);
             corsLiarFolder = registerWatcher(
                     NicoCachePaths.userPath("data/cors"));
         } catch (IOException e) {
@@ -140,7 +146,8 @@ Logger.debugWithThread(name + " " + kind + " count=" + event.count());
                         Logger.warning(jarName +
                                 " is modified, going to system exit...");
                         System.exit(jarExitStatus);
-                    } else if (key == nlFiltersFolder) {
+                    } else if (key == nlFiltersFolder
+                            || key == systemNlFiltersFolder) {
                         name = nlFilter_usr;
                         delay = 5000L;
                     } else if (key == corsLiarFolder) {
@@ -156,6 +163,9 @@ Logger.debugWithThread(name + " " + kind + " count=" + event.count());
         }
         nicoCacheFolder.cancel();
         nlFiltersFolder.cancel();
+        if (systemNlFiltersFolder != nlFiltersFolder) {
+            systemNlFiltersFolder.cancel();
+        }
     }
 
     private WatchKey registerWatcher(Path dir) throws IOException {

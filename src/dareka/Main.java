@@ -79,6 +79,7 @@ public class Main {
     }
 
     private static void mainBody() throws IOException {
+        NicoCachePaths.publishDataRoot(NicoCachePaths.dataRoot());
         // [nl] iniにしたい人用。でも正確にはiniファイルじゃないよ
         File configFile = NicoCachePaths.legacyConfigFile();
         if (configFile.exists() == false) {

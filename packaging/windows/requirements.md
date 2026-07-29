@@ -20,7 +20,8 @@ Windowsプロキシー、自動起動など、利用者のOS設定を変更す�
 
 ## 通常手順から初回起動ウィザードへ移す項目
 
-- `config.properties` と `proxy.pac` の初期作成
+- ユーザーデータ保存先の選択と、アプリ側 `config.properties` への記録
+- 利用者側 `proxy.pac` の初期作成
 - TLS MitM用CAとサイト証明書の生成
 - CAをWindowsの現在ユーザー証明書ストアへ登録するかの選択
 - Windows自動プロキシーを有効にするかの選択

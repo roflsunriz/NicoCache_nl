@@ -5,7 +5,10 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.URLDecoder;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,21 +64,18 @@ public class LocalDirProcessor implements Processor {
             String path = m.group(1);
             if (path.equals("flvplayer_wrapper.swf")) {
 // 常にlocalから返すように変更(swfConvert04)
-                file = new File(UserDataPaths.userFile("local"), path);
+                file = getLocalFile(path, null);
             }
             //ローカルにnicoplayer.swfがある時はそれを利用する(夏.07)
             else if (path.equals("flv_booster.swf") || path.equals("nicoplayer.swf")) {
                 // booster
-                file = new File(UserDataPaths.userFile("local"), path);
+                file = getLocalFile(path, null);
             }
             else if ("/list.js".equals(m.group(2))) {
-                file = new File(
-                        UserDataPaths.userFile("local"), m.group(2));
-                if (!file.exists()) {
-                    file = new File(
-                            UserDataPaths.userFile("local"),
-                            "list.js.default");
-                };
+                file = getLocalFile(m.group(2), m.group(3));
+                if (file == null || !file.exists()) {
+                    file = getLocalFile("list.js.default", null);
+                }
             }
             else if (m.group(2) != null && !m.group(2).equals("")
                                         && !m.group(2).equals("/")) {
@@ -135,19 +135,34 @@ public class LocalDirProcessor implements Processor {
             return null;
         };
 
-        File root = UserDataPaths.userFile("local");
-        File file = root;
-        for (int i = 0, end = list.length; i < end; ++i) {
-            file = new File(file, list[i]);
-        };
-        try {
-            Path canonicalRoot = root.getCanonicalFile().toPath();
-            Path canonicalFile = file.getCanonicalFile().toPath();
-            return canonicalFile.startsWith(canonicalRoot)
-                    ? canonicalFile.toFile() : null;
-        } catch (IOException e) {
-            Logger.warning("(LocalDirProcessor)failed to validate path: " + path);
-            return null;
+        List<Path> candidates = new ArrayList<>();
+        for (File rootFile : localRoots()) {
+            Path root = rootFile.toPath().toAbsolutePath().normalize();
+            Path candidate = root;
+            for (String segment : list) {
+                candidate = candidate.resolve(segment);
+            }
+            candidate = candidate.normalize();
+            if (!candidate.startsWith(root)) {
+                return null;
+            }
+            if (!candidates.contains(candidate)) {
+                candidates.add(candidate);
+            }
         }
+        for (Path candidate : candidates) {
+            if (Files.exists(candidate)
+                    || Files.exists(Path.of(candidate.toString() + ".gz"))) {
+                return candidate.toFile();
+            }
+        }
+        return candidates.isEmpty() ? null : candidates.get(0).toFile();
+    }
+
+    private static File[] localRoots() {
+        return new File[] {
+                UserDataPaths.userFile("local"),
+                UserDataPaths.applicationFile("local")
+        };
     }
 }

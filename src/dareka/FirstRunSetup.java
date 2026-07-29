@@ -20,16 +20,16 @@ final class FirstRunSetup {
     static boolean runInteractive(Path appDirectory, Path dataDirectory) {
         Path normalizedApp = appDirectory.toAbsolutePath().normalize();
         Path normalizedData = dataDirectory.toAbsolutePath().normalize();
-        FirstRunSetupService service =
-                FirstRunSetupService.production(normalizedApp, normalizedData);
-        return FirstRunWizard.showAndApply(service, Locale.getDefault());
+        return FirstRunWizard.showAndApply(
+                normalizedApp, normalizedData, Locale.getDefault());
     }
 
     static int runHeadless(Path appDirectory, Path dataDirectory,
             SetupOptions options) {
         Path normalizedApp = appDirectory.toAbsolutePath().normalize();
-        Path normalizedData = dataDirectory.toAbsolutePath().normalize();
-        if (Files.exists(normalizedData.resolve("config.properties"))) {
+        Path normalizedData =
+                options.getUserDataRoot().toAbsolutePath().normalize();
+        if (Files.exists(normalizedApp.resolve("config.properties"))) {
             System.out.println("初回セットアップは既に完了しています。");
             return 0;
         }
@@ -55,8 +55,7 @@ final class FirstRunSetup {
             return false;
         }
         Path normalizedApp = appDirectory.toAbsolutePath().normalize();
-        Path normalizedData = dataDirectory.toAbsolutePath().normalize();
-        return !Files.exists(normalizedData.resolve("config.properties"))
+        return !Files.exists(normalizedApp.resolve("config.properties"))
                 && Files.isRegularFile(
                         normalizedApp.resolve("config.properties.default"));
     }

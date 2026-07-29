@@ -53,6 +53,7 @@ public final class FunctionalTestMain {
 
     private final Path repository;
     private final Path sandbox;
+    private final Path application;
     private final Path classes;
     private HttpServer upstream;
     private ExecutorService upstreamExecutor;
@@ -64,6 +65,7 @@ public final class FunctionalTestMain {
     private FunctionalTestMain(Path repository, Path sandbox, Path classes) {
         this.repository = repository;
         this.sandbox = sandbox;
+        this.application = sandbox.resolve("application");
         this.classes = classes;
     }
 
@@ -97,6 +99,8 @@ public final class FunctionalTestMain {
             run("conditional retrieval and upstream connection failure",
                     this::testConditionalAndUpstreamFailure);
             run("local file GET/range/method handling", this::testLocalFiles);
+            run("system and user nlFilter execution order",
+                    this::testLayeredNlFilters);
             run("response rewriting and Extension request filtering",
                     this::testResponseRewriteAndRequestFilter);
             run("thumbnail fetch and cache reuse", this::testThumbnailCache);
@@ -137,7 +141,10 @@ public final class FunctionalTestMain {
     }
 
     private void prepareSandbox() throws Exception {
-        Files.createDirectories(sandbox.resolve("defaults"));
+        Files.createDirectories(application.resolve("defaults"));
+        Files.createDirectories(application.resolve("local"));
+        Files.createDirectories(application.resolve("nlFilters"));
+        Files.createDirectories(sandbox.resolve("nlFilters"));
         Files.createDirectories(sandbox.resolve("local"));
         Files.createDirectories(sandbox.resolve("cache"));
         Files.createDirectories(sandbox.resolve("cvcache"));
@@ -147,13 +154,38 @@ public final class FunctionalTestMain {
 
         try (var stream = Files.list(repository.resolve("defaults"))) {
             stream.filter(path -> path.getFileName().toString().endsWith(".properties"))
-                    .forEach(path -> copy(path, sandbox.resolve("defaults").resolve(path.getFileName())));
+                    .forEach(path -> copy(path, application.resolve("defaults")
+                            .resolve(path.getFileName())));
         }
 
-        copy(repository.resolve("local/mime.types.default"), sandbox.resolve("local/mime.types"));
-        copy(repository.resolve("nlFilter_sys.txt"), sandbox.resolve("nlFilter_sys.txt"));
+        copy(repository.resolve("local/mime.types.default"),
+                application.resolve("local/mime.types.default"));
+        copy(repository.resolve("nlFilter_sys.txt"),
+                application.resolve("nlFilter_sys.txt"));
         Files.writeString(sandbox.resolve("local/fixture.txt"),
                 "local-functional-content", StandardCharsets.UTF_8);
+        Files.writeString(application.resolve("local/system-only.txt"),
+                "system-local-content", StandardCharsets.UTF_8);
+        Files.writeString(application.resolve("local/overlay.txt"),
+                "system-overlay", StandardCharsets.UTF_8);
+        Files.writeString(sandbox.resolve("local/overlay.txt"),
+                "user-overlay", StandardCharsets.UTF_8);
+        Path linkedTarget = sandbox.resolve("linked-local-target");
+        Files.createDirectories(linkedTarget);
+        Files.writeString(linkedTarget.resolve("linked.txt"),
+                "linked-local-content", StandardCharsets.UTF_8);
+        createDirectoryLink(
+                sandbox.resolve("local/features"), linkedTarget);
+        Files.writeString(
+                application.resolve("nlFilters/01_system_test.txt"),
+                layeredFilter(
+                        "system layer", "layer-base", "layer-system"),
+                StandardCharsets.UTF_8);
+        Files.writeString(
+                sandbox.resolve("nlFilters/99_user_test.txt"),
+                layeredFilter(
+                        "user layer", "layer-system", "layer-user"),
+                StandardCharsets.UTF_8);
 
         Files.write(sandbox.resolve("cache/sm900001_Functional.mp4"),
                 "legacy-mp4-content".getBytes(StandardCharsets.UTF_8));
@@ -278,6 +310,14 @@ public final class FunctionalTestMain {
                 exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
                 exchange.getResponseHeaders().set("Last-Modified",
                         "Sun, 06 Nov 1994 08:49:37 GMT");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/two-layer".equals(path)) {
+                byte[] body = "layer-base".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set(
+                        "Content-Type", "text/plain; charset=utf-8");
                 exchange.sendResponseHeaders(200, body.length);
                 exchange.getResponseBody().write(body);
                 return;
@@ -489,11 +529,16 @@ public final class FunctionalTestMain {
                 "touchCache=false",
                 "title=true",
                 "") ;
-        Files.writeString(sandbox.resolve("config.properties"), config, StandardCharsets.UTF_8);
+        config += "userDataRoot="
+                + sandbox.toString().replace("\\", "\\\\") + "\n";
+        Files.writeString(application.resolve("config.properties"),
+                config, StandardCharsets.UTF_8);
 
         Path log = sandbox.resolve("nicocache-functional.log");
         ProcessBuilder builder = new ProcessBuilder(
-                javaExecutable(), "-cp", classes.toString(), "dareka.Main");
+                javaExecutable(),
+                "-Dnicocache.applicationRoot=" + application,
+                "-cp", classes.toString(), "dareka.Main");
         builder.directory(sandbox.toFile());
         builder.redirectErrorStream(true);
         builder.redirectOutput(log.toFile());
@@ -754,6 +799,72 @@ public final class FunctionalTestMain {
 
         Response post = request(nicoRequest("POST", "/local/fixture.txt", "Content-Length: 0\r\n"));
         assertEquals(405, post.status, "local POST status");
+
+        Response system = request(nicoRequest(
+                "GET", "/local/system-only.txt", ""));
+        assertEquals(200, system.status, "system local status");
+        assertEquals("system-local-content", system.bodyText(),
+                "system local fallback");
+
+        Response overlay = request(nicoRequest(
+                "GET", "/local/overlay.txt", ""));
+        assertEquals(200, overlay.status, "overlay local status");
+        assertEquals("user-overlay", overlay.bodyText(),
+                "user local must override system local");
+
+        Response linked = request(nicoRequest(
+                "GET", "/local/features/linked.txt", ""));
+        assertEquals(200, linked.status, "symbolic-link local status");
+        assertEquals("linked-local-content", linked.bodyText(),
+                "symbolic-link local body");
+    }
+
+    private void testLayeredNlFilters() throws Exception {
+        Response response = request(
+                "GET http://example.invalid/two-layer HTTP/1.1\r\n"
+                + "Host: example.invalid\r\nConnection: close\r\n\r\n");
+        assertEquals(200, response.status, "layered nlFilter status");
+        assertEquals("layer-user", response.bodyText(),
+                "user nlFilter must run after system nlFilter");
+    }
+
+    private static String layeredFilter(
+            String name, String match, String replacement) {
+        return String.join(System.lineSeparator(),
+                "# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)",
+                "[Replace]",
+                "Name = " + name,
+                "URL = example.invalid/two-layer",
+                "ContentType = text/plain",
+                "Match<",
+                match,
+                ">",
+                "Replace<",
+                replacement,
+                ">",
+                "");
+    }
+
+    private static void createDirectoryLink(Path link, Path target)
+            throws Exception {
+        try {
+            Files.createSymbolicLink(link, target);
+            return;
+        } catch (IOException linkError) {
+            if (!System.getProperty("os.name", "")
+                    .toLowerCase(Locale.ROOT).contains("windows")) {
+                throw linkError;
+            }
+            Process process = new ProcessBuilder(
+                    "cmd.exe", "/c", "mklink", "/J",
+                    link.toString(), target.toString())
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+            if (process.waitFor() != 0 || !Files.isDirectory(link)) {
+                throw linkError;
+            }
+        }
     }
 
     private void testResponseRewriteAndRequestFilter() throws Exception {

@@ -133,7 +133,6 @@ jobs:
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
             -AppVersion $env:APP_VERSION `
-            -NlFiltersSource .\nlFilters `
             -ZipFileName "NicoCache_nl-$env:RELEASE_TAG.zip"
 
       - name: Stage distribution archive

@@ -52,7 +52,7 @@ public final class FirstRunSetupTest {
         Files.createDirectories(sandbox);
         Files.createDirectories(previewDirectory);
         testPathResolution();
-        testUserDataMigration();
+        testSystemAssetsRemainSeparated();
         testSeparatedSetupFiles();
         testRequirementDetection();
         testHeadlessLaunchOptions();
@@ -73,8 +73,6 @@ public final class FirstRunSetupTest {
         Path absoluteCache = freshSandbox("paths/absolute-cache");
         String oldApplication = System.getProperty(
                 NicoCachePaths.APPLICATION_ROOT_PROPERTY);
-        String oldData = System.getProperty(
-                NicoCachePaths.DATA_ROOT_PROPERTY);
         String oldLauncher = System.getProperty("jpackage.app-path");
         String oldCache = System.getProperty("cacheFolder");
         String oldThumbnail = System.getProperty("thcacheFolder");
@@ -83,11 +81,20 @@ public final class FirstRunSetupTest {
             System.setProperty(
                     NicoCachePaths.APPLICATION_ROOT_PROPERTY,
                     app.toString());
-            System.setProperty(
-                    NicoCachePaths.DATA_ROOT_PROPERTY,
-                    data.toString());
             System.setProperty("jpackage.app-path",
                     app.resolve("NicoCache_nl.exe").toString());
+            Files.writeString(
+                    app.resolve("config.ini"),
+                    "userDataRoot="
+                            + sandbox.resolve("legacy-config-data")
+                            + System.lineSeparator(),
+                    StandardCharsets.ISO_8859_1);
+            Files.writeString(
+                    app.resolve("config.properties"),
+                    "userDataRoot="
+                            + data.toString().replace("\\", "\\\\")
+                            + System.lineSeparator(),
+                    StandardCharsets.ISO_8859_1);
 
             System.setProperty("cacheFolder", absoluteCache.toString());
             assertEquals(
@@ -117,7 +124,22 @@ public final class FirstRunSetupTest {
             }
             assertTrue(rejected, "path traversal must be rejected");
 
-            System.clearProperty(NicoCachePaths.DATA_ROOT_PROPERTY);
+            Files.writeString(
+                    app.resolve("config.properties"),
+                    "userDataRoot=\\u0000" + System.lineSeparator(),
+                    StandardCharsets.ISO_8859_1);
+            boolean invalidConfigRejected = false;
+            try {
+                NicoCachePaths.dataRoot();
+            } catch (IllegalStateException expected) {
+                invalidConfigRejected = true;
+                assertContains(expected.getMessage(), "userDataRoot",
+                        "invalid configured path error");
+            }
+            assertTrue(invalidConfigRejected,
+                    "invalid configured data root must be rejected");
+
+            Files.delete(app.resolve("config.properties"));
             Files.writeString(
                     app.resolve(NicoCachePaths.PORTABLE_FLAG),
                     "portable");
@@ -129,7 +151,6 @@ public final class FirstRunSetupTest {
             restoreProperty(
                     NicoCachePaths.APPLICATION_ROOT_PROPERTY,
                     oldApplication);
-            restoreProperty(NicoCachePaths.DATA_ROOT_PROPERTY, oldData);
             restoreProperty("jpackage.app-path", oldLauncher);
             restoreProperty("cacheFolder", oldCache);
             restoreProperty("thcacheFolder", oldThumbnail);
@@ -138,53 +159,37 @@ public final class FirstRunSetupTest {
         System.out.println("PASS application, user, configured, and portable paths");
     }
 
-    private void testUserDataMigration() throws Exception {
-        Path app = freshSandbox("migration/application");
-        Path data = freshSandbox("migration/data");
-        Files.writeString(app.resolve("config.properties"), "legacy=true");
-        Files.writeString(app.resolve("NicoCacheGUI.property"), "HideWindow=true");
-        Files.createDirectories(app.resolve("local/sub"));
-        Files.writeString(app.resolve("local/sub/custom.js"), "legacy-local");
+    private void testSystemAssetsRemainSeparated() throws Exception {
+        Path app = freshSandbox("separation/application");
+        Path data = freshSandbox("separation/data");
+        copyTemplateFiles(app);
+        Files.createDirectories(app.resolve("local"));
+        Files.createDirectories(app.resolve("extensions"));
         Files.createDirectories(app.resolve("nlFilters"));
-        Files.writeString(app.resolve("nlFilters/01_legacy.txt"), "legacy-filter");
-        Files.createDirectories(app.resolve("cache"));
-        Files.writeString(app.resolve("cache/sm1.mp4"), "do-not-migrate");
-
-        Files.writeString(data.resolve("config.properties"), "keep=true");
-        UserDataMain.prepareDataRoot(app, data);
-
-        assertEquals(
-                "keep=true",
-                Files.readString(data.resolve("config.properties")),
-                "existing destination config must be preserved");
-        assertEquals(
-                "legacy-local",
-                Files.readString(data.resolve("local/sub/custom.js")),
-                "local directory must migrate");
-        assertEquals(
-                "legacy-filter",
-                Files.readString(data.resolve("nlFilters/01_legacy.txt")),
-                "filter directory must migrate");
-        assertFalse(
-                Files.exists(data.resolve("cache/sm1.mp4")),
-                "cache must not be migrated implicitly");
-        assertEquals(
-                "1",
-                Files.readString(data.resolve(".data-layout-version")).trim(),
-                "migration version must be recorded");
-
+        Files.writeString(app.resolve("local/system.js"), "system-local");
         Files.writeString(
-                data.resolve("local/sub/custom.js"),
-                "user-edited");
-        UserDataMain.prepareDataRoot(app, data);
-        assertEquals(
-                "user-edited",
-                Files.readString(data.resolve("local/sub/custom.js")),
-                "repeat migration must not overwrite user data");
-        assertTrue(
-                Files.isRegularFile(app.resolve("config.properties")),
-                "migration source must remain intact");
-        System.out.println("PASS safe user-data migration and idempotency");
+                app.resolve("extensions/sample.java"), "system-extension");
+        Files.writeString(
+                app.resolve("nlFilters/01_system.txt"), "system-filter");
+
+        FirstRunSetupService service = FirstRunSetupService.production(
+                app, data);
+        service.apply(new SetupOptions(
+                data, false, false, false, false));
+
+        assertFalse(Files.exists(data.resolve("local/system.js")),
+                "system local asset must not be copied to user data");
+        assertFalse(Files.exists(data.resolve("extensions/sample.java")),
+                "system extension sample must not be copied to user data");
+        assertFalse(Files.exists(data.resolve("nlFilters/01_system.txt")),
+                "system filter must not be copied to user data");
+        assertTrue(Files.isDirectory(data.resolve("local")),
+                "user local directory must be created");
+        assertTrue(Files.isDirectory(data.resolve("extensions")),
+                "user extensions directory must be created");
+        assertTrue(Files.isDirectory(data.resolve("nlFilters")),
+                "user filter directory must be created");
+        System.out.println("PASS system assets remain separate from user data");
     }
 
     private void testSeparatedSetupFiles() throws Exception {
@@ -199,11 +204,12 @@ public final class FirstRunSetupTest {
         FirstRunSetupService service = new FirstRunSetupService(
                 files, certificates, integration);
 
-        service.apply(new SetupOptions(false, false, true, false));
+        service.apply(new SetupOptions(
+                data, false, false, true, false));
 
         assertTrue(
-                Files.isRegularFile(data.resolve("config.properties")),
-                "config must be created in data root");
+                Files.isRegularFile(app.resolve("config.properties")),
+                "config must be created in application root");
         assertTrue(
                 Files.isRegularFile(data.resolve("proxy.pac")),
                 "proxy PAC must be created in data root");
@@ -211,9 +217,10 @@ public final class FirstRunSetupTest {
                 Files.isRegularFile(
                         data.resolve("data/first-run-setup.properties")),
                 "setup state must be created in data root");
-        assertFalse(
-                Files.exists(app.resolve("config.properties")),
-                "application root must remain read-only");
+        Properties config = loadProperties(
+                app.resolve("config.properties"));
+        assertEquals(data.toString(), config.getProperty("userDataRoot"),
+                "config must persist user data root");
         System.out.println("PASS separated first-run setup files");
     }
 
@@ -221,6 +228,7 @@ public final class FirstRunSetupTest {
         LaunchOptions valid = LaunchOptions.parse(new String[] {
                 "--setup",
                 "--headless",
+                "--user-data-root=" + sandbox.resolve("headless-data"),
                 "--https=true",
                 "--trust-certificate=false",
                 "--proxy=false",
@@ -239,6 +247,7 @@ public final class FirstRunSetupTest {
         LaunchOptions missing = LaunchOptions.parse(new String[] {
                 "--setup",
                 "--headless",
+                "--user-data-root=" + sandbox.resolve("headless-data"),
                 "--https=false",
                 "--trust-certificate=false",
                 "--proxy=false"
@@ -249,6 +258,7 @@ public final class FirstRunSetupTest {
         LaunchOptions invalid = LaunchOptions.parse(new String[] {
                 "--setup",
                 "--headless",
+                "--user-data-root=" + sandbox.resolve("headless-data"),
                 "--https=yes",
                 "--trust-certificate=false",
                 "--proxy=false",
@@ -260,6 +270,7 @@ public final class FirstRunSetupTest {
         LaunchOptions contradiction = LaunchOptions.parse(new String[] {
                 "--setup",
                 "--headless",
+                "--user-data-root=" + sandbox.resolve("headless-data"),
                 "--https=false",
                 "--trust-certificate=true",
                 "--proxy=false",
@@ -336,7 +347,8 @@ public final class FirstRunSetupTest {
                 new FirstRunSetupService.SetupFiles(directory),
                 certificates,
                 integration);
-        SetupOptions options = new SetupOptions(true, true, true, true);
+        SetupOptions options = new SetupOptions(
+                directory, true, true, true, true);
         service.apply(options);
 
         assertContains(
@@ -378,7 +390,8 @@ public final class FirstRunSetupTest {
                 new FirstRunSetupService.SetupFiles(directory),
                 new FakeCertificateGenerator(directory, false),
                 new FakeSystemIntegration(false));
-        service.apply(new SetupOptions(false, false, true, false));
+        service.apply(new SetupOptions(
+                directory, false, false, true, false));
 
         assertEquals(
                 "custom-proxy",
@@ -405,7 +418,8 @@ public final class FirstRunSetupTest {
                 new FirstRunSetupService.SetupFiles(directory),
                 certificates,
                 integration);
-        service.apply(new SetupOptions(true, false, false, false));
+        service.apply(new SetupOptions(
+                directory, true, false, false, false));
 
         assertEquals(1, certificates.generateCount,
                 "HTTPS certificate files must still be generated");
@@ -429,7 +443,8 @@ public final class FirstRunSetupTest {
                 integration);
         boolean failed = false;
         try {
-            service.apply(new SetupOptions(true, true, true, true));
+            service.apply(new SetupOptions(
+                    directory, true, true, true, true));
         } catch (IOException expected) {
             failed = true;
         }
@@ -464,7 +479,8 @@ public final class FirstRunSetupTest {
                 integration);
         boolean failed = false;
         try {
-            service.apply(new SetupOptions(true, true, true, true));
+            service.apply(new SetupOptions(
+                    directory, true, true, true, true));
         } catch (IOException expected) {
             failed = true;
         }
@@ -533,6 +549,7 @@ public final class FirstRunSetupTest {
             FirstRunWizardPanel panel = new FirstRunWizardPanel(
                     new SetupMessages(Locale.JAPANESE),
                     Locale.JAPANESE,
+                    sandbox.resolve("wizard-user-data"),
                     new FirstRunWizardPanel.Listener() {
                         @Override
                         public void apply(SetupOptions options) {
@@ -557,9 +574,21 @@ public final class FirstRunSetupTest {
                     previewDirectory.resolve("wizard-step1-narrow.png"));
 
             panel.getNextButton().doClick();
-            assertEquals(1, panel.getStep(), "options step");
+            assertEquals(1, panel.getStep(), "data root step");
             render(panel, 720, 500,
                     previewDirectory.resolve("wizard-step2-standard.png"));
+            panel.getDataRootField().setText("relative-data");
+            panel.getNextButton().doClick();
+            assertEquals(1, panel.getStep(),
+                    "relative data root must block navigation");
+            assertContains(panel.getDataRootError().getText(),
+                    "絶対パス", "relative data root error");
+            Path selectedDataRoot = sandbox.resolve("wizard-selected-data");
+            panel.getDataRootField().setText(selectedDataRoot.toString());
+            panel.getNextButton().doClick();
+            assertEquals(2, panel.getStep(), "options step");
+            render(panel, 720, 500,
+                    previewDirectory.resolve("wizard-step3-standard.png"));
             panel.getHttpsCheckBox().doClick();
             assertFalse(panel.getProxyCheckBox().isEnabled(),
                     "proxy must be disabled without HTTPS");
@@ -572,8 +601,9 @@ public final class FirstRunSetupTest {
             panel.getAutoStartCheckBox().doClick();
 
             panel.getBackButton().doClick();
-            assertEquals(0, panel.getStep(), "Back from options");
+            assertEquals(1, panel.getStep(), "Back from options");
             panel.getNextButton().doClick();
+            assertEquals(2, panel.getStep(), "return to options");
             assertTrue(panel.getHttpsCheckBox().isSelected(),
                     "HTTPS choice must survive navigation");
             assertTrue(panel.getProxyCheckBox().isSelected(),
@@ -582,9 +612,12 @@ public final class FirstRunSetupTest {
                     "auto-start choice must survive navigation");
 
             panel.getNextButton().doClick();
-            assertEquals(2, panel.getStep(), "summary step");
+            assertEquals(3, panel.getStep(), "summary step");
             assertTrue(panel.getApplyButton().isVisible(),
                     "Apply must be visible on summary");
+            assertContains(panel.getSummary().getText(),
+                    selectedDataRoot.toString(),
+                    "summary data root");
             assertContains(panel.getSummary().getText(),
                     "ローカルCAを生成",
                     "summary HTTPS");
@@ -592,7 +625,7 @@ public final class FirstRunSetupTest {
                     "ログオン時起動へ追加しません",
                     "summary auto-start");
             render(panel, 960, 600,
-                    previewDirectory.resolve("wizard-step3-standard.png"));
+                    previewDirectory.resolve("wizard-step4-standard.png"));
             assertComponentsWithinBounds(panel, panel);
 
             panel.setBusy(true);
@@ -607,7 +640,7 @@ public final class FirstRunSetupTest {
             panel.getApplyButton().doClick();
             SetupOptions selectedOptions = applied.get();
             panel.showResult(selectedOptions, null);
-            assertEquals(3, panel.getStep(), "success result step");
+            assertEquals(4, panel.getStep(), "success result step");
             assertFalse(panel.getBackButton().isVisible(),
                     "Back must be hidden after success");
             assertTrue(panel.getFinishButton().isVisible(),
@@ -626,7 +659,7 @@ public final class FirstRunSetupTest {
                     "auto-start skipped result");
             render(panel, 600, 430,
                     previewDirectory.resolve(
-                            "wizard-step4-success-narrow.png"));
+                            "wizard-step5-success-narrow.png"));
             assertComponentsWithinBounds(panel, panel);
 
             panel.showResult(
@@ -648,11 +681,11 @@ public final class FirstRunSetupTest {
                     "failure detail");
             render(panel, 720, 500,
                     previewDirectory.resolve(
-                            "wizard-step4-failure-standard.png"));
+                            "wizard-step5-failure-standard.png"));
             assertComponentsWithinBounds(panel, panel);
 
             panel.getBackButton().doClick();
-            assertEquals(2, panel.getStep(),
+            assertEquals(3, panel.getStep(),
                     "Back from failure results");
             assertTrue(panel.getApplyButton().isVisible(),
                     "Apply must be available for retry");
@@ -668,6 +701,10 @@ public final class FirstRunSetupTest {
 
         SetupOptions options = applied.get();
         assertTrue(options != null, "Apply callback must run");
+        assertEquals(
+                sandbox.resolve("wizard-selected-data"),
+                options.getUserDataRoot(),
+                "applied user data root");
         assertTrue(options.isHttpsEnabled(), "applied HTTPS option");
         assertTrue(options.isCertificateTrusted(),
                 "applied certificate trust option");

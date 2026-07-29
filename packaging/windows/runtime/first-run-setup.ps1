@@ -273,7 +273,30 @@ if ([string]::IsNullOrWhiteSpace($StatePath)) {
         $installRoot = [System.IO.Path]::GetFullPath(
             (Join-Path $PSScriptRoot '..\..')
         )
-        $configuredDataRoot = $env:NICOCACHE_DATA_ROOT
+        $configuredDataRoot = $null
+        $configPath = Join-Path $installRoot 'config.properties'
+        if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+            $dataRootLine = Get-Content -LiteralPath $configPath |
+                Where-Object {
+                    $_ -match '^\s*userDataRoot\s*='
+                } |
+                Select-Object -Last 1
+            if ($dataRootLine) {
+                $configuredDataRoot = (
+                    $dataRootLine -replace '^\s*userDataRoot\s*=\s*', ''
+                )
+                $configuredDataRoot = [regex]::Replace(
+                    $configuredDataRoot,
+                    '\\u([0-9a-fA-F]{4})',
+                    {
+                        param($match)
+                        [char][Convert]::ToInt32(
+                            $match.Groups[1].Value, 16
+                        )
+                    }
+                ).Replace('\\', '\')
+            }
+        }
         if ([string]::IsNullOrWhiteSpace($configuredDataRoot)) {
             if (Test-Path -LiteralPath (
                     Join-Path $installRoot 'portable.flag'

@@ -64,9 +64,6 @@ if (Test-Path -LiteralPath $installRoot) {
 if (Test-Path -LiteralPath $userDataRoot) {
     throw "MSI利用者データ試験先が既に存在します: $userDataRoot"
 }
-$previousDataRootEnvironment = $env:NICOCACHE_DATA_ROOT
-$env:NICOCACHE_DATA_ROOT = $userDataRoot
-
 function Invoke-MsiExec {
     param(
         [Parameter(Mandatory)]
@@ -282,6 +279,7 @@ $currentProductCode = Get-MsiProductCode -Path $resolvedMsi
 $installed = $false
 $upgraded = $false
 $userStatePath = Join-Path $userDataRoot 'data\installer-lifecycle-user.txt'
+$applicationConfigPath = Join-Path $installRoot 'config.properties'
 $setupStatePath = Join-Path $userDataRoot 'data\setup-system-state.json'
 $primaryFailure = $null
 
@@ -314,6 +312,12 @@ try {
         -Force | Out-Null
     Set-Content -LiteralPath $userStatePath `
         -Value 'preserve-user-state-across-repair-and-upgrade' `
+        -Encoding ascii
+    Set-Content -LiteralPath $applicationConfigPath `
+        -Value @(
+            "userDataRoot=$($userDataRoot.Replace('\', '\\'))"
+            'installerLifecycleMarker=preserve-application-config'
+        ) `
         -Encoding ascii
 
     $repairTarget = Join-Path $installRoot 'nlFilter_sys.txt'
@@ -353,6 +357,10 @@ try {
             'preserve-user-state-across-repair-and-upgrade') {
         throw 'MSI修復でユーザー状態が変化しました'
     }
+    if ((Get-Content -Raw -LiteralPath $applicationConfigPath) -notmatch
+            'installerLifecycleMarker=preserve-application-config') {
+        throw 'MSI修復でアプリ側config.propertiesが失われました'
+    }
     Write-Output 'PASS MSI修復とユーザー状態の保全'
 
     Invoke-MsiExec -ArgumentList @(
@@ -374,8 +382,13 @@ try {
             'preserve-user-state-across-repair-and-upgrade') {
         throw 'MSI更新でユーザー状態が失われました'
     }
+    if ((Get-Content -Raw -LiteralPath $applicationConfigPath) -notmatch
+            'installerLifecycleMarker=preserve-application-config') {
+        throw 'MSI更新でアプリ側config.propertiesが失われました'
+    }
     Write-Output 'PASS 旧版から新版への更新とユーザー状態の保全'
 
+    Remove-Item -LiteralPath $applicationConfigPath -Force
     & (Join-Path $PSScriptRoot 'test-windows-app-image.ps1') `
         -AppImagePath $installRoot `
         -StartupTimeoutSeconds $StartupTimeoutSeconds
@@ -388,6 +401,7 @@ try {
         -ArgumentList @(
             '--setup',
             '--headless',
+            "--user-data-root=$userDataRoot",
             '--https=true',
             '--trust-certificate=false',
             '--proxy=true',
@@ -499,9 +513,4 @@ Write-Output 'PASS MSIの無人アンインストール、利用者データ保�
 
 if (Test-Path -LiteralPath $userDataRoot) {
     Remove-Item -LiteralPath $userDataRoot -Recurse -Force
-}
-if ($null -eq $previousDataRootEnvironment) {
-    Remove-Item Env:NICOCACHE_DATA_ROOT -ErrorAction SilentlyContinue
-} else {
-    $env:NICOCACHE_DATA_ROOT = $previousDataRootEnvironment
 }

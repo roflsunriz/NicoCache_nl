@@ -26,7 +26,7 @@ $internalAppDirectory = Join-Path $appImage 'app'
 $launcherPath = Join-Path $appImage 'NicoCache_nl.exe'
 $separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
 $dataRoot = Join-Path $testRoot 'app-image-user-data'
-$configPath = Join-Path $dataRoot 'config.properties'
+$configPath = Join-Path $appDirectory 'config.properties'
 $guiPropertiesPath = Join-Path $dataRoot 'NicoCacheGUI.property'
 $setupStatePath = Join-Path $dataRoot 'data\first-run-setup.properties'
 $systemStatePath = Join-Path $dataRoot 'data\setup-system-state.json'
@@ -61,6 +61,25 @@ foreach ($requiredPath in @(
     )) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "アプリイメージに必要なファイルがありません: $requiredPath"
+    }
+}
+$systemFilesManifest = Join-Path $root 'packaging\system-files.txt'
+$systemFiles = @(
+    Get-Content -LiteralPath $systemFilesManifest |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -and -not $_.StartsWith('#') }
+)
+foreach ($relativePath in $systemFiles) {
+    $systemPath = Join-Path $appDirectory ($relativePath -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $systemPath -PathType Leaf)) {
+        throw "システム資材がアプリイメージにありません: $relativePath"
+    }
+}
+foreach ($userOnlyDirectory in @('cache', 'certs', 'cvcache', 'thcache')) {
+    if (Test-Path -LiteralPath (
+            Join-Path $appDirectory $userOnlyDirectory
+        )) {
+        throw "ユーザー専用ディレクトリがアプリ側にあります: $userOnlyDirectory"
     }
 }
 $jarPath = Join-Path $internalAppDirectory 'NicoCache_nl.jar'
@@ -178,13 +197,12 @@ New-Item -ItemType Directory -Path $logRoot, $foreignWorkingDirectory -Force |
 $process = $null
 $knownProcessIds = @(Get-ProductProcesses | Select-Object -ExpandProperty Id)
 $testSucceeded = $false
-$previousDataRootEnvironment = $env:NICOCACHE_DATA_ROOT
-$env:NICOCACHE_DATA_ROOT = $dataRoot
 try {
     $setupProcess = Start-Process -FilePath $launcherPath `
         -ArgumentList @(
             '--setup',
             '--headless',
+            "--user-data-root=$dataRoot",
             '--https=true',
             '--trust-certificate=false',
             '--proxy=false',
@@ -199,10 +217,10 @@ try {
         throw "ヘッドレス初回セットアップに失敗しました (ExitCode: $($setupProcess.ExitCode))"
     }
     foreach ($forbiddenApplicationFile in @(
-            (Join-Path $appDirectory 'config.properties'),
             (Join-Path $appDirectory 'NicoCacheGUI.property'),
             (Join-Path $appDirectory 'proxy.pac'),
-            (Join-Path $appDirectory '.data-layout-version')
+            (Join-Path $appDirectory '.data-layout-version'),
+            (Join-Path $dataRoot 'config.properties')
         )) {
         if (Test-Path -LiteralPath $forbiddenApplicationFile) {
             throw "利用者データがアプリ本体へ作成されました: $forbiddenApplicationFile"
@@ -247,6 +265,7 @@ try {
 
     @(
         '# NicoCache_nl パッケージ隔離スモークテスト用設定'
+        "userDataRoot=$($dataRoot.Replace('\', '\\'))"
         "listenPort=$listenPort"
         'proxyHost='
         'allowFrom=local'
@@ -299,7 +318,7 @@ try {
         throw 'ルート応答にNicoCache_nlのバージョン文字列がありません'
     }
 
-    Write-Output 'PASS 異なる作業ディレクトリから単一製品ランチャーを自己再起動'
+    Write-Output 'PASS 異なる作業ディレクトリからuserDataRootを解決して起動'
     Write-Output "PASS 単一製品ランチャーの内部ヘッドレス起動"
     Write-Output "PASS HTTPループバック応答 (port=$listenPort)"
     $testSucceeded = $true
@@ -358,11 +377,6 @@ try {
     Write-Output 'PASS 証明書ストア・Windowsプロキシー設定の不変性'
     if (Test-Path -LiteralPath $dataRoot) {
         Remove-Item -LiteralPath $dataRoot -Recurse -Force
-    }
-    if ($null -eq $previousDataRootEnvironment) {
-        Remove-Item Env:NICOCACHE_DATA_ROOT -ErrorAction SilentlyContinue
-    } else {
-        $env:NICOCACHE_DATA_ROOT = $previousDataRootEnvironment
     }
     if ($testSucceeded -and -not $KeepLogs -and
             (Test-Path -LiteralPath $logRoot)) {

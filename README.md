@@ -6,6 +6,13 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 詳細な利用開始手順は [NicoCache_nl USAGE GUIDE](https://roflsunriz.github.io/setup-nicocache-nl/) にあります。
 
+Windowsパッケージ版の初回セットアップでは、キャッシュ、個人設定、利用者が追加する
+`local`・`nlFilters`・Extensionを保存するユーザーデータフォルダーを指定します。
+選択した絶対パスはアプリケーションフォルダーの`config.properties`にある
+`userDataRoot`へ保存されます。標準資材はアプリケーション側から先に読み込み、
+同名の利用者資材を後から読み込んで上書きします。書き込みはユーザーデータ側だけに
+行います。
+
 ## GUIログを検索する
 
 main、debug、Extensionの各ログタブには独立した検索欄があります。入力中に一致する

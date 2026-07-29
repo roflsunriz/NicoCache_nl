@@ -25,7 +25,7 @@ $appDirectory = $appImage
 $dataRoot = Join-Path $testRoot 'windows-first-run-user-data'
 $setupScript = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
 $launcher = Join-Path $appImage 'NicoCache_nl.exe'
-$configPath = Join-Path $dataRoot 'config.properties'
+$configPath = Join-Path $appDirectory 'config.properties'
 $guiPropertiesPath = Join-Path $dataRoot 'NicoCacheGUI.property'
 $completionStatePath =
     Join-Path $dataRoot 'data\first-run-setup.properties'
@@ -57,9 +57,6 @@ if (Test-Path -LiteralPath $statePath) {
 if (Test-Path -LiteralPath $dataRoot) {
     throw "利用者データ試験先が既に存在します: $dataRoot"
 }
-$previousDataRootEnvironment = $env:NICOCACHE_DATA_ROOT
-$env:NICOCACHE_DATA_ROOT = $dataRoot
-
 function Get-IntegrationState {
     $proxyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
     $proxy = Get-ItemProperty -LiteralPath $proxyPath -ErrorAction SilentlyContinue
@@ -109,6 +106,7 @@ try {
         -ArgumentList @(
             '--setup',
             '--headless',
+            "--user-data-root=$dataRoot",
             '--https=true',
             '--trust-certificate=false',
             '--proxy=true',
@@ -242,10 +240,5 @@ foreach ($generatedFile in $generatedFiles) {
 }
 if (Test-Path -LiteralPath $dataRoot) {
     Remove-Item -LiteralPath $dataRoot -Recurse -Force
-}
-if ($null -eq $previousDataRootEnvironment) {
-    Remove-Item Env:NICOCACHE_DATA_ROOT -ErrorAction SilentlyContinue
-} else {
-    $env:NICOCACHE_DATA_ROOT = $previousDataRootEnvironment
 }
 Write-Output 'PASS 初回Windows連携の完全復元'

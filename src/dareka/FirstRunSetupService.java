@@ -105,12 +105,26 @@ final class FirstRunSetupService {
         }
 
         void prepare(SetupOptions options) throws IOException {
-            Files.createDirectories(dataDirectory.resolve("data"));
-            createConfig(options.isHttpsEnabled());
+            for (String directory : List.of(
+                    "cache", "certs", "cvcache", "data", "extensions",
+                    "list", "local", "nlFilters", "thcache")) {
+                Files.createDirectories(dataDirectory.resolve(directory));
+            }
+            createConfig(options);
             if (options.isProxyConfigured()) {
                 copyIfMissing(
                         appDirectory.resolve("proxy_sample.pac"),
                         dataDirectory.resolve("proxy.pac"));
+            }
+            for (String relativePath : List.of(
+                    "data/cors/99_sample.conf",
+                    "data/tlsclient/cacerts2",
+                    "list/NGtitle.txt")) {
+                Path source = appDirectory.resolve(relativePath);
+                if (Files.isRegularFile(source)) {
+                    copyIfMissing(
+                            source, dataDirectory.resolve(relativePath));
+                }
             }
             createGuiProperties();
         }
@@ -128,6 +142,8 @@ final class FirstRunSetupService {
                     Boolean.toString(options.isProxyConfigured()));
             state.setProperty("enableAutoStart",
                     Boolean.toString(options.isAutoStartEnabled()));
+            state.setProperty(
+                    "userDataRoot", options.getUserDataRoot().toString());
 
             Path statePath = dataDirectory.resolve(
                     "data/first-run-setup.properties");
@@ -171,9 +187,9 @@ final class FirstRunSetupService {
             }
         }
 
-        private void createConfig(boolean enableHttps) throws IOException {
+        private void createConfig(SetupOptions options) throws IOException {
             Path source = appDirectory.resolve("config.properties.default");
-            Path target = dataDirectory.resolve("config.properties");
+            Path target = appDirectory.resolve("config.properties");
             if (Files.exists(target)) {
                 throw new IOException("設定ファイルが既に存在します: " + target);
             }
@@ -189,7 +205,11 @@ final class FirstRunSetupService {
                         temporary,
                         StandardCopyOption.COPY_ATTRIBUTES);
                 String option = System.lineSeparator()
-                        + "enableMitM=" + enableHttps
+                        + "userDataRoot="
+                        + escapePropertyValue(
+                                options.getUserDataRoot().toString())
+                        + System.lineSeparator()
+                        + "enableMitM=" + options.isHttpsEnabled()
                         + System.lineSeparator();
                 Files.writeString(
                         temporary,
@@ -202,6 +222,21 @@ final class FirstRunSetupService {
                 throw error;
             }
             createdFiles.add(target);
+        }
+
+        private static String escapePropertyValue(String value) {
+            StringBuilder escaped = new StringBuilder(value.length());
+            for (int index = 0; index < value.length(); index++) {
+                char character = value.charAt(index);
+                if (character == '\\') {
+                    escaped.append("\\\\");
+                } else if (character < 0x20 || character > 0x7e) {
+                    escaped.append(String.format("\\u%04x", (int) character));
+                } else {
+                    escaped.append(character);
+                }
+            }
+            return escaped.toString();
         }
 
         private void createGuiProperties() throws IOException {
@@ -235,6 +270,7 @@ final class FirstRunSetupService {
             if (!Files.isRegularFile(source)) {
                 throw new IOException("コピー元ファイルがありません: " + source);
             }
+            Files.createDirectories(target.getParent());
             Path temporary = target.resolveSibling(
                     target.getFileName() + ".setup.tmp");
             try {

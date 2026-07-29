@@ -7,7 +7,7 @@ import java.nio.file.Path;
  * Internal path access for processor implementations.
  */
 final class UserDataPaths {
-    private static final String DATA_ROOT_PROPERTY = "nicocache.dataRoot";
+    private static final String DATA_ROOT_PROPERTY = "nicocache.userDataRoot";
     private static final String APPLICATION_ROOT_PROPERTY =
             "nicocache.applicationRoot";
 

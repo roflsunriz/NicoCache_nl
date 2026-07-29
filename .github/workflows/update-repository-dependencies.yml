@@ -64,7 +64,6 @@ jobs:
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
             -AppVersion 1.0.0 `
-            -NlFiltersSource .\nlFilters
           .\packaging\windows\test-windows-app-image.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
           $msi = Get-ChildItem `

@@ -6,8 +6,6 @@ param(
     [ValidateSet('AppImage', 'Zip', 'Msi', 'All')]
     [string]$PackageType = 'AppImage',
 
-    [string]$NlFiltersSource,
-
     [string]$ZipFileName
 )
 
@@ -419,39 +417,34 @@ foreach ($relativePath in $distributionFiles) {
     Copy-DistributionFile -RelativePath $relativePath
 }
 
-$distributionDirectories = @('defaults', 'extensions', 'local')
+$distributionDirectories = @('defaults')
 foreach ($relativePath in $distributionDirectories) {
     Copy-DistributionDirectory -RelativePath $relativePath
 }
+$systemFilesManifest = Join-Path $root 'packaging\system-files.txt'
+$systemFiles = @(
+    Get-Content -LiteralPath $systemFilesManifest |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -and -not $_.StartsWith('#') }
+)
+if ($systemFiles.Count -eq 0) {
+    throw "システム資材一覧が空です: $systemFilesManifest"
+}
+foreach ($relativePath in $systemFiles) {
+    Copy-DistributionFile -RelativePath $relativePath
+}
 Copy-DevelopmentPayload
 $writableDirectories = @(
-    'cache', 'certs', 'cvcache', 'data', 'list', 'nlFilters', 'thcache'
+    'data', 'list'
 )
 foreach ($relativePath in $writableDirectories) {
     New-Item -ItemType Directory -Path (Join-Path $inputRoot $relativePath) `
         -Force | Out-Null
 }
-foreach ($relativePath in @('certs\readme.txt', 'data\readme.txt',
+foreach ($relativePath in @('data\readme.txt',
         'data\cors\99_sample.conf', 'data\tlsclient\cacerts2',
         'list\NGtitle.txt')) {
     Copy-DistributionFile -RelativePath $relativePath
-}
-
-if ($NlFiltersSource) {
-    $resolvedFilters = (Resolve-Path -LiteralPath $NlFiltersSource).Path
-    $filterFiles = @(Get-ChildItem -LiteralPath $resolvedFilters -File `
-            -Filter '*.txt' |
-            Where-Object {
-                -not $_.LinkType -and $_.Name -match '^(0[1-9]|1[0-9]|20)(?:\D|$)'
-            })
-    if ($filterFiles.Count -eq 0) {
-        throw "配布対象のnlFilters 01-20番台がありません: $resolvedFilters"
-    }
-    $filterFiles | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination (
-            Join-Path $inputRoot 'nlFilters'
-        )
-    }
 }
 
 $libDestination = Join-Path $inputRoot 'lib'
@@ -528,6 +521,9 @@ $runtimeLayoutPaths = @(
     $distributionFiles
     $distributionDirectories
     $writableDirectories
+    'extensions'
+    'local'
+    'nlFilters'
     'setup'
     'THIRD-PARTY-NOTICES.txt'
 )

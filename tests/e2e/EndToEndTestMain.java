@@ -100,6 +100,7 @@ public final class EndToEndTestMain {
 
     private void prepareSandbox() throws IOException {
         Files.createDirectories(application.resolve("defaults"));
+        Files.createDirectories(application.resolve("local"));
         Files.createDirectories(data.resolve("local"));
         Files.createDirectories(data.resolve("extensions"));
         Files.createDirectories(data.resolve("cache"));
@@ -112,7 +113,7 @@ public final class EndToEndTestMain {
                     application.resolve("defaults").resolve(source.getFileName())));
         }
         copy(repository.resolve("local/mime.types.default"),
-                data.resolve("local/mime.types"));
+                application.resolve("local/mime.types.default"));
         copy(repository.resolve("nlFilter_sys.txt"),
                 application.resolve("nlFilter_sys.txt"));
         copy(repository.resolve("data/tlsclient/cacerts2"),
@@ -120,6 +121,18 @@ public final class EndToEndTestMain {
 
         Files.writeString(data.resolve("local/e2e.txt"),
                 "end-to-end-content", StandardCharsets.UTF_8);
+        Files.writeString(application.resolve("local/system-only.txt"),
+                "system-end-to-end", StandardCharsets.UTF_8);
+        Files.writeString(application.resolve("local/overlay.txt"),
+                "system-overlay", StandardCharsets.UTF_8);
+        Files.writeString(data.resolve("local/overlay.txt"),
+                "user-overlay", StandardCharsets.UTF_8);
+        Path linkedTarget = data.resolve("linked-local-target");
+        Files.createDirectories(linkedTarget);
+        Files.writeString(linkedTarget.resolve("linked.txt"),
+                "linked-end-to-end", StandardCharsets.UTF_8);
+        createDirectoryLink(
+                data.resolve("local/features"), linkedTarget);
         Files.writeString(data.resolve("secret-outside-local.txt"),
                 "must-never-be-served", StandardCharsets.UTF_8);
 
@@ -149,8 +162,10 @@ public final class EndToEndTestMain {
                 "mimeTypes=local/mime.types",
                 "touchCache=false",
                 "title=false",
+                "userDataRoot="
+                        + data.toString().replace("\\", "\\\\"),
                 "");
-        Files.writeString(data.resolve("config.properties"),
+        Files.writeString(application.resolve("config.properties"),
                 config, StandardCharsets.UTF_8);
     }
 
@@ -160,7 +175,6 @@ public final class EndToEndTestMain {
                 javaExecutable(),
                 "-Djava.awt.headless=true",
                 "-Dnicocache.applicationRoot=" + application,
-                "-Dnicocache.dataRoot=" + data,
                 "-jar",
                 productJar.toString(),
                 "--headless");
@@ -227,6 +241,24 @@ public final class EndToEndTestMain {
         Response post = request(localRequest(
                 "POST", "/local/e2e.txt", "Content-Length: 0\r\n"));
         assertEquals(405, post.status, "POST status");
+
+        Response system = request(localRequest(
+                "GET", "/local/system-only.txt", ""));
+        assertEquals(200, system.status, "system local status");
+        assertEquals("system-end-to-end", system.bodyText(),
+                "system local fallback");
+
+        Response overlay = request(localRequest(
+                "GET", "/local/overlay.txt", ""));
+        assertEquals(200, overlay.status, "overlay local status");
+        assertEquals("user-overlay", overlay.bodyText(),
+                "user local override");
+
+        Response linked = request(localRequest(
+                "GET", "/local/features/linked.txt", ""));
+        assertEquals(200, linked.status, "linked local status");
+        assertEquals("linked-end-to-end", linked.bodyText(),
+                "linked local body");
     }
 
     private void testPathContainment() throws Exception {
@@ -528,6 +560,34 @@ public final class EndToEndTestMain {
         } catch (IOException error) {
             throw new IllegalStateException(
                     "failed to copy " + source + " to " + target, error);
+        }
+    }
+
+    private static void createDirectoryLink(Path link, Path target)
+            throws IOException {
+        try {
+            Files.createSymbolicLink(link, target);
+            return;
+        } catch (IOException linkError) {
+            if (!System.getProperty("os.name", "")
+                    .toLowerCase(Locale.ROOT).contains("windows")) {
+                throw linkError;
+            }
+            try {
+                Process process = new ProcessBuilder(
+                        "cmd.exe", "/c", "mklink", "/J",
+                        link.toString(), target.toString())
+                        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                        .redirectError(ProcessBuilder.Redirect.DISCARD)
+                        .start();
+                if (process.waitFor() != 0 || !Files.isDirectory(link)) {
+                    throw linkError;
+                }
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                throw new IOException("directory-link creation interrupted",
+                        error);
+            }
         }
     }
 

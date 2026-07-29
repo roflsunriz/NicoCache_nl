@@ -145,22 +145,14 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                 Logger.warning("no nlFilter_sys.txt found. please check...");
             }
         } else {
-            // ディレクトリから検索、追加(名前順)
-            File nlFilters = UserDataPaths.userFile("nlFilters");
-            if (nlFilters.isDirectory()) {
-                String[] filterArray = nlFilters.list((dir, name) -> {
-                    if (IGNORE_FILENAME_PATTERN.matcher(name).find() ||
-                            NLConfig.find("nlFilterIgnore", name)) {
-                        return false;
-                    }
-                    return name.endsWith(".txt");
-                });
-                if (filterArray != null) {
-                    Arrays.sort(filterArray);
-                    for (String fname : filterArray) {
-                        newFilterFile.add(new FilterFile(nlFilters, fname));
-                    }
-                }
+            // システム側を先に、利用者側を後に読み込む。
+            File systemFilters =
+                    UserDataPaths.applicationFile("nlFilters");
+            File userFilters = UserDataPaths.userFile("nlFilters");
+            addFilterDirectory(systemFilters, newFilterFile);
+            if (!systemFilters.toPath().toAbsolutePath().normalize().equals(
+                    userFilters.toPath().toAbsolutePath().normalize())) {
+                addFilterDirectory(userFilters, newFilterFile);
             }
             // 元のnlFilterは最後に追加
             addFilterFile(
@@ -331,6 +323,27 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
             Logger.error(e);
         } finally {
             CloseUtil.close(reader);
+        }
+    }
+
+    private static void addFilterDirectory(
+            File directory, ArrayList<FilterFile> destination) {
+        if (!directory.isDirectory()) {
+            return;
+        }
+        String[] filterArray = directory.list((dir, name) -> {
+            if (IGNORE_FILENAME_PATTERN.matcher(name).find()
+                    || NLConfig.find("nlFilterIgnore", name)) {
+                return false;
+            }
+            return name.endsWith(".txt");
+        });
+        if (filterArray == null) {
+            return;
+        }
+        Arrays.sort(filterArray);
+        for (String filename : filterArray) {
+            destination.add(new FilterFile(directory, filename));
         }
     }
 

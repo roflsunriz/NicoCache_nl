@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'packaging/windows/**'
+      - 'packaging/system-files.txt'
       - 'src/**'
       - 'defaults/**'
       - 'data/cors/99_sample.conf'
@@ -28,6 +29,7 @@ on:
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'packaging/windows/**'
+      - 'packaging/system-files.txt'
       - 'src/**'
       - 'defaults/**'
       - 'data/cors/99_sample.conf'
@@ -97,7 +99,6 @@ jobs:
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
             -AppVersion $env:TEST_PREVIOUS_VERSION `
-            -NlFiltersSource .\nlFilters
           $lifecycle = New-Item `
             -ItemType Directory `
             -Path .\.test-work\installer-lifecycle `
@@ -123,7 +124,6 @@ jobs:
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
             -AppVersion $env:TEST_CURRENT_VERSION `
-            -NlFiltersSource .\nlFilters
 
       - name: Test MSI shortcut structure
         shell: pwsh

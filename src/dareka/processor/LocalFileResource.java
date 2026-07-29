@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -58,14 +59,11 @@ public class LocalFileResource extends Resource implements ConfigObserver {
             throw new IllegalArgumentException("file must not be null");
         }
         if (Boolean.getBoolean("localPathCheck")) {
-            // カレントディレクトリを含まないパスは禁止
-            String dataRoot = System.getProperty("nicocache.dataRoot");
-            File workingRoot = dataRoot == null || dataRoot.isBlank()
-                    ? new File(".")
-                    : new File(dataRoot);
-            String cwd = workingRoot.getCanonicalPath() + File.separator;
-            String path = file.getCanonicalPath();
-            if (!path.startsWith(cwd)) {
+            Path path = file.toPath().toAbsolutePath().normalize();
+            if (!isWithinConfiguredRoot(
+                        path, "nicocache.userDataRoot", new File("."))
+                    && !isWithinConfiguredRoot(
+                        path, "nicocache.applicationRoot", new File("."))) {
                 throw new SecurityException("Invalid local path: " + path);
             }
         }
@@ -77,6 +75,16 @@ public class LocalFileResource extends Resource implements ConfigObserver {
         }
         this.file = file;
         this.end = file.length() - 1L;
+    }
+
+    private static boolean isWithinConfiguredRoot(
+            java.nio.file.Path path, String property, File fallback) {
+        String configured = System.getProperty(property);
+        File root = configured == null || configured.isBlank()
+                ? fallback : new File(configured);
+        java.nio.file.Path normalizedRoot =
+                root.toPath().toAbsolutePath().normalize();
+        return path.startsWith(normalizedRoot);
     }
 
     /**
@@ -403,17 +411,38 @@ public class LocalFileResource extends Resource implements ConfigObserver {
     public void update(Config config) {
         String mimeTypesPath = System.getProperty("mimeTypes", "");
         if (mimeTypesPath.length() > 0) {
-            mimeTypesFile = new File(mimeTypesPath);
+            mimeTypesFile = resolveOverlayFile(mimeTypesPath);
             if (!mimeTypesFile.exists()) {
-                File defaultFile = new File(mimeTypesPath + ".default");
-                if (defaultFile.exists()) {
-                    mimeTypesFile = defaultFile;
-                }
+                mimeTypesFile = resolveOverlayFile(
+                        mimeTypesPath + ".default");
             }
         } else {
             mimeTypesFile = null;
             clearMimeTypes();
         }
+    }
+
+    private static File resolveOverlayFile(String configuredPath) {
+        Path path = Path.of(configuredPath);
+        if (path.isAbsolute()) {
+            return path.normalize().toFile();
+        }
+        File first = resolveFromProperty(
+                "nicocache.userDataRoot", configuredPath);
+        if (first.exists()) {
+            return first;
+        }
+        return resolveFromProperty(
+                "nicocache.applicationRoot", configuredPath);
+    }
+
+    private static File resolveFromProperty(
+            String property, String relativePath) {
+        String configuredRoot = System.getProperty(property);
+        Path root = configuredRoot == null || configuredRoot.isBlank()
+                ? Path.of("").toAbsolutePath().normalize()
+                : Path.of(configuredRoot).toAbsolutePath().normalize();
+        return root.resolve(relativePath).normalize().toFile();
     }
 
     private static void loadMimeTypes() {
