@@ -89,6 +89,13 @@ Assert-ContainsLine $packageScript `
 $installerWorkflow = Get-Content -Raw -LiteralPath (
     Join-Path $root '.github\workflows\windows-installer.yml'
 )
+if ($installerWorkflow -match
+        '-AppVersion\s+\$env:[A-Z_]+\s+`\r?\n') {
+    throw (
+        'Windows Installer workflow leaves a trailing backtick after ' +
+        'the final AppVersion argument'
+    )
+}
 if (($installerWorkflow.Split(
         [string[]]@("      - 'nlFilters/**'"),
         [System.StringSplitOptions]::None).Count - 1) -ne 2) {

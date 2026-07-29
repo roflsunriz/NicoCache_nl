@@ -98,7 +98,7 @@ jobs:
         run: |
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
-            -AppVersion $env:TEST_PREVIOUS_VERSION `
+            -AppVersion $env:TEST_PREVIOUS_VERSION
           $lifecycle = New-Item `
             -ItemType Directory `
             -Path .\.test-work\installer-lifecycle `
@@ -123,7 +123,7 @@ jobs:
         run: |
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
-            -AppVersion $env:TEST_CURRENT_VERSION `
+            -AppVersion $env:TEST_CURRENT_VERSION
 
       - name: Test MSI shortcut structure
         shell: pwsh
