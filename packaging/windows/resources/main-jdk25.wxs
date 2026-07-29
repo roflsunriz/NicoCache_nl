@@ -118,7 +118,7 @@
     <CustomAction
       Id="NicoCacheRollbackWindowsSetup"
       Directory="TARGETDIR"
-      ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[NICOCACHE_INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback"
+      ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[NICOCACHE_INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback -RemoveApplicationConfig"
       Execute="immediate"
       Return="check" />
 

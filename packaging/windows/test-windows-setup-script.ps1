@@ -280,4 +280,85 @@ if ($defaultRollback.ExitCode -ne 0) {
     throw "既定パスによるロールバックに失敗しました (ExitCode: $($defaultRollback.ExitCode))"
 }
 
+$applicationConfigPath = Join-Path $testRoot 'product\config.properties'
+Set-Content -LiteralPath $applicationConfigPath `
+    -Value 'userDataRoot=preserved-outside-the-product' `
+    -Encoding ascii
+$uninstallRollback = Start-Process `
+    -FilePath 'powershell.exe' `
+    -ArgumentList @(
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $defaultLayoutScriptPath,
+        '-Action', 'Rollback',
+        '-StatePath', $missingStatePath,
+        '-RemoveApplicationConfig'
+    ) `
+    -Wait `
+    -PassThru `
+    -RedirectStandardOutput $standardOutputPath `
+    -RedirectStandardError $standardErrorPath
+
+if ($uninstallRollback.ExitCode -ne 0) {
+    throw "アンインストール用ロールバックに失敗しました (ExitCode: $($uninstallRollback.ExitCode))"
+}
+if (Test-Path -LiteralPath $applicationConfigPath) {
+    throw 'アンインストール用ロールバック後もconfig.propertiesが残っています'
+}
+
+$uninstallStatePath = Join-Path $testRoot (
+    'uninstall-data\setup-system-state.json'
+)
+New-Item -ItemType Directory -Path (
+    Split-Path -Parent $uninstallStatePath
+) -Force | Out-Null
+$stateLocatorBeforeUninstall = Get-StateLocatorSnapshot
+$uninstallApply = Start-Process `
+    -FilePath 'powershell.exe' `
+    -ArgumentList @(
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $defaultLayoutScriptPath,
+        '-Action', 'Apply',
+        '-StatePath', $uninstallStatePath
+    ) `
+    -Wait `
+    -PassThru `
+    -RedirectStandardOutput $standardOutputPath `
+    -RedirectStandardError $standardErrorPath
+if ($uninstallApply.ExitCode -ne 0) {
+    throw "アンインストール前状態の作成に失敗しました (ExitCode: $($uninstallApply.ExitCode))"
+}
+Set-Content -LiteralPath $applicationConfigPath `
+    -Value 'userDataRoot=preserved-outside-the-product' `
+    -Encoding ascii
+$registeredUninstallRollback = Start-Process `
+    -FilePath 'powershell.exe' `
+    -ArgumentList @(
+        '-NoProfile',
+        '-NonInteractive',
+        '-ExecutionPolicy', 'Bypass',
+        '-File', $defaultLayoutScriptPath,
+        '-Action', 'Rollback',
+        '-RemoveApplicationConfig'
+    ) `
+    -Wait `
+    -PassThru `
+    -RedirectStandardOutput $standardOutputPath `
+    -RedirectStandardError $standardErrorPath
+if ($registeredUninstallRollback.ExitCode -ne 0) {
+    throw "登録済み状態のアンインストール用ロールバックに失敗しました (ExitCode: $($registeredUninstallRollback.ExitCode))"
+}
+if (Test-Path -LiteralPath $uninstallStatePath) {
+    throw 'アンインストール用ロールバック後もWindows設定状態が残っています'
+}
+if (Test-Path -LiteralPath $applicationConfigPath) {
+    throw '登録済み状態のロールバック後もconfig.propertiesが残っています'
+}
+if ((Get-StateLocatorSnapshot) -ne $stateLocatorBeforeUninstall) {
+    throw 'アンインストール用ロールバック後に状態保存先登録が復元されませんでした'
+}
+
 Write-Output 'PASS Windows設定の段階別診断とX509Storeによる無人ロールバック'

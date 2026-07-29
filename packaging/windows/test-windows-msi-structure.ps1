@@ -267,7 +267,8 @@ try {
     foreach ($requiredArgument in @(
             '[NICOCACHE_INSTALLDIR]',
             'setup\windows\first-run-setup.ps1',
-            '-Action Rollback'
+            '-Action Rollback',
+            '-RemoveApplicationConfig'
         )) {
         if ($rollbackAction.Values[3] -notmatch
                 [regex]::Escape($requiredArgument)) {

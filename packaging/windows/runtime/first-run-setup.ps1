@@ -13,7 +13,8 @@ param(
 
     [switch]$EnableCertificate,
     [switch]$EnableProxy,
-    [switch]$EnableAutoStart
+    [switch]$EnableAutoStart,
+    [switch]$RemoveApplicationConfig
 )
 
 Set-StrictMode -Version Latest
@@ -151,6 +152,19 @@ function Restore-StateLocator {
                 $locatorKey.GetSubKeyNames().Count -eq 0) {
             Remove-Item -LiteralPath $stateLocatorRegistryPath -Force
         }
+    }
+}
+
+function Remove-ApplicationConfigFile {
+    if (-not $RemoveApplicationConfig) {
+        return
+    }
+    $installRoot = [System.IO.Path]::GetFullPath(
+        (Join-Path $PSScriptRoot '..\..')
+    )
+    $configPath = Join-Path $installRoot 'config.properties'
+    if (Test-Path -LiteralPath $configPath -PathType Leaf) {
+        Remove-Item -LiteralPath $configPath -Force
     }
 }
 
@@ -326,6 +340,7 @@ if ($Action -eq 'Rollback' -and
 $fullStatePath = [System.IO.Path]::GetFullPath($StatePath)
 if ($Action -eq 'Rollback' -and
         -not (Test-Path -LiteralPath $fullStatePath -PathType Leaf)) {
+    Remove-ApplicationConfigFile
     return
 }
 $stateDirectory = Split-Path -Parent $fullStatePath
@@ -339,6 +354,7 @@ if ($Action -eq 'Rollback') {
         ConvertFrom-Json
     Restore-State -State $state
     Remove-Item -LiteralPath $fullStatePath -Force
+    Remove-ApplicationConfigFile
     return
 }
 
