@@ -8,6 +8,8 @@
 
 ### Changed
 
+- Windows向け配布物へ移行済みであることを明確にし、GitHub Releaseから本体JARと
+  そのSHA-256ファイルを個別アセットとして公開しないようにした。
 - GUI設定へ検索内容を混在させないよう、ログ検索履歴を利用者データフォルダーの
   専用`NicoCacheGUI.search-history.properties`へ移し、従来の
   `NicoCacheGUI.property`内の履歴を初回起動時に自動移行するようにした。

@@ -65,7 +65,6 @@ function Assert-ExactSet {
 
 foreach ($step in @(
         'Run functional and Extension ABI tests',
-        'Create release checksum',
         'Test release MSI structure',
         'Test release app image',
         'Test ZIP and app image parity',
@@ -130,8 +129,6 @@ $uploadedAssets = @($upload | ForEach-Object {
     })
 $expectedUploadedAssets = @(
     'NicoCache_nl-${{ steps.release-tag.outputs.tag }}.zip'
-    'NicoCache_nl.jar'
-    'NicoCache_nl.jar.sha256'
     'NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi'
     'NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi.sha256'
     'NicoCache_nl-Updater-${{ steps.updater-version.outputs.updater_version }}.msi'
@@ -147,8 +144,6 @@ $publishedAssets = @($publish | ForEach-Object {
     })
 $expectedPublishedAssets = @(
     'NicoCache_nl-$RELEASE_TAG.zip'
-    'NicoCache_nl.jar'
-    'NicoCache_nl.jar.sha256'
     'NicoCache_nl-$APP_VERSION.msi'
     'NicoCache_nl-$APP_VERSION.msi.sha256'
     'NicoCache_nl-Updater-$UPDATER_VERSION.msi'

@@ -97,16 +97,6 @@ jobs:
           include-hidden-files: true
           path: .test-work/functional
 
-      - name: Create release checksum
-        shell: pwsh
-        run: |
-          $jarPath = Join-Path $env:GITHUB_WORKSPACE 'NicoCache_nl.jar'
-          if (-not (Test-Path -LiteralPath $jarPath -PathType Leaf)) {
-            throw "ビルド成果物がありません: $jarPath"
-          }
-          $hash = (Get-FileHash -LiteralPath $jarPath -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  NicoCache_nl.jar" | Out-File -FilePath (Join-Path $env:GITHUB_WORKSPACE 'NicoCache_nl.jar.sha256') -Encoding ascii
-
       - name: Set up JDK 25 for Windows installer
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
@@ -232,8 +222,6 @@ jobs:
           if-no-files-found: error
           path: |
             NicoCache_nl-${{ steps.release-tag.outputs.tag }}.zip
-            NicoCache_nl.jar
-            NicoCache_nl.jar.sha256
             NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi
             NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi.sha256
             NicoCache_nl-Updater-${{ steps.updater-version.outputs.updater_version }}.msi
@@ -262,8 +250,6 @@ jobs:
         run: |
           gh release create "$RELEASE_TAG" \
             "release-assets/NicoCache_nl-$RELEASE_TAG.zip" \
-            "release-assets/NicoCache_nl.jar" \
-            "release-assets/NicoCache_nl.jar.sha256" \
             "release-assets/NicoCache_nl-$APP_VERSION.msi" \
             "release-assets/NicoCache_nl-$APP_VERSION.msi.sha256" \
             "release-assets/NicoCache_nl-Updater-$UPDATER_VERSION.msi" \
