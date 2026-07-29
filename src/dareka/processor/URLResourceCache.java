@@ -324,6 +324,9 @@ public class URLResourceCache {
         }
 
         List<String> cacheControls = rh.getMessageHeadersOfName(CACHE_CONTROL);
+        if (cacheControls == null) {
+            cacheControls = Collections.emptyList();
+        }
         if (hasCacheDirective(cacheControls, "no-store")
                 || hasCacheDirective(cacheControls, "no-cache")) {
             return 0;

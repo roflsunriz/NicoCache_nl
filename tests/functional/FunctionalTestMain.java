@@ -603,6 +603,17 @@ public final class FunctionalTestMain {
             assertEquals(1, upstreamRequestCount("/resource-cache/max-age"),
                     "max-age upstream request count");
 
+            URLResource noDirectivesFirst = cache.cacheAndGet(
+                    "no-directives", base + "no-directives");
+            assertContains(resourceBody(noDirectivesFirst), "no-directives-1",
+                    "response without Cache-Control initial response");
+            URLResource noDirectivesSecond = cache.cacheAndGet(
+                    "no-directives", base + "no-directives");
+            assertContains(resourceBody(noDirectivesSecond), "no-directives-1",
+                    "response without Cache-Control cached response");
+            assertEquals(1, upstreamRequestCount("/resource-cache/no-directives"),
+                    "response without Cache-Control upstream request count");
+
             URLResource noStoreFirst = cache.cacheAndGet("no-store", base + "no-store");
             assertContains(resourceBody(noStoreFirst), "no-store-1",
                     "no-store initial response");
