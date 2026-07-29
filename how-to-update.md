@@ -67,6 +67,21 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
 
 ## GitHub Actions とリリース
 
+### v1.1.0（2026-07-30）
+
+今回のリリースは `v1.1.0` として公開する。本体ソースのバージョン文字列は
+`NicoCache_nl version 2026-07-30 (v1.1.0)` とする。機能テストと本体ビルドを実行し、
+生成物や無関係な差分がないことを確認してから、次のタグを作成・pushする。
+
+```powershell
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+GitHub Actionsのリリースワークフロー完了後、GitHub Releaseに
+`NicoCache_nl-1.1.0.zip`、`NicoCache_nl-1.1.0.msi`、そのSHA-256、
+および `updater/VERSION` に基づく独立アップデーターMSIが生成されていることを確認する。
+
 `main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
 JDK 11 で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
 加えてTemurin 25でWindows、Linux、macOSのビルド、機能、TLS、

@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-30
+
 ### Changed
 
 - Windows向け配布物へ移行済みであることを明確にし、GitHub Releaseから本体JARと
