@@ -89,7 +89,8 @@ Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*
 $target = Join-Path $workRoot 'target'
 if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
 if ($Platform -eq 'MacOS') {
-    New-Item -ItemType Directory -Path (Join-Path $target 'MacOS'), (Join-Path $target 'app') | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $target 'MacOS'),
+        (Join-Path $target 'app'), (Join-Path $target 'Resources') | Out-Null
     Set-Content -LiteralPath (Join-Path $target 'MacOS/NicoCache_nl') -Value 'launcher' -Encoding utf8
 } else {
     New-Item -ItemType Directory -Path (Join-Path $target 'lib/app'), (Join-Path $target 'bin') | Out-Null
@@ -131,4 +132,4 @@ if ($Platform -eq 'Linux') {
     }
 }
 
-Write-Output "$Platform独立アップデーターの構造・CLI自己診断テストに成功しました"
+Write-Output "${Platform}独立アップデーターの構造・CLI自己診断テストに成功しました"

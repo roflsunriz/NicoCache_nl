@@ -18,10 +18,14 @@ final class InstalledVersionDetector {
 
     static String detect(Path applicationRoot) {
         Path app = UpdaterPlatform.applicationDirectory(applicationRoot);
+        Path resourceDirectory = UpdaterPlatform.resourceDirectory(applicationRoot);
         Path launcherConfig = app.resolve("NicoCache_nl.cfg");
 
         String fromDistribution = readPlainVersion(
-                applicationRoot.resolve("NicoCache_nl.version"));
+                resourceDirectory.resolve("NicoCache_nl.version"));
+        if (fromDistribution == null && !resourceDirectory.equals(applicationRoot)) {
+            fromDistribution = readPlainVersion(applicationRoot.resolve("NicoCache_nl.version"));
+        }
         if (fromDistribution != null) return fromDistribution;
 
         String fromLauncher = readLauncherVersion(launcherConfig);
@@ -39,7 +43,10 @@ final class InstalledVersionDetector {
 
         // Legacy and synthetic layouts without the real launcher retain compatibility
         // with the historical marker files.
-        String fromMarker = readPlainVersion(applicationRoot.resolve("version.txt"));
+        String fromMarker = readPlainVersion(resourceDirectory.resolve("version.txt"));
+        if (fromMarker == null && !resourceDirectory.equals(applicationRoot)) {
+            fromMarker = readPlainVersion(applicationRoot.resolve("version.txt"));
+        }
         if (fromMarker != null) return fromMarker;
 
         String fromPackage = readJpackageVersion(app.resolve(".jpackage.xml"));

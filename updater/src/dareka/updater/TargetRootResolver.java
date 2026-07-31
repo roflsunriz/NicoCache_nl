@@ -69,6 +69,7 @@ final class TargetRootResolver {
         Path normalized = UpdaterPlatform.normalizeApplicationRoot(root);
         if (!Files.isDirectory(normalized)) return false;
         Path applicationDirectory = UpdaterPlatform.applicationDirectory(normalized);
+        Path resourceDirectory = UpdaterPlatform.resourceDirectory(normalized);
         return Files.isRegularFile(normalized.resolve("NicoCache_nl.jar"))
                 || Files.isRegularFile(normalized.resolve("NicoCache_nl.exe"))
                 || Files.isRegularFile(normalized.resolve("NicoCache_nl"))
@@ -77,16 +78,19 @@ final class TargetRootResolver {
                 || (Files.isRegularFile(applicationDirectory.resolve("NicoCache_nl.jar"))
                     && (Files.isRegularFile(normalized.resolve("bin/NicoCache_nl"))
                         || Files.isRegularFile(normalized.resolve("MacOS/NicoCache_nl"))))
-                || Files.isRegularFile(normalized.resolve("version.txt"))
-                || Files.isRegularFile(normalized.resolve("app").resolve(".jpackage.xml"));
+                || Files.isRegularFile(resourceDirectory.resolve("version.txt"))
+                || Files.isRegularFile(applicationDirectory.resolve(".jpackage.xml"));
     }
 
     private static Path prepare(Path root) {
-        if (!Files.isDirectory(root) || Files.isRegularFile(root.resolve("version.txt"))) return root;
+        Path resourceDirectory = UpdaterPlatform.resourceDirectory(root);
+        if (!Files.isDirectory(root)
+                || Files.isRegularFile(resourceDirectory.resolve("version.txt"))) return root;
         String detected = InstalledVersionDetector.detect(root);
         if ("不明".equals(detected)) return root;
         try {
-            Files.writeString(root.resolve("version.txt"), detected + System.lineSeparator(),
+            Files.writeString(resourceDirectory.resolve("version.txt"),
+                    detected + System.lineSeparator(),
                     StandardCharsets.US_ASCII);
         } catch (IOException ignored) {
             // The GUI can still read app/.jpackage.xml directly after this fallback is wired.

@@ -26,6 +26,11 @@ $outputRoot = Join-Path $workRoot 'output'
 $bundleName = 'NicoCache_nl' + $(if ($Platform -eq 'MacOS') { '.app' } else { '' })
 $bundle = Join-Path $outputRoot $bundleName
 $contentRoot = if ($Platform -eq 'MacOS') { Join-Path $bundle 'Contents' } else { $bundle }
+$resourceDirectory = if ($Platform -eq 'MacOS') {
+    Join-Path $contentRoot 'Resources'
+} else {
+    $contentRoot
+}
 $applicationDirectory = if ($Platform -eq 'Linux') {
     Join-Path $bundle 'lib/app'
 } else {
@@ -72,14 +77,14 @@ Assert-File (Join-Path $applicationDirectory 'lib/bcpkix.jar')
 Assert-File (Join-Path $applicationDirectory 'lib/bcprov.jar')
 Assert-File (Join-Path $applicationDirectory 'lib/bcutil.jar')
 Assert-File (Join-Path $applicationDirectory 'NicoCache_nl.cfg')
-Assert-File (Join-Path $contentRoot 'NicoCache_nl.version')
-Assert-True ((Get-Content -Raw -LiteralPath (Join-Path $contentRoot 'NicoCache_nl.version')).Trim() -eq $AppVersion) `
+Assert-File (Join-Path $resourceDirectory 'NicoCache_nl.version')
+Assert-True ((Get-Content -Raw -LiteralPath (Join-Path $resourceDirectory 'NicoCache_nl.version')).Trim() -eq $AppVersion) `
     '本体の公開版番号メタデータが不正です'
 Assert-File (Join-Path $runtimeDirectory 'lib/modules')
-Assert-File (Join-Path $contentRoot 'config.properties.default')
-Assert-File (Join-Path $contentRoot 'local/nllib.js')
-Assert-File (Join-Path $contentRoot 'nlFilters/01_globalFilter.txt')
-Assert-File (Join-Path $contentRoot 'data/tlsclient/cacerts2')
+Assert-File (Join-Path $resourceDirectory 'config.properties.default')
+Assert-File (Join-Path $resourceDirectory 'local/nllib.js')
+Assert-File (Join-Path $resourceDirectory 'nlFilters/01_globalFilter.txt')
+Assert-File (Join-Path $resourceDirectory 'data/tlsclient/cacerts2')
 Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.ps1').Count) `
     'PowerShellスクリプトがUnixパッケージへ混入しています'
 Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.dll').Count) `
@@ -110,7 +115,7 @@ if (-not $process.WaitForExit(120000)) {
 $stdout = $process.StandardOutput.ReadToEnd()
 $stderr = $process.StandardError.ReadToEnd()
 Assert-True ($process.ExitCode -eq 0) "初回セットアップ起動に失敗しました: $stdout$stderr"
-Assert-File (Join-Path $contentRoot 'config.properties')
+Assert-File (Join-Path $resourceDirectory 'config.properties')
 Assert-File (Join-Path $dataRoot 'data/first-run-setup.properties')
 Assert-File (Join-Path $dataRoot 'certs/ca.cer')
 Assert-File (Join-Path $dataRoot 'certs/site.jks')
@@ -142,4 +147,4 @@ if ($Platform -eq 'Linux') {
     }
 }
 
-Write-Output "$Platform本体パッケージの構造・隔離起動テストに成功しました"
+Write-Output "${Platform}本体パッケージの構造・隔離起動テストに成功しました"

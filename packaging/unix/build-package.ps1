@@ -52,6 +52,11 @@ $platformId = $Platform.ToLowerInvariant()
 $bundleName = 'NicoCache_nl' + $(if ($Platform -eq 'MacOS') { '.app' } else { '' })
 $appImagePath = Join-Path $outputRoot $bundleName
 $contentRoot = if ($Platform -eq 'MacOS') { Join-Path $appImagePath 'Contents' } else { $appImagePath }
+$resourceDirectory = if ($Platform -eq 'MacOS') {
+    Join-Path $contentRoot 'Resources'
+} else {
+    $contentRoot
+}
 $applicationDirectory = if ($Platform -eq 'Linux') {
     Join-Path $contentRoot 'lib/app'
 } else {
@@ -319,16 +324,17 @@ $runtimeLayoutPaths = @(
     'data', 'list', 'extensions', 'local', 'nlFilters',
     'THIRD-PARTY-NOTICES.txt'
 )
+New-Item -ItemType Directory -Path $resourceDirectory -Force | Out-Null
 foreach ($relativePath in $runtimeLayoutPaths) {
     $source = Join-Path $applicationDirectory $relativePath
     if (-not (Test-Path -LiteralPath $source)) { continue }
-    $destination = Join-Path $contentRoot $relativePath
+    $destination = Join-Path $resourceDirectory $relativePath
     if (Test-Path -LiteralPath $destination) { throw "アプリ実行時配置先が既に存在します: $destination" }
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
     Move-Item -LiteralPath $source -Destination $destination
 }
 
-Set-Content -LiteralPath (Join-Path $contentRoot 'NicoCache_nl.version') `
+Set-Content -LiteralPath (Join-Path $resourceDirectory 'NicoCache_nl.version') `
     -Value $AppVersion -Encoding ascii -NoNewline
 
 if ($PackageType -in @('Zip', 'All')) {

@@ -64,6 +64,33 @@ public final class ArchiveApplicationInstallerTest {
                     unsafeTarget, UpdaterPlatform.Kind.LINUX), "unsafe ZIP path was accepted");
             assertTrue(!Files.exists(work.resolve("escape.txt")),
                     "unsafe ZIP escaped the extraction directory");
+
+            Path macTarget = work.resolve("mac-installed/NicoCache_nl.app/Contents");
+            Files.createDirectories(macTarget.resolve("MacOS"));
+            Files.createDirectories(macTarget.resolve("app"));
+            Files.createDirectories(macTarget.resolve("Resources/data"));
+            Files.writeString(macTarget.resolve("MacOS/NicoCache_nl"), "old-launcher",
+                    StandardCharsets.UTF_8);
+            Files.writeString(macTarget.resolve("app/NicoCache_nl.jar"), "old-jar",
+                    StandardCharsets.UTF_8);
+            Files.writeString(macTarget.resolve("Resources/config.properties"),
+                    "userDataRoot=/mac-data\n", StandardCharsets.UTF_8);
+            Files.writeString(macTarget.resolve("Resources/data/user-state.txt"), "keep",
+                    StandardCharsets.UTF_8);
+            Path macArchive = work.resolve("NicoCache_nl-2.0.0-macos-arm64.zip");
+            writeMacArchive(macArchive);
+            ArchiveApplicationInstaller.install(macArchive, macTarget, UpdaterPlatform.Kind.MACOS);
+
+            assertEquals("new-launcher", Files.readString(macTarget.resolve("MacOS/NicoCache_nl")),
+                    "macOS launcher was replaced");
+            assertEquals("userDataRoot=/mac-data\n",
+                    Files.readString(macTarget.resolve("Resources/config.properties")),
+                    "macOS application config was preserved");
+            assertEquals("keep",
+                    Files.readString(macTarget.resolve("Resources/data/user-state.txt")),
+                    "macOS user data was preserved");
+            assertTrue(Files.exists(macTarget.resolve("Resources/new-product.txt")),
+                    "macOS product resource was installed");
         } finally {
             deleteTree(work);
         }
@@ -92,6 +119,16 @@ public final class ArchiveApplicationInstallerTest {
         output.putNextEntry(new ZipEntry(name));
         output.write(content.getBytes(StandardCharsets.UTF_8));
         output.closeEntry();
+    }
+
+    private static void writeMacArchive(Path archive) throws IOException {
+        try (ZipOutputStream output = new ZipOutputStream(Files.newOutputStream(archive))) {
+            add(output, "NicoCache_nl.app/Contents/MacOS/NicoCache_nl", "new-launcher");
+            add(output, "NicoCache_nl.app/Contents/app/NicoCache_nl.jar", "new-jar");
+            add(output, "NicoCache_nl.app/Contents/Resources/new-product.txt", "new");
+            add(output, "NicoCache_nl.app/Contents/Resources/data/package-sample.txt",
+                    "sample");
+        }
     }
 
     private static void expectFailure(Action action, String message) throws Exception {

@@ -74,7 +74,7 @@ final class ArchiveApplicationInstaller {
 
             Files.createDirectories(preserved);
             for (String entry : PRESERVED_ROOT_ENTRIES) {
-                Path source = target.resolve(entry).normalize();
+                Path source = UpdaterPlatform.resourceDirectory(target).resolve(entry).normalize();
                 if (!source.startsWith(target) || !Files.exists(source)) continue;
                 movePath(source, preserved.resolve(entry));
                 movedPreserved.add(entry);
@@ -251,7 +251,8 @@ final class ArchiveApplicationInstaller {
         if (!Files.isDirectory(preserved)) return;
         try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(preserved)) {
             for (Path entry : stream) {
-                Path destination = target.resolve(entry.getFileName());
+                Path destination = UpdaterPlatform.resourceDirectory(target)
+                        .resolve(entry.getFileName());
                 if (Files.exists(destination)) deleteTree(destination);
                 movePath(entry, destination);
             }
@@ -261,7 +262,7 @@ final class ArchiveApplicationInstaller {
     private static void reclaimPreserved(Path failed, Path preserved, List<String> entries)
             throws IOException {
         for (String entry : entries) {
-            Path source = failed.resolve(entry);
+            Path source = UpdaterPlatform.resourceDirectory(failed).resolve(entry);
             Path destination = preserved.resolve(entry);
             if (Files.exists(source) && !Files.exists(destination)) movePath(source, destination);
         }

@@ -76,7 +76,9 @@ final class UpdaterPlatform {
                 && "macos".equalsIgnoreCase(fileName(parent))
                 && parent.getParent() != null
                 && "contents".equalsIgnoreCase(fileName(parent.getParent()))) {
-            return parent.getParent();
+            Path contents = parent.getParent();
+            Path resources = contents.resolve("Resources");
+            return Files.isDirectory(resources) ? resources : contents;
         }
         if (kind == Kind.LINUX
                 && "bin".equalsIgnoreCase(fileName(parent))
@@ -104,6 +106,12 @@ final class UpdaterPlatform {
         Path normalized = applicationRoot.toAbsolutePath().normalize();
         Path linuxDirectory = normalized.resolve("lib/app");
         return Files.isDirectory(linuxDirectory) ? linuxDirectory : normalized.resolve("app");
+    }
+
+    static Path resourceDirectory(Path applicationRoot) {
+        Path normalized = applicationRoot.toAbsolutePath().normalize();
+        Path resources = normalized.resolve("Resources");
+        return Files.isDirectory(resources) ? resources : normalized;
     }
 
     static Path runtimeDirectory(Path applicationRoot) {

@@ -1,6 +1,7 @@
 package dareka;
 
 import java.awt.GraphicsEnvironment;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 /** Small, shared platform policy used by the launcher and first-run setup. */
@@ -52,7 +53,9 @@ final class PlatformSupport {
                 && "MacOS".equalsIgnoreCase(fileName(parent))
                 && parent.getParent() != null
                 && "Contents".equalsIgnoreCase(fileName(parent.getParent()))) {
-            return parent.getParent();
+            Path contents = parent.getParent();
+            Path resources = contents.resolve("Resources");
+            return Files.isDirectory(resources) ? resources : contents;
         }
         if (kind == Kind.LINUX
                 && "bin".equalsIgnoreCase(fileName(parent))
@@ -67,7 +70,13 @@ final class PlatformSupport {
         case WINDOWS:
             return applicationRoot.resolve("NicoCache_nl.exe");
         case MACOS:
-            return applicationRoot.resolve("MacOS").resolve("NicoCache_nl");
+            Path contents = applicationRoot;
+            if ("Resources".equalsIgnoreCase(fileName(applicationRoot))
+                    && applicationRoot.getParent() != null
+                    && "Contents".equalsIgnoreCase(fileName(applicationRoot.getParent()))) {
+                contents = applicationRoot.getParent();
+            }
+            return contents.resolve("MacOS").resolve("NicoCache_nl");
         case LINUX:
             return applicationRoot.resolve("bin").resolve("NicoCache_nl");
         case OTHER:

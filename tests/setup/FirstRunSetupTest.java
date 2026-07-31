@@ -165,6 +165,18 @@ public final class FirstRunSetupTest {
                     PlatformSupport.applicationRootFromLauncher(
                             macLauncher, PlatformSupport.Kind.MACOS),
                     "macOS app bundle Contents root");
+            Path macResources = macContents.resolve("Resources");
+            Files.createDirectories(macResources);
+            assertEquals(
+                    macResources,
+                    PlatformSupport.applicationRootFromLauncher(
+                            macLauncher, PlatformSupport.Kind.MACOS),
+                    "macOS app bundle Resources root");
+            assertEquals(
+                    macLauncher,
+                    PlatformSupport.launcherPath(
+                            macResources, PlatformSupport.Kind.MACOS),
+                    "macOS app bundle launcher from Resources root");
         } finally {
             restoreProperty(
                     NicoCachePaths.APPLICATION_ROOT_PROPERTY,
