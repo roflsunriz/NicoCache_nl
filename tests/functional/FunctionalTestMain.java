@@ -43,6 +43,7 @@ import dareka.common.LRUMap;
 import dareka.processor.URLResource;
 import dareka.processor.URLResourceCache;
 import dareka.processor.impl.CmafCachingProcessor;
+import dareka.processor.impl.DomandCVIEntry;
 import dareka.processor.util.LocalFlvTemplate;
 
 public final class FunctionalTestMain {
@@ -407,8 +408,8 @@ public final class FunctionalTestMain {
                 String extension = audio ? "cmfa" : "cmfv";
                 String base = cmafBase(path.contains("/hlsext/") ? "hlsext" : "hlsbid");
                 String playlist = "#EXTM3U\n"
-                        + "#EXT-X-KEY:METHOD=AES-128,URI=\"" + base + "/keys/"
-                        + sourceId + ".key?token=k\",IV=0x00000000000000000000000000000001\n"
+                        + "#EXT-X-KEY:IV=0x00000000000000000000000000000001,URI=\""
+                        + base + "/keys/" + sourceId + ".key?token=k\",METHOD=AES-128\n"
                         + "#EXT-X-MAP:URI=\"" + base + "/" + mediaType + "/1/"
                         + sourceId + "/init001." + extension + "?token=i\"\n"
                         + "#EXTINF:1.0,\n" + base + "/" + mediaType + "/1/"
@@ -672,6 +673,16 @@ public final class FunctionalTestMain {
         } catch (NumberFormatException expected) {
             // expected
         }
+
+        DomandCVIEntry decryptInfo = new DomandCVIEntry(
+                "functional", "sm", "900012", 0, 0, "0p", null,
+                "audio-aac-128kbps", false, ".hls", null, null, null);
+        AtomicInteger lateListenerCalls = new AtomicInteger();
+        decryptInfo.setAudioIV(new byte[16]);
+        decryptInfo.setAudioKey(new byte[16]);
+        decryptInfo.addGotAudioDecryptInfoListeners(lateListenerCalls::incrementAndGet);
+        assertEquals(1, lateListenerCalls.get(),
+                "late decrypt listener registration must not be lost");
     }
 
     private void testLruMapCapacity() {

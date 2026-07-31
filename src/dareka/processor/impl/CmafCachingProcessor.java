@@ -344,8 +344,8 @@ public class CmafCachingProcessor implements Processor {
 
         if (binContent.length != 16) {
             // 唯一対応しているAES-128の鍵長ではない
+            movieInfo.setCacheSaveFlag(false);
             Logger.info("AES-128 keyが16bytesではありません");
-            // movieInfo.setCacheSaveFlag(false)しない.
             return resource;
         };
 
@@ -1226,11 +1226,28 @@ public class CmafCachingProcessor implements Processor {
     private static final Pattern TO_SUBPLAYLIST_REMOTE_URL_TO_LOCAL_URL =
             Pattern.compile("^.*/(audio|video)/(\\d+)/[^/]*/([^?]*)(?:[?].*)$");
 
-    // group(1): method. 例: AES-128
-    // group(2): key url.
-    // group(3): Initialization Vector. 例: 0x1E1C49FE49E2BA5AC9CBA6BB0CF74B4C
-    private static final Pattern EXT_X_METHOD_AND_KEY_URL_AND_IV_PATTERN =
-        Pattern.compile("(?:^|\n)#EXT-X-KEY[^\n]*METHOD=([^,\n]*)[^\n]*URI=\"([^\"]*)[^\n]*IV=([^\n,]*)");
+    // #EXT-X-KEYの属性は順不同なので、行全体を取得して個別に解釈する。
+    private static final Pattern EXT_X_KEY_TAG_PATTERN =
+        Pattern.compile("(?m)^#EXT-X-KEY:([^\r\n]*)");
+    private static final Pattern EXT_X_KEY_ATTRIBUTE_PATTERN =
+        Pattern.compile("(?:^|,)\\s*([A-Z0-9-]+)=(\"[^\"]*\"|[^,]*)");
+
+    private static String getExtXKeyAttribute(String attributeList, String name) {
+        Matcher m = EXT_X_KEY_ATTRIBUTE_PATTERN.matcher(attributeList);
+        while (m.find()) {
+            if (!name.equals(m.group(1))) {
+                continue;
+            };
+            String value = m.group(2).trim();
+            if (value.length() >= 2
+                && value.charAt(0) == '"'
+                && value.charAt(value.length() - 1) == '"') {
+                return value.substring(1, value.length() - 1);
+            };
+            return value;
+        };
+        return null;
+    };
 
 
     private static Resource processSubPlaylist(
@@ -1308,30 +1325,36 @@ public class CmafCachingProcessor implements Processor {
 
         String encIVHex; // 復号情報の初期化ベクトルの文字列形式. "0x789ABC..."
         {
-            Matcher m = EXT_X_METHOD_AND_KEY_URL_AND_IV_PATTERN.matcher(content);
+            Matcher m = EXT_X_KEY_TAG_PATTERN.matcher(content);
             if (!m.find()) {
                 movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
                 Logger.info("復号情報をプレイリストから取り出せませんでした: "
                             + movieInfo.getSmid());
                 return serverResponse;
             };
-            String encMethod = m.group(1);
-            String encKeyUrl = m.group(2);
+            String attributes = m.group(1);
+            String encMethod = getExtXKeyAttribute(attributes, "METHOD");
+            String encKeyUrl = getExtXKeyAttribute(attributes, "URI");
+            encIVHex = getExtXKeyAttribute(attributes, "IV");
 
-            if (KEY_URL_PATTERN.matcher(encKeyUrl).matches()) {
-                // Logger.info("-- " + av + " key url: 形式ok");
-                // do nothing.
-            }
-            else {
-                Logger.info("" + av + " key url: 未知形式 '" + encKeyUrl + "'");
+            if (encMethod == null || encKeyUrl == null || encIVHex == null) {
+                movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
+                Logger.info("復号情報の属性が不足しています: "
+                            + movieInfo.getSmid());
+                return serverResponse;
             };
 
-            encIVHex = m.group(3);
+            if (!KEY_URL_PATTERN.matcher(encKeyUrl).matches()) {
+                movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
+                Logger.info("" + av + " key url: 未知形式 '" + encKeyUrl + "'");
+                return serverResponse;
+            };
 
             if (!("AES-128".equals(encMethod))) {
                 movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
                 Logger.info("非対応の暗号化方法(" + encMethod + ")です: "
                             + movieInfo.getSmid());
+                return serverResponse;
             };
         };
 
@@ -1348,6 +1371,12 @@ public class CmafCachingProcessor implements Processor {
             movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
             Logger.info("初期化ベクトル表現が不正です:["
                         + encIVHex + "]: " + movieInfo.getSmid());
+            return serverResponse;
+        };
+        if (encIV.length != 16) {
+            movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
+            Logger.info("初期化ベクトルの長さがAES-128と一致しません: "
+                        + movieInfo.getSmid());
             return serverResponse;
         };
 

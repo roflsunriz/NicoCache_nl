@@ -323,13 +323,23 @@ public class DomandCVIEntry {
     };
 
     // 登録した処理は0回or1回実行される.
+    // 鍵・IVの確認と登録を同じロック下で行い、確認直後に情報が揃う競合でも
+    // 復号処理を取りこぼさない。
     public synchronized void addGotAudioDecryptInfoListeners(Runnable r) {
-        gotAudioDecryptInfoListeners.add(r);
+        if (audioIV != null && audioKey != null) {
+            r.run();
+        } else {
+            gotAudioDecryptInfoListeners.add(r);
+        };
     };
 
     // 登録した処理は0回or1回実行される.
     public synchronized void addGotVideoDecryptInfoListeners(Runnable r) {
-        gotVideoDecryptInfoListeners.add(r);
+        if (videoIV != null && videoKey != null) {
+            r.run();
+        } else {
+            gotVideoDecryptInfoListeners.add(r);
+        };
     };
 
     public synchronized void setAudioIV(byte[] v) {
