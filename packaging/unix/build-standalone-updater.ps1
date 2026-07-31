@@ -136,7 +136,7 @@ function Get-PackageArguments {
             $arguments += @('--linux-rpm-license-type', 'Apache-2.0', '--linux-shortcut')
         }
     } else {
-        $arguments += @('--mac-package-identifier', 'jp.nicocache.nicocache_nl.updater')
+        $arguments += @('--mac-package-identifier', 'jp.nicocache.nicocache-nl.updater')
     }
     return $arguments
 }

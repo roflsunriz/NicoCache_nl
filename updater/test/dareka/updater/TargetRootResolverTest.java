@@ -26,9 +26,9 @@ public final class TargetRootResolverTest {
             assertTrue(TargetRootResolver.isInstallation(root), "NicoCache_nl.exe marker was ignored");
 
             Path linuxImage = root.resolve("linux-image");
-            Files.createDirectories(linuxImage.resolve("app"));
+            Files.createDirectories(linuxImage.resolve("lib/app"));
             Files.createDirectories(linuxImage.resolve("bin"));
-            Files.writeString(linuxImage.resolve("app/NicoCache_nl.jar"), "jar");
+            Files.writeString(linuxImage.resolve("lib/app/NicoCache_nl.jar"), "jar");
             Files.writeString(linuxImage.resolve("bin/NicoCache_nl"), "launcher");
             assertTrue(TargetRootResolver.isInstallation(linuxImage),
                     "Linux jpackage app image was not detected");

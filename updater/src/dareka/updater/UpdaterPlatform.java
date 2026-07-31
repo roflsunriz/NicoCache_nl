@@ -1,5 +1,6 @@
 package dareka.updater;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 
@@ -97,6 +98,18 @@ final class UpdaterPlatform {
         default:
             return applicationRoot.resolve("NicoCache_nl");
         }
+    }
+
+    static Path applicationDirectory(Path applicationRoot) {
+        Path normalized = applicationRoot.toAbsolutePath().normalize();
+        Path linuxDirectory = normalized.resolve("lib/app");
+        return Files.isDirectory(linuxDirectory) ? linuxDirectory : normalized.resolve("app");
+    }
+
+    static Path runtimeDirectory(Path applicationRoot) {
+        Path normalized = applicationRoot.toAbsolutePath().normalize();
+        Path linuxDirectory = normalized.resolve("lib/runtime");
+        return Files.isDirectory(linuxDirectory) ? linuxDirectory : normalized.resolve("runtime");
     }
 
     static Path defaultRoot() {

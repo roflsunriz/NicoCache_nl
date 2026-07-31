@@ -192,7 +192,10 @@ final class ArchiveApplicationInstaller {
             candidate = root.resolve("Contents");
         }
         if (!Files.isDirectory(candidate)) return false;
-        if (!Files.isRegularFile(candidate.resolve("app/NicoCache_nl.jar"))) return false;
+        if (!Files.isRegularFile(
+                UpdaterPlatform.applicationDirectory(candidate).resolve("NicoCache_nl.jar"))) {
+            return false;
+        }
         if (platform == UpdaterPlatform.Kind.MACOS) {
             return Files.isRegularFile(candidate.resolve("MacOS/NicoCache_nl"));
         }
@@ -216,7 +219,8 @@ final class ArchiveApplicationInstaller {
             launcher = root.resolve("NicoCache_nl");
         }
         setExecutable(launcher);
-        Path runtimeBin = root.resolve("runtime/bin");
+        Path runtimeRoot = UpdaterPlatform.runtimeDirectory(root);
+        Path runtimeBin = runtimeRoot.resolve("bin");
         if (Files.isDirectory(runtimeBin)) {
             try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(runtimeBin)) {
                 for (Path file : stream) {
@@ -224,7 +228,7 @@ final class ArchiveApplicationInstaller {
                 }
             }
         }
-        setExecutable(root.resolve("runtime/lib/jspawnhelper"));
+        setExecutable(runtimeRoot.resolve("lib/jspawnhelper"));
     }
 
     private static void setExecutable(Path file) throws IOException {

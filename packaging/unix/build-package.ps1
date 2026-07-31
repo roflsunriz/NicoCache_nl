@@ -52,6 +52,11 @@ $platformId = $Platform.ToLowerInvariant()
 $bundleName = 'NicoCache_nl' + $(if ($Platform -eq 'MacOS') { '.app' } else { '' })
 $appImagePath = Join-Path $outputRoot $bundleName
 $contentRoot = if ($Platform -eq 'MacOS') { Join-Path $appImagePath 'Contents' } else { $appImagePath }
+$applicationDirectory = if ($Platform -eq 'Linux') {
+    Join-Path $contentRoot 'lib/app'
+} else {
+    Join-Path $contentRoot 'app'
+}
 
 function Get-JPackageVersion {
     if ($Platform -ne 'MacOS') { return $AppVersion }
@@ -175,7 +180,7 @@ function Get-ProductPackageArguments {
             $arguments += @('--linux-rpm-license-type', 'Apache-2.0', '--linux-shortcut')
         }
     } else {
-        $arguments += @('--mac-package-identifier', 'jp.nicocache.nicocache_nl')
+        $arguments += @('--mac-package-identifier', 'jp.nicocache.nicocache-nl')
     }
     return $arguments
 }
@@ -315,7 +320,7 @@ $runtimeLayoutPaths = @(
     'THIRD-PARTY-NOTICES.txt'
 )
 foreach ($relativePath in $runtimeLayoutPaths) {
-    $source = Join-Path (Join-Path $contentRoot 'app') $relativePath
+    $source = Join-Path $applicationDirectory $relativePath
     if (-not (Test-Path -LiteralPath $source)) { continue }
     $destination = Join-Path $contentRoot $relativePath
     if (Test-Path -LiteralPath $destination) { throw "アプリ実行時配置先が既に存在します: $destination" }

@@ -26,6 +26,16 @@ $outputRoot = Join-Path $workRoot 'output'
 $bundleName = 'NicoCache_nl Updater' + $(if ($Platform -eq 'MacOS') { '.app' } else { '' })
 $bundle = Join-Path $outputRoot $bundleName
 $contentRoot = if ($Platform -eq 'MacOS') { Join-Path $bundle 'Contents' } else { $bundle }
+$applicationDirectory = if ($Platform -eq 'Linux') {
+    Join-Path $bundle 'lib/app'
+} else {
+    Join-Path $contentRoot 'app'
+}
+$runtimeDirectory = if ($Platform -eq 'Linux') {
+    Join-Path $bundle 'lib/runtime'
+} else {
+    Join-Path $contentRoot 'runtime'
+}
 $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
     'X64' { 'x64' }
     'Arm64' { 'arm64' }
@@ -71,8 +81,8 @@ $launcher = if ($Platform -eq 'MacOS') {
     Join-Path $bundle 'bin/NicoCache_nl Updater'
 }
 Assert-File $launcher
-Assert-File (Join-Path $contentRoot 'app/NicoCacheUpdater.jar')
-Assert-File (Join-Path $contentRoot 'runtime/lib/modules')
+Assert-File (Join-Path $applicationDirectory 'NicoCacheUpdater.jar')
+Assert-File (Join-Path $runtimeDirectory 'lib/modules')
 Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.ps1').Count) `
     'PowerShellスクリプトがアップデーターへ混入しています'
 
@@ -82,10 +92,15 @@ if ($Platform -eq 'MacOS') {
     New-Item -ItemType Directory -Path (Join-Path $target 'MacOS'), (Join-Path $target 'app') | Out-Null
     Set-Content -LiteralPath (Join-Path $target 'MacOS/NicoCache_nl') -Value 'launcher' -Encoding utf8
 } else {
-    New-Item -ItemType Directory -Path (Join-Path $target 'app'), (Join-Path $target 'bin') | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $target 'lib/app'), (Join-Path $target 'bin') | Out-Null
     Set-Content -LiteralPath (Join-Path $target 'bin/NicoCache_nl') -Value 'launcher' -Encoding utf8
 }
-Set-Content -LiteralPath (Join-Path $target 'app/NicoCache_nl.cfg') -Encoding utf8 -Value @'
+$targetApplicationDirectory = if ($Platform -eq 'Linux') {
+    Join-Path $target 'lib/app'
+} else {
+    Join-Path $target 'app'
+}
+Set-Content -LiteralPath (Join-Path $targetApplicationDirectory 'NicoCache_nl.cfg') -Encoding utf8 -Value @'
 [Application]
 app.mainmodule=NicoCache_nl.jar
 

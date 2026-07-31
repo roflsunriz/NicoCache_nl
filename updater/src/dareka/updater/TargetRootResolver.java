@@ -68,12 +68,13 @@ final class TargetRootResolver {
         if (root == null) return false;
         Path normalized = UpdaterPlatform.normalizeApplicationRoot(root);
         if (!Files.isDirectory(normalized)) return false;
+        Path applicationDirectory = UpdaterPlatform.applicationDirectory(normalized);
         return Files.isRegularFile(normalized.resolve("NicoCache_nl.jar"))
                 || Files.isRegularFile(normalized.resolve("NicoCache_nl.exe"))
                 || Files.isRegularFile(normalized.resolve("NicoCache_nl"))
                 || Files.isRegularFile(normalized.resolve("bin/NicoCache_nl"))
                 || Files.isRegularFile(normalized.resolve("MacOS/NicoCache_nl"))
-                || (Files.isRegularFile(normalized.resolve("app/NicoCache_nl.jar"))
+                || (Files.isRegularFile(applicationDirectory.resolve("NicoCache_nl.jar"))
                     && (Files.isRegularFile(normalized.resolve("bin/NicoCache_nl"))
                         || Files.isRegularFile(normalized.resolve("MacOS/NicoCache_nl"))))
                 || Files.isRegularFile(normalized.resolve("version.txt"))

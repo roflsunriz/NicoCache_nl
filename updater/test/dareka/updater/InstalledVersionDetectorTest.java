@@ -12,7 +12,7 @@ public final class InstalledVersionDetectorTest {
     public static void main(String[] args) throws Exception {
         Path root = Files.createTempDirectory("installed-version-test-");
         try {
-            Path app = root.resolve("app");
+            Path app = root.resolve("lib/app");
             Files.createDirectories(app);
             Files.writeString(app.resolve("NicoCache_nl.cfg"),
                     "[Application]\n"

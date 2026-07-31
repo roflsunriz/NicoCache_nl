@@ -26,6 +26,16 @@ $outputRoot = Join-Path $workRoot 'output'
 $bundleName = 'NicoCache_nl' + $(if ($Platform -eq 'MacOS') { '.app' } else { '' })
 $bundle = Join-Path $outputRoot $bundleName
 $contentRoot = if ($Platform -eq 'MacOS') { Join-Path $bundle 'Contents' } else { $bundle }
+$applicationDirectory = if ($Platform -eq 'Linux') {
+    Join-Path $bundle 'lib/app'
+} else {
+    Join-Path $contentRoot 'app'
+}
+$runtimeDirectory = if ($Platform -eq 'Linux') {
+    Join-Path $bundle 'lib/runtime'
+} else {
+    Join-Path $contentRoot 'runtime'
+}
 $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
     'X64' { 'x64' }
     'Arm64' { 'arm64' }
@@ -56,16 +66,16 @@ if ($Platform -eq 'Linux') {
     $launcher = Join-Path $contentRoot 'MacOS/NicoCache_nl'
     Assert-File $launcher
 }
-Assert-File (Join-Path $contentRoot 'app/NicoCache_nl.jar')
-Assert-File (Join-Path $contentRoot 'app/NicoCacheCA.jar')
-Assert-File (Join-Path $contentRoot 'app/lib/bcpkix.jar')
-Assert-File (Join-Path $contentRoot 'app/lib/bcprov.jar')
-Assert-File (Join-Path $contentRoot 'app/lib/bcutil.jar')
-Assert-File (Join-Path $contentRoot 'app/NicoCache_nl.cfg')
+Assert-File (Join-Path $applicationDirectory 'NicoCache_nl.jar')
+Assert-File (Join-Path $applicationDirectory 'NicoCacheCA.jar')
+Assert-File (Join-Path $applicationDirectory 'lib/bcpkix.jar')
+Assert-File (Join-Path $applicationDirectory 'lib/bcprov.jar')
+Assert-File (Join-Path $applicationDirectory 'lib/bcutil.jar')
+Assert-File (Join-Path $applicationDirectory 'NicoCache_nl.cfg')
 Assert-File (Join-Path $contentRoot 'NicoCache_nl.version')
 Assert-True ((Get-Content -Raw -LiteralPath (Join-Path $contentRoot 'NicoCache_nl.version')).Trim() -eq $AppVersion) `
     '本体の公開版番号メタデータが不正です'
-Assert-File (Join-Path $contentRoot 'runtime/lib/modules')
+Assert-File (Join-Path $runtimeDirectory 'lib/modules')
 Assert-File (Join-Path $contentRoot 'config.properties.default')
 Assert-File (Join-Path $contentRoot 'local/nllib.js')
 Assert-File (Join-Path $contentRoot 'nlFilters/01_globalFilter.txt')

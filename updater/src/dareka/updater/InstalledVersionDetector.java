@@ -17,7 +17,7 @@ final class InstalledVersionDetector {
     private InstalledVersionDetector() {}
 
     static String detect(Path applicationRoot) {
-        Path app = applicationRoot.resolve("app");
+        Path app = UpdaterPlatform.applicationDirectory(applicationRoot);
         Path launcherConfig = app.resolve("NicoCache_nl.cfg");
 
         String fromDistribution = readPlainVersion(
