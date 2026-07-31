@@ -71,7 +71,11 @@ final class TargetRootResolver {
         return Files.isRegularFile(normalized.resolve("NicoCache_nl.jar"))
                 || Files.isRegularFile(normalized.resolve("NicoCache_nl.exe"))
                 || Files.isRegularFile(normalized.resolve("NicoCache_nl"))
+                || Files.isRegularFile(normalized.resolve("bin/NicoCache_nl"))
                 || Files.isRegularFile(normalized.resolve("MacOS/NicoCache_nl"))
+                || (Files.isRegularFile(normalized.resolve("app/NicoCache_nl.jar"))
+                    && (Files.isRegularFile(normalized.resolve("bin/NicoCache_nl"))
+                        || Files.isRegularFile(normalized.resolve("MacOS/NicoCache_nl"))))
                 || Files.isRegularFile(normalized.resolve("version.txt"))
                 || Files.isRegularFile(normalized.resolve("app").resolve(".jpackage.xml"));
     }

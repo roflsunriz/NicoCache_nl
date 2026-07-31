@@ -54,6 +54,11 @@ final class PlatformSupport {
                 && "Contents".equalsIgnoreCase(fileName(parent.getParent()))) {
             return parent.getParent();
         }
+        if (kind == Kind.LINUX
+                && "bin".equalsIgnoreCase(fileName(parent))
+                && parent.getParent() != null) {
+            return parent.getParent();
+        }
         return parent;
     }
 
@@ -64,6 +69,7 @@ final class PlatformSupport {
         case MACOS:
             return applicationRoot.resolve("MacOS").resolve("NicoCache_nl");
         case LINUX:
+            return applicationRoot.resolve("bin").resolve("NicoCache_nl");
         case OTHER:
         default:
             return applicationRoot.resolve("NicoCache_nl");

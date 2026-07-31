@@ -18,7 +18,8 @@ public final class ArchiveApplicationInstallerTest {
         try {
             Path target = work.resolve("installed");
             Files.createDirectories(target.resolve("app"));
-            Files.writeString(target.resolve("NicoCache_nl"), "old-launcher",
+            Files.createDirectories(target.resolve("bin"));
+            Files.writeString(target.resolve("bin/NicoCache_nl"), "old-launcher",
                     StandardCharsets.UTF_8);
             Files.writeString(target.resolve("app/NicoCache_nl.jar"), "old-jar",
                     StandardCharsets.UTF_8);
@@ -36,7 +37,7 @@ public final class ArchiveApplicationInstallerTest {
             writeArchive(archive, false);
             ArchiveApplicationInstaller.install(archive, target, UpdaterPlatform.Kind.LINUX);
 
-            assertEquals("new-launcher", Files.readString(target.resolve("NicoCache_nl")),
+            assertEquals("new-launcher", Files.readString(target.resolve("bin/NicoCache_nl")),
                     "launcher was replaced");
             assertEquals("userDataRoot=/data\n",
                     Files.readString(target.resolve("config.properties")),
@@ -52,7 +53,8 @@ public final class ArchiveApplicationInstallerTest {
 
             Path unsafeTarget = work.resolve("unsafe-installed");
             Files.createDirectories(unsafeTarget.resolve("app"));
-            Files.writeString(unsafeTarget.resolve("NicoCache_nl"), "launcher",
+            Files.createDirectories(unsafeTarget.resolve("bin"));
+            Files.writeString(unsafeTarget.resolve("bin/NicoCache_nl"), "launcher",
                     StandardCharsets.UTF_8);
             Files.writeString(unsafeTarget.resolve("app/NicoCache_nl.jar"), "jar",
                     StandardCharsets.UTF_8);
@@ -76,7 +78,7 @@ public final class ArchiveApplicationInstallerTest {
                 output.closeEntry();
                 return;
             }
-            add(output, "NicoCache_nl/NicoCache_nl", "new-launcher");
+            add(output, "NicoCache_nl/bin/NicoCache_nl", "new-launcher");
             add(output, "NicoCache_nl/app/NicoCache_nl.jar", "new-jar");
             add(output, "NicoCache_nl/app/NicoCache_nl.cfg",
                     "java-options=-Djpackage.app-version=2.0.0\n");

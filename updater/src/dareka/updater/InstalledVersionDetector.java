@@ -20,6 +20,10 @@ final class InstalledVersionDetector {
         Path app = applicationRoot.resolve("app");
         Path launcherConfig = app.resolve("NicoCache_nl.cfg");
 
+        String fromDistribution = readPlainVersion(
+                applicationRoot.resolve("NicoCache_nl.version"));
+        if (fromDistribution != null) return fromDistribution;
+
         String fromLauncher = readLauncherVersion(launcherConfig);
         if (fromLauncher != null) return fromLauncher;
 
@@ -28,6 +32,7 @@ final class InstalledVersionDetector {
         // metadata must be surfaced instead of hidden by stale compatibility markers.
         if (Files.isRegularFile(applicationRoot.resolve("NicoCache_nl.exe"))
                 || Files.isRegularFile(applicationRoot.resolve("NicoCache_nl"))
+                || Files.isRegularFile(applicationRoot.resolve("bin/NicoCache_nl"))
                 || Files.isRegularFile(applicationRoot.resolve("MacOS/NicoCache_nl"))) {
             return "不明";
         }

@@ -4,7 +4,7 @@ param(
     [ValidateSet('Linux', 'MacOS')]
     [string]$Platform,
 
-    [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
+    [ValidatePattern('^\d+(?:\.\d+){0,2}$')]
     [string]$AppVersion = '0.1.0'
 )
 
@@ -68,7 +68,7 @@ Assert-True (Test-Path -LiteralPath $bundle -PathType Container) "アップデ�
 $launcher = if ($Platform -eq 'MacOS') {
     Join-Path $contentRoot 'MacOS/NicoCache_nl Updater'
 } else {
-    Join-Path $bundle 'NicoCache_nl Updater'
+    Join-Path $bundle 'bin/NicoCache_nl Updater'
 }
 Assert-File $launcher
 Assert-File (Join-Path $contentRoot 'app/NicoCacheUpdater.jar')
@@ -82,8 +82,8 @@ if ($Platform -eq 'MacOS') {
     New-Item -ItemType Directory -Path (Join-Path $target 'MacOS'), (Join-Path $target 'app') | Out-Null
     Set-Content -LiteralPath (Join-Path $target 'MacOS/NicoCache_nl') -Value 'launcher' -Encoding utf8
 } else {
-    New-Item -ItemType Directory -Path (Join-Path $target 'app') | Out-Null
-    Set-Content -LiteralPath (Join-Path $target 'NicoCache_nl') -Value 'launcher' -Encoding utf8
+    New-Item -ItemType Directory -Path (Join-Path $target 'app'), (Join-Path $target 'bin') | Out-Null
+    Set-Content -LiteralPath (Join-Path $target 'bin/NicoCache_nl') -Value 'launcher' -Encoding utf8
 }
 Set-Content -LiteralPath (Join-Path $target 'app/NicoCache_nl.cfg') -Encoding utf8 -Value @'
 [Application]

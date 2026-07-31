@@ -147,6 +147,24 @@ public final class FirstRunSetupTest {
                     app,
                     NicoCachePaths.dataRoot(),
                     "portable mode must use application root");
+
+            Path linuxLauncher = app.resolve("bin/NicoCache_nl");
+            assertEquals(
+                    app,
+                    PlatformSupport.applicationRootFromLauncher(
+                            linuxLauncher, PlatformSupport.Kind.LINUX),
+                    "Linux jpackage launcher must resolve its app-image root");
+            assertEquals(
+                    linuxLauncher,
+                    PlatformSupport.launcherPath(app, PlatformSupport.Kind.LINUX),
+                    "Linux jpackage launcher path");
+            Path macContents = app.resolve("NicoCache_nl.app/Contents");
+            Path macLauncher = macContents.resolve("MacOS/NicoCache_nl");
+            assertEquals(
+                    macContents,
+                    PlatformSupport.applicationRootFromLauncher(
+                            macLauncher, PlatformSupport.Kind.MACOS),
+                    "macOS app bundle Contents root");
         } finally {
             restoreProperty(
                     NicoCachePaths.APPLICATION_ROOT_PROPERTY,

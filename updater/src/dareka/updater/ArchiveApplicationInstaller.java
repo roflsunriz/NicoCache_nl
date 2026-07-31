@@ -196,7 +196,8 @@ final class ArchiveApplicationInstaller {
         if (platform == UpdaterPlatform.Kind.MACOS) {
             return Files.isRegularFile(candidate.resolve("MacOS/NicoCache_nl"));
         }
-        return Files.isRegularFile(candidate.resolve("NicoCache_nl"));
+        return Files.isRegularFile(candidate.resolve("bin/NicoCache_nl"))
+                || Files.isRegularFile(candidate.resolve("NicoCache_nl"));
     }
 
     private static void validatePackageRoot(Path root, UpdaterPlatform.Kind platform)
@@ -210,7 +211,10 @@ final class ArchiveApplicationInstaller {
             throws IOException {
         Path launcher = platform == UpdaterPlatform.Kind.MACOS
                 ? root.resolve("MacOS/NicoCache_nl")
-                : root.resolve("NicoCache_nl");
+                : root.resolve("bin/NicoCache_nl");
+        if (platform == UpdaterPlatform.Kind.LINUX && !Files.isRegularFile(launcher)) {
+            launcher = root.resolve("NicoCache_nl");
+        }
         setExecutable(launcher);
         Path runtimeBin = root.resolve("runtime/bin");
         if (Files.isDirectory(runtimeBin)) {

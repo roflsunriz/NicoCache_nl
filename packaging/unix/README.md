@@ -21,11 +21,17 @@ NicoCache_nl-<version>-macos-<arch>.<zip|pkg|dmg>
 ```
 
 アプリイメージのランチャーとJavaランタイムを含むため、配布物はビルドしたOSと
-アーキテクチャに対応します。Linuxの初回セットアップは`trust`、GNOMEの
+アーキテクチャに対応します。Linuxアプリイメージのランチャーは
+`NicoCache_nl/bin/NicoCache_nl`、macOSアプリバンドルのランチャーは
+`NicoCache_nl.app/Contents/MacOS/NicoCache_nl`です。Linuxの初回セットアップは`trust`、GNOMEの
 `gsettings`、ユーザー自動起動デスクトップエントリーを使用し、macOSでは
 `security`、`networksetup`、`LaunchAgents`を使用します。利用できないOSサービス
 や権限が必要な変更は、ウィザードで失敗として表示し、同じ試行で行った変更を
 ロールバックします。
+
+macOSの`jpackage`は0をメジャー版にできないため、0.xの公開版を指定した場合も
+配布ファイル名と`NicoCache_nl.version`には公開版を保持し、バンドル内部の版だけを
+macOSが受け付ける値へ変換します。
 
 ## 独立アップデーター
 

@@ -25,6 +25,12 @@ public final class InstalledVersionDetectorTest {
             Files.writeString(root.resolve("version.txt"), "9.9.9\n", StandardCharsets.US_ASCII);
             assertEquals("1.0.1", InstalledVersionDetector.detect(root), "launcher config precedence");
 
+            Files.writeString(root.resolve("NicoCache_nl.version"), "0.1.0\n",
+                    StandardCharsets.US_ASCII);
+            assertEquals("0.1.0", InstalledVersionDetector.detect(root),
+                    "macOS-compatible public version metadata precedence");
+            Files.delete(root.resolve("NicoCache_nl.version"));
+
             Files.writeString(app.resolve("NicoCache_nl.cfg"),
                     "[JavaOptions]\njava-options=-Djpackage.app-version=broken\n",
                     StandardCharsets.UTF_8);

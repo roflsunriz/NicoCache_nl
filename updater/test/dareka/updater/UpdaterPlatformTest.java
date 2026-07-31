@@ -26,6 +26,14 @@ public final class UpdaterPlatformTest {
                 macLauncher, UpdaterPlatform.Kind.MACOS);
         assertEquals(Path.of("Applications/NicoCache_nl.app/Contents").toAbsolutePath().normalize(), macRoot,
                 "macOS launcher root");
+        Path linuxLauncher = Path.of("opt/NicoCache_nl/bin/NicoCache_nl");
+        Path linuxRoot = UpdaterPlatform.applicationRootFromLauncher(
+                linuxLauncher, UpdaterPlatform.Kind.LINUX);
+        assertEquals(Path.of("opt/NicoCache_nl").toAbsolutePath().normalize(), linuxRoot,
+                "Linux launcher root");
+        assertEquals(Path.of("opt/NicoCache_nl/bin/NicoCache_nl").toAbsolutePath().normalize(),
+                UpdaterPlatform.launcherPath(linuxRoot, UpdaterPlatform.Kind.LINUX),
+                "Linux launcher path");
         System.out.println("Updater platform tests passed");
     }
 

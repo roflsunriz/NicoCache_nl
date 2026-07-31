@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
+    [ValidatePattern('^\d+(?:\.\d+){0,2}$')]
     [string]$AppVersion = '0.1.0',
 
     [ValidateSet('Linux', 'MacOS')]
@@ -47,6 +47,25 @@ $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSA
 $platformId = $Platform.ToLowerInvariant()
 $bundleName = 'NicoCache_nl Updater' + $(if ($Platform -eq 'MacOS') { '.app' } else { '' })
 $appImagePath = Join-Path $outputRoot $bundleName
+
+function Get-JPackageVersion {
+    if ($Platform -ne 'MacOS') { return $AppVersion }
+    $parts = @($AppVersion.Split('.'))
+    if ([int]$parts[0] -gt 0) { return $AppVersion }
+
+    # macOS jpackage rejects a zero major version. The public updater asset
+    # name remains AppVersion; this value is only bundle metadata.
+    $mappedParts = @('1')
+    if ($parts.Count -gt 1) {
+        $mappedParts += $parts[1..($parts.Count - 1)]
+    }
+    return ($mappedParts -join '.')
+}
+
+$jpackageVersion = Get-JPackageVersion
+if ($jpackageVersion -ne $AppVersion) {
+    Write-Output "macOSのjpackage内部版を $AppVersion から $jpackageVersion へ変換します"
+}
 
 function Assert-ChildPath {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Parent)
@@ -104,7 +123,7 @@ function Get-PackageArguments {
     param([Parameter(Mandatory)][string]$Type)
     $arguments = @(
         '-J-Duser.language=ja', '-J-Duser.country=JP', '--type', $Type,
-        '--name', 'NicoCache_nl Updater', '--app-version', $AppVersion,
+        '--name', 'NicoCache_nl Updater', '--app-version', $jpackageVersion,
         '--vendor', 'NicoCache_nl',
         '--description', 'NicoCache_nl本体と外部依存関係を管理するアップデーター',
         '--app-image', $appImagePath, '--dest', $outputRoot, '--verbose'
@@ -157,7 +176,7 @@ Invoke-NativeCommand -FilePath $jar -ArgumentList @('cfm', $jarPath, $manifest,
 
 $appImageArguments = @(
     '-J-Duser.language=ja', '-J-Duser.country=JP', '--type', 'app-image',
-    '--name', 'NicoCache_nl Updater', '--app-version', $AppVersion,
+    '--name', 'NicoCache_nl Updater', '--app-version', $jpackageVersion,
     '--vendor', 'NicoCache_nl',
     '--description', 'NicoCache_nl本体と外部依存関係を管理するアップデーター',
     '--input', $inputRoot, '--dest', $outputRoot,

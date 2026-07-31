@@ -77,7 +77,26 @@ final class UpdaterPlatform {
                 && "contents".equalsIgnoreCase(fileName(parent.getParent()))) {
             return parent.getParent();
         }
+        if (kind == Kind.LINUX
+                && "bin".equalsIgnoreCase(fileName(parent))
+                && parent.getParent() != null) {
+            return parent.getParent();
+        }
         return parent;
+    }
+
+    static Path launcherPath(Path applicationRoot, Kind kind) {
+        switch (kind) {
+        case WINDOWS:
+            return applicationRoot.resolve("NicoCache_nl.exe");
+        case MACOS:
+            return applicationRoot.resolve("MacOS/NicoCache_nl");
+        case LINUX:
+            return applicationRoot.resolve("bin/NicoCache_nl");
+        case OTHER:
+        default:
+            return applicationRoot.resolve("NicoCache_nl");
+        }
     }
 
     static Path defaultRoot() {

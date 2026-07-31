@@ -4,7 +4,7 @@ param(
     [ValidateSet('Linux', 'MacOS')]
     [string]$Platform,
 
-    [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
+    [ValidatePattern('^\d+(?:\.\d+){0,2}$')]
     [string]$AppVersion = '0.1.0'
 )
 
@@ -48,7 +48,7 @@ function Get-RequiredCommand([string]$Name) {
 
 Assert-True (Test-Path -LiteralPath $bundle -PathType Container) "アプリイメージがありません: $bundle"
 if ($Platform -eq 'Linux') {
-    $launcher = Join-Path $bundle 'NicoCache_nl'
+    $launcher = Join-Path $bundle 'bin/NicoCache_nl'
     Assert-File $launcher
     Assert-True ((Get-Item -LiteralPath $launcher).UnixFileMode.ToString().Contains('UserExecute')) `
         'Linuxランチャーに実行属性がありません'
@@ -62,6 +62,9 @@ Assert-File (Join-Path $contentRoot 'app/lib/bcpkix.jar')
 Assert-File (Join-Path $contentRoot 'app/lib/bcprov.jar')
 Assert-File (Join-Path $contentRoot 'app/lib/bcutil.jar')
 Assert-File (Join-Path $contentRoot 'app/NicoCache_nl.cfg')
+Assert-File (Join-Path $contentRoot 'NicoCache_nl.version')
+Assert-True ((Get-Content -Raw -LiteralPath (Join-Path $contentRoot 'NicoCache_nl.version')).Trim() -eq $AppVersion) `
+    '本体の公開版番号メタデータが不正です'
 Assert-File (Join-Path $contentRoot 'runtime/lib/modules')
 Assert-File (Join-Path $contentRoot 'config.properties.default')
 Assert-File (Join-Path $contentRoot 'local/nllib.js')

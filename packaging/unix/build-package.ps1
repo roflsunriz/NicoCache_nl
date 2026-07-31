@@ -1,7 +1,7 @@
 #Requires -Version 7.0
 [CmdletBinding()]
 param(
-    [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
+    [ValidatePattern('^\d+(?:\.\d+){0,2}$')]
     [string]$AppVersion = '0.1.0',
 
     [ValidateSet('Linux', 'MacOS')]
@@ -52,6 +52,26 @@ $platformId = $Platform.ToLowerInvariant()
 $bundleName = 'NicoCache_nl' + $(if ($Platform -eq 'MacOS') { '.app' } else { '' })
 $appImagePath = Join-Path $outputRoot $bundleName
 $contentRoot = if ($Platform -eq 'MacOS') { Join-Path $appImagePath 'Contents' } else { $appImagePath }
+
+function Get-JPackageVersion {
+    if ($Platform -ne 'MacOS') { return $AppVersion }
+    $parts = @($AppVersion.Split('.'))
+    if ([int]$parts[0] -gt 0) { return $AppVersion }
+
+    # macOS jpackage rejects a zero major version. Keep the public release
+    # version in NicoCache_nl.version and use a valid bundle version only for
+    # Apple's package metadata.
+    $mappedParts = @('1')
+    if ($parts.Count -gt 1) {
+        $mappedParts += $parts[1..($parts.Count - 1)]
+    }
+    return ($mappedParts -join '.')
+}
+
+$jpackageVersion = Get-JPackageVersion
+if ($jpackageVersion -ne $AppVersion) {
+    Write-Output "macOSのjpackage内部版を $AppVersion から $jpackageVersion へ変換します"
+}
 
 function Assert-ChildPath {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Parent)
@@ -142,7 +162,7 @@ function Get-ProductPackageArguments {
     param([Parameter(Mandatory)][string]$Type)
     $arguments = @(
         '-J-Duser.language=ja', '-J-Duser.country=JP',
-        '--type', $Type, '--name', 'NicoCache_nl', '--app-version', $AppVersion,
+        '--type', $Type, '--name', 'NicoCache_nl', '--app-version', $jpackageVersion,
         '--vendor', 'NicoCache_nl',
         '--description', 'ニコニコ動画向けローカルプロキシー兼キャッシュサーバー',
         '--app-image', $appImagePath, '--dest', $outputRoot, '--verbose'
@@ -276,7 +296,7 @@ $sharedJavaOptions = @(
 $appImageArguments = @(
     '-J-Duser.language=ja', '-J-Duser.country=JP', '--type', 'app-image',
     '--add-modules', (Get-RuntimeModules -JavaPath $java), '--name', 'NicoCache_nl',
-    '--app-version', $AppVersion, '--vendor', 'NicoCache_nl',
+    '--app-version', $jpackageVersion, '--vendor', 'NicoCache_nl',
     '--description', 'ニコニコ動画向けローカルプロキシー兼キャッシュサーバー',
     '--input', $inputRoot, '--dest', $outputRoot,
     '--main-jar', 'NicoCache_nl.jar', '--main-class', 'dareka.UserDataMain'
@@ -302,6 +322,9 @@ foreach ($relativePath in $runtimeLayoutPaths) {
     New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
     Move-Item -LiteralPath $source -Destination $destination
 }
+
+Set-Content -LiteralPath (Join-Path $contentRoot 'NicoCache_nl.version') `
+    -Value $AppVersion -Encoding ascii -NoNewline
 
 if ($PackageType -in @('Zip', 'All')) {
     $archivePath = Join-Path $outputRoot ("NicoCache_nl-$AppVersion-$platformId-$architecture.zip")
