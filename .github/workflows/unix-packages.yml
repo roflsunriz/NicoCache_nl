@@ -1,0 +1,158 @@
+name: Unix Packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/unix-packages.yml'
+      - 'packaging/unix/**'
+      - 'packaging/windows/dependency-lock.psd1'
+      - 'packaging/windows/THIRD-PARTY-NOTICES.txt'
+      - 'packaging/system-files.txt'
+      - 'src/**'
+      - 'defaults/**'
+      - 'data/cors/99_sample.conf'
+      - 'data/tlsclient/cacerts2'
+      - 'extensions/**'
+      - 'local/**'
+      - 'manifest-nl.mf'
+      - 'certificate-targets.txt'
+      - 'config.properties.default'
+      - 'nlFilter_sys.txt'
+      - 'nlFilters/**'
+      - 'proxy_sample.pac'
+      - 'updater/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/unix-packages.yml'
+      - 'packaging/unix/**'
+      - 'packaging/windows/dependency-lock.psd1'
+      - 'packaging/windows/THIRD-PARTY-NOTICES.txt'
+      - 'packaging/system-files.txt'
+      - 'src/**'
+      - 'defaults/**'
+      - 'data/cors/99_sample.conf'
+      - 'data/tlsclient/cacerts2'
+      - 'extensions/**'
+      - 'local/**'
+      - 'manifest-nl.mf'
+      - 'certificate-targets.txt'
+      - 'config.properties.default'
+      - 'nlFilter_sys.txt'
+      - 'nlFilters/**'
+      - 'proxy_sample.pac'
+      - 'updater/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unix-packages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      APP_VERSION: 0.1.0
+      UPDATER_VERSION: 0.1.0
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install Linux package inspection tools
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install --yes rpm
+
+      - name: Show tool versions
+        shell: pwsh
+        run: |
+          java --version
+          jpackage --version
+          pwsh --version
+          rpm --version
+
+      - name: Build Linux application packages
+        shell: pwsh
+        run: ./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion $env:APP_VERSION
+
+      - name: Test Linux application packages
+        shell: pwsh
+        run: ./packaging/unix/test-package.ps1 -Platform Linux -AppVersion $env:APP_VERSION
+
+      - name: Build Linux standalone updater packages
+        shell: pwsh
+        run: ./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion $env:UPDATER_VERSION
+
+      - name: Test Linux standalone updater packages
+        shell: pwsh
+        run: ./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion $env:UPDATER_VERSION
+
+      - name: Upload Linux package diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unix-packages-linux
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: .test-work/unix-package-linux/**
+
+  macos:
+    name: macOS packages
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      APP_VERSION: 0.1.0
+      UPDATER_VERSION: 0.1.0
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Show tool versions
+        shell: pwsh
+        run: |
+          java --version
+          jpackage --version
+          pwsh --version
+          sw_vers
+
+      - name: Build macOS application packages
+        shell: pwsh
+        run: ./packaging/unix/build-package.ps1 -Platform MacOS -PackageType All -AppVersion $env:APP_VERSION
+
+      - name: Test macOS application packages
+        shell: pwsh
+        run: ./packaging/unix/test-package.ps1 -Platform MacOS -AppVersion $env:APP_VERSION
+
+      - name: Build macOS standalone updater packages
+        shell: pwsh
+        run: ./packaging/unix/build-standalone-updater.ps1 -Platform MacOS -PackageType All -AppVersion $env:UPDATER_VERSION
+
+      - name: Test macOS standalone updater packages
+        shell: pwsh
+        run: ./packaging/unix/test-standalone-updater.ps1 -Platform MacOS -AppVersion $env:UPDATER_VERSION
+
+      - name: Upload macOS package diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: unix-packages-macos
+          if-no-files-found: warn
+          include-hidden-files: true
+          path: .test-work/unix-package-macos/**

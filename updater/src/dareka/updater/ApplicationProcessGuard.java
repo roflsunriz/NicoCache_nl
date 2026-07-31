@@ -33,8 +33,10 @@ final class ApplicationProcessGuard {
                 String lowerName = fileName.toLowerCase(Locale.ROOT);
                 if (executable.startsWith(normalizedRoot)
                         && (lowerName.equals("nicocache_nl.exe")
+                        || lowerName.equals("nicocache_nl")
                         || lowerName.equals("java.exe")
-                        || lowerName.equals("javaw.exe"))) {
+                        || lowerName.equals("javaw.exe")
+                        || lowerName.equals("java"))) {
                     result.add(fileName + " (PID " + process.pid() + ")");
                 }
             } catch (RuntimeException ignored) {

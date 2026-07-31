@@ -11,6 +11,20 @@
 - CI、リリース、依存関係更新が対応外のJDK 11で本体ビルドを開始して停止しないよう、
   最小サポート版のJDK 17を明示してビルドするようにした。
 
+### Added
+
+- 本体アプリイメージ、初回セットアップ、独立アップデーターをLinuxとmacOSへ拡張し、
+  LinuxではDEB/RPM、macOSではPKG/DMGとアプリイメージZIPを生成するようにした。
+- Linuxの`trust`・GNOME自動プロキシー・XDG autostart、macOSの`security`・
+  `networksetup`・LaunchAgentsを、初回セットアップのロールバック可能なOS連携として追加した。
+- Linux/macOSのアプリイメージZIPをSHA-256検証して安全に置換する独立アップデーターと、
+  対応OSのパッケージ生成・隔離起動・CLI自己診断を検証するCIを追加した。
+
+### Changed
+
+- リリースワークフローへLinux/macOS本体・独立アップデーターの各プラットフォーム／
+  アーキテクチャ別パッケージとSHA-256を追加した。Solarisは対応対象に含めない。
+
 ## [1.1.0] - 2026-07-30
 
 ### Changed

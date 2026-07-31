@@ -113,12 +113,31 @@ MSIはGitHub Actionsの一時Windowsランナーへ旧版を `msiexec /qn` で
 ローカル環境の製品登録を汚染しないため、MSI試験スクリプトは一時GitHub
 Actionsランナー以外での実行を拒否する。
 
+## Linux/macOS パッケージの隔離スモークテスト
+
+`packaging/unix/test-package.ps1` はLinuxのアプリイメージZIP・DEB・RPMまたは
+macOSのZIP・PKG・DMGを確認し、アプリイメージ内のランチャー、専用ランタイム、
+標準資材を検証する。OSの証明書ストア、プロキシー、自動起動設定は変更せず、
+OS連携を無効にしたヘッドレス初回セットアップを実行する。
+
+`packaging/unix/test-standalone-updater.ps1` は同じOSの独立アップデーターから
+対象ルート検証と依存関係自己診断を実行し、ZIPとネイティブパッケージの構造を
+確認する。実際の`trust`、`gsettings`、`security`、`networksetup`への変更は
+実行しない。これらのOS連携を選択した実適用は、対象OSの隔離ランナーでのみ行う。
+
+```powershell
+./packaging/unix/build-package.ps1 -Platform Linux -PackageType All
+./packaging/unix/test-package.ps1 -Platform Linux
+./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All
+./packaging/unix/test-standalone-updater.ps1 -Platform Linux
+```
+
 ## 初回起動ウィザード
 
 次のコマンドはOS設定を変更せず、初回セットアップの判定、設定作成、
 既存ファイル保全、失敗ロールバック、日本語と英語の辞書キー、5画面の全ボタンと
 チェック項目、選択連動、戻る・次へ・キャンセル・適用、処理中の操作無効化、
-単一EXE用ヘッドレス引数の必須項目・値・矛盾検査を検証する。あわせて、
+単一ランチャー用ヘッドレス引数の必須項目・値・矛盾検査を検証する。あわせて、
 アプリ本体と利用者データのパス解決、絶対・相対キャッシュパス、ポータブル
 モード、システム資材を利用者領域へ複製しない初回セットアップを検証する。
 
@@ -127,7 +146,7 @@ Actionsランナー以外での実行を拒否する。
 ```
 
 `-KeepWorkDir` を指定すると、標準幅と最小幅の画面プレビューを
-`.test-work/first-run-setup/preview/` に保持する。OS連携の実処理は
+`.test-work/first-run-setup/preview/` に保持する。WindowsのOS連携の実処理は
 `packaging/windows/test-windows-first-run.ps1` が一時GitHub Actionsランナーで
 同じEXEの `--setup --headless` 経由でCA登録、Windows自動プロキシー、
 ログオン時起動を適用し、保存した変更前状態へ完全に復元できることを確認する。
@@ -138,8 +157,8 @@ Actionsランナー以外での実行を拒否する。
 
 次のテストは、リリース時の機能テストと本体MSI検証が残っていること、および
 アップロードする資産とGitHub Releaseへ公開する資産が一致することを検証する。
-配布用ZIP、本体MSIと各ハッシュを欠落させた場合や、独立アップデーター
-MSIまたはハッシュを追加し忘れた場合は失敗する。
+配布用ZIP、本体MSI、Linux/macOSパッケージ、または各ハッシュを欠落させた場合や、
+独立アップデーターMSIまたはハッシュを追加し忘れた場合は失敗する。
 
 ```powershell
 .\tests\release\test-release-workflow.ps1

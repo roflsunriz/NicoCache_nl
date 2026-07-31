@@ -10,6 +10,7 @@ $lines = @(Get-Content -LiteralPath $workflowPath)
 $workflowPaths = @(
     $workflowPath
     (Join-Path $root '.github\workflows\ci.yml')
+    (Join-Path $root '.github\workflows\unix-packages.yml')
     (Join-Path $root '.github\workflows\windows-installer.yml')
     (Join-Path $root '.github\workflows\update-repository-dependencies.yml')
 )
@@ -153,6 +154,21 @@ if (-not (($hashUpdater -join "`n").Contains('Get-FileHash -LiteralPath $release
     throw 'Standalone updater checksum does not use SHA-256'
 }
 
+$releaseContent = Get-Content -Raw -LiteralPath $workflowPath
+foreach ($required in @(
+        '  build-unix:',
+        'platform: Linux',
+        'platform: MacOS',
+        'packaging/unix/build-package.ps1',
+        'packaging/unix/build-standalone-updater.ps1',
+        'name: release-assets-${{ matrix.platform }}',
+        'merge-multiple: true'
+    )) {
+    if (-not $releaseContent.Contains($required)) {
+        throw "Unix release workflow contract is missing: $required"
+    }
+}
+
 $upload = Get-StepBlock -Name 'Upload release assets'
 Assert-ContainsLine $upload 'if-no-files-found: error' 'Release asset upload'
 $uploadedAssets = @($upload | ForEach-Object {
@@ -171,19 +187,10 @@ $expectedUploadedAssets = @(
 Assert-ExactSet $expectedUploadedAssets $uploadedAssets 'Uploaded release asset set'
 
 $publish = Get-StepBlock -Name 'Create GitHub release'
-$publishedAssets = @($publish | ForEach-Object {
-        if ($_.Trim() -match '^"release-assets/(?<asset>[^"]+)"') {
-            $Matches.asset
-        }
-    })
-$expectedPublishedAssets = @(
-    'NicoCache_nl-$RELEASE_TAG.zip'
-    'NicoCache_nl-$APP_VERSION.msi'
-    'NicoCache_nl-$APP_VERSION.msi.sha256'
-    'NicoCache_nl-Updater-$UPDATER_VERSION.msi'
-    'NicoCache_nl-Updater-$UPDATER_VERSION.msi.sha256'
-)
-Assert-ExactSet $expectedPublishedAssets $publishedAssets 'Published release asset set'
+Assert-ContainsLine $publish 'release-assets/* \' 'Published release asset set'
+if (($publish -join "`n") -match 'release-assets/NicoCache_nl-') {
+    throw 'Release publication must publish the complete staged cross-platform asset set'
+}
 foreach ($option in @(
         '--repo "$GITHUB_REPOSITORY" \',
         '--verify-tag \',

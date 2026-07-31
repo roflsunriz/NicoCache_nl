@@ -8,7 +8,6 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Properties;
 
-import javax.swing.filechooser.FileSystemView;
 
 /**
  * Central path resolver for application files, user-managed files and
@@ -39,10 +38,8 @@ final class NicoCachePaths {
 
         String launcher = System.getProperty("jpackage.app-path");
         if (launcher != null && !launcher.isBlank()) {
-            Path parent = Path.of(launcher).toAbsolutePath().normalize().getParent();
-            if (parent != null) {
-                return parent;
-            }
+            return PlatformSupport.applicationRootFromLauncher(
+                    Path.of(launcher), PlatformSupport.current());
         }
         return Path.of("").toAbsolutePath().normalize();
     }
@@ -82,18 +79,9 @@ final class NicoCachePaths {
             return applicationRoot();
         }
 
-        Path documents;
-        try {
-            documents = FileSystemView.getFileSystemView()
-                    .getDefaultDirectory()
-                    .toPath();
-        } catch (RuntimeException error) {
-            String userHome = System.getProperty("user.home");
-            documents = userHome == null || userHome.isBlank()
-                    ? applicationRoot()
-                    : Path.of(userHome);
-        }
-        return documents.resolve("NicoCache_nl").toAbsolutePath().normalize();
+        return PlatformSupport.defaultDataRoot(
+                PlatformSupport.current(), applicationRoot(), isPackaged(),
+                isPortable());
     }
 
     private static String readConfiguredDataRoot() {

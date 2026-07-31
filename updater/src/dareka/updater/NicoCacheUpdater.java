@@ -134,11 +134,10 @@ public final class NicoCacheUpdater {
         JPanel header = new JPanel();
         header.add(new JLabel("Temurin LTS:"));
         header.add(javaChoice);
-        header.add(new JLabel("WinGetを優先し、利用できない場合は公式配布APIへフォールバックします。"));
+        header.add(new JLabel("OSのパッケージ管理を優先し、Bouncy Castleは本体専用として管理します。"));
         panel.add(header, BorderLayout.NORTH);
-        dependencyOutput.setText("Temurin、FFmpeg、Apache Ant、7-ZipはWinGetが対応するスコープへ導入し、"
-                + "新しいCMD/PowerShellから利用可能にします。\n"
-                + "WinGetパッケージがない場合は現在のWindowsユーザー用に導入します。\n"
+        dependencyOutput.setText("Temurin、FFmpeg、Apache Ant、7-ZipはOSのパッケージ管理を確認します。\n"
+                + "WindowsではWinGetまたは公式配布API、Linux/macOSでは各OSの管理方式を使用します。\n"
                 + "Bouncy CastleだけはNicoCache_nl専用ライブラリとして管理します。\n");
         panel.add(new JScrollPane(dependencyOutput), BorderLayout.CENTER);
         JPanel buttons = new JPanel();
@@ -183,7 +182,7 @@ public final class NicoCacheUpdater {
                     latestRelease = get();
                     String installed = InstalledVersionDetector.detect(applicationRoot);
                     applicationOutput.setText("対象: " + applicationRoot + "\n導入版: " + installed
-                            + "\n最新版: " + latestRelease.version + "\n配布物: " + latestRelease.msiUri + "\n");
+                            + "\n最新版: " + latestRelease.version + "\n配布物: " + latestRelease.packageName + "\n");
                     applicationUpdateButton.setEnabled("不明".equals(installed)
                             || compareVersions(latestRelease.version, installed) > 0);
                     if (!applicationUpdateButton.isEnabled()) applicationOutput.append("既に最新版です。\n");
@@ -209,9 +208,16 @@ public final class NicoCacheUpdater {
             @Override protected Path doInBackground() throws Exception { return downloadAndVerify(latestRelease); }
             @Override protected void done() {
                 try {
-                    Path msi = get();
-                    new ProcessBuilder("msiexec.exe", "/i", msi.toString()).start();
-                    applicationOutput.append("Windows Installerを起動しました。\n");
+                    Path packageFile = get();
+                    ApplicationProcessGuard.requireStopped(applicationRoot);
+                    if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
+                        new ProcessBuilder("msiexec.exe", "/i", packageFile.toString()).start();
+                        applicationOutput.append("Windows Installerを起動しました。\n");
+                    } else {
+                        ArchiveApplicationInstaller.install(packageFile, applicationRoot,
+                                UpdaterPlatform.current());
+                        applicationOutput.append("アプリイメージを更新しました。\n");
+                    }
                 } catch (Exception error) {
                     applicationOutput.append("更新準備に失敗しました: " + rootMessage(error) + "\n");
                 } finally {
@@ -229,11 +235,15 @@ public final class NicoCacheUpdater {
             return;
         }
         if (update) {
+            String updateMessage = UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS
+                    ? "WinGetを優先し、失敗または利用不可の場合は公式配布APIを使用します。\n"
+                            + "WinGetがマシン全体への導入を必要とする場合は、Windowsの許可画面が表示されます。\n"
+                            + "ユーザーPATHとJAVA_HOMEが必要に応じて更新されます。"
+                    : "OSのパッケージ管理を確認し、root権限を自動取得せずに更新案内を表示します。\n"
+                            + "Bouncy CastleはNicoCache_nl専用ライブラリとして更新します。";
             int answer = JOptionPane.showConfirmDialog(frame,
                     "Temurin、FFmpeg、Apache Ant、7-Zipを導入・更新します。\n"
-                            + "WinGetを優先し、失敗または利用不可の場合は公式配布APIを使用します。\n"
-                            + "WinGetがマシン全体への導入を必要とする場合は、Windowsの許可画面が表示されます。\n"
-                            + "ユーザーPATHとJAVA_HOMEが必要に応じて更新されます。",
+                            + updateMessage,
                     "外部依存関係のインストール", JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.QUESTION_MESSAGE);
             if (answer != JOptionPane.OK_OPTION) return;
@@ -292,14 +302,19 @@ public final class NicoCacheUpdater {
     }
 
     private static Release parseRelease(String json) throws IOException {
+        return parseRelease(json, UpdaterPlatform.current());
+    }
+
+    private static Release parseRelease(String json, UpdaterPlatform.Kind platform)
+            throws IOException {
         Matcher tagMatcher = TAG_PATTERN.matcher(json);
         if (!tagMatcher.find()) throw new IOException("release tag is missing");
         Matcher versionMatcher = VERSION_PATTERN.matcher(tagMatcher.group(1));
         if (!versionMatcher.matches()) throw new IOException("unsupported release tag: " + tagMatcher.group(1));
         String version = versionMatcher.group(1);
-        String msiName = "NicoCache_nl-" + version + ".msi";
-        String checksumName = msiName + ".sha256";
-        URI msi = null;
+        String packageName = packageName(version, platform);
+        String checksumName = packageName + ".sha256";
+        URI packageUri = null;
         URI checksum = null;
         Matcher matcher = DOWNLOAD_PATTERN.matcher(json);
         while (matcher.find()) {
@@ -307,17 +322,45 @@ public final class NicoCacheUpdater {
             URI asset = URI.create(value);
             String path = asset.getPath();
             String name = path.substring(path.lastIndexOf('/') + 1);
-            if (name.equalsIgnoreCase(msiName)) {
-                msi = asset;
+            if (name.equalsIgnoreCase(packageName)) {
+                packageUri = asset;
             } else if (name.equalsIgnoreCase(checksumName)
                     || name.equalsIgnoreCase(checksumName + ".txt")) {
                 checksum = asset;
             }
         }
-        if (msi == null || checksum == null) {
-            throw new IOException("NicoCache_nl本体のMSIまたはSHA-256がReleaseにありません");
+        if (packageUri == null || checksum == null) {
+            throw new IOException("NicoCache_nl本体の" + packageDescription(platform)
+                    + "またはSHA-256がReleaseにありません");
         }
-        return new Release(version, msi, checksum);
+        return new Release(version, packageUri, checksum, packageName,
+                platform == UpdaterPlatform.Kind.LINUX || platform == UpdaterPlatform.Kind.MACOS);
+    }
+
+    private static String packageName(String version, UpdaterPlatform.Kind platform)
+            throws IOException {
+        switch (platform) {
+        case WINDOWS:
+            return "NicoCache_nl-" + version + ".msi";
+        case LINUX:
+        case MACOS:
+            return "NicoCache_nl-" + version + "-"
+                    + UpdaterPlatform.platformId(platform) + "-"
+                    + UpdaterPlatform.architecture() + ".zip";
+        case OTHER:
+        default:
+            throw new IOException("未対応のOSではReleaseを選択できません");
+        }
+    }
+
+    private static String packageDescription(UpdaterPlatform.Kind platform) {
+        switch (platform) {
+        case WINDOWS: return "MSI";
+        case LINUX: return "LinuxアプリイメージZIP";
+        case MACOS: return "macOSアプリイメージZIP";
+        case OTHER:
+        default: return "対応配布物";
+        }
     }
 
     private List<Integer> fetchAvailableLtsReleases() throws IOException, InterruptedException {
@@ -351,13 +394,16 @@ public final class NicoCacheUpdater {
         HttpClient client = HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT)
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
         Path directory = Files.createTempDirectory("NicoCache_nl-update-");
-        Path partial = directory.resolve("NicoCache_nl.msi.download");
-        Path msi = directory.resolve("NicoCache_nl-" + release.version + ".msi");
+        Path partial = directory.resolve(release.packageName + ".download");
+        Path packageFile = directory.resolve(release.packageName);
         HttpResponse<Path> binary = client.send(
-                HttpRequest.newBuilder(release.msiUri).timeout(Duration.ofMinutes(5))
+                HttpRequest.newBuilder(release.packageUri).timeout(Duration.ofMinutes(5))
                         .header("User-Agent", "NicoCache_nl Updater").build(),
                 HttpResponse.BodyHandlers.ofFile(partial));
-        if (binary.statusCode() != 200) throw new IOException("MSI download returned HTTP " + binary.statusCode());
+        if (binary.statusCode() != 200) {
+            throw new IOException(packageDescription(UpdaterPlatform.current())
+                    + " download returned HTTP " + binary.statusCode());
+        }
         Matcher checksumMatcher = SHA256_PATTERN.matcher(sendText(release.checksumUri).body());
         if (!checksumMatcher.find()) throw new IOException("SHA-256 value is missing");
         String expected = checksumMatcher.group(1).toLowerCase(Locale.ROOT);
@@ -365,10 +411,10 @@ public final class NicoCacheUpdater {
         if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII),
                 actual.getBytes(StandardCharsets.US_ASCII))) {
             Files.deleteIfExists(partial);
-            throw new IOException("MSIのSHA-256が一致しません");
+            throw new IOException("配布物のSHA-256が一致しません");
         }
-        Files.move(partial, msi, StandardCopyOption.REPLACE_EXISTING);
-        return msi;
+        Files.move(partial, packageFile, StandardCopyOption.REPLACE_EXISTING);
+        return packageFile;
     }
 
     private void setApplicationBusy(boolean busy) {
@@ -425,12 +471,19 @@ public final class NicoCacheUpdater {
 
     private static final class Release {
         final String version;
+        final URI packageUri;
         final URI msiUri;
         final URI checksumUri;
-        Release(String version, URI msiUri, URI checksumUri) {
+        final String packageName;
+        final boolean archive;
+        Release(String version, URI packageUri, URI checksumUri, String packageName,
+                boolean archive) {
             this.version = version;
-            this.msiUri = msiUri;
+            this.packageUri = packageUri;
+            this.msiUri = archive ? null : packageUri;
             this.checksumUri = checksumUri;
+            this.packageName = packageName;
+            this.archive = archive;
         }
     }
 

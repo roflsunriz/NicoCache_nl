@@ -8,6 +8,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 
 /** Dependency-free unit tests runnable with plain javac/java. */
 public final class NicoCacheUpdaterTest {
@@ -83,6 +84,22 @@ public final class NicoCacheUpdaterTest {
                 URI.create("https://example.invalid/NicoCache_nl-1.2.3.msi"));
         assertFieldEquals(releaseClass, release, "checksumUri",
                 URI.create("https://example.invalid/NicoCache_nl-1.2.3.msi.sha256"));
+
+        Method parsePlatformRelease = updater.getDeclaredMethod("parseRelease", String.class,
+                UpdaterPlatform.Kind.class);
+        parsePlatformRelease.setAccessible(true);
+        String linuxName = "NicoCache_nl-1.2.3-linux-" + UpdaterPlatform.architecture() + ".zip";
+        Object linuxRelease = parsePlatformRelease.invoke(null,
+                "{\"tag_name\":\"v1.2.3\",\"assets\":["
+                + "{\"browser_download_url\":\"https://example.invalid/" + linuxName + ".sha256\"},"
+                + "{\"browser_download_url\":\"https://example.invalid/" + linuxName + "\"}"
+                + "]}", UpdaterPlatform.Kind.LINUX);
+        Class<?> linuxReleaseClass = linuxRelease.getClass();
+        assertFieldEquals(linuxReleaseClass, linuxRelease, "packageName", linuxName);
+        assertFieldEquals(linuxReleaseClass, linuxRelease, "packageUri",
+                URI.create("https://example.invalid/" + linuxName));
+        assertFieldEquals(linuxReleaseClass, linuxRelease, "archive", Boolean.TRUE);
+        assertFieldEquals(linuxReleaseClass, linuxRelease, "msiUri", null);
         assertReleaseRejected(parseRelease,
                 "{\"tag_name\":\"v1.2.3\",\"assets\":["
                 + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.1.0.msi\"},"
@@ -110,7 +127,7 @@ public final class NicoCacheUpdaterTest {
         Field field = type.getDeclaredField(fieldName);
         field.setAccessible(true);
         Object actual = field.get(target);
-        if (!expected.equals(actual)) {
+        if (!Objects.equals(expected, actual)) {
             throw new AssertionError(fieldName + ": expected " + expected + ", got " + actual);
         }
     }
@@ -118,7 +135,7 @@ public final class NicoCacheUpdaterTest {
     private static void assertReleaseRejected(Method parseRelease, String json) throws Exception {
         try {
             parseRelease.invoke(null, json);
-            throw new AssertionError("Updater-only release assets were accepted as the product MSI");
+            throw new AssertionError("Updater-only release assets were accepted as the product package");
         } catch (InvocationTargetException expected) {
             if (!(expected.getCause() instanceof java.io.IOException)) {
                 throw expected;

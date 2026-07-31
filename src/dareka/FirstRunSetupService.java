@@ -47,8 +47,11 @@ final class FirstRunSetupService {
                 new SetupFiles(appDirectory, dataDirectory),
                 new PackagedCertificateGenerator(
                         appDirectory, dataDirectory),
-                new WindowsSetupIntegration(
-                        appDirectory, dataDirectory));
+                PlatformSupport.current() == PlatformSupport.Kind.WINDOWS
+                        ? new WindowsSetupIntegration(
+                                appDirectory, dataDirectory)
+                        : new UnixSetupIntegration(
+                                appDirectory, dataDirectory));
     }
 
     void apply(SetupOptions options) throws Exception {

@@ -30,7 +30,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 /** Installs command-line dependencies for the current Windows user. */
-final class SystemDependencyManager {
+final class SystemDependencyManager implements DependencyProvider {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NORMAL).build();
@@ -63,7 +63,8 @@ final class SystemDependencyManager {
         Files.createDirectories(this.userProgramsRoot);
     }
 
-    String checkAll(int javaMajor) throws Exception {
+    @Override
+    public String checkAll(int javaMajor) throws Exception {
         StringBuilder out = new StringBuilder();
         out.append("導入方式: WinGet優先、公式配布APIフォールバック\n");
         out.append("対象スコープ: WinGetはユーザー優先（パッケージに応じてマシン）、公式配布APIは現在のWindowsユーザー\n");
@@ -78,7 +79,8 @@ final class SystemDependencyManager {
         return out.toString();
     }
 
-    String updateAll(int javaMajor) throws Exception {
+    @Override
+    public String updateAll(int javaMajor) throws Exception {
         StringBuilder out = new StringBuilder();
         boolean winget = isWingetAvailable();
         for (Tool tool : tools(javaMajor)) {
@@ -109,8 +111,9 @@ final class SystemDependencyManager {
         return out.toString();
     }
 
-    String selfTest() throws Exception {
-        Path root = Files.createTempDirectory(userProgramsRoot, "self-test-");
+    @Override
+    public String selfTest() throws Exception {
+        Path root = Files.createTempDirectory("NicoCache_nl-dependency-self-test-");
         try {
             Path bin = root.resolve("bin");
             Files.createDirectories(bin);

@@ -7,7 +7,7 @@ import java.util.Map;
 
 final class LaunchOptions {
     private static final String USAGE =
-            "Usage: NicoCache_nl.exe --setup --headless "
+            "Usage: NicoCache_nl --setup --headless "
             + "--user-data-root=<absolute-path> "
             + "--https=<true|false> "
             + "--trust-certificate=<true|false> "

@@ -3,6 +3,10 @@
 自己完結型の Windows アプリイメージ、ZIP、MSI を生成する。利用者の
 Java、PowerShell 7、Apache Ant、7-Zip には依存しない。
 
+Linux/macOSのアプリイメージ、ZIP、DEB/RPM、PKG/DMGは
+`packaging/unix/README.md` と同ディレクトリのスクリプトで生成する。Solarisは
+配布対象外である。
+
 ## 生成物
 
 - `NicoCache_nl.exe`: GUI、ヘッドレス、初回セットアップを担う唯一のアプリ

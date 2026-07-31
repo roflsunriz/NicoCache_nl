@@ -53,9 +53,8 @@ GUIログのタブ、検索、メニュー、履歴保存など画面操作を�
 
 画面を確認する場合は `-KeepWorkDir` を指定し、
 `.test-work/first-run-setup/preview/` の5画面を確認する。結果画面は成功時と
-失敗時の両方を確認する。証明書ストア、
-Windowsプロキシー、ログオン時起動の実適用試験はローカルで実行せず、
-一時GitHub Actionsランナーへ限定する。
+失敗時の両方を確認する。証明書ストア、OSプロキシー、ログオン時起動の実適用試験は
+ローカルで実行せず、対象OSの一時GitHub Actionsランナーへ限定する。
 
 証明書の対象ドメインを更新する場合は `certificate-targets.txt` だけを変更する。
 従来の `genCerts.bat` と初回起動ウィザードは同じ一覧を参照するため、別々の
@@ -102,9 +101,10 @@ Windowsプロキシー、ログオン時起動の実適用試験はローカル�
    git push origin "v$ReleaseVersion"
    ```
 
-7. GitHub Actionsのリリースワークフロー完了後、GitHub Releaseに
-   `NicoCache_nl-<version>.zip`、`NicoCache_nl-<version>.msi`、そのSHA-256、
-   および `updater/VERSION` に基づく独立アップデーターMSIが生成されていることを確認する。
+7. GitHub Actionsのリリースワークフロー完了後、GitHub ReleaseにWindowsの
+   `NicoCache_nl-<version>.zip`/MSI、LinuxのアプリイメージZIP/DEB/RPM、macOSの
+   アプリイメージZIP/PKG/DMG、それぞれのSHA-256、および`updater/VERSION`に基づく
+   各OSの独立アップデーター配布物が生成されていることを確認する。
 
 タグを作成した後に検証失敗や内容間違いが判明した場合は、リリースを公開せず、
 修正コミットを作成してから新しいタグ名でやり直す。既存タグの付け替えや削除は、
@@ -114,9 +114,10 @@ GitHub Releaseの状態を確認して管理者が明示的に判断する。
 最小サポート版のJDK 17で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
 加えてTemurin 25でWindows、Linux、macOSのビルド、機能、TLS、
 Extension ABI、初回セットアップを検証し、WindowsインストーラーはJDK 25で生成、
-隔離起動、修復、更新、アンインストールを確認する。
-さらにリリースワークフローの契約テストで、配布用ZIP、本体MSIと各ハッシュ
-が公開対象に残り、独立アップデーターMSIとハッシュが追加されていることを確認する。
+隔離起動、修復、更新、アンインストールを確認する。Unixパッケージワークフローでは
+Linux/macOSのアプリイメージ、ネイティブパッケージ、独立アップデーターCLIを確認する。
+さらにリリースワークフローの契約テストで、全プラットフォームの配布物と各ハッシュが
+公開対象へ渡り、独立アップデーターの全プラットフォーム資産が追加されることを確認する。
 
 リリースは `v<major>.<minor>.<build>` 形式のタグをpushすると開始する。MSIの
 版番号制約に合わせ、majorとminorは0〜255、buildは0〜65535にする。例えば次の
@@ -132,13 +133,11 @@ git push origin v1.0.1
 majorとminorは0〜255、buildは0〜65535にする。本体とアップデーターは別々に
 版管理するため、本体だけを変更したときにアップデーター版を合わせて上げない。
 
-テストに合格すると、GitHub Release に `.gitignore` で除外されていないファイルを
-まとめた `NicoCache_nl-<タグ名>.zip` が添付される。例外指定で残る配布ファイルと、
-同じタグの `nlFilters` にある `01`〜`20` 番台の `.txt` も含まれるが、
-シンボリックリンクは含まれない。タグのソースからJDK 25で生成・検証した
-`NicoCache_nl-<版番号>.msi` とそのSHA-256も個別アセットとして添付される。
-同じタグのソースから、`updater/VERSION` で生成した
-`NicoCache_nl-Updater-<アップデーター版>.msi` とそのSHA-256も添付される。
+テストに合格すると、GitHub ReleaseにはWindowsの配布用ZIP、MSI、各SHA-256に加え、
+タグのソースからJDK 25で生成・検証したLinuxの
+`NicoCache_nl-<版番号>-linux-<arch>`、macOSの
+`NicoCache_nl-<版番号>-macos-<arch>`のZIPとネイティブパッケージ、および
+`updater/VERSION`で生成した各OSの独立アップデーター資産とSHA-256が添付される。
 既存タグから再実行する場合は、Release workflow の手動実行でタグ名を指定する。
 
 ## リポジトリ依存関係
@@ -171,6 +170,25 @@ Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Cen
 更新PRの検証に失敗した場合はマージしない。自動処理が変更する管理対象は
 `packaging/windows/dependency-lock.psd1` だけなので、誤更新を取り込んだ場合は
 該当コミットを `git revert` し、直前のロックへ戻したうえで再検証する。
+
+## Linux/macOS パッケージ
+
+LinuxとmacOSのネイティブパッケージは対象OS上のJDK 25 `jpackage`で生成する。
+クロスプラットフォーム生成は行わない。Solarisは配布・CIの対象外とする。
+
+```powershell
+./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 0.1.0
+./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 0.1.0
+./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion 0.1.0
+./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion 0.1.0
+```
+
+LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメージZIP、PKG、DMGを
+生成する。アプリイメージZIPは独立アップデーターが直接更新に使用し、更新時は
+`config.properties`、`portable.flag`、キャッシュ、証明書、利用者データ、ローカル
+資材を保持する。Linuxの証明書・プロキシー・自動起動は`trust`、GNOMEの`gsettings`、
+XDG autostartを使い、macOSでは`security`、`networksetup`、`LaunchAgents`を使う。
+権限や対応サービスが不足する場合は、ウィザードが今回の変更をロールバックする。
 
 ## Windows インストーラー
 
@@ -281,6 +299,12 @@ Windowsパッケージの生成に失敗した場合は、既存のNicoCache_nl�
 変更せず、Git管理外の `.test-work/windows-package/` だけを削除して再生成する。
 証明書ストア、Windowsプロキシー設定、タスクスケジューラーを復旧操作として
 変更する必要はない。
+
+Linux/macOSパッケージの生成に失敗した場合は、既存のインストール先やOS設定を
+変更せず、`.test-work/unix-package-*` と
+`.test-work/standalone-updater-*` だけを削除して再生成する。アーカイブ更新が失敗した
+場合は、アップデーターが作成した同一親ディレクトリ内の一時バックアップを使って
+自動復旧し、復旧失敗時は削除せず診断を残す。
 
 初回セットアップの適用に失敗した場合は、同じ試行で作成した設定とOS変更が
 自動復元される。復元にも失敗した場合は

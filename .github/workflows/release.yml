@@ -227,33 +227,144 @@ jobs:
             NicoCache_nl-Updater-${{ steps.updater-version.outputs.updater_version }}.msi
             NicoCache_nl-Updater-${{ steps.updater-version.outputs.updater_version }}.msi.sha256
 
-  publish:
+  build-unix:
     needs: build
+    name: Build ${{ matrix.platform }} release assets
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: Linux
+            runner: ubuntu-24.04
+          - platform: MacOS
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      APP_VERSION: ${{ needs.build.outputs.app_version }}
+      UPDATER_VERSION: ${{ needs.build.outputs.updater_version }}
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.tag }}
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install Linux package inspection tools
+        if: matrix.platform == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes rpm
+
+      - name: Build and test Unix application packages
+        shell: pwsh
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: |
+          ./packaging/unix/build-package.ps1 `
+            -Platform $env:TARGET_PLATFORM `
+            -PackageType All `
+            -AppVersion $env:APP_VERSION
+          ./packaging/unix/test-package.ps1 `
+            -Platform $env:TARGET_PLATFORM `
+            -AppVersion $env:APP_VERSION
+
+      - name: Build and test Unix standalone updater packages
+        shell: pwsh
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: |
+          ./packaging/unix/build-standalone-updater.ps1 `
+            -Platform $env:TARGET_PLATFORM `
+            -PackageType All `
+            -AppVersion $env:UPDATER_VERSION
+          ./packaging/unix/test-standalone-updater.ps1 `
+            -Platform $env:TARGET_PLATFORM `
+            -AppVersion $env:UPDATER_VERSION
+
+      - name: Stage Unix release assets and checksums
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
+            'X64' { 'x64' }
+            'Arm64' { 'arm64' }
+            'X86' { 'x86' }
+            default { throw '未対応のCPUアーキテクチャです' }
+          }
+          $platformId = '${{ matrix.platform }}'.ToLowerInvariant()
+          $appOutput = Join-Path $env:GITHUB_WORKSPACE ('.test-work/unix-package-' + $platformId + '/output')
+          $updaterOutput = Join-Path $env:GITHUB_WORKSPACE ('.test-work/standalone-updater-' + $platformId + '/output')
+          $releaseAssets = Join-Path $env:GITHUB_WORKSPACE 'release-assets'
+          New-Item -ItemType Directory -Path $releaseAssets -Force | Out-Null
+          $patterns = @(
+            "NicoCache_nl-$env:APP_VERSION-$platformId-$architecture.zip",
+            "NicoCache_nl-$env:APP_VERSION-$platformId-$architecture.deb",
+            "NicoCache_nl-$env:APP_VERSION-$platformId-$architecture.rpm",
+            "NicoCache_nl-$env:APP_VERSION-$platformId-$architecture.pkg",
+            "NicoCache_nl-$env:APP_VERSION-$platformId-$architecture.dmg"
+          )
+          $updaterPatterns = @(
+            "NicoCache_nl-Updater-$env:UPDATER_VERSION-$platformId-$architecture.zip",
+            "NicoCache_nl-Updater-$env:UPDATER_VERSION-$platformId-$architecture.deb",
+            "NicoCache_nl-Updater-$env:UPDATER_VERSION-$platformId-$architecture.rpm",
+            "NicoCache_nl-Updater-$env:UPDATER_VERSION-$platformId-$architecture.pkg",
+            "NicoCache_nl-Updater-$env:UPDATER_VERSION-$platformId-$architecture.dmg"
+          )
+          foreach ($pattern in $patterns) {
+            $candidate = Get-ChildItem -LiteralPath $appOutput -File -Filter $pattern -ErrorAction SilentlyContinue
+            if ($candidate) { Copy-Item -LiteralPath $candidate.FullName -Destination $releaseAssets -Force }
+          }
+          foreach ($pattern in $updaterPatterns) {
+            $candidate = Get-ChildItem -LiteralPath $updaterOutput -File -Filter $pattern -ErrorAction SilentlyContinue
+            if ($candidate) { Copy-Item -LiteralPath $candidate.FullName -Destination $releaseAssets -Force }
+          }
+          $assets = @(Get-ChildItem -LiteralPath $releaseAssets -File)
+          if ($assets.Count -lt 6) { throw "Unixリリース資産が不足しています: $($assets.Count)" }
+          foreach ($asset in $assets) {
+            $hash = (Get-FileHash -LiteralPath $asset.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($asset.Name)" | Out-File -LiteralPath ($asset.FullName + '.sha256') -Encoding ascii
+          }
+
+      - name: Upload Unix release assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets-${{ matrix.platform }}
+          if-no-files-found: error
+          path: release-assets/*
+
+  publish:
+    needs: [build, build-unix]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
-      APP_VERSION: ${{ needs.build.outputs.app_version }}
-      UPDATER_VERSION: ${{ needs.build.outputs.updater_version }}
 
     steps:
       - name: Download release assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: release-assets
+          pattern: release-assets*
           path: release-assets
+          merge-multiple: true
 
       - name: Create GitHub release
         shell: bash
         run: |
+          test -n "$(find release-assets -maxdepth 1 -type f | head -n 1)"
           gh release create "$RELEASE_TAG" \
-            "release-assets/NicoCache_nl-$RELEASE_TAG.zip" \
-            "release-assets/NicoCache_nl-$APP_VERSION.msi" \
-            "release-assets/NicoCache_nl-$APP_VERSION.msi.sha256" \
-            "release-assets/NicoCache_nl-Updater-$UPDATER_VERSION.msi" \
-            "release-assets/NicoCache_nl-Updater-$UPDATER_VERSION.msi.sha256" \
+            release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
             --generate-notes \

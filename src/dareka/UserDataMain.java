@@ -13,14 +13,11 @@ final class UserDataMain {
     public static void main(String[] args) {
         String packagedLauncher = System.getProperty("jpackage.app-path");
         if (packagedLauncher != null && !packagedLauncher.isBlank()) {
-            Path executable =
-                    Path.of(packagedLauncher).toAbsolutePath().normalize();
-            Path applicationRoot = executable.getParent();
-            if (applicationRoot != null) {
-                System.setProperty(
-                        NicoCachePaths.APPLICATION_ROOT_PROPERTY,
-                        applicationRoot.toString());
-            }
+            Path applicationRoot = PlatformSupport.applicationRootFromLauncher(
+                    Path.of(packagedLauncher), PlatformSupport.current());
+            System.setProperty(
+                    NicoCachePaths.APPLICATION_ROOT_PROPERTY,
+                    applicationRoot.toString());
         }
         NLMain.main(args);
     }

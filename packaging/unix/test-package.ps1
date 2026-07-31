@@ -1,0 +1,132 @@
+#Requires -Version 7.0
+[CmdletBinding()]
+param(
+    [ValidateSet('Linux', 'MacOS')]
+    [string]$Platform,
+
+    [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
+    [string]$AppVersion = '0.1.0'
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($Platform)) {
+    if ($IsLinux) { $Platform = 'Linux' }
+    elseif ($IsMacOS) { $Platform = 'MacOS' }
+    else { throw 'LinuxまたはmacOS上で実行するか、-Platformを指定してください' }
+}
+$hostPlatform = if ($IsLinux) { 'Linux' } elseif ($IsMacOS) { 'MacOS' } else { 'Other' }
+if ($Platform -ne $hostPlatform) {
+    throw "Unixパッケージの検証は対象OS上で実行してください (host=$hostPlatform, target=$Platform)"
+}
+
+$root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
+$workRoot = Join-Path $root (Join-Path '.test-work' ('unix-package-' + $Platform.ToLowerInvariant()))
+$outputRoot = Join-Path $workRoot 'output'
+$bundleName = 'NicoCache_nl' + $(if ($Platform -eq 'MacOS') { '.app' } else { '' })
+$bundle = Join-Path $outputRoot $bundleName
+$contentRoot = if ($Platform -eq 'MacOS') { Join-Path $bundle 'Contents' } else { $bundle }
+$architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
+    'X64' { 'x64' }
+    'Arm64' { 'arm64' }
+    'X86' { 'x86' }
+    default { throw '未対応のCPUアーキテクチャです' }
+}
+
+function Assert-True([bool]$Condition, [string]$Message) {
+    if (-not $Condition) { throw $Message }
+}
+function Assert-File([string]$Path) {
+    Assert-True (Test-Path -LiteralPath $Path -PathType Leaf) "ファイルがありません: $Path"
+}
+function Get-RequiredCommand([string]$Name) {
+    $command = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $command) { throw "必要な検証コマンドがありません: $Name" }
+    if ($command.Source) { return $command.Source }
+    return $command.Path
+}
+
+Assert-True (Test-Path -LiteralPath $bundle -PathType Container) "アプリイメージがありません: $bundle"
+if ($Platform -eq 'Linux') {
+    $launcher = Join-Path $bundle 'NicoCache_nl'
+    Assert-File $launcher
+    Assert-True ((Get-Item -LiteralPath $launcher).UnixFileMode.ToString().Contains('UserExecute')) `
+        'Linuxランチャーに実行属性がありません'
+} else {
+    $launcher = Join-Path $contentRoot 'MacOS/NicoCache_nl'
+    Assert-File $launcher
+}
+Assert-File (Join-Path $contentRoot 'app/NicoCache_nl.jar')
+Assert-File (Join-Path $contentRoot 'app/NicoCacheCA.jar')
+Assert-File (Join-Path $contentRoot 'app/lib/bcpkix.jar')
+Assert-File (Join-Path $contentRoot 'app/lib/bcprov.jar')
+Assert-File (Join-Path $contentRoot 'app/lib/bcutil.jar')
+Assert-File (Join-Path $contentRoot 'app/NicoCache_nl.cfg')
+Assert-File (Join-Path $contentRoot 'runtime/lib/modules')
+Assert-File (Join-Path $contentRoot 'config.properties.default')
+Assert-File (Join-Path $contentRoot 'local/nllib.js')
+Assert-File (Join-Path $contentRoot 'nlFilters/01_globalFilter.txt')
+Assert-File (Join-Path $contentRoot 'data/tlsclient/cacerts2')
+Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.ps1').Count) `
+    'PowerShellスクリプトがUnixパッケージへ混入しています'
+Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.dll').Count) `
+    'Windows DLLがUnixパッケージへ混入しています'
+
+$sandbox = Join-Path $workRoot 'launcher-sandbox'
+if (Test-Path -LiteralPath $sandbox) { Remove-Item -LiteralPath $sandbox -Recurse -Force }
+New-Item -ItemType Directory -Path $sandbox | Out-Null
+$dataRoot = Join-Path $sandbox 'data'
+$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$startInfo.FileName = $launcher
+$startInfo.WorkingDirectory = $sandbox
+$startInfo.UseShellExecute = $false
+$startInfo.RedirectStandardOutput = $true
+$startInfo.RedirectStandardError = $true
+foreach ($argument in @(
+        '--setup', '--headless', "--user-data-root=$dataRoot", '--https=true',
+        '--trust-certificate=false', '--proxy=false', '--autostart=false')) {
+    [void]$startInfo.ArgumentList.Add($argument)
+}
+$process = [System.Diagnostics.Process]::new()
+$process.StartInfo = $startInfo
+[void]$process.Start()
+if (-not $process.WaitForExit(120000)) {
+    $process.Kill($true)
+    throw 'Unixアプリイメージの初回セットアップ起動がタイムアウトしました'
+}
+$stdout = $process.StandardOutput.ReadToEnd()
+$stderr = $process.StandardError.ReadToEnd()
+Assert-True ($process.ExitCode -eq 0) "初回セットアップ起動に失敗しました: $stdout$stderr"
+Assert-File (Join-Path $contentRoot 'config.properties')
+Assert-File (Join-Path $dataRoot 'data/first-run-setup.properties')
+Assert-File (Join-Path $dataRoot 'certs/ca.cer')
+Assert-File (Join-Path $dataRoot 'certs/site.jks')
+
+$archive = Join-Path $outputRoot "NicoCache_nl-$AppVersion-$($Platform.ToLowerInvariant())-$architecture.zip"
+if (Test-Path -LiteralPath $archive -PathType Leaf) {
+    $unzip = Get-RequiredCommand 'unzip'
+    & $unzip -t $archive | Out-Null
+    Assert-True ($LASTEXITCODE -eq 0) "本体ZIPの検証に失敗しました: $archive"
+}
+if ($Platform -eq 'Linux') {
+    foreach ($extension in @('.deb', '.rpm')) {
+        $package = Get-ChildItem -LiteralPath $outputRoot -Filter "*linux-$architecture$extension" -File |
+            Select-Object -First 1
+        Assert-True ($null -ne $package) "Linux $extension がありません"
+        if ($extension -eq '.deb') {
+            & (Get-RequiredCommand 'dpkg-deb') --info $package.FullName | Out-Null
+        } else {
+            & (Get-RequiredCommand 'rpm') -qpl $package.FullName | Out-Null
+        }
+        Assert-True ($LASTEXITCODE -eq 0) "Linux $extension のメタデータ検証に失敗しました"
+    }
+} else {
+    foreach ($extension in @('.pkg', '.dmg')) {
+        $package = Get-ChildItem -LiteralPath $outputRoot -Filter "*macos-$architecture$extension" -File |
+            Select-Object -First 1
+        Assert-True ($null -ne $package) "macOS $extension がありません"
+        Assert-True ($package.Length -gt 0) "macOS $extension が空です"
+    }
+}
+
+Write-Output "$Platform本体パッケージの構造・隔離起動テストに成功しました"

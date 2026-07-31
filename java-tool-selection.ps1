@@ -6,11 +6,15 @@ function Get-JavaToolCandidates {
 
     $paths = [System.Collections.Generic.List[string]]::new()
     if ($env:JAVA_HOME) {
-        $paths.Add((Join-Path $env:JAVA_HOME "bin\$CommandName.exe"))
-        $paths.Add((Join-Path $env:JAVA_HOME "bin\$CommandName"))
+        $javaBin = Join-Path $env:JAVA_HOME 'bin'
+        $paths.Add((Join-Path $javaBin "$CommandName.exe"))
+        $paths.Add((Join-Path $javaBin $CommandName))
     }
     Get-Command $CommandName -All -ErrorAction SilentlyContinue |
-        ForEach-Object { $paths.Add($_.Source) }
+        ForEach-Object {
+            $commandPath = if ($_.Source) { $_.Source } else { $_.Path }
+            if ($commandPath) { $paths.Add($commandPath) }
+        }
 
     $seen = @{}
     foreach ($path in $paths) {

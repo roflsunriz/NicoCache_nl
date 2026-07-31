@@ -79,7 +79,8 @@ $tests = @(Get-ChildItem (Join-Path $root 'updater\test') -Filter '*.java' -Recu
 if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed' }
 foreach ($testClass in @('dareka.updater.NicoCacheUpdaterTest', 'dareka.updater.TargetRootResolverTest',
         'dareka.updater.InstalledVersionDetectorTest', 'dareka.updater.ApplicationProcessGuardTest',
-        'dareka.updater.DependencyEngineTest')) {
+        'dareka.updater.DependencyEngineTest', 'dareka.updater.ArchiveApplicationInstallerTest',
+        'dareka.updater.UpdaterPlatformTest')) {
     & java -cp $classes $testClass
     if ($LASTEXITCODE -ne 0) { throw "Updater Java test failed: $testClass" }
 }

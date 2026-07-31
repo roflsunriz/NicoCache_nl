@@ -652,7 +652,7 @@ public final class FirstRunSetupTest {
                     "HTTPS証明書: 成功",
                     "HTTPS success result");
             assertContains(panel.getResultSummary().getText(),
-                    "Windows自動プロキシー: 成功",
+                    "自動プロキシー: 成功",
                     "proxy success result");
             assertContains(panel.getResultSummary().getText(),
                     "ログオン時自動起動: 未選択",

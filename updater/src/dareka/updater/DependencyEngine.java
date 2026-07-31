@@ -28,11 +28,13 @@ final class DependencyEngine {
     private static final Pattern SHA256 = Pattern.compile("(?i)^[0-9a-f]{64}$");
 
     private final Path applicationRoot;
-    private final SystemDependencyManager systemDependencies;
+    private final DependencyProvider systemDependencies;
 
     DependencyEngine(Path applicationRoot) throws IOException {
         this.applicationRoot = applicationRoot.toAbsolutePath().normalize();
-        this.systemDependencies = new SystemDependencyManager();
+        this.systemDependencies = UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS
+                ? new SystemDependencyManager()
+                : new UnixDependencyManager();
     }
 
     String checkAll(int javaMajor) throws Exception {
@@ -43,7 +45,9 @@ final class DependencyEngine {
 
     String updateAll(int javaMajor) throws Exception {
         StringBuilder output = new StringBuilder(systemDependencies.updateAll(javaMajor));
-        UserToolAliasRepair.repair();
+        if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
+            UserToolAliasRepair.repair();
+        }
         output.append(updateBouncyCastle());
         return output.toString();
     }
