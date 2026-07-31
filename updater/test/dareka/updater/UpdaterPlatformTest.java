@@ -1,6 +1,9 @@
 package dareka.updater;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 /** Verifies platform and app-image naming policy without requiring another OS. */
 public final class UpdaterPlatformTest {
@@ -34,6 +37,28 @@ public final class UpdaterPlatformTest {
         assertEquals(Path.of("opt/NicoCache_nl/bin/NicoCache_nl").toAbsolutePath().normalize(),
                 UpdaterPlatform.launcherPath(linuxRoot, UpdaterPlatform.Kind.LINUX),
                 "Linux launcher path");
+        try {
+            Path macContents = Files.createTempDirectory("updater-platform-test-");
+            try {
+                Files.createDirectories(macContents.resolve("runtime/Contents/Home/lib"));
+                assertEquals(macContents.resolve("runtime/Contents/Home"),
+                        UpdaterPlatform.runtimeDirectory(macContents),
+                        "macOS nested runtime directory");
+            } finally {
+                try (Stream<Path> paths = Files.walk(macContents)) {
+                    paths.sorted(java.util.Comparator.reverseOrder())
+                            .forEach(path -> {
+                                try {
+                                    Files.deleteIfExists(path);
+                                } catch (IOException error) {
+                                    throw new RuntimeException(error);
+                                }
+                            });
+                }
+            }
+        } catch (IOException error) {
+            throw new AssertionError("macOS runtime directory test setup failed", error);
+        }
         System.out.println("Updater platform tests passed");
     }
 

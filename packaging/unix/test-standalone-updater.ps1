@@ -34,7 +34,7 @@ $applicationDirectory = if ($Platform -eq 'Linux') {
 $runtimeDirectory = if ($Platform -eq 'Linux') {
     Join-Path $bundle 'lib/runtime'
 } else {
-    Join-Path $contentRoot 'runtime'
+    Join-Path $contentRoot 'runtime/Contents/Home'
 }
 $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
     'X64' { 'x64' }
@@ -118,17 +118,17 @@ if ($Platform -eq 'Linux') {
     foreach ($extension in @('.deb', '.rpm')) {
         $package = Get-ChildItem -LiteralPath $outputRoot -Filter "*linux-$architecture$extension" -File |
             Select-Object -First 1
-        Assert-True ($null -ne $package) "Linuxアップデーター$extensionがありません"
+        Assert-True ($null -ne $package) "Linuxアップデーター${extension}がありません"
         if ($extension -eq '.deb') { & (Get-RequiredCommand 'dpkg-deb') --info $package.FullName | Out-Null }
         else { & (Get-RequiredCommand 'rpm') -qpl $package.FullName | Out-Null }
-        Assert-True ($LASTEXITCODE -eq 0) "Linuxアップデーター$extensionの検証に失敗しました"
+        Assert-True ($LASTEXITCODE -eq 0) "Linuxアップデーター${extension}の検証に失敗しました"
     }
 } else {
     foreach ($extension in @('.pkg', '.dmg')) {
         $package = Get-ChildItem -LiteralPath $outputRoot -Filter "*macos-$architecture$extension" -File |
             Select-Object -First 1
-        Assert-True ($null -ne $package) "macOSアップデーター$extensionがありません"
-        Assert-True ($package.Length -gt 0) "macOSアップデーター$extensionが空です"
+        Assert-True ($null -ne $package) "macOSアップデーター${extension}がありません"
+        Assert-True ($package.Length -gt 0) "macOSアップデーター${extension}が空です"
     }
 }
 

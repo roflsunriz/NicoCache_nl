@@ -194,7 +194,7 @@ function Rename-NativeArtifact {
     param([Parameter(Mandatory)][string]$Extension)
     $candidate = Get-ChildItem -LiteralPath $outputRoot -Filter ("*" + $Extension) -File |
         Sort-Object LastWriteTime -Descending | Select-Object -First 1
-    if (-not $candidate) { throw "jpackageの$Extension成果物が見つかりません" }
+    if (-not $candidate) { throw "jpackageの${Extension}成果物が見つかりません" }
     $target = Join-Path $outputRoot ("NicoCache_nl-$AppVersion-$platformId-$architecture$Extension")
     Move-Item -LiteralPath $candidate.FullName -Destination $target -Force
     Write-Output "ネイティブパッケージを作成しました: $target"

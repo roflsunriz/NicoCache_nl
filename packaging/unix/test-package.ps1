@@ -39,7 +39,7 @@ $applicationDirectory = if ($Platform -eq 'Linux') {
 $runtimeDirectory = if ($Platform -eq 'Linux') {
     Join-Path $bundle 'lib/runtime'
 } else {
-    Join-Path $contentRoot 'runtime'
+    Join-Path $contentRoot 'runtime/Contents/Home'
 }
 $architecture = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()) {
     'X64' { 'x64' }

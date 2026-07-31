@@ -116,6 +116,8 @@ final class UpdaterPlatform {
 
     static Path runtimeDirectory(Path applicationRoot) {
         Path normalized = applicationRoot.toAbsolutePath().normalize();
+        Path macDirectory = normalized.resolve("runtime/Contents/Home");
+        if (Files.isDirectory(macDirectory)) return macDirectory;
         Path linuxDirectory = normalized.resolve("lib/runtime");
         return Files.isDirectory(linuxDirectory) ? linuxDirectory : normalized.resolve("runtime");
     }
