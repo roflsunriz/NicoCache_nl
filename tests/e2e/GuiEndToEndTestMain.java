@@ -77,6 +77,8 @@ public final class GuiEndToEndTestMain {
                         error.printStackTrace(System.err);
                     });
             run("GUI stable component identities", this::testComponentIdentity);
+            run("GUI shutdown after failed initialization",
+                    this::testShutdownAfterFailedInitialization);
             run("GUI debug file logging and retention",
                     this::testDebugFileLogging);
             run("GUI geometry and responsive rendering",
@@ -116,7 +118,7 @@ public final class GuiEndToEndTestMain {
             }
             throw new AssertionError("GUI end-to-end tests failed");
         }
-        System.out.println("GUI end-to-end tests passed: 7");
+        System.out.println("GUI end-to-end tests passed: 8");
     }
 
     private void prepare() throws IOException {
@@ -286,6 +288,26 @@ public final class GuiEndToEndTestMain {
         }
         assertTrue(Files.size(rolloverLog) <= 256,
                 "closed rollover log must remain within the byte limit");
+    }
+
+    private void testShutdownAfterFailedInitialization() throws Exception {
+        String previousTimeout = System.getProperty("shutdownTimeout");
+        System.setProperty("shutdownTimeout", "1000");
+        try {
+            long started = System.nanoTime();
+            NLMain.shutdown();
+            long elapsedMillis = java.util.concurrent.TimeUnit.NANOSECONDS
+                    .toMillis(System.nanoTime() - started);
+            assertTrue(elapsedMillis < 500,
+                    "shutdown after failed initialization took too long: "
+                    + elapsedMillis + "ms");
+        } finally {
+            if (previousTimeout == null) {
+                System.clearProperty("shutdownTimeout");
+            } else {
+                System.setProperty("shutdownTimeout", previousTimeout);
+            }
+        }
     }
 
     private void testGeometryAndRendering() throws Exception {

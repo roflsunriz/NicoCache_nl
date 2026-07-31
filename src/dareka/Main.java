@@ -33,10 +33,11 @@ public class Main {
         return VER_STRING;
     }
 
-    private static Server server;
-    private static TlsEndPoint tlsEndPoint;
-    private static Thread cleanerHookThread;          // [nl]
-    private static DirectoryWatcher directoryWatcher; // [nl]
+    private static volatile Server server;
+    private static volatile TlsEndPoint tlsEndPoint;
+    private static volatile Thread cleanerHookThread;          // [nl]
+    private static volatile DirectoryWatcher directoryWatcher; // [nl]
+    private static volatile boolean done = true;
 
     public static void stop() {
         if (directoryWatcher != null) { // [nl]
@@ -48,19 +49,32 @@ public class Main {
     }
 
     public static void main(String[] args) {
+        done = false;
         try {
             mainBody();
-            if (cleanerHookThread.isAlive()) { // [nl]
-                cleanerHookThread.interrupt();
-            }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Logger.error(e);
+        } finally {
+            try {
+                if (cleanerHookThread != null
+                        && cleanerHookThread.isAlive()) { // [nl]
+                    cleanerHookThread.interrupt();
+                }
+            } catch (Throwable e) {
+                Logger.error(e);
+            }
+            try {
+                stop();
+            } catch (Throwable e) {
+                Logger.error(e);
+            }
+            cleanerHookThread = null;
+            done = true;
         }
-        cleanerHookThread = null;
     }
 
     static boolean isDone() { // [nl]
-        return server != null && cleanerHookThread == null;
+        return done;
     }
 
     static void disconnect() { // [nl]

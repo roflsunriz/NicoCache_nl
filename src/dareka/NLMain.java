@@ -132,10 +132,20 @@ public class NLMain {
         Main.main(args);
 
         synchronized (NLMain.class) { // shutdownから抜けるまで待つ
-            extLoggerHandler.close();
-            if (guiLauncher != null) {
-                guiLauncher.close();
-                System.exit(0);
+            boolean startedGUI = guiLauncher != null;
+            try {
+                if (extLoggerHandler != null) {
+                    extLoggerHandler.close();
+                }
+                if (startedGUI) {
+                    guiLauncher.close();
+                }
+            } catch (Throwable t) {
+                Logger.error(t);
+            } finally {
+                if (startedGUI) {
+                    System.exit(0);
+                }
             }
         }
     }
@@ -158,12 +168,20 @@ public class NLMain {
     static native void setNativeWindowProc(JFrame frame, String params);
 
     static synchronized void shutdown() {
-        if (guiLauncher != null) {
-            guiLauncher.activatePrimaryTab();
+        try {
+            if (guiLauncher != null) {
+                guiLauncher.activatePrimaryTab();
+            }
+        } catch (Throwable t) {
+            Logger.error(t);
         }
         Logger.debugWithThread("NLMain.shutdown() called");
 
-        Main.stop();
+        try {
+            Main.stop();
+        } catch (Throwable t) {
+            Logger.error(t);
+        }
 
         if (Thread.currentThread() == mainThread) {
             return;
@@ -176,7 +194,7 @@ public class NLMain {
                 timeout -= interval;
             }
         } catch (InterruptedException e) {
-            // do nothing.
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -531,6 +549,9 @@ public class NLMain {
     }
 
     void activatePrimaryTab() {
+        if (logWindow == null) {
+            return;
+        }
         Runnable f = () -> {
             if (NLMain.isDebugMode()) {
                 getTabbedPane().setSelectedIndex(1);
@@ -554,9 +575,15 @@ public class NLMain {
     void close() {
         Runnable closeGui = () -> {
                 if (tray != null) {
-                    tray.close(); tray = null;
+                    try {
+                        tray.close();
+                    } catch (Throwable t) {
+                        Logger.error(t);
+                    } finally {
+                        tray = null;
+                    }
                 }
-                if (logWindow.frame != null) {
+                if (logWindow != null && logWindow.frame != null) {
                     for (LogPane pane : logWindow.tabs.values()) {
                         pane.dispose();
                     }
@@ -610,15 +637,25 @@ public class NLMain {
     }
 
     static void append(String log) {
-        if (logWindow != null) {
-            SwingUtilities.invokeLater(() -> logWindow.mainPane.append(log));
+        LogWindow window = logWindow;
+        if (window != null && window.mainPane != null) {
+            SwingUtilities.invokeLater(() -> {
+                if (logWindow == window && window.mainPane != null) {
+                    window.mainPane.append(log);
+                }
+            });
             appendDebug(log);
         }
     }
 
     static void appendDebug(String log) {
-        if (logWindow != null && logWindow.debugPane != null) {
-            SwingUtilities.invokeLater(() -> logWindow.debugPane.append(log));
+        LogWindow window = logWindow;
+        if (window != null && window.debugPane != null) {
+            SwingUtilities.invokeLater(() -> {
+                if (logWindow == window && window.debugPane != null) {
+                    window.debugPane.append(log);
+                }
+            });
         }
     }
 
@@ -791,7 +828,10 @@ public class NLMain {
         }
 
         void close() {
-            SystemTray.getSystemTray().remove(trayIcon);
+            if (trayIcon != null) {
+                SystemTray.getSystemTray().remove(trayIcon);
+                trayIcon = null;
+            }
         }
 
         void addMenuItem(String label, ActionListener listener, PopupMenu popup) {

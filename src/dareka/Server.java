@@ -138,14 +138,30 @@ public class Server {
             acceptServerSocket();
         } finally {
             Logger.info("finalizing");
-            Logger.debugWithThread("stopping extensions"); // [nl]
-            cleanupExtensions();
-            Logger.debugWithThread("stopping accepting request");
-            cleanupServerSocket();
-            Logger.debugWithThread("stopping processing request");
-            cleanupWorkers();
-            Logger.debugWithThread("stopping threads");
-            cleanupExecutor();
+            try {
+                Logger.debugWithThread("stopping extensions"); // [nl]
+                cleanupExtensions();
+            } catch (Throwable t) {
+                Logger.error(t);
+            }
+            try {
+                Logger.debugWithThread("stopping accepting request");
+                cleanupServerSocket();
+            } catch (Throwable t) {
+                Logger.error(t);
+            }
+            try {
+                Logger.debugWithThread("stopping processing request");
+                cleanupWorkers();
+            } catch (Throwable t) {
+                Logger.error(t);
+            }
+            try {
+                Logger.debugWithThread("stopping threads");
+                cleanupExecutor();
+            } catch (Throwable t) {
+                Logger.error(t);
+            }
             Logger.info("finalized");
 
             if (liveWorkers.size() > 0) {
@@ -542,12 +558,20 @@ public class Server {
         for (Extension2 entry : newExtensions) {
             // リスナが実装されているかどうかで一方のみ呼び出す
             if (entry instanceof SystemEventListener) {
-                ((SystemEventListener) entry).onSystemEvent(
-                        SystemEventListener.SYSTEM_EXIT, null);
+                try {
+                    ((SystemEventListener) entry).onSystemEvent(
+                            SystemEventListener.SYSTEM_EXIT, null);
+                } catch (Throwable t) {
+                    Logger.error(t);
+                }
             } else {
                 try { // onSystemExit() があれば呼び出す
                     entry.getClass().getMethod("onSystemExit").invoke(entry);
-                } catch (Exception e) {}
+                } catch (NoSuchMethodException e) {
+                    // Optional callback is not implemented.
+                } catch (Exception e) {
+                    Logger.error(e);
+                }
             }
         }
     }

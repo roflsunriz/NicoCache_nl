@@ -128,8 +128,10 @@ public final class FunctionalTestMain {
             }
         }
 
-        run("Extension system-exit callback", () -> assertFileContains(
-                sandbox.resolve("extension-system-exit.txt"), "system-exit"));
+        run("Extension exception does not interrupt graceful shutdown", () ->
+                assertFileContains(
+                        sandbox.resolve("extension-system-exit.txt"),
+                        "system-exit"));
 
         if (!FAILURES.isEmpty()) {
             System.err.println("Functional test failures: " + FAILURES.size());
