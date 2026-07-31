@@ -18,8 +18,10 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import dareka.common.Logger;
@@ -74,6 +76,16 @@ public class DomandCVIEntry {
     private byte[] videoIV = null; // 復号に使う初期化ベクトル
     private byte[] audioKey = null; // 復号に使うキー
     private byte[] videoKey = null; // 復号に使うキー
+
+    // HLSの#EXT-X-KEYは、次の#EXT-X-KEYまで後続セグメントへ適用される。
+    // そのためプレイリスト内で鍵・IVが切り替わる配信では、品質全体で一つの
+    // 値を共有すると後続セグメントを別の鍵で復号してしまう。
+    private Map<String, String> audioKeyUrlsByFilename = new HashMap<>();
+    private Map<String, byte[]> audioIVsByFilename = new HashMap<>();
+    private Map<String, byte[]> audioKeysByUrl = new HashMap<>();
+    private Map<String, String> videoKeyUrlsByFilename = new HashMap<>();
+    private Map<String, byte[]> videoIVsByFilename = new HashMap<>();
+    private Map<String, byte[]> videoKeysByUrl = new HashMap<>();
 
     // - 復号に使う初期化ベクトルとキーは復号対象よりも後にダウンロードされるかも知れない.
     //   それに備えて復号処理を後で行なえるようにする.
@@ -342,6 +354,66 @@ public class DomandCVIEntry {
         };
     };
 
+    // セグメント固有の鍵を待つ処理用。既存の公開APIは「品質全体の鍵が揃ったら
+    // 即時実行」という互換挙動を維持し、こちらは呼び出し側がセグメント固有の
+    // 鍵の有無を確認した後にだけ待機集合へ追加する。
+    synchronized void addAudioDecryptInfoListener(Runnable r) {
+        gotAudioDecryptInfoListeners.add(r);
+    };
+
+    synchronized void addVideoDecryptInfoListener(Runnable r) {
+        gotVideoDecryptInfoListeners.add(r);
+    };
+
+    synchronized void setAudioDecryptInfo(
+        String filename, String keyUrl, byte[] iv) {
+        audioKeyUrlsByFilename.put(filename, keyUrl);
+        audioIVsByFilename.put(filename, iv);
+        mightCallAudioListeners();
+    };
+
+    synchronized void setVideoDecryptInfo(
+        String filename, String keyUrl, byte[] iv) {
+        videoKeyUrlsByFilename.put(filename, keyUrl);
+        videoIVsByFilename.put(filename, iv);
+        mightCallVideoListeners();
+    };
+
+    private static String keyUrlWithoutSearch(String url) {
+        int question = url == null ? -1 : url.indexOf("?");
+        return question < 0 ? url : url.substring(0, question);
+    };
+
+    private static void putKey(
+        Map<String, byte[]> keysByUrl, String keyUrl, byte[] key) {
+        keysByUrl.put(keyUrl, key);
+        String baseUrl = keyUrlWithoutSearch(keyUrl);
+        if (!baseUrl.equals(keyUrl) && !keysByUrl.containsKey(baseUrl)) {
+            keysByUrl.put(baseUrl, key);
+        };
+    };
+
+    private static byte[] findKey(
+        Map<String, byte[]> keysByUrl, String keyUrl) {
+        byte[] key = keysByUrl.get(keyUrl);
+        if (key != null) {
+            return key;
+        };
+        return keysByUrl.get(keyUrlWithoutSearch(keyUrl));
+    };
+
+    synchronized void setAudioKeyForUrl(String keyUrl, byte[] key) {
+        putKey(audioKeysByUrl, keyUrl, key);
+        audioKey = key;
+        mightCallAudioListeners();
+    };
+
+    synchronized void setVideoKeyForUrl(String keyUrl, byte[] key) {
+        putKey(videoKeysByUrl, keyUrl, key);
+        videoKey = key;
+        mightCallVideoListeners();
+    };
+
     public synchronized void setAudioIV(byte[] v) {
         audioIV = v;
         mightCallAudioListeners();
@@ -360,6 +432,32 @@ public class DomandCVIEntry {
     public synchronized void setVideoKey(byte[] v) {
         videoKey = v;
         mightCallVideoListeners();
+    };
+
+    synchronized byte[] getAudioIV(String filename) {
+        byte[] iv = audioIVsByFilename.get(filename);
+        return iv == null ? audioIV : iv;
+    };
+
+    synchronized byte[] getVideoIV(String filename) {
+        byte[] iv = videoIVsByFilename.get(filename);
+        return iv == null ? videoIV : iv;
+    };
+
+    synchronized byte[] getAudioKey(String filename) {
+        String keyUrl = audioKeyUrlsByFilename.get(filename);
+        if (keyUrl == null) {
+            return audioKey;
+        };
+        return findKey(audioKeysByUrl, keyUrl);
+    };
+
+    synchronized byte[] getVideoKey(String filename) {
+        String keyUrl = videoKeyUrlsByFilename.get(filename);
+        if (keyUrl == null) {
+            return videoKey;
+        };
+        return findKey(videoKeysByUrl, keyUrl);
     };
 
     public synchronized byte[] getAudioIV() {

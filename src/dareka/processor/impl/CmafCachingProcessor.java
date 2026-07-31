@@ -351,13 +351,14 @@ public class CmafCachingProcessor implements Processor {
 
         // Logger.info("-- thread[" + Thread.currentThread().getId() + "]");
 
-        // 既に鍵をセットしていても上書きする.
+        // 既に鍵をセットしていても上書きする。プレイリスト内で鍵が
+        // 切り替わる場合に備え、要求URLごとの値も保持する。
         if (av.isAudio()) {
             // Logger.info("-- audio key: ok");
-            movieInfo.setAudioKey(binContent);
+            movieInfo.setAudioKeyForUrl(requestHeader.getURI(), binContent);
         } else {
             // Logger.info("-- video key: ok");
-            movieInfo.setVideoKey(binContent);
+            movieInfo.setVideoKeyForUrl(requestHeader.getURI(), binContent);
         };
 
         return resource;
@@ -1227,8 +1228,6 @@ public class CmafCachingProcessor implements Processor {
             Pattern.compile("^.*/(audio|video)/(\\d+)/[^/]*/([^?]*)(?:[?].*)$");
 
     // #EXT-X-KEYの属性は順不同なので、行全体を取得して個別に解釈する。
-    private static final Pattern EXT_X_KEY_TAG_PATTERN =
-        Pattern.compile("(?m)^#EXT-X-KEY:([^\r\n]*)");
     private static final Pattern EXT_X_KEY_ATTRIBUTE_PATTERN =
         Pattern.compile("(?:^|,)\\s*([A-Z0-9-]+)=(\"[^\"]*\"|[^,]*)");
 
@@ -1247,6 +1246,80 @@ public class CmafCachingProcessor implements Processor {
             return value;
         };
         return null;
+    };
+
+    private static final class PlaylistDecryptInfo {
+        final byte[] iv;
+
+        PlaylistDecryptInfo(byte[] iv) {
+            this.iv = iv;
+        };
+    };
+
+    // #EXT-X-KEYは次の同タグまで後続のmedia segmentへ適用される。
+    // プレイリスト全体の先頭1件だけを保存すると、鍵ローテーション後の
+    // セグメントを誤った鍵・IVで復号してしまうため、ファイル名ごとに記録する。
+    // 不明な暗号方式や属性が混在するプレイリストは、誤った復号結果を保存
+    // しないようにnullを返す。
+    private static PlaylistDecryptInfo registerPlaylistDecryptInfo(
+        String content, AV av, DomandCVIEntry movieInfo) {
+
+        PlaylistDecryptInfo first = null;
+        String keyUrl = null;
+        byte[] iv = null;
+
+        for (String rawLine : content.split("\n", -1)) {
+            String line = rawLine.endsWith("\r")
+                ? rawLine.substring(0, rawLine.length() - 1)
+                : rawLine;
+
+            if (line.startsWith("#EXT-X-KEY:")) {
+                String attributes = line.substring("#EXT-X-KEY:".length());
+                String method = getExtXKeyAttribute(attributes, "METHOD");
+                String nextKeyUrl = getExtXKeyAttribute(attributes, "URI");
+                String ivHex = getExtXKeyAttribute(attributes, "IV");
+
+                if (!"AES-128".equals(method)
+                    || nextKeyUrl == null
+                    || ivHex == null
+                    || !KEY_URL_PATTERN.matcher(nextKeyUrl).matches()
+                    || !ivHex.startsWith("0x")) {
+                    return null;
+                };
+
+                byte[] nextIV;
+                try {
+                    nextIV = hexStringToByteArray(ivHex.substring(2));
+                } catch (NumberFormatException e) {
+                    return null;
+                };
+                if (nextIV.length != 16) {
+                    return null;
+                };
+
+                keyUrl = nextKeyUrl;
+                iv = nextIV;
+                if (first == null) {
+                    first = new PlaylistDecryptInfo(iv);
+                };
+                continue;
+            };
+
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            };
+
+            Matcher m = TO_SUBPLAYLIST_REMOTE_URL_TO_LOCAL_URL.matcher(line);
+            if (m.find() && keyUrl != null && iv != null) {
+                String filename = m.group(3);
+                if (av.isAudio()) {
+                    movieInfo.setAudioDecryptInfo(filename, keyUrl, iv);
+                } else {
+                    movieInfo.setVideoDecryptInfo(filename, keyUrl, iv);
+                };
+            };
+        };
+        return first;
     };
 
 
@@ -1305,6 +1378,20 @@ public class CmafCachingProcessor implements Processor {
             Logger.info("(cmaf subpl)Forbidden: requestHeader:" + requestHeader);
         };
 
+        PlaylistDecryptInfo decryptInfo = registerPlaylistDecryptInfo(
+            content, av, movieInfo);
+        if (decryptInfo == null) {
+            movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
+            Logger.info("復号情報をプレイリストから取り出せませんでした: "
+                        + movieInfo.getSmid());
+            return serverResponse;
+        };
+        if (av.isAudio()) {
+            movieInfo.setAudioIV(decryptInfo.iv);
+        } else {
+            movieInfo.setVideoIV(decryptInfo.iv);
+        };
+
         if (! "false".equals(requestHeader.getParameter("nicocachenl_save"))
             && movieInfo.getCacheSaveFlag()) {
 
@@ -1321,69 +1408,6 @@ public class CmafCachingProcessor implements Processor {
                     movieInfo.mightWriteVideoM3u8(binContentToWriteFile);
                 };
             };
-        };
-
-        String encIVHex; // 復号情報の初期化ベクトルの文字列形式. "0x789ABC..."
-        {
-            Matcher m = EXT_X_KEY_TAG_PATTERN.matcher(content);
-            if (!m.find()) {
-                movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
-                Logger.info("復号情報をプレイリストから取り出せませんでした: "
-                            + movieInfo.getSmid());
-                return serverResponse;
-            };
-            String attributes = m.group(1);
-            String encMethod = getExtXKeyAttribute(attributes, "METHOD");
-            String encKeyUrl = getExtXKeyAttribute(attributes, "URI");
-            encIVHex = getExtXKeyAttribute(attributes, "IV");
-
-            if (encMethod == null || encKeyUrl == null || encIVHex == null) {
-                movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
-                Logger.info("復号情報の属性が不足しています: "
-                            + movieInfo.getSmid());
-                return serverResponse;
-            };
-
-            if (!KEY_URL_PATTERN.matcher(encKeyUrl).matches()) {
-                movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
-                Logger.info("" + av + " key url: 未知形式 '" + encKeyUrl + "'");
-                return serverResponse;
-            };
-
-            if (!("AES-128".equals(encMethod))) {
-                movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
-                Logger.info("非対応の暗号化方法(" + encMethod + ")です: "
-                            + movieInfo.getSmid());
-                return serverResponse;
-            };
-        };
-
-        if (!encIVHex.startsWith("0x")) {
-            movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
-            Logger.info("非対応の初期化ベクトル表現です: "
-                        + movieInfo.getSmid());
-        };
-
-        byte[] encIV; // 復号情報の初期化ベクトル. AES-128では16bytes.
-        try {
-            encIV= hexStringToByteArray(encIVHex.substring(2));
-        } catch (NumberFormatException e) {
-            movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
-            Logger.info("初期化ベクトル表現が不正です:["
-                        + encIVHex + "]: " + movieInfo.getSmid());
-            return serverResponse;
-        };
-        if (encIV.length != 16) {
-            movieInfo.setCacheSaveFlag(false); // キャッシュしないというフラグ.
-            Logger.info("初期化ベクトルの長さがAES-128と一致しません: "
-                        + movieInfo.getSmid());
-            return serverResponse;
-        };
-
-        if (av.isAudio()) {
-            movieInfo.setAudioIV(encIV);
-        } else {
-            movieInfo.setVideoIV(encIV);
         };
 
         // メソッドが縦に長すぎる. 整理必要.
@@ -1710,8 +1734,10 @@ class ChunkListener implements TransferListener, Runnable {
 
         try {
             if (needDecrypt) {
-                byte[] iv = getIV(movieInfo, av);
-                byte[] key = getEncKey(movieInfo, av);
+                byte[] iv = getIV(movieInfo, av, filenameRel.substring(
+                    filenameRel.lastIndexOf('/') + 1));
+                byte[] key = getEncKey(movieInfo, av, filenameRel.substring(
+                    filenameRel.lastIndexOf('/') + 1));
                 this.decrypter = createDecrypter(iv, key, av);
             };
         } catch (NoSuchAlgorithmException e) {
@@ -1762,20 +1788,22 @@ class ChunkListener implements TransferListener, Runnable {
         };
     };
 
-    private static byte[] getIV(DomandCVIEntry movieInfo, AV av) {
+    private static byte[] getIV(
+        DomandCVIEntry movieInfo, AV av, String filename) {
         if (av.isAudio()) {
-            return movieInfo.getAudioIV();
+            return movieInfo.getAudioIV(filename);
         } else if (av.isVideo()) {
-            return movieInfo.getVideoIV();
+            return movieInfo.getVideoIV(filename);
         };
         return null;
     };
 
-    private static byte[] getEncKey(DomandCVIEntry movieInfo, AV av) {
+    private static byte[] getEncKey(
+        DomandCVIEntry movieInfo, AV av, String filename) {
         if (av.isAudio()) {
-            return movieInfo.getAudioKey();
+            return movieInfo.getAudioKey(filename);
         } else if (av.isVideo()) {
-            return movieInfo.getVideoKey();
+            return movieInfo.getVideoKey(filename);
         };
         return null;
     };
@@ -1929,9 +1957,9 @@ class ChunkListener implements TransferListener, Runnable {
             // まだ復号情報の用意が出来ていない. run()呼び出しを予約.
             Runnable async = new AsyncExecute(this, executor);
             if (av.isAudio()) {
-                movieInfo.addGotAudioDecryptInfoListeners(async);
+                movieInfo.addAudioDecryptInfoListener(async);
             } else {
-                movieInfo.addGotVideoDecryptInfoListeners(async);
+                movieInfo.addVideoDecryptInfoListener(async);
             };
         };
     };
@@ -2068,6 +2096,7 @@ class ChunkListener implements TransferListener, Runnable {
             CloseUtil.close(partIStream);
             CloseUtil.close(decryptedChannel);
             CloseUtil.close(decryptedOStream);
+            decryptedFile.delete();
             return;
         };
 
@@ -2087,6 +2116,7 @@ class ChunkListener implements TransferListener, Runnable {
             CloseUtil.close(partIStream);
             CloseUtil.close(decryptedChannel);
             CloseUtil.close(decryptedOStream);
+            decryptedFile.delete();
             return;
         } catch (BadPaddingException e) {
             errorwarning(file + ": " + e.toString());
@@ -2094,6 +2124,7 @@ class ChunkListener implements TransferListener, Runnable {
             CloseUtil.close(partIStream);
             CloseUtil.close(decryptedChannel);
             CloseUtil.close(decryptedOStream);
+            decryptedFile.delete();
             return;
         };
 
@@ -2105,6 +2136,7 @@ class ChunkListener implements TransferListener, Runnable {
             CloseUtil.close(partIStream);
             CloseUtil.close(decryptedChannel);
             CloseUtil.close(decryptedOStream);
+            decryptedFile.delete();
             return;
         };
 

@@ -406,14 +406,23 @@ public final class FunctionalTestMain {
                 String mediaType = audio ? "audio" : "video";
                 String sourceId = audio ? "audio-aac-128kbps" : "video-h264-720p";
                 String extension = audio ? "cmfa" : "cmfv";
-                String base = cmafBase(path.contains("/hlsext/") ? "hlsext" : "hlsbid");
+                boolean rotating = path.contains("/hlsext/");
+                String base = cmafBase(rotating ? "hlsext" : "hlsbid");
                 String playlist = "#EXTM3U\n"
                         + "#EXT-X-KEY:IV=0x00000000000000000000000000000001,URI=\""
-                        + base + "/keys/" + sourceId + ".key?token=k\",METHOD=AES-128\n"
+                        + base + "/keys/" + sourceId + ".key?token="
+                        + (rotating ? "k1" : "k") + "\",METHOD=AES-128\n"
                         + "#EXT-X-MAP:URI=\"" + base + "/" + mediaType + "/1/"
                         + sourceId + "/init001." + extension + "?token=i\"\n"
                         + "#EXTINF:1.0,\n" + base + "/" + mediaType + "/1/"
-                        + sourceId + "/01." + extension + "?token=c\n"
+                        + sourceId + "/01." + extension + "?token=c1\n"
+                        + (rotating
+                                ? "#EXT-X-KEY:METHOD=AES-128,URI=\""
+                                + base + "/keys/" + sourceId + ".key?token=k2\","
+                                + "IV=0x00000000000000000000000000000002\n"
+                                + "#EXTINF:1.0,\n" + base + "/" + mediaType + "/1/"
+                                + sourceId + "/02." + extension + "?token=c2\n"
+                                : "")
                         + "#EXT-X-ENDLIST\n";
                 byte[] body = playlist.getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/vnd.apple.mpegurl");
@@ -423,7 +432,10 @@ public final class FunctionalTestMain {
             }
             if (path.contains("/keys/")) {
                 byte[] body = new byte[16];
-                Arrays.fill(body, (byte) 0x2a);
+                boolean secondKey = path.contains("/hlsext/")
+                        && exchange.getRequestURI().getRawQuery() != null
+                        && exchange.getRequestURI().getRawQuery().contains("token=k2");
+                Arrays.fill(body, secondKey ? (byte) 0x2b : (byte) 0x2a);
                 exchange.sendResponseHeaders(200, body.length);
                 exchange.getResponseBody().write(body);
                 return;
@@ -434,7 +446,12 @@ public final class FunctionalTestMain {
                 if (path.substring(path.lastIndexOf('/') + 1).startsWith("init")) {
                     body = (mediaType + "-init").getBytes(StandardCharsets.US_ASCII);
                 } else {
-                    body = encryptCmafSegment(mediaType + "-segment");
+                    boolean secondSegment = path.contains("/hlsext/")
+                            && path.substring(path.lastIndexOf('/') + 1).startsWith("02.");
+                    body = encryptCmafSegment(
+                            mediaType + "-segment" + (secondSegment ? "-2" : ""),
+                            secondSegment ? (byte) 0x2b : (byte) 0x2a,
+                            secondSegment ? 2 : 1);
                 }
                 exchange.sendResponseHeaders(200, body.length);
                 exchange.getResponseBody().write(body);
@@ -466,12 +483,13 @@ public final class FunctionalTestMain {
         }
     }
 
-    private static byte[] encryptCmafSegment(String content) throws IOException {
+    private static byte[] encryptCmafSegment(
+            String content, byte keyFill, int ivLastByte) throws IOException {
         try {
             byte[] key = new byte[16];
-            Arrays.fill(key, (byte) 0x2a);
+            Arrays.fill(key, keyFill);
             byte[] iv = new byte[16];
-            iv[15] = 1;
+            iv[15] = (byte) ivLastByte;
             Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"),
                     new IvParameterSpec(iv));
@@ -1064,9 +1082,17 @@ public final class FunctionalTestMain {
         Response video = request(nicoRequest("GET", localBase + "video/01.cmfv", ""));
         assertEquals(200, video.status, "hlsext decrypted video status");
         assertEquals("video-segment", video.bodyText(), "hlsext decrypted video body");
+        Response videoSecond = request(nicoRequest("GET", localBase + "video/02.cmfv", ""));
+        assertEquals(200, videoSecond.status, "hlsext second decrypted video status");
+        assertEquals("video-segment-2", videoSecond.bodyText(),
+                "hlsext second decrypted video body");
         Response audio = request(nicoRequest("GET", localBase + "audio/01.cmfa", ""));
         assertEquals(200, audio.status, "hlsext decrypted audio status");
         assertEquals("audio-segment", audio.bodyText(), "hlsext decrypted audio body");
+        Response audioSecond = request(nicoRequest("GET", localBase + "audio/02.cmfa", ""));
+        assertEquals(200, audioSecond.status, "hlsext second decrypted audio status");
+        assertEquals("audio-segment-2", audioSecond.bodyText(),
+                "hlsext second decrypted audio body");
     }
 
     private Path waitForCompletedCmafCache(String smid, Duration timeout) throws Exception {
@@ -1093,6 +1119,7 @@ public final class FunctionalTestMain {
         String key = smid + sourceId;
         String base = cmafBase(route);
         String query = "?token=functional&nicocachenl_domandcvikey=" + key;
+        boolean rotating = "hlsext".equals(route);
 
         Response playlist = request(absoluteRequest(base + "/playlists/media/"
                 + sourceId + ".m3u8" + query, "delivery.domand.nicovideo.jp"));
@@ -1100,10 +1127,21 @@ public final class FunctionalTestMain {
         assertContains(playlist.bodyText(), "nicocachenl_domandcvikey=" + key,
                 "CMAF " + mediaType + " playlist URL injection");
 
+        String firstKeyQuery = (rotating ? "?token=k1" : "?token=functional")
+                + "&nicocachenl_domandcvikey=" + key;
         Response keyResponse = request(absoluteRequest(base + "/keys/" + sourceId
-                + ".key" + query, "delivery.domand.nicovideo.jp"));
+                + ".key" + firstKeyQuery, "delivery.domand.nicovideo.jp"));
         assertEquals(200, keyResponse.status, "CMAF " + mediaType + " key status");
         assertEquals(16, keyResponse.body.length, "CMAF " + mediaType + " key length");
+        if (rotating) {
+            Response secondKeyResponse = request(absoluteRequest(base + "/keys/" + sourceId
+                    + ".key?token=k2&nicocachenl_domandcvikey=" + key,
+                    "delivery.domand.nicovideo.jp"));
+            assertEquals(200, secondKeyResponse.status,
+                    "CMAF " + mediaType + " second key status");
+            assertEquals(16, secondKeyResponse.body.length,
+                    "CMAF " + mediaType + " second key length");
+        }
 
         Response init = request(absoluteRequest(base + "/" + mediaType + "/1/"
                 + sourceId + "/init001." + extension + query,
@@ -1117,6 +1155,15 @@ public final class FunctionalTestMain {
         assertEquals(200, segment.status, "CMAF " + mediaType + " media segment status");
         assertFalse(segment.bodyText().contains(mediaType + "-segment"),
                 "upstream CMAF media segment must remain encrypted on the wire");
+        if (rotating) {
+            Response secondSegment = request(absoluteRequest(base + "/" + mediaType + "/1/"
+                    + sourceId + "/02." + extension + query,
+                    "delivery.domand.nicovideo.jp"));
+            assertEquals(200, secondSegment.status,
+                    "CMAF " + mediaType + " second media segment status");
+            assertFalse(secondSegment.bodyText().contains(mediaType + "-segment"),
+                    "upstream CMAF second media segment must remain encrypted on the wire");
+        }
     }
 
     private static String absoluteRequest(String url, String host) {
