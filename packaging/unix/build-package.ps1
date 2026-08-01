@@ -392,7 +392,7 @@ if ($PackageType -in @('Zip', 'All')) {
 }
 
 if ($Platform -eq 'Linux' -and $PackageType -in @('Deb', 'Rpm', 'All')) {
-    $linuxNativeToolStage = Join-Path $bundle 'lib/tools'
+    $linuxNativeToolStage = Join-Path $appImagePath 'lib/tools'
     $sourceToolDirectory = Join-Path $resourceDirectory 'tools'
     if (-not (Test-Path -LiteralPath $sourceToolDirectory -PathType Container)) {
         throw "Linuxネイティブパッケージへ含めるツールがありません: $sourceToolDirectory"
