@@ -55,6 +55,10 @@ jobs:
         shell: pwsh
         run: .\test-first-run-setup.ps1
 
+      - name: Run CMAF/Domand converter tests
+        shell: pwsh
+        run: .\tools\cmaf-to-mp4\test.ps1
+
       - name: Run strict end-to-end and GUI tests
         timeout-minutes: 5
         shell: pwsh

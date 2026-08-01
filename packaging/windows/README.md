@@ -14,6 +14,8 @@ Linux/macOSのアプリイメージ、ZIP、DEB/RPM、PKG/DMGは
 - アプリ専用 Java ランタイム
 - NicoCache_nl 本体、内部ライブラリとしての証明書生成ツール、Bouncy Castle、
   既定設定、ローカル配信用ファイル
+- 保存済みCMAF/Domandを単一MP4へ変換する
+  `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`と説明書
 - `NicoCache_nl-<version>.msi`: 対話・無人インストール兼用パッケージ
 - `NicoCache_nl-<version>.zip`: MSIと同じアプリイメージを展開した開発・検証用ZIP
 
@@ -27,6 +29,8 @@ ZIPとMSIは同じアプリイメージを共通の入力として生成する�
 既定設定、ローカル配信用ファイルに加え、`development/` 以下へソース、テスト、
 ビルド・検証スクリプト、開発資料を収録する。`.git`、CI管理ファイル、キャッシュ、
 証明書、利用者データは収録しない。
+変換器のJARはアプリイメージのルートにある`tools/cmaf-to-mp4/`へ配置するため、
+MSIのインストール先とZIP展開先のどちらからも利用できる。FFmpeg本体は同梱しない。
 標準フィルターは本体と同じコミットの`nlFilters/`から取り込み、外部管理の
 シンボリックリンクは配布物へ含めない。
 

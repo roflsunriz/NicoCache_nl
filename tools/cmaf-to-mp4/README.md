@@ -56,6 +56,21 @@ Linux/macOS:
 どちらも`dist/nico-cmaf-to-mp4.jar`を作成します。JavaのJARと標準APIだけで構成
 しているため、同じJARをWindows・Linux・macOSで利用できます。
 
+Windows・Linux・macOSの本体パッケージとアプリイメージZIPにも、ビルド時に生成した
+同じJARが`tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`として含まれます。Windowsでは
+アプリイメージのルート、Linuxではアプリイメージのルート、macOSでは
+`NicoCache_nl.app/Contents/Resources/`が基準です。パッケージにFFmpegは含めないため、
+変換時は利用者が導入したFFmpegを`PATH`または`--ffmpeg`で指定してください。
+
+パッケージに同梱されたJavaランタイムから起動する場合は、各アプリイメージのルートで
+次のように実行できます。
+
+```text
+Windows: runtime/bin/java.exe -jar tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar
+Linux:   lib/runtime/bin/java -jar tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar
+macOS:   Contents/runtime/Contents/Home/bin/java -jar Contents/Resources/tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar
+```
+
 ## GUI
 
 ビルド後、引数なしで起動します。

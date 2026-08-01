@@ -77,6 +77,23 @@ Assert-File (Join-Path $applicationDirectory 'lib/bcpkix.jar')
 Assert-File (Join-Path $applicationDirectory 'lib/bcprov.jar')
 Assert-File (Join-Path $applicationDirectory 'lib/bcutil.jar')
 Assert-File (Join-Path $applicationDirectory 'NicoCache_nl.cfg')
+Assert-File (Join-Path $resourceDirectory 'tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar')
+Assert-File (Join-Path $resourceDirectory 'tools/cmaf-to-mp4/README.md')
+$cmafJarPath = Join-Path $resourceDirectory 'tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$cmafArchive = [System.IO.Compression.ZipFile]::OpenRead($cmafJarPath)
+try {
+    $cmafEntries = @($cmafArchive.Entries | Select-Object -ExpandProperty FullName)
+    foreach ($requiredEntry in @(
+            'META-INF/MANIFEST.MF',
+            'nicocache/cmaftomp4/Main.class'
+        )) {
+        Assert-True ($requiredEntry -in $cmafEntries) `
+            "同梱CMAF/Domand変換アプリJARに必要な要素がありません: $requiredEntry"
+    }
+} finally {
+    $cmafArchive.Dispose()
+}
 Assert-File (Join-Path $resourceDirectory 'NicoCache_nl.version')
 Assert-True ((Get-Content -Raw -LiteralPath (Join-Path $resourceDirectory 'NicoCache_nl.version')).Trim() -eq $AppVersion) `
     '本体の公開版番号メタデータが不正です'
@@ -125,6 +142,17 @@ if (Test-Path -LiteralPath $archive -PathType Leaf) {
     $unzip = Get-RequiredCommand 'unzip'
     & $unzip -t $archive | Out-Null
     Assert-True ($LASTEXITCODE -eq 0) "本体ZIPの検証に失敗しました: $archive"
+    $zipEntries = @(& $unzip -Z1 $archive)
+    Assert-True ($LASTEXITCODE -eq 0) "本体ZIPの一覧取得に失敗しました: $archive"
+    $zipToolRoot = if ($Platform -eq 'MacOS') {
+        "$bundleName/Contents/Resources/tools/cmaf-to-mp4"
+    } else {
+        "$bundleName/tools/cmaf-to-mp4"
+    }
+    foreach ($relativePath in @('nico-cmaf-to-mp4.jar', 'README.md')) {
+        Assert-True ("$zipToolRoot/$relativePath" -in $zipEntries) `
+            "本体ZIPにCMAF/Domand変換アプリがありません: $relativePath"
+    }
 }
 if ($Platform -eq 'Linux') {
     foreach ($extension in @('.deb', '.rpm')) {
@@ -133,12 +161,22 @@ if ($Platform -eq 'Linux') {
         Assert-True ($null -ne $package) "Linux $extension がありません"
         if ($extension -eq '.deb') {
             & (Get-RequiredCommand 'dpkg-deb') --info $package.FullName | Out-Null
+            $packageEntries = @(& (Get-RequiredCommand 'dpkg-deb') --contents $package.FullName)
         } else {
-            & (Get-RequiredCommand 'rpm') -qpl $package.FullName | Out-Null
+            $packageEntries = @(& (Get-RequiredCommand 'rpm') -qpl $package.FullName)
         }
         Assert-True ($LASTEXITCODE -eq 0) "Linux $extension のメタデータ検証に失敗しました"
+        Assert-True (@($packageEntries | Where-Object { $_ -match 'tools/cmaf-to-mp4/nico-cmaf-to-mp4\.jar' }).Count -gt 0) `
+            "Linux $extension にCMAF/Domand変換アプリがありません"
     }
 } else {
+    $pkg = Get-ChildItem -LiteralPath $outputRoot -Filter "*macos-$architecture.pkg" -File |
+        Select-Object -First 1
+    Assert-True ($null -ne $pkg) 'macOS PKGがありません'
+    $pkgEntries = @(& (Get-RequiredCommand 'pkgutil') --payload-files $pkg.FullName)
+    Assert-True ($LASTEXITCODE -eq 0) 'macOS PKGのペイロード一覧を取得できません'
+    Assert-True (@($pkgEntries | Where-Object { $_ -match 'Contents/Resources/tools/cmaf-to-mp4/nico-cmaf-to-mp4\.jar' }).Count -gt 0) `
+        'macOS PKGにCMAF/Domand変換アプリがありません'
     foreach ($extension in @('.pkg', '.dmg')) {
         $package = Get-ChildItem -LiteralPath $outputRoot -Filter "*macos-$architecture$extension" -File |
             Select-Object -First 1

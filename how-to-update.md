@@ -205,6 +205,10 @@ LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメー�
 資材を保持する。Linuxの証明書・プロキシー・自動起動は`trust`、GNOMEの`gsettings`、
 XDG autostartを使い、macOSでは`security`、`networksetup`、`LaunchAgents`を使う。
 権限や対応サービスが不足する場合は、ウィザードが今回の変更をロールバックする。
+本体パッケージの作成時にはCMAF/Domand変換器JARも再ビルドされ、Linuxでは
+`tools/cmaf-to-mp4/`、macOSでは`Contents/Resources/tools/cmaf-to-mp4/`へ配置される。
+`test-package.ps1`はアプリイメージ、ZIP、LinuxのDEB/RPM、macOSのPKGにそのJARが
+含まれることも検証する。
 
 ## Windows インストーラー
 
@@ -223,6 +227,8 @@ Windowsパッケージ版では、アプリケーションフォルダーの
 同名の利用者資材は `userDataRoot` 側から後に読み込んで上書きする。キャッシュ、
 証明書、個人設定などの書き込み先は利用者データ側だけにする。更新時は
 `config.properties` と利用者データを保持し、復旧時も利用者データを削除しない。
+同じアプリイメージを入力にするWindowsのMSIとZIPにも、ルートの
+`tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`を収録する。
 
 ```powershell
 .\packaging\windows\build-windows-package.ps1 -PackageType AppImage

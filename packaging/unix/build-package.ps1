@@ -292,6 +292,14 @@ foreach ($artifact in $dependencyLock.Artifacts) {
 }
 Copy-Item -LiteralPath (Join-Path $root 'packaging/windows/THIRD-PARTY-NOTICES.txt') `
     -Destination (Join-Path $inputRoot 'THIRD-PARTY-NOTICES.txt')
+$cmafPackageScript = Join-Path $root 'tools/cmaf-to-mp4/prepare-package.ps1'
+if (-not (Test-Path -LiteralPath $cmafPackageScript -PathType Leaf)) {
+    throw "CMAF/Domand変換アプリのパッケージ準備スクリプトが見つかりません: $cmafPackageScript"
+}
+& $cmafPackageScript -DestinationRoot $inputRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "CMAF/Domand変換アプリを${Platform}パッケージへ追加できません (ExitCode: $LASTEXITCODE)"
+}
 
 $sharedJavaOptions = @(
     '-Xmx128m', '--add-opens=java.base/java.lang.invoke=ALL-UNNAMED',
@@ -322,6 +330,7 @@ $runtimeLayoutPaths = @(
     'certificate-targets.txt', 'config.properties.default', 'nlFilter_sys.txt',
     'proxy_sample.pac', 'README.md', 'CHANGELOG.md', 'documents/tls.md', 'defaults',
     'data', 'list', 'extensions', 'local', 'nlFilters',
+    'tools',
     'THIRD-PARTY-NOTICES.txt'
 )
 New-Item -ItemType Directory -Path $resourceDirectory -Force | Out-Null

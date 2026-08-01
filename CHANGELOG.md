@@ -46,6 +46,9 @@
 
 ### Changed
 
+- 保存済みCMAF/Domand変換器を本体のWindows/Linux/macOSパッケージとアプリイメージZIPへ
+  同梱し、各パッケージ作成時にJava 11互換のJARを再生成して、実行時ルートの
+  `tools/cmaf-to-mp4/`へ配置するようにした。FFmpeg本体は引き続き同梱しない。
 - リリースワークフローへLinux/macOS本体・独立アップデーターの各プラットフォーム／
   アーキテクチャ別パッケージとSHA-256を追加した。Solarisは対応対象に含めない。
 

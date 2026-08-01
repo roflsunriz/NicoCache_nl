@@ -433,6 +433,14 @@ foreach ($relativePath in $systemFiles) {
     Copy-DistributionFile -RelativePath $relativePath
 }
 Copy-DevelopmentPayload
+$cmafPackageScript = Join-Path $root 'tools\cmaf-to-mp4\prepare-package.ps1'
+if (-not (Test-Path -LiteralPath $cmafPackageScript -PathType Leaf)) {
+    throw "CMAF/Domand変換アプリのパッケージ準備スクリプトが見つかりません: $cmafPackageScript"
+}
+& $cmafPackageScript -DestinationRoot $inputRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "CMAF/Domand変換アプリをWindowsパッケージへ追加できません (ExitCode: $LASTEXITCODE)"
+}
 $writableDirectories = @(
     'data', 'list'
 )
@@ -523,6 +531,7 @@ $runtimeLayoutPaths = @(
     'local'
     'nlFilters'
     'setup'
+    'tools'
     'THIRD-PARTY-NOTICES.txt'
 )
 foreach ($relativePath in $runtimeLayoutPaths) {

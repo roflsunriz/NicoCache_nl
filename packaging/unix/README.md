@@ -33,6 +33,10 @@ macOSの`jpackage`は0をメジャー版にできないため、0.xの公開版�
 配布ファイル名と`NicoCache_nl.version`には公開版を保持し、バンドル内部の版だけを
 macOSが受け付ける値へ変換します。
 
+保存済みCMAF/Domand変換器のJARと説明書は、LinuxのアプリイメージとアプリイメージZIP、
+DEB/RPMでは`tools/cmaf-to-mp4/`、macOSのアプリバンドルとアプリイメージZIP、PKG/DMGでは
+`Contents/Resources/tools/cmaf-to-mp4/`に含まれます。FFmpeg本体は同梱しません。
+
 Linuxのjpackageアプリイメージでは、JARと設定を`lib/app/`、Javaランタイムを
 `lib/runtime/`に配置します。アプリケーション側の設定・データ資材はアプリイメージの
 ルートへ移します。macOSでは同じ資材を`Contents/Resources/`へ配置し、macOSの

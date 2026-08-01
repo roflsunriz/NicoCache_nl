@@ -21,6 +21,7 @@ on:
       - 'nlFilter_sys.txt'
       - 'nlFilters/**'
       - 'proxy_sample.pac'
+      - 'tools/cmaf-to-mp4/**'
       - 'updater/**'
   pull_request:
     branches: [main]
@@ -42,6 +43,7 @@ on:
       - 'nlFilter_sys.txt'
       - 'nlFilters/**'
       - 'proxy_sample.pac'
+      - 'tools/cmaf-to-mp4/**'
       - 'updater/**'
   workflow_dispatch:
 

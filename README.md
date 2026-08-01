@@ -57,7 +57,8 @@ Linux/macOSパッケージの詳細は[Unixパッケージの説明](packaging/u
 処理します。
 
 詳しい前提、ビルド、CLIオプションは[CMAF/Domand MP4変換ツールの説明](tools/cmaf-to-mp4/README.md)
-を参照してください。
+を参照してください。Windows・Linux・macOSの本体パッケージとアプリイメージZIPにも、
+実行用JARが`tools/cmaf-to-mp4/`として含まれます。
 
 変更履歴は [CHANGELOG.md](CHANGELOG.md) に集約しています。
 

@@ -54,6 +54,8 @@ foreach ($requiredPath in @(
         (Join-Path $appDirectory 'data\tlsclient\cacerts2'),
         (Join-Path $appDirectory 'local\mime.types.default'),
         (Join-Path $appDirectory 'documents\tls.md'),
+        (Join-Path $appDirectory 'tools\cmaf-to-mp4\nico-cmaf-to-mp4.jar'),
+        (Join-Path $appDirectory 'tools\cmaf-to-mp4\README.md'),
         (Join-Path $internalAppDirectory 'development\build-javac.ps1'),
         (Join-Path $internalAppDirectory 'development\src\dareka\NLMain.java'),
         (Join-Path $internalAppDirectory 'development\tests\functional\FunctionalTestMain.java')
@@ -101,6 +103,21 @@ try {
     }
 } finally {
     $archive.Dispose()
+}
+$cmafJarPath = Join-Path $appDirectory 'tools\cmaf-to-mp4\nico-cmaf-to-mp4.jar'
+$cmafArchive = [System.IO.Compression.ZipFile]::OpenRead($cmafJarPath)
+try {
+    $cmafEntries = @($cmafArchive.Entries | Select-Object -ExpandProperty FullName)
+    foreach ($requiredEntry in @(
+            'META-INF/MANIFEST.MF',
+            'nicocache/cmaftomp4/Main.class'
+        )) {
+        if ($requiredEntry -notin $cmafEntries) {
+            throw "同梱CMAF/Domand変換アプリJARに必要な要素がありません: $requiredEntry"
+        }
+    }
+} finally {
+    $cmafArchive.Dispose()
 }
 $keytool = (Get-Command keytool -ErrorAction Stop).Source
 & $keytool -list `
