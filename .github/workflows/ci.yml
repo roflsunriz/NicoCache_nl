@@ -43,9 +43,13 @@ jobs:
           .\packaging\windows\test-dependency-lock.ps1
           .\packaging\windows\test-dependency-update.ps1
 
+      - name: Prepare Bouncy Castle build dependencies
+        shell: pwsh
+        run: .\packaging\windows\prepare-dependencies.ps1 -DestinationDirectory .\.test-work\ci-dependencies
+
       - name: Build NicoCache Java applications
         shell: pwsh
-        run: .\build-javac.ps1 -JavaVersion 17
+        run: .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\ci-dependencies -Clean
 
       - name: Run functional and Extension ABI tests
         shell: pwsh
@@ -118,10 +122,14 @@ jobs:
           javac --version
           jar --version
 
+      - name: Prepare Bouncy Castle build dependencies
+        shell: pwsh
+        run: .\packaging\windows\prepare-dependencies.ps1 -DestinationDirectory .\.test-work\ci-dependencies
+
       - name: Build and test with Java 25
         shell: pwsh
         run: |
-          ./build-javac.ps1
+          ./build-javac.ps1 -LibraryDirectory ./.test-work/ci-dependencies -Clean
           ./test-functional.ps1
           ./test-first-run-setup.ps1
 

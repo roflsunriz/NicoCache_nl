@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'packaging/windows/**'
+      - 'packaging/windows/prepare-dependencies.ps1'
       - 'packaging/system-files.txt'
       - 'build-javac.ps1'
       - 'build-javac.sh'
@@ -42,6 +43,7 @@ on:
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'packaging/windows/**'
+      - 'packaging/windows/prepare-dependencies.ps1'
       - 'packaging/system-files.txt'
       - 'build-javac.ps1'
       - 'build-javac.sh'

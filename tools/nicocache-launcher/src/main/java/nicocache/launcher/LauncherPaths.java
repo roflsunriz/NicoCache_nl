@@ -42,10 +42,15 @@ final class LauncherPaths {
         Path dataRoot = explicitDataRoot == null
                 ? discoverDataRoot(applicationRoot)
                 : explicitDataRoot.toAbsolutePath().normalize();
+        Path macApplicationDirectory = currentPlatform() == Platform.MACOS
+                ? applicationRoot.resolve("../app").normalize()
+                : null;
         Path coreJar = firstRegularFile(
                 applicationRoot.resolve("NicoCache_nl.jar"),
                 applicationRoot.resolve("app/NicoCache_nl.jar"),
-                applicationRoot.resolve("lib/app/NicoCache_nl.jar"));
+                applicationRoot.resolve("lib/app/NicoCache_nl.jar"),
+                macApplicationDirectory == null ? null
+                        : macApplicationDirectory.resolve("NicoCache_nl.jar"));
         if (coreJar == null) {
             throw new IllegalStateException(
                     "NicoCache_nl.jar が見つかりません: " + applicationRoot);
@@ -56,7 +61,9 @@ final class LauncherPaths {
                 codeSource == null ? null : codeSource.resolve("nicocache-launcher.jar"),
                 applicationRoot.resolve("NicoCacheLauncher.jar"),
                 applicationRoot.resolve("app/NicoCacheLauncher.jar"),
-                applicationRoot.resolve("lib/app/NicoCacheLauncher.jar"));
+                applicationRoot.resolve("lib/app/NicoCacheLauncher.jar"),
+                macApplicationDirectory == null ? null
+                        : macApplicationDirectory.resolve("NicoCacheLauncher.jar"));
         if (launcherJar == null && codeSource != null
                 && Files.isRegularFile(codeSource.resolve("LauncherMain.class"))) {
             launcherJar = codeSource;

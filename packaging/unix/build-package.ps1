@@ -267,16 +267,13 @@ if ($Platform -eq 'Linux' -and $PackageType -in @('Rpm', 'All')) {
     Get-RequiredCommand -Name 'rpmbuild' | Out-Null
 }
 
-foreach ($artifact in $dependencyLock.Artifacts) {
-    $destination = Join-Path $dependencyRoot $artifact.FileName
-    $partial = "$destination.download"
-    Invoke-WebRequest -Uri $artifact.Url -OutFile $partial
-    $actualHash = (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actualHash -ne $artifact.Sha256) {
-        Remove-Item -LiteralPath $partial -Force
-        throw "依存ファイルのSHA-256が一致しません: $($artifact.Name)"
-    }
-    Move-Item -LiteralPath $partial -Destination $destination
+$prepareDependenciesScript = Join-Path $root 'packaging/windows/prepare-dependencies.ps1'
+if (-not (Test-Path -LiteralPath $prepareDependenciesScript -PathType Leaf)) {
+    throw "ビルド用依存ファイル準備スクリプトが見つかりません: $prepareDependenciesScript"
+}
+& $prepareDependenciesScript -DestinationDirectory $dependencyRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "${Platform}パッケージ用の依存ファイル準備に失敗しました (ExitCode: $LASTEXITCODE)"
 }
 
 $javaBuildScript = Join-Path $root 'build-javac.ps1'
@@ -394,15 +391,34 @@ if ($PackageType -in @('Zip', 'All')) {
     Write-Output "ZIPを作成しました: $archivePath"
 }
 
-if ($Platform -eq 'Linux' -and $PackageType -in @('Deb', 'All')) {
-    Invoke-NativeCommand -FilePath $jpackage -ArgumentList (Get-ProductPackageArguments -Type 'deb') `
-        -FailureMessage 'Linux DEBの作成に失敗しました'
-    Rename-NativeArtifact -Extension '.deb'
-}
-if ($Platform -eq 'Linux' -and $PackageType -in @('Rpm', 'All')) {
-    Invoke-NativeCommand -FilePath $jpackage -ArgumentList (Get-ProductPackageArguments -Type 'rpm') `
-        -FailureMessage 'Linux RPMの作成に失敗しました'
-    Rename-NativeArtifact -Extension '.rpm'
+if ($Platform -eq 'Linux' -and $PackageType -in @('Deb', 'Rpm', 'All')) {
+    $linuxNativeToolStage = Join-Path $bundle 'lib/tools'
+    $sourceToolDirectory = Join-Path $resourceDirectory 'tools'
+    if (-not (Test-Path -LiteralPath $sourceToolDirectory -PathType Container)) {
+        throw "Linuxネイティブパッケージへ含めるツールがありません: $sourceToolDirectory"
+    }
+    New-Item -ItemType Directory -Path $linuxNativeToolStage -Force | Out-Null
+    foreach ($item in Get-ChildItem -LiteralPath $sourceToolDirectory -Force) {
+        Copy-Item -LiteralPath $item.FullName `
+            -Destination (Join-Path $linuxNativeToolStage $item.Name) -Recurse -Force
+    }
+    try {
+        if ($PackageType -in @('Deb', 'All')) {
+            Invoke-NativeCommand -FilePath $jpackage -ArgumentList (Get-ProductPackageArguments -Type 'deb') `
+                -FailureMessage 'Linux DEBの作成に失敗しました'
+            Rename-NativeArtifact -Extension '.deb'
+        }
+        if ($PackageType -in @('Rpm', 'All')) {
+            Invoke-NativeCommand -FilePath $jpackage -ArgumentList (Get-ProductPackageArguments -Type 'rpm') `
+                -FailureMessage 'Linux RPMの作成に失敗しました'
+            Rename-NativeArtifact -Extension '.rpm'
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $linuxNativeToolStage) {
+            Remove-Item -LiteralPath $linuxNativeToolStage -Recurse -Force
+        }
+    }
 }
 if ($Platform -eq 'MacOS' -and $PackageType -in @('Pkg', 'All')) {
     Invoke-NativeCommand -FilePath $jpackage -ArgumentList (Get-ProductPackageArguments -Type 'pkg') `

@@ -233,7 +233,7 @@ if ($Platform -eq 'Linux') {
                 }).Count -gt 0) `
                 "Linux $extension に独立アプリJARがありません: $artifactName"
         }
-        Assert-True (@($packageEntries | Where-Object { $_ -match 'tools/cmaf-to-mp4/nico-cmaf-to-mp4\.jar' }).Count -gt 0) `
+        Assert-True (@($packageEntries | Where-Object { $_ -match '/lib/tools/cmaf-to-mp4/nico-cmaf-to-mp4\.jar' }).Count -gt 0) `
             "Linux $extension にCMAF/Domand変換アプリがありません"
     }
 } else {

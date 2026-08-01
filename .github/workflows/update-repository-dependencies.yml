@@ -41,11 +41,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Prepare Bouncy Castle build dependencies
+        if: steps.update.outputs.updated == 'true'
+        shell: pwsh
+        run: .\packaging\windows\prepare-dependencies.ps1 -DestinationDirectory .\.test-work\dependency-build
+
       - name: Run Java build and functional tests
         if: steps.update.outputs.updated == 'true'
         shell: pwsh
         run: |
-          .\build-javac.ps1 -JavaVersion 17
+          .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\dependency-build -Clean
           .\test-functional.ps1
           .\test-first-run-setup.ps1
           .\packaging\windows\test-windows-setup-script.ps1

@@ -74,7 +74,9 @@ foreach ($step in @(
         'Test release app image',
         'Test ZIP and app image parity',
         'Test release Windows integration and rollback',
-        'Create MSI checksum'
+        'Create MSI checksum',
+        'Check out release changelog',
+        'Stage CHANGELOG excerpt'
     )) {
     Get-StepBlock -Name $step | Out-Null
 }
@@ -83,17 +85,17 @@ $compatibilityBuilds = @(
     @{
         Path = $workflowPath
         BuildStep = 'Build NicoCache Java applications'
-        BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17'
+        BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\release-dependencies -Clean'
     }
     @{
         Path = Join-Path $root '.github\workflows\ci.yml'
         BuildStep = 'Build NicoCache Java applications'
-        BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17'
+        BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\ci-dependencies -Clean'
     }
     @{
         Path = Join-Path $root '.github\workflows\update-repository-dependencies.yml'
         BuildStep = 'Run Java build and functional tests'
-        BuildLine = '.\build-javac.ps1 -JavaVersion 17'
+        BuildLine = '.\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\dependency-build -Clean'
     }
 )
 foreach ($compatibilityBuild in $compatibilityBuilds) {
@@ -141,6 +143,7 @@ $packageInputPaths = @(
     'build-javac.sh'
     'tools/nicocache-build/**'
     'tools/nicocache-launcher/**'
+    'packaging/windows/prepare-dependencies.ps1'
     'src/**'
     'data/readme.txt'
     'nlFilters/**'
@@ -232,9 +235,25 @@ if (($publish -join "`n") -match 'release-assets/NicoCache_nl-') {
 foreach ($option in @(
         '--repo "$GITHUB_REPOSITORY" \',
         '--verify-tag \',
+        '--notes-file release-changelog.md \',
         '--generate-notes \'
     )) {
     Assert-ContainsLine $publish $option 'GitHub release publication'
+}
+
+$changelogCheckout = Get-StepBlock -Name 'Check out release changelog'
+Assert-ContainsLine $changelogCheckout 'ref: ${{ needs.build.outputs.tag }}' `
+    'Release changelog checkout'
+Assert-ContainsLine $changelogCheckout 'CHANGELOG.md' 'Release changelog checkout'
+
+$changelogStage = Get-StepBlock -Name 'Stage CHANGELOG excerpt'
+if (-not (($changelogStage -join "`n") -match 'Substring\(1\)')) {
+    throw 'Release changelog staging must derive the version from the v-prefixed tag'
+}
+foreach ($required in @('CHANGELOG.md', 'release-changelog.md', '^## \[')) {
+    if (-not (($changelogStage -join "`n").Contains($required))) {
+        throw "Release changelog staging is missing: $required"
+    }
 }
 
 Write-Output 'Release workflow contract tests passed'

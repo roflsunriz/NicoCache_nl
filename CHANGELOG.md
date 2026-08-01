@@ -8,6 +8,9 @@
 
 ### Fixed
 
+- クリーンチェックアウトのCIでもロック済みBouncy Castleを取得してJava 17/25ビルドへ渡すようにし、
+  LinuxのDEB/RPMへCMAF/Domand変換器を保持し、macOSアプリバンドルの`Contents/app`にある
+  本体JARを起動管理アプリが解決できるようにした。
 - `/cache/info`と`/cache/info/v2`の空入力を空JSONとして扱い、`rm`、`rmtmp`、
   `echo`の引数なし・不正入力を例外ではなく400で返すようにした。`echo`のJSON
   エスケープと`getxml?type=...`の標準クエリ解析も修正し、外部APIの応答を機械的に
@@ -25,6 +28,7 @@
   macOSでは`Contents/Resources`を使う標準バンドル構造を、本体、初回セットアップ、
   アップデーターが正しく扱えるようにし、macOSの0.x版でも公開版番号を保持したまま
   有効な識別子と`jpackage`の制約に適合するパッケージを生成できるようにした。
+
 - 暗号化CMAF/Domandの鍵情報を属性順に依存せず解釈し、プレイリスト内で切り替わる
   セグメントごとの鍵・IVと鍵取得の競合を正しく扱い、復号に失敗した暗号文を
   キャッシュへ保存しないようにした。
@@ -88,6 +92,7 @@
 
 ### Changed
 
+- リリースワークフローが、対象タグに対応する`CHANGELOG.md`のセクションをリリースノートへ引用するようにした。
 - 置き換えが完了した`RunNicoCache.ps1`、`NicoCache_nl.sh`、`genCerts.bat`、
   `genCerts.sh`、空の旧ランチャーバッチを削除し、配布パッケージと開発手順の入口を
   独立Javaアプリへ統一した。クリーン環境からビルドするための`build-javac.ps1`/

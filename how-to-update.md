@@ -5,6 +5,14 @@
 - JDK 17、21、25 のいずれか（`build-javac.ps1` が検出して選択）
 - PowerShell（Windowsまたは`build-javac.ps1`を使う場合）、またはPOSIX互換シェル
 
+初回のクリーンチェックアウトでは、Javaビルドに使うBouncy Castleをロックファイルから
+取得する。取得先とSHA-256はスクリプトが検証する。
+
+```powershell
+.\packaging\windows\prepare-dependencies.ps1 `
+  -DestinationDirectory .\.test-work\build-dependencies
+```
+
 `build-javac.ps1`はJavaで実装した`NicoCacheBuild.jar`をブートストラップして、
 本体、CA生成、起動管理、ビルド管理の4アプリを生成する。コンパイル済みクラスは
 `.build/`へ隔離し、`src/`へ`.class`を生成しない。JDKが同じならWindows、Linux、
@@ -34,7 +42,7 @@ APIの一覧と呼び出し例は[本体APIリファレンス](documents/api.md)
 次に本体をビルドする。
 
 ```powershell
-.\build-javac.ps1
+.\build-javac.ps1 -LibraryDirectory .\.test-work\build-dependencies
 ```
 
 Linux/macOSでは次のPOSIXラッパーも利用できる。
@@ -111,7 +119,7 @@ GUIログのタブ、検索、メニュー、履歴保存など画面操作を�
 使う場合は、次のように指定する。
 
 ```powershell
-.\build-javac.ps1 -JavaVersion 17
+.\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\build-dependencies
 ```
 
 起動時は生成した`NicoCacheLauncher.jar`を直接実行する。GUIは`javaw`または

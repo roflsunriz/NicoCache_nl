@@ -43,6 +43,10 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Prepare Bouncy Castle build dependencies
+        shell: pwsh
+        run: .\packaging\windows\prepare-dependencies.ps1 -DestinationDirectory .\.test-work\release-dependencies
+
       - name: Validate release tag
         id: release-tag
         shell: pwsh
@@ -82,7 +86,7 @@ jobs:
 
       - name: Build NicoCache Java applications
         shell: pwsh
-        run: .\build-javac.ps1 -JavaVersion 17
+        run: .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\release-dependencies -Clean
 
       - name: Run functional and Extension ABI tests
         shell: pwsh
@@ -352,6 +356,50 @@ jobs:
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
 
     steps:
+      - name: Check out release changelog
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.build.outputs.tag }}
+          sparse-checkout: |
+            CHANGELOG.md
+          sparse-checkout-cone-mode: false
+
+      - name: Stage CHANGELOG excerpt
+        shell: pwsh
+        run: |
+          $tag = $env:RELEASE_TAG
+          $version = $tag.Substring(1)
+          $escapedVersion = [regex]::Escape($version)
+          $lines = @(Get-Content -LiteralPath .\CHANGELOG.md)
+          $start = -1
+          for ($index = 0; $index -lt $lines.Count; $index++) {
+            if ($lines[$index] -match "^## \[$escapedVersion\](?:\s|$)") {
+              $start = $index
+              break
+            }
+          }
+          if ($start -lt 0) {
+            throw "CHANGELOG.mdにタグ $tag に対応する [$version] セクションがありません"
+          }
+          $end = $lines.Count
+          for ($index = $start + 1; $index -lt $lines.Count; $index++) {
+            if ($lines[$index] -match '^## \[') {
+              $end = $index
+              break
+            }
+          }
+          $section = @($lines[$start..($end - 1)])
+          $notes = @(
+            "## CHANGELOG.md — $tag"
+            ''
+            'タグに対応するCHANGELOG.mdの該当セクションを引用します。'
+            ''
+          ) + $section
+          [System.IO.File]::WriteAllLines(
+            'release-changelog.md',
+            $notes,
+            [System.Text.UTF8Encoding]::new($false))
+
       - name: Download release assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -367,5 +415,6 @@ jobs:
             release-assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
+            --notes-file release-changelog.md \
             --generate-notes \
             --title "$RELEASE_TAG"
