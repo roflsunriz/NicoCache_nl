@@ -30,6 +30,10 @@
 
 ### Added
 
+- 保存済みCMAF/Domandキャッシュの`master.m3u8`と相対セグメントをFFmpegで単一MP4へ
+  変換できる独立Javaアプリを追加した。GUIのフォルダ選択・ドラッグ・アンド・ドロップ、
+  出力先指定、出力先を開く操作、変換後の自動オープン、CLI／ヘッドレス実行を同じ変換
+  コアで利用できるようにした。
 - 本体アプリイメージ、初回セットアップ、独立アップデーターをLinuxとmacOSへ拡張し、
   LinuxではDEB/RPM、macOSではPKG/DMGとアプリイメージZIPを生成するようにした。
 - Linuxの`trust`・GNOME自動プロキシー・XDG autostart、macOSの`security`・

@@ -24,6 +24,20 @@
 .\build-javac.ps1
 ```
 
+保存済みCMAF/Domandを単一MP4へ変換する独立ツールを変更した場合は、同ツールの
+ビルドと単体テストを実行する。ツールはJava 11以上でビルドでき、実際の変換確認には
+別途FFmpegと完成済みキャッシュが必要になる。
+
+```powershell
+.\tools\cmaf-to-mp4\test.ps1
+```
+
+Linux/macOSでは、対象OS上で次を実行する。
+
+```sh
+./tools/cmaf-to-mp4/test.sh
+```
+
 GUIログのタブ、検索、メニュー、履歴保存など画面操作を変更した場合は、実Swing
 ウィンドウを使うE2Eも実行する。`-KeepWorkDir`を付けると、最小サイズと標準サイズの
 確認画像を`.test-work/e2e/gui/preview/`へ残せる。

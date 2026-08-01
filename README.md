@@ -47,6 +47,16 @@ Linux/macOSパッケージの詳細は[Unixパッケージの説明](packaging/u
 
 テストの範囲は[テスト概要](tests/README.md) を参照してください。
 
+## 保存済みCMAF/Domandを単一MP4へ変換する
+
+独立ツール `tools/cmaf-to-mp4/` は、保存済みCMAF/DomandキャッシュをFFmpegで
+単一のMP4へ変換します。引数なしならGUIが起動し、キャッシュフォルダのドラッグ・
+アンド・ドロップ、出力先指定、出力先フォルダを開く操作、変換後に自動で開く設定を
+利用できます。画面のない環境や自動処理では同じJARを`--headless`で実行できます。
+
+詳しい前提、ビルド、CLIオプションは[CMAF/Domand MP4変換ツールの説明](tools/cmaf-to-mp4/README.md)
+を参照してください。
+
 変更履歴は [CHANGELOG.md](CHANGELOG.md) に集約しています。
 
 `documents/archive/`には、互換性確認や来歴のために旧版の README、変更履歴、開発メモを保存しています。
