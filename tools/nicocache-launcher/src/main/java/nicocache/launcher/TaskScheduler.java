@@ -3,6 +3,7 @@ package nicocache.launcher;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -17,9 +18,19 @@ import java.util.stream.Collectors;
 
 final class TaskScheduler {
     private final LauncherPaths paths;
+    private final LauncherPaths.Platform platform;
+    private final TaskCommandRunner commandRunner;
 
     TaskScheduler(LauncherPaths paths) {
+        this(paths, paths.getPlatform(), null);
+    }
+
+    TaskScheduler(LauncherPaths paths, LauncherPaths.Platform platform,
+            TaskCommandRunner commandRunner) {
         this.paths = paths;
+        this.platform = platform;
+        this.commandRunner = commandRunner == null ? this::runSystemCommand
+                : commandRunner;
     }
 
     List<TaskDefinition> list() throws IOException {
@@ -138,7 +149,7 @@ final class TaskScheduler {
         if (!task.isEnabled()) {
             return;
         }
-        switch (paths.getPlatform()) {
+        switch (platform) {
         case WINDOWS:
             installWindows(task);
             return;
@@ -154,9 +165,11 @@ final class TaskScheduler {
     }
 
     private void removeNative(TaskDefinition task) throws IOException {
-        switch (paths.getPlatform()) {
+        switch (platform) {
         case WINDOWS:
             runOptional("schtasks", "/Delete", "/TN", windowsTaskName(task), "/F");
+            runOptional("schtasks", "/Delete", "/TN",
+                    legacyWindowsTaskName(task), "/F");
             return;
         case MACOS:
             Path plist = macosDirectory().resolve(task.getId() + ".plist");
@@ -183,18 +196,29 @@ final class TaskScheduler {
     }
 
     private void installWindows(TaskDefinition task) throws IOException {
-        List<String> arguments = new ArrayList<>();
-        arguments.add("/Create");
-        arguments.add("/TN");
-        arguments.add(windowsTaskName(task));
-        arguments.add("/SC");
-        arguments.add("ONLOGON");
-        arguments.add("/TR");
-        arguments.add(renderWindowsCommand());
-        arguments.add("/RL");
-        arguments.add("LIMITED");
-        arguments.add("/F");
-        runChecked("schtasks", arguments);
+        Path xmlFile = paths.getDataRoot().resolve("data")
+                .resolve(task.getId() + ".windows-task.xml");
+        Files.createDirectories(xmlFile.getParent());
+        try {
+            writeWindowsTaskXml(xmlFile, renderWindowsTaskXml());
+            runChecked("schtasks", List.of("/Create", "/TN",
+                    windowsTaskName(task), "/XML", xmlFile.toString(), "/F"));
+            runChecked("schtasks", List.of("/Query", "/TN",
+                    windowsTaskName(task), "/FO", "LIST"));
+        } finally {
+            Files.deleteIfExists(xmlFile);
+        }
+    }
+
+    private void writeWindowsTaskXml(Path path, String content)
+            throws IOException {
+        byte[] encoded = content.getBytes(StandardCharsets.UTF_16LE);
+        byte[] withByteOrderMark = new byte[encoded.length + 2];
+        withByteOrderMark[0] = (byte) 0xff;
+        withByteOrderMark[1] = (byte) 0xfe;
+        System.arraycopy(encoded, 0, withByteOrderMark, 2, encoded.length);
+        Files.write(path, withByteOrderMark, StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
     }
 
     private void installMacos(TaskDefinition task) throws IOException {
@@ -235,13 +259,71 @@ final class TaskScheduler {
     }
 
     private String windowsTaskName(TaskDefinition task) {
+        return "\\" + task.getId();
+    }
+
+    private String legacyWindowsTaskName(TaskDefinition task) {
         return "\\NicoCache_nl\\" + task.getId();
     }
 
-    private String renderWindowsCommand() {
-        return paths.getTaskCommand().stream()
-                .map(TaskScheduler::windowsQuote)
+    private String renderWindowsTaskXml() {
+        List<String> command = paths.getTaskCommand();
+        if (command.isEmpty()) {
+            throw new IllegalStateException("タスク登録用の起動コマンドが空です");
+        }
+        String arguments = command.subList(1, command.size()).stream()
+                .map(TaskScheduler::windowsCommandArgument)
                 .collect(Collectors.joining(" "));
+        String userId = windowsUserId();
+        StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n")
+                .append("<Task version=\"1.2\" ")
+                .append("xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n")
+                .append("<RegistrationInfo><Author>NicoCache_nl launcher</Author>"
+                        + "</RegistrationInfo>\n")
+                .append("<Triggers><LogonTrigger><Enabled>true</Enabled>"
+                        + "<UserId>").append(xml(userId))
+                .append("</UserId></LogonTrigger></Triggers>\n")
+                .append("<Principals><Principal id=\"Author\">\n")
+                .append("<UserId>").append(xml(userId)).append("</UserId>\n")
+                .append("<LogonType>InteractiveToken</LogonType>\n")
+                .append("<RunLevel>LeastPrivilege</RunLevel>\n")
+                .append("</Principal></Principals>\n")
+                .append("<Settings><AllowStartOnDemand>true</AllowStartOnDemand>\n")
+                .append("<AllowHardTerminate>true</AllowHardTerminate>\n")
+                .append("<Enabled>true</Enabled></Settings>\n")
+                .append("<Actions Context=\"Author\"><Exec>\n")
+                .append("<Command>").append(xml(command.get(0))).append("</Command>\n")
+                .append("<Arguments>").append(xml(arguments)).append("</Arguments>\n")
+                .append("<WorkingDirectory>").append(xml(paths.getApplicationRoot()
+                        .toString())).append("</WorkingDirectory>\n")
+                .append("</Exec></Actions></Task>\n");
+        return xml.toString();
+    }
+
+    private String windowsUserId() {
+        try {
+            TaskCommandResult result = commandRunner.run("whoami", List.of());
+            String value = result.output == null ? "" : result.output.trim();
+            if (result.exitCode == 0 && !value.isBlank()) {
+                int lineEnd = value.indexOf('\n');
+                return lineEnd < 0 ? value : value.substring(0, lineEnd).trim();
+            }
+        } catch (IOException ignored) {
+            // Fall back to the Java and environment identity below.
+        }
+        String user = System.getProperty("user.name", "");
+        if (user.isBlank()) {
+            user = System.getenv("USERNAME");
+        }
+        if (user == null || user.isBlank()) {
+            user = "unknown";
+        }
+        String domain = System.getenv("USERDOMAIN");
+        if (domain == null || domain.isBlank()) {
+            return user;
+        }
+        return domain + "\\" + user;
     }
 
     private String renderDesktopCommand() {
@@ -272,7 +354,7 @@ final class TaskScheduler {
 
     private String userId() {
         try {
-            CommandResult result = run("id", List.of("-u"), true);
+            TaskCommandResult result = commandRunner.run("id", List.of("-u"));
             String value = result.output.trim();
             return value.isEmpty() ? "0" : value;
         } catch (IOException error) {
@@ -282,7 +364,7 @@ final class TaskScheduler {
 
     private void runChecked(String command, List<String> arguments)
             throws IOException {
-        CommandResult result = run(command, arguments, true);
+        TaskCommandResult result = commandRunner.run(command, arguments);
         if (result.exitCode != 0) {
             throw new IOException(command + " に失敗しました (ExitCode: "
                     + result.exitCode + ")"
@@ -292,15 +374,15 @@ final class TaskScheduler {
 
     private void runOptional(String command, String... arguments) {
         try {
-            run(command, List.of(arguments), true);
+            commandRunner.run(command, List.of(arguments));
         } catch (IOException ignored) {
             // Removing an already absent task and unavailable session loaders
             // are both safe after the native file has been updated.
         }
     }
 
-    private CommandResult run(String command, List<String> arguments,
-            boolean waitForExit) throws IOException {
+    private TaskCommandResult runSystemCommand(String command,
+            List<String> arguments) throws IOException {
         List<String> commandLine = new ArrayList<>();
         commandLine.add(command);
         commandLine.addAll(arguments);
@@ -311,9 +393,6 @@ final class TaskScheduler {
         } catch (IOException error) {
             throw new IOException("OSのタスク管理コマンドを起動できません: "
                     + command, error);
-        }
-        if (!waitForExit) {
-            return new CommandResult(0, "");
         }
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         Thread reader = new Thread(() -> copy(process.getInputStream(), output),
@@ -333,8 +412,27 @@ final class TaskScheduler {
             throw new IOException("OSのタスク管理コマンドが中断されました: "
                     + command, error);
         }
-        return new CommandResult(process.exitValue(),
-                output.toString(StandardCharsets.UTF_8));
+        return new TaskCommandResult(process.exitValue(),
+                output.toString(commandOutputCharset()));
+    }
+
+    private Charset commandOutputCharset() {
+        if (platform != LauncherPaths.Platform.WINDOWS) {
+            return StandardCharsets.UTF_8;
+        }
+        for (String property : List.of("sun.stdout.encoding",
+                "native.encoding", "sun.jnu.encoding")) {
+            String name = System.getProperty(property);
+            if (name == null || name.isBlank()) {
+                continue;
+            }
+            try {
+                return Charset.forName(name);
+            } catch (IllegalArgumentException ignored) {
+                // Try the next JVM/platform encoding hint.
+            }
+        }
+        return StandardCharsets.UTF_8;
     }
 
     private static void copy(InputStream input, ByteArrayOutputStream output) {
@@ -350,7 +448,41 @@ final class TaskScheduler {
     }
 
     private static String windowsQuote(String value) {
-        return "\"" + value.replace("\"", "\\\"") + "\"";
+        StringBuilder quoted = new StringBuilder(value.length() + 2);
+        quoted.append('"');
+        int backslashes = 0;
+        for (int index = 0; index < value.length(); index++) {
+            char character = value.charAt(index);
+            if (character == '\\') {
+                backslashes++;
+            } else if (character == '"') {
+                appendBackslashes(quoted, backslashes * 2 + 1);
+                quoted.append('"');
+                backslashes = 0;
+            } else {
+                appendBackslashes(quoted, backslashes);
+                quoted.append(character);
+                backslashes = 0;
+            }
+        }
+        appendBackslashes(quoted, backslashes * 2);
+        quoted.append('"');
+        return quoted.toString();
+    }
+
+    private static String windowsCommandArgument(String value) {
+        if (!value.isEmpty()
+                && value.chars().noneMatch(Character::isWhitespace)
+                && value.indexOf('"') < 0) {
+            return value;
+        }
+        return windowsQuote(value);
+    }
+
+    private static void appendBackslashes(StringBuilder target, int count) {
+        for (int index = 0; index < count; index++) {
+            target.append('\\');
+        }
     }
 
     private static String desktopQuote(String value) {
@@ -367,13 +499,4 @@ final class TaskScheduler {
                 .replace("'", "&apos;");
     }
 
-    private static final class CommandResult {
-        final int exitCode;
-        final String output;
-
-        CommandResult(int exitCode, String output) {
-            this.exitCode = exitCode;
-            this.output = output;
-        }
-    }
 }

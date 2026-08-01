@@ -68,6 +68,10 @@ jobs:
         shell: pwsh
         run: .\test-e2e.ps1
 
+      - name: Run Windows task scheduler integration test
+        shell: pwsh
+        run: .\packaging\windows\test-windows-task-scheduler.ps1
+
       - name: Run safe Windows setup script failure test
         shell: pwsh
         run: .\packaging\windows\test-windows-setup-script.ps1
@@ -126,3 +130,8 @@ jobs:
         timeout-minutes: 5
         shell: pwsh
         run: ./test-e2e.ps1
+
+      - name: Run Windows task scheduler integration test with Java 25
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/windows/test-windows-task-scheduler.ps1

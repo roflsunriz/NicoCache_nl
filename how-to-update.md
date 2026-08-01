@@ -61,6 +61,22 @@ java -jar .\NicoCacheLauncher.jar --headless --stop
 未設定環境では先に`--setup --headless`を実行し、ユーザーデータ先とHTTPS、CA信頼、
 OSプロキシー、自動起動の各`true`/`false`を明示する。
 
+自動起動はタスク名を指定してログオン時に一回だけ登録する。間隔指定はなく、
+登録直後にOS側のタスク照会が失敗した場合は成功として保存しない。
+
+```powershell
+java -jar .\NicoCacheLauncher.jar --headless --task-install `
+  --task-name=NicoCache_nl
+java -jar .\NicoCacheLauncher.jar --headless --task-update `
+  --task-name=NicoCache_nl
+java -jar .\NicoCacheLauncher.jar --headless --task-remove `
+  --task-name=NicoCache_nl
+```
+
+Windowsではタスクスケジューラーのルート直下、macOSでは`LaunchAgents`、Linuxでは
+XDG autostartへ保存する。実適用を検証するときは、作業中のユーザー設定を変更せず、
+CI専用の一意なタスクを使う`packaging/windows/test-windows-task-scheduler.ps1`を実行する。
+
 管理APIは`127.0.0.1`だけで待ち受け、`data/nicocache-control.properties`に保存した
 ランダムトークンを要求する。起動管理アプリ以外から呼ぶ場合も、状態ファイルの
 `host`、`port`、`token`を読み、Bearer認証を付ける。主なエンドポイントは

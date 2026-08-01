@@ -103,6 +103,14 @@ force-shutdownによる隔離プロセス終了も検証する。graceful-shutdo
 隔離領域で確認する。タスク登録の実適用はOSごとのCIランナーで行い、
 ローカル環境のタスクスケジューラーは変更しない。
 
+Windowsの実タスクスケジューラー連携は、次のCI専用試験で一意なタスクを登録し、
+`schtasks /Query /XML`でログオン時トリガーと起動引数を確認した後、更新・削除して
+残存がないことを検証する。GitHub Actions以外ではOS設定を変更しないため実行を拒否する。
+
+```powershell
+.\packaging\windows\test-windows-task-scheduler.ps1
+```
+
 ## Windows パッケージの隔離スモークテスト
 
 `packaging/windows/test-windows-app-image.ps1` は自己完結アプリイメージの
