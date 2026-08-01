@@ -47,6 +47,11 @@ Linuxのjpackageアプリイメージでは、JARと設定を`lib/app/`、Java�
 ルートへ移します。macOSでは同じ資材を`Contents/Resources/`へ配置し、macOSの
 コード署名が認識できる標準アプリバンドル構造を保ちます。
 
+Linuxのアプリイメージ、アプリイメージZIP、DEB/RPM、およびmacOSのアプリバンドル、
+アプリイメージZIP、PKG/DMGには、`NicoCache_nl.jar`、`NicoCacheCA.jar`、
+`NicoCacheLauncher.jar`、`NicoCacheBuild.jar`の独立アプリ4本を同じ構成で含めます。
+Linuxでは`lib/app/`、macOSでは`Contents/app/`がJARの配置先です。
+
 既存ユーザーが旧ルートから新しいユーザーデータルートへ移行する場合は、起動管理GUIの
 「データルート診断」で不足項目と起動阻害要因を確認できます。初回セットアップを完了した
 パッケージの新規インストールでは、完了記録が作成されるため通常この診断は不要です。

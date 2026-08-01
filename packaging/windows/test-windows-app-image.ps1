@@ -48,6 +48,7 @@ foreach ($requiredPath in @(
         (Join-Path $internalAppDirectory 'NicoCache_nl.jar'),
         (Join-Path $internalAppDirectory 'NicoCacheCA.jar'),
         (Join-Path $internalAppDirectory 'NicoCacheLauncher.jar'),
+        (Join-Path $internalAppDirectory 'NicoCacheBuild.jar'),
         $certificateTargetsPath,
         (Join-Path $internalAppDirectory 'lib\bcprov.jar'),
         (Join-Path $internalAppDirectory 'lib\bcpkix.jar'),
@@ -143,6 +144,16 @@ try {
     }
 } finally {
     $launcherArchive.Dispose()
+}
+$buildJarPath = Join-Path $internalAppDirectory 'NicoCacheBuild.jar'
+$buildArchive = [System.IO.Compression.ZipFile]::OpenRead($buildJarPath)
+try {
+    $buildEntries = @($buildArchive.Entries | Select-Object -ExpandProperty FullName)
+    if ('nicocache/build/BuildMain.class' -notin $buildEntries) {
+        throw 'ビルド管理JARに必要なエントリがありません: nicocache/build/BuildMain.class'
+    }
+} finally {
+    $buildArchive.Dispose()
 }
 $cmafJarPath = Join-Path $appDirectory 'tools\cmaf-to-mp4\nico-cmaf-to-mp4.jar'
 $cmafArchive = [System.IO.Compression.ZipFile]::OpenRead($cmafJarPath)

@@ -71,6 +71,8 @@
 - 起動管理からログオン時に一回だけ起動するタスクを登録・編集・更新・削除できる
   Windowsタスクスケジューラー、macOS LaunchAgents、Linux XDG autostart向けの
   アダプターを追加した。
+- Windows、Linux、macOSのアプリイメージ、ZIP、ネイティブパッケージへ、独立した4本の
+  JavaアプリJARを同じ構成で収録し、パッケージ検証で配置と内容を確認するようにした。
 - 本体へループバック限定・トークン認証の状態確認、グレイスフル停止、強制停止APIを
   追加し、証明書生成対象を`certificate-targets.txt`から読み込むようにした。
 - 保存済みCMAF/Domandキャッシュの`master.m3u8`と相対セグメントをFFmpegで単一MP4へ

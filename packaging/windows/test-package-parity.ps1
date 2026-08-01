@@ -30,6 +30,19 @@ if (Test-Path -LiteralPath $extractRoot) {
 New-Item -ItemType Directory -Path $extractRoot | Out-Null
 Expand-Archive -LiteralPath $zip -DestinationPath $extractRoot -Force
 
+foreach ($artifactName in @(
+        'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
+        'NicoCacheBuild.jar')) {
+    $appArtifact = Join-Path $appImage "app\$artifactName"
+    $zipArtifact = Join-Path $extractRoot "app\$artifactName"
+    if (-not (Test-Path -LiteralPath $appArtifact -PathType Leaf)) {
+        throw "アプリイメージに独立アプリJARがありません: $artifactName"
+    }
+    if (-not (Test-Path -LiteralPath $zipArtifact -PathType Leaf)) {
+        throw "ZIPに独立アプリJARがありません: $artifactName"
+    }
+}
+
 function Get-RelativeFiles {
     param([Parameter(Mandatory)][string]$BasePath)
 

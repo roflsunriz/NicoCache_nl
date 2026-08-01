@@ -74,6 +74,7 @@ if ($Platform -eq 'Linux') {
 Assert-File (Join-Path $applicationDirectory 'NicoCache_nl.jar')
 Assert-File (Join-Path $applicationDirectory 'NicoCacheCA.jar')
 Assert-File (Join-Path $applicationDirectory 'NicoCacheLauncher.jar')
+Assert-File (Join-Path $applicationDirectory 'NicoCacheBuild.jar')
 $launcherJarPath = Join-Path $applicationDirectory 'NicoCacheLauncher.jar'
 $launcherArchive = [System.IO.Compression.ZipFile]::OpenRead($launcherJarPath)
 try {
@@ -89,6 +90,16 @@ try {
     }
 } finally {
     $launcherArchive.Dispose()
+}
+$buildJarPath = Join-Path $applicationDirectory 'NicoCacheBuild.jar'
+$buildArchive = [System.IO.Compression.ZipFile]::OpenRead($buildJarPath)
+try {
+    $buildEntries = @($buildArchive.Entries | Select-Object -ExpandProperty FullName)
+    Assert-True ($null -ne $buildEntries -and
+        'nicocache/build/BuildMain.class' -in $buildEntries) `
+        'ビルド管理JARに必要なエントリがありません: nicocache/build/BuildMain.class'
+} finally {
+    $buildArchive.Dispose()
 }
 Assert-File (Join-Path $applicationDirectory 'lib/bcpkix.jar')
 Assert-File (Join-Path $applicationDirectory 'lib/bcprov.jar')
@@ -174,6 +185,17 @@ if (Test-Path -LiteralPath $archive -PathType Leaf) {
     Assert-True ($LASTEXITCODE -eq 0) "本体ZIPの検証に失敗しました: $archive"
     $zipEntries = @(& $unzip -Z1 $archive)
     Assert-True ($LASTEXITCODE -eq 0) "本体ZIPの一覧取得に失敗しました: $archive"
+    $zipApplicationRoot = if ($Platform -eq 'MacOS') {
+        "$bundleName/Contents/app"
+    } else {
+        "$bundleName/lib/app"
+    }
+    foreach ($artifactName in @(
+            'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
+            'NicoCacheBuild.jar')) {
+        Assert-True ("$zipApplicationRoot/$artifactName" -in $zipEntries) `
+            "本体ZIPに独立アプリJARがありません: $artifactName"
+    }
     $zipToolRoot = if ($Platform -eq 'MacOS') {
         "$bundleName/Contents/Resources/tools/cmaf-to-mp4"
     } else {
@@ -203,6 +225,14 @@ if ($Platform -eq 'Linux') {
             $packageEntries = @(& (Get-RequiredCommand 'rpm') -qpl $package.FullName)
         }
         Assert-True ($LASTEXITCODE -eq 0) "Linux $extension のメタデータ検証に失敗しました"
+        foreach ($artifactName in @(
+                'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
+                'NicoCacheBuild.jar')) {
+            Assert-True (@($packageEntries | Where-Object {
+                    $_ -match [regex]::Escape("/lib/app/$artifactName")
+                }).Count -gt 0) `
+                "Linux $extension に独立アプリJARがありません: $artifactName"
+        }
         Assert-True (@($packageEntries | Where-Object { $_ -match 'tools/cmaf-to-mp4/nico-cmaf-to-mp4\.jar' }).Count -gt 0) `
             "Linux $extension にCMAF/Domand変換アプリがありません"
     }
@@ -212,6 +242,14 @@ if ($Platform -eq 'Linux') {
     Assert-True ($null -ne $pkg) 'macOS PKGがありません'
     $pkgEntries = @(& (Get-RequiredCommand 'pkgutil') --payload-files $pkg.FullName)
     Assert-True ($LASTEXITCODE -eq 0) 'macOS PKGのペイロード一覧を取得できません'
+    foreach ($artifactName in @(
+            'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
+            'NicoCacheBuild.jar')) {
+        Assert-True (@($pkgEntries | Where-Object {
+                $_ -match [regex]::Escape("Contents/app/$artifactName")
+            }).Count -gt 0) `
+            "macOS PKGに独立アプリJARがありません: $artifactName"
+    }
     Assert-True (@($pkgEntries | Where-Object { $_ -match 'Contents/Resources/tools/cmaf-to-mp4/nico-cmaf-to-mp4\.jar' }).Count -gt 0) `
         'macOS PKGにCMAF/Domand変換アプリがありません'
     foreach ($extension in @('.pkg', '.dmg')) {

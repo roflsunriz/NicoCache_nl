@@ -359,7 +359,8 @@ if ($LASTEXITCODE -ne 0) {
     throw 'NicoCacheBuildによる本体・補助アプリのビルドに失敗しました'
 }
 foreach ($artifactName in @(
-        'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar')) {
+        'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
+        'NicoCacheBuild.jar')) {
     $artifactPath = Join-Path $root $artifactName
     if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
         throw "Javaビルド成果物がありません: $artifactPath"

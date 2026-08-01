@@ -124,6 +124,17 @@ try {
             -FieldCount 2)) {
         $fileNames[$row.Values[0]] = $row.Values[1]
     }
+    foreach ($artifactName in @(
+            'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
+            'NicoCacheBuild.jar')) {
+        $escapedArtifactName = [regex]::Escape($artifactName)
+        if (@($fileNames.Values | Where-Object {
+                $_ -match "(^|\|)$escapedArtifactName$"
+            }).Count -eq 0) {
+            throw "MSIのFileテーブルに独立アプリJARがありません: $artifactName"
+        }
+    }
+    Write-Output 'PASS MSI内の独立アプリ4本のファイル定義'
     $componentConditions = @{}
     foreach ($row in @(Get-MsiRows `
             -Database $database `

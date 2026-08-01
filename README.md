@@ -34,6 +34,9 @@ Linux/macOSでは同じJavaビルドアプリをPOSIXラッパーから実行で
 ./build-javac.sh
 ```
 
+Windowsのアプリイメージ・MSI・ZIP、Linuxのアプリイメージ・ZIP・DEB/RPM、macOSの
+アプリバンドル・ZIP・PKG/DMGには、上記4本の独立アプリJARを同じ構成で収録します。
+
 `NicoCacheLauncher.jar`は引数なしならGUIで起動し、タスクトレイ常駐、ログオン時に
 一回だけ実行する自動起動タスクの登録・更新・削除、本体の起動状態表示を管理します。
 起動時にはユーザーデータルートも自動診断し、移行先の不足項目、既定資材による代替、

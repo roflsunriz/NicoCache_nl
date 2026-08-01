@@ -303,6 +303,9 @@ Firefoxへ`userDataRoot/certs/ca.cer`をインポート済みであることも�
 （起動不可）を確認する。診断は読み取り専用で、移行元の設定やキャッシュを変更しない。
 同じアプリイメージを入力にするWindowsのMSIとZIPにも、ルートの
 `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`を収録する。
+Windowsのアプリイメージ、MSI、ZIP、およびLinux/macOSのアプリイメージ、ZIP、
+ネイティブパッケージには、4本の独立アプリJAR（`NicoCache_nl.jar`、
+`NicoCacheCA.jar`、`NicoCacheLauncher.jar`、`NicoCacheBuild.jar`）を同じ構成で収録する。
 
 ```powershell
 .\packaging\windows\build-windows-package.ps1 -PackageType AppImage
