@@ -271,6 +271,9 @@ public class Cache extends CacheManager {
 
     // [nl] 一時ファイルを取り除く
     public static boolean removeTmp(VideoDescriptor video) {
+        if (video == null) {
+            return false;
+        }
         File tmp = video2Tmp.get(video);
         if (tmp == null || getDLFlag(video))
             return false;

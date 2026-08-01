@@ -51,6 +51,10 @@ jobs:
         shell: pwsh
         run: .\test-functional.ps1
 
+      - name: Run core API contract tests
+        shell: pwsh
+        run: .\test-api.ps1
+
       - name: Run first-run setup tests
         shell: pwsh
         run: .\test-first-run-setup.ps1

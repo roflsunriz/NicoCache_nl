@@ -57,6 +57,16 @@ HTTP サーバーを利用する。
 - Extension と Extension2 のロード、および Processor、stopper Processor、
   Rewriter、RequestFilter、CompleteCache、イベント、終了通知
 
+本体APIの契約だけを短時間で確認する場合は次を実行する。`/cache/info`、
+`info/v2`、`ajax_info`、`echo`、検索・一覧・XML、旧API、削除・移動・LST更新の
+成功系・不正入力・メソッド制限を隔離した実ソケットで検証し、`list/`からのパス脱出も
+拒否されることを確認する。起動管理APIのBearer認証、status、ping、未知パス、
+force-shutdownによる隔離プロセス終了も検証する。graceful-shutdownはE2Eテストで検証する。
+
+```powershell
+.\test-api.ps1
+```
+
 失敗調査で作業ファイルとログを残す場合は `-KeepWorkDir` を指定する。
 
 ## Extension ABI 互換テスト

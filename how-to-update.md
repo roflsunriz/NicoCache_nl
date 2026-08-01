@@ -23,6 +23,14 @@ macOSで同じビルドアプリを実行できる。
 .\test-functional.ps1
 ```
 
+本体APIの仕様や削除処理を変更した場合は、隔離した実ソケットでAPI契約テストも実行する。
+
+```powershell
+.\test-api.ps1
+```
+
+APIの一覧と呼び出し例は[本体APIリファレンス](documents/api.md)にまとめている。
+
 次に本体をビルドする。
 
 ```powershell

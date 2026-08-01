@@ -23,6 +23,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ConcurrentHashMap;
@@ -58,6 +59,7 @@ public final class FunctionalTestMain {
     private final Path sandbox;
     private final Path application;
     private final Path classes;
+    private final boolean apiOnly;
     private HttpServer upstream;
     private ExecutorService upstreamExecutor;
     private Process nicocache;
@@ -65,22 +67,27 @@ public final class FunctionalTestMain {
     private int nicocachePort;
     private final Map<String, AtomicInteger> upstreamRequests = new ConcurrentHashMap<>();
 
-    private FunctionalTestMain(Path repository, Path sandbox, Path classes) {
+    private FunctionalTestMain(Path repository, Path sandbox, Path classes,
+            boolean apiOnly) {
         this.repository = repository;
         this.sandbox = sandbox;
         this.application = sandbox.resolve("application");
         this.classes = classes;
+        this.apiOnly = apiOnly;
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 3) {
-            throw new IllegalArgumentException("usage: FunctionalTestMain <repository> <sandbox> <classes>");
+        if (args.length < 3 || args.length > 4
+                || args.length == 4 && !"--api-only".equals(args[3])) {
+            throw new IllegalArgumentException(
+                    "usage: FunctionalTestMain <repository> <sandbox> <classes> [--api-only]");
         }
 
         FunctionalTestMain suite = new FunctionalTestMain(
                 Path.of(args[0]).toAbsolutePath().normalize(),
                 Path.of(args[1]).toAbsolutePath().normalize(),
-                Path.of(args[2]).toAbsolutePath().normalize());
+                Path.of(args[2]).toAbsolutePath().normalize(),
+                args.length == 4);
         suite.execute();
     }
 
@@ -90,34 +97,40 @@ public final class FunctionalTestMain {
             startUpstream();
             startNicoCache();
 
-            run("URL resource cache response policies", this::testUrlResourceCachePolicies);
-            run("template reload and CMAF utility validation",
-                    this::testTemplateAndCmafUtility);
-            run("CMAF cache progress size stability",
-                    CmafCachingProgressUnitTest::run);
-            run("LRU map minimum capacity and eviction",
-                    this::testLruMapCapacity);
-            run("GUI log filtering primitives", LogSearchUnitTest::run);
-            run("forward proxy GET/POST/HEAD and upstream status", this::testForwardProxy);
-            run("forward proxy byte range", this::testForwardProxyRange);
-            run("HTTPS CONNECT and TLS loopback", this::testHttpsMitmLocalFile);
-            run("conditional retrieval and upstream connection failure",
-                    this::testConditionalAndUpstreamFailure);
-            run("local file GET/range/method handling", this::testLocalFiles);
-            run("system and user nlFilter execution order",
-                    this::testLayeredNlFilters);
-            run("response rewriting and Extension request filtering",
-                    this::testResponseRewriteAndRequestFilter);
-            run("thumbnail fetch and cache reuse", this::testThumbnailCache);
-            run("nvcomment response saving", this::testCommentSaving);
-            run("hlsext encrypted CMAF completion and playback",
-                    this::testHlsextEncryptedCmafFlow);
-            run("shlsbid playlist refresh keeps segment decrypt generation",
-                    this::testShlsbidPlaylistRefreshDecryptInfo);
-            run("DOMAND/CMAF completion and offline playback", this::testCmafMasterFlow);
-            run("cache info and legacy cache playback", this::testCacheInfoAndPlayback);
-            run("cache removal API and validation", this::testCacheRemoval);
-            run("Extension and Extension2 registrations and events", this::testExtensionDispatch);
+            if (apiOnly) {
+                run("control API contract and authentication", this::testControlApiContract);
+                run("core cache API contract and validation", this::testCacheApiContract);
+                run("control force-shutdown contract", this::testControlForceShutdown);
+            } else {
+                run("URL resource cache response policies", this::testUrlResourceCachePolicies);
+                run("template reload and CMAF utility validation",
+                        this::testTemplateAndCmafUtility);
+                run("CMAF cache progress size stability",
+                        CmafCachingProgressUnitTest::run);
+                run("LRU map minimum capacity and eviction",
+                        this::testLruMapCapacity);
+                run("GUI log filtering primitives", LogSearchUnitTest::run);
+                run("forward proxy GET/POST/HEAD and upstream status", this::testForwardProxy);
+                run("forward proxy byte range", this::testForwardProxyRange);
+                run("HTTPS CONNECT and TLS loopback", this::testHttpsMitmLocalFile);
+                run("conditional retrieval and upstream connection failure",
+                        this::testConditionalAndUpstreamFailure);
+                run("local file GET/range/method handling", this::testLocalFiles);
+                run("system and user nlFilter execution order",
+                        this::testLayeredNlFilters);
+                run("response rewriting and Extension request filtering",
+                        this::testResponseRewriteAndRequestFilter);
+                run("thumbnail fetch and cache reuse", this::testThumbnailCache);
+                run("nvcomment response saving", this::testCommentSaving);
+                run("hlsext encrypted CMAF completion and playback",
+                        this::testHlsextEncryptedCmafFlow);
+                run("shlsbid playlist refresh keeps segment decrypt generation",
+                        this::testShlsbidPlaylistRefreshDecryptInfo);
+                run("DOMAND/CMAF completion and offline playback", this::testCmafMasterFlow);
+                run("cache info and legacy cache playback", this::testCacheInfoAndPlayback);
+                run("cache removal API and validation", this::testCacheRemoval);
+                run("Extension and Extension2 registrations and events", this::testExtensionDispatch);
+            }
         } finally {
             try {
                 stopNicoCache();
@@ -134,10 +147,12 @@ public final class FunctionalTestMain {
             }
         }
 
-        run("Extension exception does not interrupt graceful shutdown", () ->
-                assertFileContains(
-                        sandbox.resolve("extension-system-exit.txt"),
-                        "system-exit"));
+        if (!apiOnly) {
+            run("Extension exception does not interrupt graceful shutdown", () ->
+                    assertFileContains(
+                            sandbox.resolve("extension-system-exit.txt"),
+                            "system-exit"));
+        }
 
         if (!FAILURES.isEmpty()) {
             System.err.println("Functional test failures: " + FAILURES.size());
@@ -216,6 +231,47 @@ public final class FunctionalTestMain {
                 "#EXTM3U\n#EXT-X-VERSION:7\nsegment.ts\n", StandardCharsets.UTF_8);
         Files.writeString(lowerHls.resolve("segment.ts"),
                 "lower-quality-hls-segment", StandardCharsets.UTF_8);
+
+        Files.createDirectories(sandbox.resolve("cache/api-target"));
+        Files.createDirectories(sandbox.resolve("list"));
+        Files.write(sandbox.resolve("cache/api-target/sm900020_Target.mp4"),
+                "api-target-seed".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900006_Api.mp4"),
+                "api-rm-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900007_Api.mp4"),
+                "api-rmtmp-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900021_Api.mp4"),
+                "api-legacy-rmtmp-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900008_Api.mp4"),
+                "api-rmall-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900008_Api.mp4"),
+                "api-rmall-tmp-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900009_Api.mp4"),
+                "api-redirect-rm-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900013_Api.mp4"),
+                "api-redirect-rmtmp-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900014_Api.mp4"),
+                "api-redirect-rmall-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900014_Api.mp4"),
+                "api-redirect-rmall-tmp-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900015_Api.mp4"),
+                "api-move-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900016_Api.mp4"),
+                "api-topmove-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900017_Api.mp4"),
+                "api-title-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900018_Api.mp4"),
+                "api-legacy-rm-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900019_Api.mp4"),
+                "api-legacy-rmall-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900022_Api.mp4"),
+                "api-ajax-legacy-rm-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900023_Api.mp4"),
+                "api-ajax-legacy-rmtmp-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900024_Api.mp4"),
+                "api-ajax-legacy-rmall-content".getBytes(StandardCharsets.UTF_8));
+        Files.writeString(sandbox.resolve("list/api.txt"),
+                "beta\nalpha\nalpha\n", StandardCharsets.UTF_8);
 
         KeyStore keyStore = KeyStore.getInstance("JKS");
         keyStore.load(null, "NicoCache".toCharArray());
@@ -1185,6 +1241,262 @@ public final class FunctionalTestMain {
         assertFileContains(cachedSegment, "audio-segment");
     }
 
+    private void testControlApiContract() throws Exception {
+        Properties status = readControlProperties();
+        String token = status.getProperty("token");
+
+        Response unauthorized = controlRequest(status, "GET",
+                "/api/control/status", null, null);
+        assertEquals(401, unauthorized.status,
+                "control status without authentication");
+
+        Response authorized = controlRequest(status, "GET",
+                "/api/control/status", token, null);
+        assertEquals(200, authorized.status, "control status response");
+        assertContains(authorized.bodyText(), "\"status\":\"running\"",
+                "control status state");
+        assertContains(authorized.bodyText(), "\"pid\":",
+                "control status pid");
+        assertContains(authorized.bodyText(), "\"proxyPort\":",
+                "control status proxy port");
+
+        Response ping = controlRequest(status, "GET", "/api/control/ping",
+                token, null);
+        assertEquals(200, ping.status, "control ping response");
+        assertEquals("{\"status\":\"ok\"}", ping.bodyText(),
+                "control ping body");
+
+        Response unknown = controlRequest(status, "GET",
+                "/api/control/unknown", token, null);
+        assertEquals(404, unknown.status, "control unknown endpoint");
+
+        Response wrongMethod = controlRequest(status, "POST",
+                "/api/control/status", token, null);
+        assertEquals(404, wrongMethod.status, "control method validation");
+    }
+
+    private void testControlForceShutdown() throws Exception {
+        Properties status = readControlProperties();
+        Response forcing = controlRequest(status, "POST",
+                "/api/control/force-shutdown", status.getProperty("token"), null);
+        assertEquals(202, forcing.status, "control force-shutdown response");
+        assertEquals("{\"status\":\"forcing\"}", forcing.bodyText(),
+                "control force-shutdown body");
+        assertTrue(nicocache.waitFor(STOP_TIMEOUT.toMillis(),
+                java.util.concurrent.TimeUnit.MILLISECONDS),
+                "control force-shutdown must terminate the process");
+    }
+
+    private void testCacheApiContract() throws Exception {
+        Response emptyInfo = request(nicoRequest("GET", "/cache/info", ""));
+        assertEquals(200, emptyInfo.status, "empty cache info status");
+        assertEquals("{}", emptyInfo.bodyText(), "empty cache info response");
+
+        Response infoPost = request(nicoRequestWithBody(
+                "POST", "/cache/info", "sm900001,sm900002"));
+        assertEquals(200, infoPost.status, "cache info POST status");
+        assertContains(infoPost.bodyText(), "\"sm900001\"",
+                "cache info POST response");
+
+        Response emptyInfoV2 = request(nicoRequest("GET", "/cache/info/v2", ""));
+        assertEquals(200, emptyInfoV2.status, "empty cache info v2 status");
+        assertEquals("{}", emptyInfoV2.bodyText(), "empty cache info v2 response");
+
+        Response infoV2Post = request(nicoRequestWithBody(
+                "POST", "/cache/info/v2", "sm900001"));
+        assertEquals(200, infoV2Post.status, "cache info v2 POST status");
+        assertContains(infoV2Post.bodyText(), "\"sm900001\"",
+                "cache info v2 POST response");
+
+        Response ajaxInfo = request(nicoRequest(
+                "GET", "/cache/ajax_info?sm900001", ""));
+        assertEquals(200, ajaxInfo.status, "ajax_info status");
+        assertContains(ajaxInfo.bodyText(), "OK", "ajax_info response");
+        Response ajaxInfoPost = request(nicoRequest(
+                "POST", "/cache/ajax_info?sm900001", ""));
+        assertEquals(405, ajaxInfoPost.status, "ajax_info method validation");
+
+        Response oldInfo = request(nicoRequest(
+                "GET", "/cache/oldinfo?sm900001", ""));
+        assertEquals(200, oldInfo.status, "legacy cache info status");
+        assertContains(oldInfo.bodyText(), "\"sm900001\"",
+                "legacy cache info response");
+        Response oldInfoV2 = request(nicoRequest(
+                "GET", "/cache/oldinfo/v2?sm900001", ""));
+        assertEquals(200, oldInfoV2.status, "legacy cache info v2 status");
+        Response oldInfoPost = request(nicoRequestWithBody(
+                "POST", "/cache/oldinfo", "sm900001"));
+        assertEquals(200, oldInfoPost.status, "legacy cache info POST status");
+
+        Response echo = request(nicoRequest(
+                "GET", "/cache/echo?sm900001%22", ""));
+        assertEquals(200, echo.status, "cache echo status");
+        assertContains(echo.bodyText(), "sm900001\\\"",
+                "cache echo must escape quotes as JSON");
+        Response emptyEcho = request(nicoRequest("GET", "/cache/echo", ""));
+        assertEquals(400, emptyEcho.status, "cache echo parameter validation");
+
+        Response search = request(nicoRequest(
+                "GET", "/cache/search/Api", ""));
+        assertEquals(200, search.status, "cache search status");
+        assertContains(search.bodyText(), "sm900006",
+                "cache search response");
+        Response regexSearch = request(nicoRequest(
+                "GET", "/cache/rsearch/Api?order=d", ""));
+        assertEquals(200, regexSearch.status, "cache regex search status");
+
+        for (String path : List.of("/cache/cachelist.json", "/cache/templist.json",
+                "/cache/dirlist.json", "/cache/flvlist.json")) {
+            Response list = request(nicoRequest("GET", path, ""));
+            assertEquals(200, list.status, path + " status");
+            assertContains(list.header("content-type"), "application/json",
+                    path + " content type");
+        }
+        Response ajaxList = request(nicoRequest("GET", "/cache/ajax", ""));
+        assertEquals(200, ajaxList.status, "cache ajax list status");
+        assertContains(ajaxList.bodyText(), "dirList", "cache ajax list response");
+        Response flvList = request(nicoRequest("GET", "/cache/flvlist", ""));
+        assertEquals(200, flvList.status, "cache flv list status");
+        assertContains(flvList.bodyText(), "# my cache", "cache flv list response");
+        Response cachePage = request(nicoRequest("GET", "/cache/", ""));
+        assertEquals(200, cachePage.status, "cache management page status");
+        Response logPage = request(nicoRequest("GET", "/cache/log", ""));
+        assertEquals(200, logPage.status, "cache log page status");
+        Response xml = request(nicoRequest(
+                "GET", "/cache/getxml?type=dirlist", ""));
+        assertEquals(200, xml.status, "cache XML list status");
+        assertContains(xml.header("content-type"), "application/xml",
+                "cache XML list content type");
+        assertContains(xml.bodyText(), "dirList", "cache XML list response");
+        for (String type : List.of("templist", "cachelist", "cachelistall")) {
+            Response typedXml = request(nicoRequest(
+                    "GET", "/cache/getxml?type=" + type, ""));
+            assertEquals(200, typedXml.status, "cache XML " + type + " status");
+            assertContains(typedXml.header("content-type"), "application/xml",
+                    "cache XML " + type + " content type");
+        }
+
+        Response title = request(nicoRequest(
+                "GET", "/cache/ajax_title?sm900017-API%20title", ""));
+        assertEquals(200, title.status, "cache title status");
+        assertContains(title.bodyText(), "OK", "cache title response");
+        Response move = request(nicoRequest(
+                "GET", "/cache/ajax_move?sm900015-/api-target", ""));
+        assertEquals(200, move.status, "cache move status");
+        assertEquals("OK", move.bodyText(), "cache move response");
+        assertTrue(Files.exists(sandbox.resolve("cache/api-target/sm900015_Api.mp4")),
+                "cache move destination");
+        Response topMove = request(nicoRequest(
+                "GET", "/cache/ajax_topmove?sm900016-/api-target", ""));
+        assertEquals(200, topMove.status, "cache topmove status");
+        assertEquals("OK", topMove.bodyText(), "cache topmove response");
+        assertTrue(Files.exists(sandbox.resolve("cache/api-target/sm900016_Api.mp4")),
+                "cache topmove destination");
+
+        Response addList = request(nicoRequest(
+                "GET", "/cache/ajax_addlist/api.txt?gamma", ""));
+        assertEquals(200, addList.status, "cache addlist status");
+        assertEquals("OK", addList.bodyText(), "cache addlist response");
+        Response trimList = request(nicoRequest(
+                "GET", "/cache/ajax_trimlist/api.txt?type=smid", ""));
+        assertEquals(200, trimList.status, "cache trimlist status");
+        assertEquals("OK", trimList.bodyText(), "cache trimlist response");
+        Response unsafeList = request(nicoRequest(
+                "GET", "/cache/ajax_addlist/../escaped.txt?bad", ""));
+        assertEquals(400, unsafeList.status, "cache list path validation");
+        assertFalse(Files.exists(sandbox.resolve("escaped.txt")),
+                "unsafe cache list path must not write outside list");
+
+        Response invalidInfo = request(nicoRequest(
+                "GET", "/cache/info?not-an-id", ""));
+        assertEquals(400, invalidInfo.status, "cache info invalid parameter");
+        Response invalidRemove = request(nicoRequest("GET", "/cache/ajax_rm", ""));
+        assertEquals(400, invalidRemove.status, "cache rm invalid parameter");
+        Response invalidTempRemove = request(nicoRequest(
+                "GET", "/cache/ajax_rmtmp?not-an-id", ""));
+        assertEquals(400, invalidTempRemove.status, "cache rmtmp invalid parameter");
+        Response invalidAllRemove = request(nicoRequest(
+                "GET", "/cache/ajax_rmall?sm900001[720p,128]", ""));
+        assertEquals(400, invalidAllRemove.status, "cache rmall invalid parameter");
+        Response wrongRemoveMethod = request(nicoRequest(
+                "POST", "/cache/ajax_rm?sm900001", ""));
+        assertEquals(405, wrongRemoveMethod.status, "cache rm method validation");
+
+        Response rm = request(nicoRequest(
+                "GET", "/cache/ajax_rm?sm900006", ""));
+        assertEquals(200, rm.status, "cache ajax_rm status");
+        assertEquals("OK", rm.bodyText(), "cache ajax_rm response");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900006_Api.mp4")),
+                "cache ajax_rm deletion");
+
+        Response rmtmp = request(nicoRequest(
+                "GET", "/cache/ajax_rmtmp?sm900007", ""));
+        assertEquals(200, rmtmp.status, "cache ajax_rmtmp status");
+        assertEquals("OK", rmtmp.bodyText(), "cache ajax_rmtmp response");
+        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900007_Api.mp4")),
+                "cache ajax_rmtmp deletion");
+
+        Response rmall = request(nicoRequest(
+                "GET", "/cache/ajax_rmall?sm900008", ""));
+        assertEquals(200, rmall.status, "cache ajax_rmall status");
+        assertEquals("OK", rmall.bodyText(), "cache ajax_rmall response");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900008_Api.mp4")),
+                "cache ajax_rmall deletion");
+
+        Response redirectRm = request(nicoRequest(
+                "GET", "/cache/rm?sm900009", ""));
+        assertEquals(302, redirectRm.status, "cache rm redirect status");
+        assertEquals("http://www.nicovideo.jp/", redirectRm.header("location"),
+                "cache rm redirect target");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900009_Api.mp4")),
+                "cache rm deletion");
+        Response redirectRmtmp = request(nicoRequest(
+                "GET", "/cache/rmtmp?sm900013", ""));
+        assertEquals(302, redirectRmtmp.status, "cache rmtmp redirect status");
+        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900013_Api.mp4")),
+                "cache rmtmp deletion");
+        Response redirectRmall = request(nicoRequest(
+                "GET", "/cache/rmall?sm900014", ""));
+        assertEquals(302, redirectRmall.status, "cache rmall redirect status");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900014_Api.mp4")),
+                "cache rmall deletion");
+
+        Response legacyRemove = request(nicoRequest(
+                "GET", "/cache/oldrm?sm900018", ""));
+        assertEquals(302, legacyRemove.status, "legacy cache rm redirect status");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900018_Api.mp4")),
+                "legacy cache rm deletion");
+        Response legacyRemoveAll = request(nicoRequest(
+                "GET", "/cache/oldrmall?sm900019", ""));
+        assertEquals(302, legacyRemoveAll.status, "legacy cache rmall redirect status");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900019_Api.mp4")),
+                "legacy cache rmall deletion");
+
+        Response legacyTempRemove = request(nicoRequest(
+                "GET", "/cache/oldrmtmp?sm900021", ""));
+        assertEquals(302, legacyTempRemove.status,
+                "legacy cache rmtmp redirect status");
+        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900021_Api.mp4")),
+                "legacy cache rmtmp deletion");
+
+        for (String id : List.of("sm900022", "sm900023", "sm900024")) {
+            String operation = id.equals("sm900022") ? "oldrm"
+                    : id.equals("sm900023") ? "oldrmtmp" : "oldrmall";
+            Response ajaxLegacy = request(nicoRequest(
+                    "GET", "/cache/ajax_" + operation + "?" + id, ""));
+            assertEquals(200, ajaxLegacy.status,
+                    "ajax legacy " + operation + " status");
+            assertEquals("OK", ajaxLegacy.bodyText(),
+                    "ajax legacy " + operation + " response");
+        }
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900022_Api.mp4")),
+                "ajax legacy cache rm deletion");
+        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900023_Api.mp4")),
+                "ajax legacy cache rmtmp deletion");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900024_Api.mp4")),
+                "ajax legacy cache rmall deletion");
+    }
+
     private Path waitForCmafSegment(String smid, String relativePath, Duration timeout)
             throws Exception {
         long deadline = System.nanoTime() + timeout.toNanos();
@@ -1413,7 +1725,11 @@ public final class FunctionalTestMain {
             return;
         }
         try {
-            request(nicoRequest("GET", "/functional/stop", ""));
+            if (apiOnly) {
+                requestControlGracefulShutdown();
+            } else {
+                request(nicoRequest("GET", "/functional/stop", ""));
+            }
             if (!nicocache.waitFor(STOP_TIMEOUT.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
                 dumpChildThreads();
                 throw new AssertionError("NicoCache did not stop gracefully");
@@ -1426,6 +1742,54 @@ public final class FunctionalTestMain {
                     nicocache.waitFor(3, java.util.concurrent.TimeUnit.SECONDS);
                 }
             }
+        }
+    }
+
+    private void requestControlGracefulShutdown() throws Exception {
+        Properties status = readControlProperties();
+        Response response = controlRequest(status, "POST",
+                "/api/control/graceful-shutdown", status.getProperty("token"), null);
+        if (response.status != 202 && response.status != 200) {
+            throw new AssertionError(
+                    "control graceful shutdown status: " + response.status);
+        }
+        assertContains(response.bodyText(), "\"status\":\"stopping\"",
+                "control graceful shutdown response");
+    }
+
+    private Properties readControlProperties() throws IOException {
+        Properties status = new Properties();
+        try (InputStream input = Files.newInputStream(
+                sandbox.resolve("data/nicocache-control.properties"))) {
+            status.load(input);
+        }
+        return status;
+    }
+
+    private Response controlRequest(Properties status, String method, String path,
+            String token, String body) throws Exception {
+        byte[] bodyBytes = body == null
+                ? new byte[0]
+                : body.getBytes(StandardCharsets.UTF_8);
+        StringBuilder request = new StringBuilder()
+                .append(method).append(' ').append(path).append(" HTTP/1.1\r\n")
+                .append("Host: 127.0.0.1\r\n");
+        if (token != null) {
+            request.append("Authorization: Bearer ").append(token).append("\r\n");
+        }
+        request.append("Content-Length: ").append(bodyBytes.length)
+                .append("\r\nConnection: close\r\n\r\n");
+
+        int controlPort = Integer.parseInt(status.getProperty("port"));
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(),
+                    controlPort), 2000);
+            socket.setSoTimeout(8000);
+            OutputStream output = socket.getOutputStream();
+            output.write(request.toString().getBytes(StandardCharsets.US_ASCII));
+            output.write(bodyBytes);
+            output.flush();
+            return Response.parse(readHttpResponse(socket.getInputStream(), false));
         }
     }
 
@@ -1521,6 +1885,15 @@ public final class FunctionalTestMain {
                 + "Host: www.nicovideo.jp\r\n" + extraHeaders + "Connection: close\r\n\r\n";
     }
 
+    private static String nicoRequestWithBody(String method, String path, String body) {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        return method + " http://www.nicovideo.jp" + path + " HTTP/1.1\r\n"
+                + "Host: www.nicovideo.jp\r\n"
+                + "Content-Length: " + bytes.length + "\r\n"
+                + "Content-Type: text/plain; charset=UTF-8\r\n"
+                + "Connection: close\r\n\r\n" + body;
+    }
+
     private static int findFreePort() throws IOException {
         try (ServerSocket socket = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
             return socket.getLocalPort();
@@ -1589,6 +1962,12 @@ public final class FunctionalTestMain {
 
     private static void assertFalse(boolean actual, String message) {
         if (actual) {
+            throw new AssertionError(message);
+        }
+    }
+
+    private static void assertTrue(boolean actual, String message) {
+        if (!actual) {
             throw new AssertionError(message);
         }
     }

@@ -105,6 +105,8 @@ Windows インストーラーの詳細は [Windows パッケージの説明](pac
 Linux/macOSパッケージの詳細は[Unixパッケージの説明](packaging/unix/README.md)、
 
 テストの範囲は[テスト概要](tests/README.md) を参照してください。
+本体のキャッシュAPIと起動管理APIの一覧・利用例は[本体APIリファレンス](documents/api.md)を
+参照してください。
 
 ## 保存済みCMAF/Domandを単一MP4へ変換する
 

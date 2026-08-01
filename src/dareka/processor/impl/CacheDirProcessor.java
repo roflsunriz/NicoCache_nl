@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.Socket;
 import java.net.URLDecoder;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.SortedSet;
@@ -231,8 +233,11 @@ public class CacheDirProcessor implements Processor {
             // 2024-03-29に以下のコード追記. 要求されたものとは違う品質を返す
             // ことは不適切かも知れない.
             if (cache != null && !cache.exists()) {
-                video = Cache.getPreferredCachedVideo(smid);
-                cache = new Cache(video);
+                VideoDescriptor preferredVideo = Cache.getPreferredCachedVideo(smid);
+                if (preferredVideo != null) {
+                    video = preferredVideo;
+                    cache = new Cache(video);
+                }
             };
         };
 
@@ -423,7 +428,11 @@ public class CacheDirProcessor implements Processor {
             HashMap<String, String> query = new HashMap<>();
 
             String key, value;
-            for (String params : path.substring(7).split("&")) {
+            String parameterText = path.substring(7);
+            if (parameterText.startsWith("?")) {
+                parameterText = parameterText.substring(1);
+            }
+            for (String params : parameterText.split("&")) {
                 String[] param = params.split("=",2);
                 if (params.length() > 1) {
                     key = param[0]; value = param[1];
@@ -493,7 +502,7 @@ public class CacheDirProcessor implements Processor {
         // [nl] リストページ
         // [nl] ローカルFLVリスト→削除
         if (path.matches("oldrm(?:tmp)?\\?[a-z]{2}[0-9]+(?:low)?(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\]\\w*\\.(?:flv|mp4|hls))?(?:low)?")) { // tail low for cachemanager workaround
-            if (path.startsWith("rmtmp")) {
+            if (path.startsWith("oldrmtmp")) {
                 Logger.info("Remove Temporary: " + altid);
                 if (Cache.removeTmp(video)) {
                     msg = "OK";
@@ -575,6 +584,9 @@ public class CacheDirProcessor implements Processor {
         else if ((m = LST_API_PATTERN.matcher(path)).matches()) {
             ajax = true;
             String cmd = m.group(1), file = m.group(3), value = m.group(4);
+            if (!isSafeListPath(file)) {
+                return StringResource.getBadRequest();
+            }
             boolean regex = m.group(2) != null;
             if (value == null) value = "";
             if ("add".equals(cmd) && value.length() > 0) {
@@ -715,7 +727,14 @@ public class CacheDirProcessor implements Processor {
     // キャッシュ情報一括取得API
     private static Resource processCacheInfoAPI(String query, int version) {
         StringBuilder sb = createJsonStringBuilder();
+        if (query == null || query.trim().isEmpty()) {
+            return createJsonStringResource(sb);
+        }
+        query = query.trim();
         for (String id : query.split("[,\\s]+")) {
+            if (id.isEmpty()) {
+                continue;
+            }
             String smid = id;
             if (id.matches("\\d+")) {
                 if (id.length() >= 10)
@@ -1031,8 +1050,12 @@ public class CacheDirProcessor implements Processor {
                 return StringResource.getMethodNotAllowed();
             };
 
-            String msg = "NG";
             Specifier spec = new Specifier(query);
+            if (spec.video == null || !spec.altid.equals(query)) {
+                return StringResource.getBadRequest();
+            }
+
+            String msg = "NG";
 
             Logger.info("Remove Cache: " + spec.altid);
             // Logger.info("  resolved(" + spec.video + ")");
@@ -1055,8 +1078,12 @@ public class CacheDirProcessor implements Processor {
                 return StringResource.getMethodNotAllowed();
             };
 
-            String msg = "NG";
             Specifier spec = new Specifier(query);
+            if (spec.video == null || !spec.altid.equals(query)) {
+                return StringResource.getBadRequest();
+            }
+
+            String msg = "NG";
 
             Logger.info("Remove Temporary: " + spec.altid);
             // Logger.info("  resolved(" + spec.video + ")");
@@ -1120,6 +1147,10 @@ public class CacheDirProcessor implements Processor {
             return StringResource.getMethodNotAllowed();
         };
 
+        if (query == null || query.isEmpty()) {
+            return StringResource.getBadRequest();
+        }
+
         String decoded = null;
         if (query != null) {
             decoded = URLDecoder.decode(query, StandardCharsets.UTF_8);
@@ -1174,15 +1205,62 @@ public class CacheDirProcessor implements Processor {
         if (s == null) {
             return "null";
         };
-        s = s.replaceAll("\\\\", "\\\\");
-        s = s.replaceAll("\"", "\\\"");
-        s = s.replaceAll("\b", "\\b");
-        s = s.replaceAll("\f", "\\f");
-        s = s.replaceAll("\n", "\\n");
-        s = s.replaceAll("\r", "\\r");
-        s = s.replaceAll("\t", "\\t");
-        return "\"" + s + "\"";
+        StringBuilder escaped = new StringBuilder(s.length() + 8);
+        for (int index = 0; index < s.length(); index++) {
+            char character = s.charAt(index);
+            switch (character) {
+            case '\\':
+                escaped.append("\\\\");
+                break;
+            case '"':
+                escaped.append("\\\"");
+                break;
+            case '\b':
+                escaped.append("\\b");
+                break;
+            case '\f':
+                escaped.append("\\f");
+                break;
+            case '\n':
+                escaped.append("\\n");
+                break;
+            case '\r':
+                escaped.append("\\r");
+                break;
+            case '\t':
+                escaped.append("\\t");
+                break;
+            default:
+                if (character < 0x20) {
+                    escaped.append("\\u");
+                    String hex = Integer.toHexString(character);
+                    for (int padding = hex.length(); padding < 4; padding++) {
+                        escaped.append('0');
+                    }
+                    escaped.append(hex);
+                } else {
+                    escaped.append(character);
+                }
+                break;
+            }
+        }
+        return "\"" + escaped + "\"";
     };
+
+    /**
+     * /cache/addlist と /cache/trimlist は list/ 配下だけを対象にする。
+     * 現在の作業ディレクトリを基準にした従来仕様は維持しつつ、
+     * '..' や Windows の区切り文字による脱出を許可しない。
+     */
+    private static boolean isSafeListPath(String file) {
+        try {
+            Path root = Path.of("list").toAbsolutePath().normalize();
+            Path candidate = Path.of(file).toAbsolutePath().normalize();
+            return !candidate.equals(root) && candidate.startsWith(root);
+        } catch (InvalidPathException error) {
+            return false;
+        }
+    }
 
     private static String videoDescriptorToAltId(VideoDescriptor video) {
         if (video == null) {
@@ -1338,6 +1416,10 @@ public class CacheDirProcessor implements Processor {
         public Specifier(String query) {
             // - ALT_ID_PATTERNを部分一致で探す.
             // - 厳密一致にするべきだがこのファイルの整理が済むまではこのまま.
+
+            if (query == null) {
+                return;
+            }
 
             Matcher m = ALT_ID_PATTERN.matcher(query);
             if (!m.find()) {
