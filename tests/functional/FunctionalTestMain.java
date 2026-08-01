@@ -8,6 +8,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,6 +27,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Future;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
@@ -455,7 +457,17 @@ public final class FunctionalTestMain {
                             secondSegment ? (byte) 0x2b : (byte) 0x2a,
                             secondSegment ? 2 : 1);
                 }
-                exchange.sendResponseHeaders(200, body.length);
+                boolean chunkedCmaf = path.contains("/hlsbid/");
+                exchange.sendResponseHeaders(200, chunkedCmaf ? 0 : body.length);
+                if ((path.contains("/hlsext/") || path.contains("/hlsbid/"))
+                        && path.substring(path.lastIndexOf('/') + 1).startsWith("01.")) {
+                    try {
+                        Thread.sleep(150L);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("interrupted duplicate CMAF fixture", e);
+                    }
+                }
                 exchange.getResponseBody().write(body);
                 return;
             }
@@ -1129,7 +1141,7 @@ public final class FunctionalTestMain {
         assertContains(playlist.bodyText(), "nicocachenl_domandcvikey=" + key,
                 "CMAF " + mediaType + " playlist URL injection");
 
-        String firstKeyQuery = (rotating ? "?token=k1" : "?token=functional")
+        String firstKeyQuery = (rotating ? "?token=k1" : "?token=k")
                 + "&nicocachenl_domandcvikey=" + key;
         Response keyResponse = request(absoluteRequest(base + "/keys/" + sourceId
                 + ".key" + firstKeyQuery, "delivery.domand.nicovideo.jp"));
@@ -1151,12 +1163,28 @@ public final class FunctionalTestMain {
         assertEquals(200, init.status, "CMAF " + mediaType + " init chunk status");
         assertContains(init.bodyText(), mediaType + "-init", "CMAF " + mediaType + " init chunk");
 
-        Response segment = request(absoluteRequest(base + "/" + mediaType + "/1/"
+        String segmentRequest = absoluteRequest(base + "/" + mediaType + "/1/"
                 + sourceId + "/01." + extension + query,
-                "delivery.domand.nicovideo.jp"));
-        assertEquals(200, segment.status, "CMAF " + mediaType + " media segment status");
-        assertFalse(segment.bodyText().contains(mediaType + "-segment"),
-                "upstream CMAF media segment must remain encrypted on the wire");
+                "delivery.domand.nicovideo.jp");
+        boolean duplicateRequest = rotating || "hlsbid".equals(route);
+        if (duplicateRequest) {
+            Response[] duplicateSegments = requestConcurrently(segmentRequest);
+            String segmentPath = URI.create(base + "/" + mediaType + "/1/"
+                    + sourceId + "/01." + extension).getPath();
+            assertEquals(2, upstreamRequestCount(segmentPath),
+                    "CMAF duplicate media segment upstream request count");
+            for (Response duplicateSegment : duplicateSegments) {
+                assertEquals(200, duplicateSegment.status,
+                        "CMAF " + mediaType + " duplicate media segment status");
+                assertFalse(duplicateSegment.bodyText().contains(mediaType + "-segment"),
+                        "upstream duplicate CMAF media segment must remain encrypted on the wire");
+            }
+        } else {
+            Response segment = request(segmentRequest);
+            assertEquals(200, segment.status, "CMAF " + mediaType + " media segment status");
+            assertFalse(segment.bodyText().contains(mediaType + "-segment"),
+                    "upstream CMAF media segment must remain encrypted on the wire");
+        }
         if (rotating) {
             Response secondSegment = request(absoluteRequest(base + "/" + mediaType + "/1/"
                     + sourceId + "/02." + extension + query,
@@ -1165,6 +1193,17 @@ public final class FunctionalTestMain {
                     "CMAF " + mediaType + " second media segment status");
             assertFalse(secondSegment.bodyText().contains(mediaType + "-segment"),
                     "upstream CMAF second media segment must remain encrypted on the wire");
+        }
+    }
+
+    private Response[] requestConcurrently(String requestText) throws Exception {
+        ExecutorService clients = Executors.newFixedThreadPool(2);
+        try {
+            Future<Response> first = clients.submit(() -> request(requestText));
+            Future<Response> second = clients.submit(() -> request(requestText));
+            return new Response[] { first.get(), second.get() };
+        } finally {
+            clients.shutdownNow();
         }
     }
 

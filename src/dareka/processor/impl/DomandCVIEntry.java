@@ -379,18 +379,44 @@ public class DomandCVIEntry {
         mightCallVideoListeners();
     };
 
-    private static String keyUrlWithoutSearch(String url) {
-        int question = url == null ? -1 : url.indexOf("?");
-        return question < 0 ? url : url.substring(0, question);
+    // プレイリストの鍵URLには署名付きクエリを残したまま、ブラウザーへ
+    // 付与したNicoCache内部パラメータだけを除去して照合する。
+    // パスだけに縮めると、同じ鍵パスで署名や鍵が切り替わったときに
+    // 古い鍵を再利用してしまい、復号結果がBadPaddingになる。
+    private static String keyUrlWithoutNicoCacheParameters(String url) {
+        if (url == null) {
+            return null;
+        };
+
+        int question = url.indexOf("?");
+        if (question < 0) {
+            return url;
+        };
+
+        String query = url.substring(question + 1);
+        StringBuilder keptQuery = new StringBuilder(query.length());
+        for (String parameter : query.split("&", -1)) {
+            int equals = parameter.indexOf('=');
+            String name = equals < 0 ? parameter : parameter.substring(0, equals);
+            if (name.startsWith("nicocachenl_")) {
+                continue;
+            };
+            if (keptQuery.length() > 0) {
+                keptQuery.append('&');
+            };
+            keptQuery.append(parameter);
+        };
+
+        if (keptQuery.length() == 0) {
+            return url.substring(0, question);
+        };
+        return url.substring(0, question + 1) + keptQuery;
     };
 
     private static void putKey(
         Map<String, byte[]> keysByUrl, String keyUrl, byte[] key) {
         keysByUrl.put(keyUrl, key);
-        String baseUrl = keyUrlWithoutSearch(keyUrl);
-        if (!baseUrl.equals(keyUrl) && !keysByUrl.containsKey(baseUrl)) {
-            keysByUrl.put(baseUrl, key);
-        };
+        keysByUrl.put(keyUrlWithoutNicoCacheParameters(keyUrl), key);
     };
 
     private static byte[] findKey(
@@ -399,7 +425,7 @@ public class DomandCVIEntry {
         if (key != null) {
             return key;
         };
-        return keysByUrl.get(keyUrlWithoutSearch(keyUrl));
+        return keysByUrl.get(keyUrlWithoutNicoCacheParameters(keyUrl));
     };
 
     synchronized void setAudioKeyForUrl(String keyUrl, byte[] key) {

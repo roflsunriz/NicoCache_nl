@@ -19,11 +19,13 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.FutureTask;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -164,6 +166,35 @@ public class CmafCachingProcessor implements Processor {
 
     private final Executor executor;
     public final static ReentrantLock giantLock = new ReentrantLock();
+
+    private static final Object SEGMENT_LOCKS_MONITOR = new Object();
+    private static final Map<String, SegmentLock> SEGMENT_LOCKS = new HashMap<>();
+
+    static final class SegmentLock {
+        final Semaphore lock = new Semaphore(1, true);
+        private int references;
+    };
+
+    static SegmentLock registerSegmentLock(String key) {
+        synchronized (SEGMENT_LOCKS_MONITOR) {
+            SegmentLock segmentLock = SEGMENT_LOCKS.get(key);
+            if (segmentLock == null) {
+                segmentLock = new SegmentLock();
+                SEGMENT_LOCKS.put(key, segmentLock);
+            };
+            segmentLock.references++;
+            return segmentLock;
+        }
+    };
+
+    static void unregisterSegmentLock(String key, SegmentLock segmentLock) {
+        synchronized (SEGMENT_LOCKS_MONITOR) {
+            segmentLock.references--;
+            if (segmentLock.references == 0 && SEGMENT_LOCKS.get(key) == segmentLock) {
+                SEGMENT_LOCKS.remove(key);
+            };
+        };
+    };
 
     private static final String[] PROCESSOR_SUPPORTED_METHODS =
         new String[] { "GET", "POST" };
@@ -1619,6 +1650,10 @@ class ChunkListener implements TransferListener, Runnable {
     boolean needDecrypt;
     Cipher decrypter = null;
 
+    private String segmentLockKey;
+    private CmafCachingProcessor.SegmentLock segmentLock;
+    private boolean segmentLockHeld;
+
     boolean errorOccurred;
 
     // - サーバーから予告されるコンテンツ長.
@@ -1775,6 +1810,37 @@ class ChunkListener implements TransferListener, Runnable {
         Logger.warning(msg);
     };
 
+    private void acquireSegmentLock() {
+        if (segmentLockHeld) {
+            return;
+        };
+
+        String key = partFile.getAbsolutePath();
+        CmafCachingProcessor.SegmentLock registeredLock =
+            CmafCachingProcessor.registerSegmentLock(key);
+        segmentLockKey = key;
+        segmentLock = registeredLock;
+        registeredLock.lock.acquireUninterruptibly();
+        segmentLockHeld = true;
+    };
+
+    private void releaseSegmentLock() {
+        if (!segmentLockHeld) {
+            return;
+        };
+
+        CmafCachingProcessor.SegmentLock registeredLock = segmentLock;
+        String key = segmentLockKey;
+        segmentLockHeld = false;
+        segmentLock = null;
+        segmentLockKey = null;
+        try {
+            registeredLock.lock.release();
+        } finally {
+            CmafCachingProcessor.unregisterSegmentLock(key, registeredLock);
+        };
+    };
+
     private void close(boolean deletePart) {
         CloseUtil.close(partChannel);
         CloseUtil.close(partRAF);
@@ -1786,6 +1852,7 @@ class ChunkListener implements TransferListener, Runnable {
                 partFile.delete();
             };
         };
+        releaseSegmentLock();
     };
 
     private static byte[] getIV(
@@ -1903,7 +1970,7 @@ class ChunkListener implements TransferListener, Runnable {
         int start = abl[0];
         int end = abl[1] + 1; // +1で開区間を閉区間へ.
 
-        openPartFileForWrite();
+        openPartFileForWrite(false);
 
         try {
             // start == 現在長は、前回受信分の直後から続ける正常な Range 応答。
@@ -1932,7 +1999,7 @@ class ChunkListener implements TransferListener, Runnable {
         Logger.info(filenameRel + ": 再開 " + start + "-" + end);
     };
 
-    private void openPartFileForWrite() {
+    private void openPartFileForWrite(boolean truncate) {
         if (partRAF != null || partChannel != null) {
             errorwarning("error: partRAF!=null||partChannel!=null: "
                          + "コーディングミス");
@@ -1941,8 +2008,15 @@ class ChunkListener implements TransferListener, Runnable {
 
         try {
             partRAF = new RandomAccessFile(partFile, "rw");
+            if (truncate) {
+                partRAF.setLength(0);
+                partRAF.seek(0);
+            };
         } catch (FileNotFoundException e) {
             errorwarning("書き込みopen失敗: " + partFile);
+            return;
+        } catch (IOException e) {
+            errorwarning("書き込み初期化失敗: " + partFile);
             return;
         };
         partChannel = partRAF.getChannel();
@@ -1952,7 +2026,11 @@ class ChunkListener implements TransferListener, Runnable {
         // ダウンロードした動画チャンクの復号処理を非同期で行なう.
         if (initDecrypter()) {
             // 復号情報の用意完了. run()呼び出し.
-            executor.execute(this);
+            try {
+                executor.execute(this);
+            } catch (RuntimeException e) {
+                error(e);
+            };
         } else {
             // まだ復号情報の用意が出来ていない. run()呼び出しを予約.
             Runnable async = new AsyncExecute(this, executor);
@@ -1973,40 +2051,44 @@ class ChunkListener implements TransferListener, Runnable {
         //   gotVideoDecryptInfoListeners経由で呼ばれる. 呼び出し機序はDomandCVIEntry.javaを参照.
         // - あるいはexecutor.execute経由で呼ばれる.
 
-        if (errorOccurred) {
-            return;
-        };
-
-        if (decrypter == null) {
-            if (!initDecrypter()) {
-                Cache.decrementDL(movieInfo.getVideoDescriptor());
-                close(false);
-                Logger.info(filenameRel + ": 復号準備失敗");
+        try {
+            if (errorOccurred) {
                 return;
             };
-        };
 
-        decrypt();
-
-        if (errorOccurred) {
-            Cache.decrementDL(movieInfo.getVideoDescriptor());
-            close(false);
-            return;
-        };
-
-        partFile.renameTo(file);
-        if (!file.exists()) {
-            // - cache store済ならエラーではない.
-            if (!movieInfo.getCompletedFlag()) {
-                errorwarning("移動失敗(pf): '" + partFile + "' → '"+ file + "'");
+            if (decrypter == null) {
+                if (!initDecrypter()) {
+                    Cache.decrementDL(movieInfo.getVideoDescriptor());
+                    close(false);
+                    Logger.info(filenameRel + ": 復号準備失敗");
+                    return;
+                };
             };
-            Cache.decrementDL(movieInfo.getVideoDescriptor());
-            close(false);
-            return;
-        };
-        partFile.delete();
 
-        mightEndCache();
+            decrypt();
+
+            if (errorOccurred) {
+                Cache.decrementDL(movieInfo.getVideoDescriptor());
+                close(false);
+                return;
+            };
+
+            partFile.renameTo(file);
+            if (!file.exists()) {
+                // - cache store済ならエラーではない.
+                if (!movieInfo.getCompletedFlag()) {
+                    errorwarning("移動失敗(pf): '" + partFile + "' → '"+ file + "'");
+                };
+                Cache.decrementDL(movieInfo.getVideoDescriptor());
+                close(false);
+                return;
+            };
+            partFile.delete();
+
+            mightEndCache();
+        } finally {
+            releaseSegmentLock();
+        };
     };
 
     // - partFileの中身を復号してtmpFileへ.
@@ -2081,7 +2163,7 @@ class ChunkListener implements TransferListener, Runnable {
                     break;
                 };
                 byte[] deced = decrypter.update(rawbuf, 0, (int)reads);
-                decryptedChannel.write(ByteBuffer.wrap(deced));
+                writeFully(decryptedChannel, ByteBuffer.wrap(deced));
 
                 decrypterInputCounter += (int)reads;
                 bytebuf.clear();
@@ -2129,7 +2211,7 @@ class ChunkListener implements TransferListener, Runnable {
         };
 
         try {
-            decryptedChannel.write(ByteBuffer.wrap(deced));
+            writeFully(decryptedChannel, ByteBuffer.wrap(deced));
         } catch (IOException e) {
             errorwarning(file + ": " + e.toString());
             CloseUtil.close(partIChannel);
@@ -2178,6 +2260,13 @@ class ChunkListener implements TransferListener, Runnable {
         return result;
     };
 
+    private static void writeFully(FileChannel channel, ByteBuffer buffer)
+        throws IOException {
+        while (buffer.hasRemaining()) {
+            channel.write(buffer);
+        };
+    };
+
     // - debugとメッセージ用.
     private boolean isFirstCmfv() {
         return filenameRel.contains("/1.cmfv")
@@ -2215,6 +2304,21 @@ class ChunkListener implements TransferListener, Runnable {
             return;
         };
 
+        if (statusCode != 200 && statusCode != 206) {
+            errorwarning("Invalid status code[" + statusCode + "]: " + filenameRel);
+            return;
+        };
+
+        // コンストラクター後に同じセグメントの要求が先に完了している場合がある。
+        // 完成ファイルがある要求は一時ファイルを開かず、応答だけ通過させる。
+        acquireSegmentLock();
+        if (file.exists()) {
+            errorOccurred = true;
+            releaseSegmentLock();
+            mightEndCache();
+            return;
+        };
+
         if (contentLength == -1) {
             // - contentLength==-1をshlsbid動画のフラグとして使う.
             // - shlsbid動画の場合に、Content-Lengthがないヘッダが送られて
@@ -2236,12 +2340,7 @@ class ChunkListener implements TransferListener, Runnable {
             return;
         };
 
-        if (statusCode != 200) {
-            errorwarning("Invalid status code[" + statusCode + "]: " + filenameRel);
-            return;
-        };
-
-        openPartFileForWrite();
+        openPartFileForWrite(true);
     };
 
     @Override
@@ -2258,7 +2357,7 @@ class ChunkListener implements TransferListener, Runnable {
 
         ByteBuffer bb = ByteBuffer.wrap(input, 0, length);
         try {
-            partChannel.write(bb);
+            writeFully(partChannel, bb);
             contentPos += length;
         } catch (IOException e) {
             errorwarning(filenameRel + ": 書き込み失敗");
