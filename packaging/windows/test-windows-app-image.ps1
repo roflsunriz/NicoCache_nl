@@ -24,6 +24,7 @@ if (-not $appImage.StartsWith(
 $appDirectory = $appImage
 $internalAppDirectory = Join-Path $appImage 'app'
 $launcherPath = Join-Path $appImage 'NicoCache_nl.exe'
+$coreJavaPath = Join-Path $appImage 'runtime\bin\java.exe'
 $separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
 $dataRoot = Join-Path $testRoot 'app-image-user-data'
 $configPath = Join-Path $appDirectory 'config.properties'
@@ -42,6 +43,8 @@ $foreignWorkingDirectory = Join-Path $logRoot 'foreign-working-directory'
 
 foreach ($requiredPath in @(
         $launcherPath,
+        (Join-Path $appDirectory 'runtime\bin\java.exe'),
+        (Join-Path $appDirectory 'runtime\bin\javaw.exe'),
         (Join-Path $internalAppDirectory 'NicoCache_nl.jar'),
         (Join-Path $internalAppDirectory 'NicoCacheCA.jar'),
         (Join-Path $internalAppDirectory 'NicoCacheLauncher.jar'),
@@ -54,12 +57,22 @@ foreach ($requiredPath in @(
         (Join-Path $appDirectory 'data\cors\99_sample.conf'),
         (Join-Path $appDirectory 'data\tlsclient\cacerts2'),
         (Join-Path $appDirectory 'local\mime.types.default'),
+        (Join-Path $appDirectory 'how-to-update.md'),
+        (Join-Path $appDirectory 'documents\api.md'),
         (Join-Path $appDirectory 'documents\tls.md'),
+        (Join-Path $appDirectory 'documents\user-data-root.md'),
+        (Join-Path $appDirectory 'packaging\windows\README.md'),
+        (Join-Path $appDirectory 'packaging\unix\README.md'),
+        (Join-Path $appDirectory 'tests\README.md'),
+        (Join-Path $appDirectory 'nlFilters\how-to-update.md'),
+        (Join-Path $appDirectory 'nlFilters\tools\nlfilter-lab\README.md'),
         (Join-Path $appDirectory 'tools\cmaf-to-mp4\nico-cmaf-to-mp4.jar'),
         (Join-Path $appDirectory 'tools\cmaf-to-mp4\README.md'),
         (Join-Path $internalAppDirectory 'development\build-javac.ps1'),
         (Join-Path $internalAppDirectory 'development\src\dareka\NLMain.java'),
-        (Join-Path $internalAppDirectory 'development\tests\functional\FunctionalTestMain.java')
+        (Join-Path $internalAppDirectory 'development\tests\functional\FunctionalTestMain.java'),
+        (Join-Path $internalAppDirectory 'development\nlFilters\how-to-update.md'),
+        (Join-Path $internalAppDirectory 'development\nlFilters\tools\nlfilter-lab\README.md')
     )) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "アプリイメージに必要なファイルがありません: $requiredPath"
@@ -208,9 +221,12 @@ function Get-ProductProcesses {
         Get-Process -ErrorAction SilentlyContinue |
             Where-Object {
                 try {
-                    $_.Path -and [string]::Equals(
-                        $_.Path,
-                        $launcherPath,
+                    if (-not $_.Path) { return $false }
+                    [string]::Equals(
+                        $_.Path, $launcherPath,
+                        [System.StringComparison]::OrdinalIgnoreCase
+                    ) -or [string]::Equals(
+                        $_.Path, $coreJavaPath,
                         [System.StringComparison]::OrdinalIgnoreCase
                     )
                 } catch {
@@ -238,6 +254,7 @@ New-Item -ItemType Directory -Path $logRoot, $foreignWorkingDirectory -Force |
     Out-Null
 
 $process = $null
+$setupProcess = $null
 $knownProcessIds = @(Get-ProductProcesses | Select-Object -ExpandProperty Id)
 $testSucceeded = $false
 try {
@@ -370,24 +387,34 @@ try {
     Write-Output "PASS HTTPループバック応答 (port=$listenPort)"
     $testSucceeded = $true
 } finally {
-    $expectedPath = (Resolve-Path -LiteralPath $launcherPath).Path
     $startedProcesses = @(
         Get-ProductProcesses |
             Where-Object { $_.Id -notin $knownProcessIds }
+    )
+    $expectedPaths = @(
+        (Resolve-Path -LiteralPath $launcherPath).Path,
+        (Resolve-Path -LiteralPath $coreJavaPath).Path
     )
     foreach ($startedProcess in $startedProcesses) {
         if ($startedProcess.HasExited) {
             continue
         }
         $actualPath = $startedProcess.MainModule.FileName
-        if (-not [string]::Equals(
-                $expectedPath,
-                $actualPath,
-                [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "終了対象プロセスがランチャーと一致しません: $actualPath"
+        if (-not @($expectedPaths | Where-Object {
+                    [string]::Equals(
+                        $_, $actualPath,
+                        [System.StringComparison]::OrdinalIgnoreCase
+                    )
+                }).Count) {
+            throw "終了対象プロセスがテスト対象と一致しません: $actualPath"
         }
         Stop-Process -Id $startedProcess.Id -Force
         $startedProcess.WaitForExit(10000) | Out-Null
+    }
+    foreach ($ownedProcess in @($process, $setupProcess)) {
+        if ($null -ne $ownedProcess) {
+            $ownedProcess.Dispose()
+        }
     }
     if (Test-Path -LiteralPath $systemStatePath) {
         & powershell.exe `

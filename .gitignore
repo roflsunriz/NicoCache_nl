@@ -84,7 +84,6 @@ Uninstall.exe
 /local/list.js
 /local/mime.types
 COMMON-AGENTS.md
-stop-nicocache.ps1
 
 # Independent CMAF/Domand MP4 converter build output
 /tools/cmaf-to-mp4/build/

@@ -136,6 +136,44 @@ if (($installerWorkflow.Split(
     throw 'Windows Installer workflow must run for push and PR nlFilters changes'
 }
 
+$packageInputPaths = @(
+    'build-javac.ps1'
+    'build-javac.sh'
+    'tools/nicocache-build/**'
+    'tools/nicocache-launcher/**'
+    'src/**'
+    'data/readme.txt'
+    'nlFilters/**'
+    'README.md'
+    'CHANGELOG.md'
+    'how-to-update.md'
+    'documents/api.md'
+    'documents/tls.md'
+    'documents/user-data-root.md'
+    'tests/README.md'
+)
+foreach ($packageWorkflow in @(
+        @{
+            Path = Join-Path $root '.github\workflows\windows-installer.yml'
+            ExtraPaths = @('packaging/unix/README.md')
+        }
+        @{
+            Path = Join-Path $root '.github\workflows\unix-packages.yml'
+            ExtraPaths = @('packaging/windows/README.md')
+        }
+    )) {
+    $packageWorkflowContent = Get-Content -Raw -LiteralPath $packageWorkflow.Path
+    foreach ($inputPath in @($packageInputPaths + $packageWorkflow.ExtraPaths)) {
+        $escapedPath = [regex]::Escape($inputPath)
+        $pathLinePattern = "(?m)^[ `t]*-[ `t]*'$escapedPath'[ `t]*$"
+        $occurrences = [regex]::Matches(
+            $packageWorkflowContent, $pathLinePattern).Count
+        if ($occurrences -ne 2) {
+            throw "配布ワークフローのpush/PRパスフィルターが不足しています: $($packageWorkflow.Path) / $inputPath / $occurrences"
+        }
+    }
+}
+
 $validateUpdaterVersion = Get-StepBlock -Name 'Validate standalone updater version'
 Assert-ContainsLine $validateUpdaterVersion `
     '$version = (Get-Content -Raw -LiteralPath .\updater\VERSION).Trim()' `

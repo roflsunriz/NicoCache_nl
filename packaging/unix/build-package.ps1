@@ -248,9 +248,21 @@ New-Item -ItemType Directory -Path $buildRoot, $dependencyRoot, $inputRoot, $out
 
 $java = Get-RequiredCommand -Name 'java'
 $jpackage = Get-RequiredCommand -Name 'jpackage'
+$jlink = Get-RequiredCommand -Name 'jlink'
 $zip = Get-RequiredCommand -Name 'zip'
 $javaMajor = Get-JavaMajorVersion -JavaPath $java
 if ($javaMajor -ne 25) { throw 'Linux/macOSパッケージのビルドにはJDK 25が必要です' }
+$runtimeModules = Get-RuntimeModules -JavaPath $java
+$javaHome = Split-Path -Parent (Split-Path -Parent $java)
+$runtimeImage = Join-Path $buildRoot 'runtime-image'
+# jpackage自動生成のネイティブコマンド省略を避け、起動管理アプリの
+# 本体JAR子プロセス起動に使うjavaコマンドをランタイムへ含める。
+Invoke-NativeCommand -FilePath $jlink -ArgumentList @(
+    '--module-path', (Join-Path $javaHome 'jmods'),
+    '--add-modules', $runtimeModules,
+    '--strip-debug', '--no-header-files', '--no-man-pages',
+    '--output', $runtimeImage
+) -FailureMessage 'Java実行環境の作成に失敗しました'
 if ($Platform -eq 'Linux' -and $PackageType -in @('Rpm', 'All')) {
     Get-RequiredCommand -Name 'rpmbuild' | Out-Null
 }
@@ -285,7 +297,11 @@ foreach ($artifactName in @(
 }
 
 foreach ($file in @('certificate-targets.txt', 'config.properties.default', 'nlFilter_sys.txt',
-        'proxy_sample.pac', 'README.md', 'CHANGELOG.md', 'documents/tls.md')) {
+        'proxy_sample.pac', 'README.md', 'CHANGELOG.md', 'how-to-update.md',
+        'documents/api.md', 'documents/tls.md', 'documents/user-data-root.md',
+        'packaging/windows/README.md', 'packaging/unix/README.md',
+        'tests/README.md', 'nlFilters/how-to-update.md',
+        'nlFilters/tools/nlfilter-lab/README.md')) {
     Copy-DistributionFile -RelativePath $file
 }
 Copy-DistributionDirectory -RelativePath 'defaults'
@@ -325,7 +341,7 @@ $sharedJavaOptions = @(
 )
 $appImageArguments = @(
     '-J-Duser.language=ja', '-J-Duser.country=JP', '--type', 'app-image',
-    '--add-modules', (Get-RuntimeModules -JavaPath $java), '--name', 'NicoCache_nl',
+    '--runtime-image', $runtimeImage, '--name', 'NicoCache_nl',
     '--app-version', $jpackageVersion, '--vendor', 'NicoCache_nl',
     '--description', 'ニコニコ動画向けローカルプロキシー兼キャッシュサーバー',
     '--input', $inputRoot, '--dest', $outputRoot,
@@ -343,9 +359,14 @@ Invoke-NativeCommand -FilePath $jpackage -ArgumentList $appImageArguments `
     -FailureMessage "${Platform}アプリイメージの作成に失敗しました"
 
 $runtimeLayoutPaths = @(
+    'nlFilters',
     'certificate-targets.txt', 'config.properties.default', 'nlFilter_sys.txt',
-    'proxy_sample.pac', 'README.md', 'CHANGELOG.md', 'documents/tls.md', 'defaults',
-    'data', 'list', 'extensions', 'local', 'nlFilters',
+    'proxy_sample.pac', 'README.md', 'CHANGELOG.md', 'how-to-update.md',
+    'documents/api.md', 'documents/tls.md', 'documents/user-data-root.md',
+    'packaging/windows/README.md', 'packaging/unix/README.md', 'tests/README.md',
+    'nlFilters/how-to-update.md', 'nlFilters/tools/nlfilter-lab/README.md',
+    'defaults',
+    'data', 'list', 'extensions', 'local',
     'tools',
     'THIRD-PARTY-NOTICES.txt'
 )

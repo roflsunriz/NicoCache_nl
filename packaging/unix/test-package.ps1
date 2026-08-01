@@ -115,7 +115,17 @@ Assert-File (Join-Path $resourceDirectory 'NicoCache_nl.version')
 Assert-True ((Get-Content -Raw -LiteralPath (Join-Path $resourceDirectory 'NicoCache_nl.version')).Trim() -eq $AppVersion) `
     '本体の公開版番号メタデータが不正です'
 Assert-File (Join-Path $runtimeDirectory 'lib/modules')
+Assert-File (Join-Path $runtimeDirectory 'bin/java')
 Assert-File (Join-Path $resourceDirectory 'config.properties.default')
+Assert-File (Join-Path $resourceDirectory 'how-to-update.md')
+Assert-File (Join-Path $resourceDirectory 'documents/api.md')
+Assert-File (Join-Path $resourceDirectory 'documents/tls.md')
+Assert-File (Join-Path $resourceDirectory 'documents/user-data-root.md')
+Assert-File (Join-Path $resourceDirectory 'packaging/windows/README.md')
+Assert-File (Join-Path $resourceDirectory 'packaging/unix/README.md')
+Assert-File (Join-Path $resourceDirectory 'tests/README.md')
+Assert-File (Join-Path $resourceDirectory 'nlFilters/how-to-update.md')
+Assert-File (Join-Path $resourceDirectory 'nlFilters/tools/nlfilter-lab/README.md')
 Assert-File (Join-Path $resourceDirectory 'local/nllib.js')
 Assert-File (Join-Path $resourceDirectory 'nlFilters/01_globalFilter.txt')
 Assert-File (Join-Path $resourceDirectory 'data/tlsclient/cacerts2')
@@ -173,6 +183,13 @@ if (Test-Path -LiteralPath $archive -PathType Leaf) {
         Assert-True ("$zipToolRoot/$relativePath" -in $zipEntries) `
             "本体ZIPにCMAF/Domand変換アプリがありません: $relativePath"
     }
+    $userDataGuideEntry = if ($Platform -eq 'MacOS') {
+        "$bundleName/Contents/Resources/documents/user-data-root.md"
+    } else {
+        "$bundleName/documents/user-data-root.md"
+    }
+    Assert-True ($userDataGuideEntry -in $zipEntries) `
+        '本体ZIPにユーザーデータルートの説明書がありません'
 }
 if ($Platform -eq 'Linux') {
     foreach ($extension in @('.deb', '.rpm')) {

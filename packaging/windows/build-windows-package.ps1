@@ -232,6 +232,19 @@ function Copy-DevelopmentPayload {
             -Force | Out-Null
         Copy-Item -LiteralPath $source -Destination $destination -Force
     }
+    foreach ($relativePath in @(
+            'nlFilters/how-to-update.md',
+            'nlFilters/tools/nlfilter-lab/README.md'
+        )) {
+        $source = Join-Path $root ($relativePath -replace '/', '\')
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+            throw "開発用nlFilter文書が見つかりません: $source"
+        }
+        $destination = Join-Path $developmentRoot ($relativePath -replace '/', '\')
+        New-Item -ItemType Directory -Path (Split-Path -Parent $destination) `
+            -Force | Out-Null
+        Copy-Item -LiteralPath $source -Destination $destination -Force
+    }
 }
 
 function Remove-JPackageInstallRootCleaner {
@@ -313,6 +326,7 @@ New-Item -ItemType Directory -Path $buildRoot, $dependencyRoot, $inputRoot,
 
 $java = Get-RequiredCommand -Name 'java'
 $jpackage = Get-RequiredCommand -Name 'jpackage'
+$jlink = Get-RequiredCommand -Name 'jlink'
 $javaMajorVersion = Get-JavaMajorVersion -JavaPath $java
 if ($PackageType -in @('Msi', 'All')) {
     Get-RequiredCommand -Name 'candle' | Out-Null
@@ -363,7 +377,15 @@ $distributionFiles = @(
     'proxy_sample.pac',
     'README.md',
     'CHANGELOG.md',
-    'documents/tls.md'
+    'how-to-update.md',
+    'documents/api.md',
+    'documents/tls.md',
+    'documents/user-data-root.md',
+    'packaging/windows/README.md',
+    'packaging/unix/README.md',
+    'tests/README.md',
+    'nlFilters/how-to-update.md',
+    'nlFilters/tools/nlfilter-lab/README.md'
 )
 foreach ($relativePath in $distributionFiles) {
     Copy-DistributionFile -RelativePath $relativePath
@@ -458,10 +480,20 @@ $runtimeModules = @(
 if ($runtimeModules.Count -le 1) {
     throw '既定Javaモジュールの一覧が空です'
 }
+$javaHome = Split-Path -Parent (Split-Path -Parent $java)
+$runtimeImage = Join-Path $buildRoot 'runtime-image'
+# JDK 25のjpackage自動ランタイムはネイティブコマンドを省略するため、
+# 起動管理アプリが本体JARを子プロセス起動できるjlinkイメージを明示する。
+Invoke-NativeCommand -FilePath $jlink -ArgumentList @(
+    '--module-path', (Join-Path $javaHome 'jmods'),
+    '--add-modules', ($runtimeModules -join ','),
+    '--strip-debug', '--no-header-files', '--no-man-pages',
+    '--output', $runtimeImage
+) -FailureMessage 'Java実行環境の作成に失敗しました'
 # 非modular Extension向けの既定集合にEUC-JP文字セットを加える。
 $jpackageArguments = @(
     '--type', 'app-image',
-    '--add-modules', ($runtimeModules -join ','),
+    '--runtime-image', $runtimeImage,
     '--name', 'NicoCache_nl',
     '--app-version', $AppVersion,
     '--vendor', 'NicoCache_nl',
@@ -479,12 +511,12 @@ Invoke-NativeCommand -FilePath $jpackage -ArgumentList $jpackageArguments `
     -FailureMessage 'Windowsアプリイメージの作成に失敗しました'
 
 $runtimeLayoutPaths = @(
+    'nlFilters'
     $distributionFiles
     $distributionDirectories
     $writableDirectories
     'extensions'
     'local'
-    'nlFilters'
     'setup'
     'tools'
     'THIRD-PARTY-NOTICES.txt'
