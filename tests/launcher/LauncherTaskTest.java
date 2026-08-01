@@ -34,6 +34,14 @@ public final class LauncherTaskTest {
             rejected = true;
         }
         assertTrue(rejected, "interval CLI option must be removed");
+        assertEquals(LauncherOptions.Action.CHECK_DATA_ROOT,
+                LauncherOptions.parse(new String[] {
+                        "--headless", "--check-data-root" }).getAction(),
+                "data-root diagnostic action");
+        assertEquals(LauncherOptions.Action.CHECK_DATA_ROOT,
+                LauncherOptions.parse(new String[] {
+                        "--headless", "--diagnose-data-root" }).getAction(),
+                "data-root diagnostic alias");
         System.out.println("Launcher task tests passed");
     }
 
@@ -44,6 +52,14 @@ public final class LauncherTaskTest {
     }
 
     private static void assertEquals(String expected, String actual,
+            String message) {
+        if (!expected.equals(actual)) {
+            throw new AssertionError(message + ": expected=" + expected
+                    + ", actual=" + actual);
+        }
+    }
+
+    private static void assertEquals(Object expected, Object actual,
             String message) {
         if (!expected.equals(actual)) {
             throw new AssertionError(message + ": expected=" + expected

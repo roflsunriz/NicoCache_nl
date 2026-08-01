@@ -285,6 +285,10 @@ try {
             throw "隔離証明書生成物がありません: $generatedPath"
         }
     }
+    $diagnosticOutput = & $launcherPath '--headless' '--check-data-root' 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "ユーザーデータルート診断が完全になりません: $diagnosticOutput"
+    }
     $actualCertificateTargets = @(
         Get-Content -LiteralPath (
             Join-Path $certificateDirectory 'site.targets'

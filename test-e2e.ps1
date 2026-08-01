@@ -93,6 +93,11 @@ try {
         throw '起動管理タスクの回帰テストに失敗しました'
     }
 
+    & java -cp $classes nicocache.launcher.DataRootInspectorTest
+    if ($LASTEXITCODE -ne 0) {
+        throw 'ユーザーデータルート診断テストに失敗しました'
+    }
+
     & java '-Djava.awt.headless=false' -cp $classes `
         dareka.GuiEndToEndTestMain $guiSandbox $preview
     if ($LASTEXITCODE -ne 0) {

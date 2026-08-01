@@ -36,12 +36,16 @@ Linux/macOSでは同じJavaビルドアプリをPOSIXラッパーから実行で
 
 `NicoCacheLauncher.jar`は引数なしならGUIで起動し、タスクトレイ常駐、ログオン時に
 一回だけ実行する自動起動タスクの登録・更新・削除、本体の起動状態表示を管理します。
+起動時にはユーザーデータルートも自動診断し、移行先の不足項目、既定資材による代替、
+HTTPS証明書や権限の問題を画面で確認できます。詳細は[ユーザーデータルートの診断と移行](documents/user-data-root.md)
+を参照してください。
 画面のない環境では同じJARを次のように使えます。
 
 ```powershell
 java -jar .\NicoCacheLauncher.jar --headless --start
 java -jar .\NicoCacheLauncher.jar --headless --status
 java -jar .\NicoCacheLauncher.jar --headless --stop
+java -jar .\NicoCacheLauncher.jar --headless --check-data-root
 ```
 
 初回は`--setup --headless`に`--user-data-root`、`--https`、

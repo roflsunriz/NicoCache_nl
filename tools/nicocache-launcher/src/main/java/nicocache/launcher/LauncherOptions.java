@@ -12,6 +12,7 @@ final class LauncherOptions {
         STOP,
         FORCE_STOP,
         STATUS,
+        CHECK_DATA_ROOT,
         TASK_LIST,
         TASK_INSTALL,
         TASK_REMOVE,
@@ -67,6 +68,9 @@ final class LauncherOptions {
                 selected = select(selected, Action.FORCE_STOP);
             } else if ("--status".equals(arg)) {
                 selected = select(selected, Action.STATUS);
+            } else if ("--check-data-root".equals(arg)
+                    || "--diagnose-data-root".equals(arg)) {
+                selected = select(selected, Action.CHECK_DATA_ROOT);
             } else if ("--task-list".equals(arg)) {
                 selected = select(selected, Action.TASK_LIST);
             } else if ("--task-install".equals(arg)) {

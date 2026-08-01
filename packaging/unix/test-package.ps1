@@ -153,6 +153,9 @@ Assert-File (Join-Path $resourceDirectory 'config.properties')
 Assert-File (Join-Path $dataRoot 'data/first-run-setup.properties')
 Assert-File (Join-Path $dataRoot 'certs/ca.cer')
 Assert-File (Join-Path $dataRoot 'certs/site.jks')
+$checkOutput = & $launcher '--headless' '--check-data-root' 2>&1
+Assert-True ($LASTEXITCODE -eq 0) `
+    "ユーザーデータルート診断が完全になりません: $checkOutput"
 
 $archive = Join-Path $outputRoot "NicoCache_nl-$AppVersion-$($Platform.ToLowerInvariant())-$architecture.zip"
 if (Test-Path -LiteralPath $archive -PathType Leaf) {

@@ -29,6 +29,7 @@ import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
@@ -41,6 +42,7 @@ final class LauncherWindow {
     private final ResourceBundle messages;
     private final JFrame frame = new JFrame();
     private final JLabel statusLabel = new JLabel();
+    private final JLabel dataRootStatusLabel = new JLabel();
     private final DefaultListModel<TaskDefinition> taskModel =
             new DefaultListModel<>();
     private final JList<TaskDefinition> taskList = new JList<>(taskModel);
@@ -55,6 +57,7 @@ final class LauncherWindow {
         this.messages = messages;
         buildWindow();
         createTray();
+        refreshDataRoot();
         refreshTasks();
         startCoreAsync();
         statusTimer = new Timer(1000, event -> refreshStatus());
@@ -92,10 +95,17 @@ final class LauncherWindow {
         JPanel top = new JPanel(new BorderLayout(8, 8));
         statusLabel.setName("launcher.status");
         top.add(statusLabel, BorderLayout.CENTER);
+        JPanel topButtons = new JPanel(new GridLayout(1, 0, 6, 6));
         JButton refresh = new JButton(messages.getString("button.refresh"));
         refresh.setName("launcher.refresh");
         refresh.addActionListener(event -> refreshStatus());
-        top.add(refresh, BorderLayout.EAST);
+        topButtons.add(refresh);
+        JButton dataRootCheck = new JButton(
+                messages.getString("button.checkDataRoot"));
+        dataRootCheck.setName("launcher.data-root.check");
+        dataRootCheck.addActionListener(event -> showDataRootInspection());
+        topButtons.add(dataRootCheck);
+        top.add(topButtons, BorderLayout.EAST);
         content.add(top, BorderLayout.NORTH);
 
         JPanel controls = new JPanel(new GridLayout(1, 0, 6, 6));
@@ -121,8 +131,18 @@ final class LauncherWindow {
                 this::removeTask);
         tasks.add(taskButtons, BorderLayout.SOUTH);
 
+        JPanel dataRootPanel = new JPanel(new BorderLayout(6, 6));
+        dataRootPanel.setBorder(BorderFactory.createTitledBorder(
+                messages.getString("dataRoot.title")));
+        dataRootStatusLabel.setName("launcher.data-root");
+        dataRootPanel.add(dataRootStatusLabel, BorderLayout.CENTER);
+
+        JPanel upper = new JPanel(new BorderLayout(8, 8));
+        upper.add(controls, BorderLayout.NORTH);
+        upper.add(dataRootPanel, BorderLayout.SOUTH);
+
         JPanel center = new JPanel(new BorderLayout(8, 8));
-        center.add(controls, BorderLayout.NORTH);
+        center.add(upper, BorderLayout.NORTH);
         center.add(tasks, BorderLayout.CENTER);
         content.add(center, BorderLayout.CENTER);
 
@@ -147,6 +167,7 @@ final class LauncherWindow {
     }
 
     private void refreshStatus() {
+        refreshDataRoot();
         Properties status = ControlClient.readStatusIfPresent(
                 paths.getControlStatusFile());
         if (!ControlClient.isAlive(status)) {
@@ -173,6 +194,42 @@ final class LauncherWindow {
         } catch (Exception error) {
             statusLabel.setText(messages.getString("status.unreachable"));
         }
+    }
+
+    private void refreshDataRoot() {
+        DataRootInspection inspection = DataRootInspector.inspect(
+                paths.getApplicationRoot(), paths.getDataRoot());
+        dataRootStatusLabel.setText(
+                DataRootInspectionFormatter.summary(inspection, messages));
+        switch (inspection.getState()) {
+        case BLOCKED:
+            dataRootStatusLabel.setForeground(new Color(170, 0, 0));
+            break;
+        case ATTENTION:
+            dataRootStatusLabel.setForeground(new Color(145, 90, 0));
+            break;
+        case COMPLETE:
+        default:
+            dataRootStatusLabel.setForeground(new Color(0, 105, 45));
+            break;
+        }
+    }
+
+    private void showDataRootInspection() {
+        DataRootInspection inspection = DataRootInspector.inspect(
+                paths.getApplicationRoot(), paths.getDataRoot());
+        JTextArea details = new JTextArea(
+                DataRootInspectionFormatter.details(inspection, messages));
+        details.setEditable(false);
+        details.setLineWrap(false);
+        details.setCaretPosition(0);
+        JScrollPane scroll = new JScrollPane(details);
+        scroll.setPreferredSize(new Dimension(820, 420));
+        JOptionPane.showMessageDialog(frame, scroll,
+                messages.getString("dataRoot.dialog.title"),
+                inspection.getState() == DataRootInspection.OverallState.BLOCKED
+                        ? JOptionPane.ERROR_MESSAGE
+                        : JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void refreshTasks() {

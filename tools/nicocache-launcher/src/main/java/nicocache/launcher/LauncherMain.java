@@ -100,6 +100,8 @@ public final class LauncherMain {
         case STATUS:
             printStatus(paths);
             return 0;
+        case CHECK_DATA_ROOT:
+            return printDataRootInspection(paths, messages());
         case TASK_LIST:
             for (TaskDefinition task : new TaskScheduler(paths).list()) {
                 System.out.println(task);
@@ -163,6 +165,15 @@ public final class LauncherMain {
         System.out.println("version=" + status.getProperty("version"));
     }
 
+    private static int printDataRootInspection(LauncherPaths paths,
+            ResourceBundle messages) {
+        DataRootInspection inspection = DataRootInspector.inspect(
+                paths.getApplicationRoot(), paths.getDataRoot());
+        System.out.print(DataRootInspectionFormatter.details(
+                inspection, messages));
+        return inspection.getExitCode();
+    }
+
     private static ResourceBundle messages() {
         return ResourceBundle.getBundle("nicocache.launcher.messages",
                 Locale.getDefault());
@@ -172,6 +183,7 @@ public final class LauncherMain {
         System.out.println("NicoCacheLauncher");
         System.out.println("Usage: java -jar NicoCacheLauncher.jar [options]");
         System.out.println("  --start / --stop / --force-stop / --status");
+        System.out.println("  --check-data-root  ユーザーデータルートを診断");
         System.out.println("  --headless [--start]  起動して待機（--startは非同期）");
         System.out.println("  --task-list / --task-install / --task-update / --task-remove");
         System.out.println("  --task-name=<name>  (ログオン時に1回だけ実行)");

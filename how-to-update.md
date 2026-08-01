@@ -277,8 +277,14 @@ Windowsのパスは、設定ファイルでは`C:/Users/利用者名/Documents/N
 `config.properties` と利用者データを保持し、復旧時も利用者データを削除しない。
 Firefoxのプロキシーは`listenPort`（既定値`8080`）へ接続する。起動管理APIの
 `controlPort`／状態ファイルの`port`はブラウザー用ではない。移行先でHTTPS MitMを
-有効にする場合は、`userDataRoot/certs/site.jks`が存在することと、Firefoxへ
-`userDataRoot/certs/ca.cer`をインポート済みであることも確認する。
+有効にする場合は、`userDataRoot/certs/site.jks`が存在することと、
+Firefoxへ`userDataRoot/certs/ca.cer`をインポート済みであることも確認する。
+既存利用者がアプリケーション側からドキュメントなどの新しい場所へユーザーデータを
+移す場合は、起動管理アプリの「データルート診断」を使う。画面ではルートの権限、初回
+セットアップ用フォルダー、TLSストア、MitM証明書、PACファイル、旧レイアウトの混在を
+項目別に確認できる。画面のない環境では`java -jar NicoCacheLauncher.jar --headless --check-data-root`
+を実行し、終了コード`0`（完全）、`1`（起動可能だが要確認）、`2`
+（起動不可）を確認する。診断は読み取り専用で、移行元の設定やキャッシュを変更しない。
 同じアプリイメージを入力にするWindowsのMSIとZIPにも、ルートの
 `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`を収録する。
 
