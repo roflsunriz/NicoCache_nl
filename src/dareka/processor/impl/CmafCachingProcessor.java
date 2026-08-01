@@ -2492,39 +2492,44 @@ class ChunkListener implements TransferListener, Runnable {
 
     private void reportCachingProgress() {
         Cache cache = movieInfo.getCache();
-        long cachedSegments = cache.tmpCachedSize();
-        long totalSegments = cache.tmpFinalSize();
+        CacheManager.HlsTmpSegments hlsTmpSegments = movieInfo.getHlsTmpSegments();
+        if (hlsTmpSegments == null) {
+            hlsTmpSegments = CacheManager.HlsTmpSegments.get(
+                cache.getVideoDescriptor());
+            if (hlsTmpSegments != null) {
+                movieInfo.setHlsTmpSegments(hlsTmpSegments);
+            }
+        }
+        long cachedSegments = hlsTmpSegments == null
+            ? -1 : hlsTmpSegments.getCachedSegments().size();
+        long totalSegments = hlsTmpSegments == null
+            ? -1 : hlsTmpSegments.getPlaylistSegments().size();
         if (cachedSegments < 0 || totalSegments <= 0) {
             Logger.info("caching " + movieInfo.getSmid());
             return;
         };
 
-        File tmpDir = cache.getCacheTmpFile();
-        long cachedBytes = getDirectorySize(tmpDir);
+        long cachedBytes = movieInfo.getCompletedCacheSize();
+        if (cachedBytes < 0) {
+            for (DomandCVIEntry entry : movieInfo.getFamilyEntries()) {
+                cachedBytes = entry.getCompletedCacheSize();
+                if (cachedBytes >= 0) {
+                    break;
+                }
+            }
+        }
+        if (cachedBytes < 0) {
+            File tmpDir = cache.getCacheTmpFile();
+            // tmpcmfP_ (暗号文) と tmpcmfD_ (復号中) は作業用ファイルであり、
+            // それらを含めると並行ダウンロードの途中で表示サイズが増減する。
+            // HlsTmpSegmentsが保存完了を認識した最終ファイルだけを数える。
+            cachedBytes = hlsTmpSegments.getCachedSegmentBytes(tmpDir);
+        }
         double percentage = (double)cachedSegments / totalSegments * 100;
         Logger.info(String.format(
             "caching %s: %s (%d/%d segments, %.0f%%)",
             movieInfo.getSmid(), TextUtil.bytesToString(cachedBytes),
             cachedSegments, totalSegments, percentage));
-    };
-
-    private static long getDirectorySize(File file) {
-        if (file == null || !file.exists()) {
-            return 0;
-        };
-        if (!file.isDirectory()) {
-            return file.length();
-        };
-
-        long size = 0;
-        File[] files = file.listFiles();
-        if (files == null) {
-            return 0;
-        };
-        for (File child : files) {
-            size += getDirectorySize(child);
-        };
-        return size;
     };
 
 };

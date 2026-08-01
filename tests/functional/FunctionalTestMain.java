@@ -93,6 +93,8 @@ public final class FunctionalTestMain {
             run("URL resource cache response policies", this::testUrlResourceCachePolicies);
             run("template reload and CMAF utility validation",
                     this::testTemplateAndCmafUtility);
+            run("CMAF cache progress size stability",
+                    CmafCachingProgressUnitTest::run);
             run("LRU map minimum capacity and eviction",
                     this::testLruMapCapacity);
             run("GUI log filtering primitives", LogSearchUnitTest::run);
@@ -1076,6 +1078,7 @@ public final class FunctionalTestMain {
         exerciseCmafMedia("sm900010", "hlsbid", "video", "video-h264-720p", "cmfv");
 
         Path completed = waitForCompletedCmafCache("sm900010", Duration.ofSeconds(8));
+        assertCmafProgressLogHasPositiveSizes("sm900010");
         assertFileContains(sandbox.resolve("extension-complete-cache.txt"), "sm900010");
         assertFileContains(sandbox.resolve("extension-event-6.txt"), "6");
 
@@ -1219,6 +1222,29 @@ public final class FunctionalTestMain {
             Thread.sleep(50L);
         }
         throw new AssertionError(smid + " CMAF cache was not completed after all encrypted segments");
+    }
+
+    private void assertCmafProgressLogHasPositiveSizes(String smid) throws IOException {
+        String prefix = "caching " + smid + ": ";
+        boolean found = false;
+        String log = new String(Files.readAllBytes(sandbox.resolve("nicocache-functional.log")),
+                StandardCharsets.ISO_8859_1);
+        for (String line : log.split("\\R")) {
+            int start = line.indexOf(prefix);
+            if (start < 0) {
+                continue;
+            }
+            found = true;
+            start += prefix.length();
+            int end = line.indexOf(" (", start);
+            if (end < 0) {
+                throw new AssertionError("CMAF progress size is malformed: " + line);
+            }
+            String sizeText = line.substring(start, end).trim();
+            double size = Double.parseDouble(sizeText.substring(0, sizeText.indexOf(' ')));
+            assertFalse(size <= 0, "CMAF progress size must be positive: " + line);
+        }
+        assertFalse(!found, "CMAF progress log is missing: " + smid);
     }
 
     private void exerciseCmafMedia(String smid, String route, String mediaType,

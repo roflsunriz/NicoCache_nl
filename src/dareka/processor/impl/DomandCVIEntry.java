@@ -128,6 +128,8 @@ public class DomandCVIEntry {
     // - trueならばthisが役割を終えた状態.
     //   - ハンドルしていたnltmpはすでに存在していない.
     private boolean completedFlag = false;
+    // - cacheStore後はnltmpが移動しているため、進捗ログ用に完成時のサイズを保持する.
+    private long completedCacheSize = -1;
 
     public Set<DomandCVIEntry> getFamilyEntries() {
         Set<DomandCVIEntry> entries = new HashSet<>(assocList.size() +
@@ -587,6 +589,10 @@ public class DomandCVIEntry {
 
     public synchronized boolean getCompletedFlag() {
         return completedFlag;
+    };
+
+    synchronized long getCompletedCacheSize() {
+        return completedCacheSize;
     };
 
     public synchronized CacheManager.HlsTmpSegments getHlsTmpSegments() {
@@ -1062,6 +1068,7 @@ public class DomandCVIEntry {
         // [nl] 存在チェックと完了時のイベント通知.
         if (finalCache.exists()) {
             this.completedFlag = true;
+            this.completedCacheSize = finalCache.length();
         }
         else {
             Logger.info("completion failed(v): " + finalCache.getCacheFileName());
@@ -1216,6 +1223,7 @@ public class DomandCVIEntry {
 
             if (dest.exists()) {
                 this.completedFlag = true;
+                this.completedCacheSize = dest.length();
                 // store成功したからsource(videoDescriptorがdestとは異なる)を消す.
                 deleteTmp_withErrorHandling(
                     "(dcvie|audiostore)failed to remove nltmp(2): ",

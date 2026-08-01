@@ -1050,6 +1050,30 @@ public class CacheManager {
         return sum;
     }
 
+    /**
+     * HLS一時キャッシュ内の完成済みセグメントだけを合計する。
+     *
+     * @param nltmpDir HLS一時キャッシュのルート
+     * @param cachedSegments 既に保存完了したセグメントの相対パス
+     * @return 完成済みセグメントの合計バイト数
+     */
+    static long getCachedSegmentBytes(File nltmpDir, Set<String> cachedSegments) {
+        if (nltmpDir == null || cachedSegments == null) {
+            return 0;
+        }
+        long total = 0;
+        for (String segment : cachedSegments) {
+            if (segment == null) {
+                continue;
+            }
+            File segmentFile = new File(nltmpDir, segment);
+            if (segmentFile.isFile()) {
+                total += segmentFile.length();
+            }
+        }
+        return total;
+    }
+
     // ID/Fileマップを返す
     // 互換性のために非dmcキャッシュだけのmapを返す
     @Deprecated
@@ -1687,6 +1711,10 @@ public class CacheManager {
 
         public synchronized Set<String> getCachedSegments() {
             return Collections.unmodifiableSet(cachedSegments);
+        }
+
+        synchronized long getCachedSegmentBytes(File nltmpDir) {
+            return CacheManager.getCachedSegmentBytes(nltmpDir, cachedSegments);
         }
 
         private static String toSegmentPath(String streamId, String segment) {
