@@ -1342,11 +1342,10 @@ public class CmafCachingProcessor implements Processor {
 
             Matcher m = TO_SUBPLAYLIST_REMOTE_URL_TO_LOCAL_URL.matcher(line);
             if (m.find() && keyUrl != null && iv != null) {
-                String filename = m.group(3);
                 if (av.isAudio()) {
-                    movieInfo.setAudioDecryptInfo(filename, keyUrl, iv);
+                    movieInfo.setAudioDecryptInfo(line, keyUrl, iv);
                 } else {
-                    movieInfo.setVideoDecryptInfo(filename, keyUrl, iv);
+                    movieInfo.setVideoDecryptInfo(line, keyUrl, iv);
                 };
             };
         };
@@ -1546,6 +1545,17 @@ public class CmafCachingProcessor implements Processor {
         // - trueになる想定filenameは01.cmfv, 999.cmfv, 01.cmfa, 123.cmfaなど.
         boolean needDecrypt = !(filename.startsWith("init"));
 
+        // ブラウザーが受け取ったプレイリストにないURLは、対応する鍵世代を
+        // 安全に特定できない。誤った鍵で保存したり復号待ちロックを残したりせず、
+        // 上流応答をそのまま通過させる。
+        if (needDecrypt && (av.isAudio()
+                ? !movieInfo.hasAudioDecryptInfo(requestHeader.getURI())
+                : !movieInfo.hasVideoDecryptInfo(requestHeader.getURI()))) {
+            Logger.info("復号情報がないCMAFセグメントはキャッシュしません: "
+                        + movieInfo.getSmid() + ": " + filename);
+            return null;
+        };
+
         URLResource serverResource;
         try {
             Cache.incrementDL(movieInfo.getVideoDescriptor());
@@ -1555,7 +1565,7 @@ public class CmafCachingProcessor implements Processor {
             serverResource.setFollowRedirects(true);
 
             ChunkListener x = new ChunkListener(
-                movieInfo, av, filename, needDecrypt, eventSource, executor);
+                movieInfo, av, url, filename, needDecrypt, eventSource, executor);
             if (url.contains("/shlsbid/")) {
                 // - shlsbid動画は仕様が違う.
                 // - 一部のログを非表示に.
@@ -1632,6 +1642,7 @@ class ChunkListener implements TransferListener, Runnable {
     // - 個別キャッシュ(smXXX...hls/)ディレクトリからの相対パス.
     // - 例: video/01.cmfv, audio/02.cmfa
     String filenameRel;
+    String segmentUrl;
     File tmpCacheDir; // <- tmpCacheDir
     File chunkavDir; // <- div
     File file;
@@ -1676,7 +1687,8 @@ class ChunkListener implements TransferListener, Runnable {
     boolean shlsbid = false;
 
     public ChunkListener
-    (DomandCVIEntry movieInfo, AV av, String filename, boolean needDecrypt
+    (DomandCVIEntry movieInfo, AV av, String segmentUrl, String filename,
+     boolean needDecrypt
      , NLEventSource eventSource, Executor executor) {
 
         // 必須フィールドを初期化した上で無効なlistenerをno-opにするため、
@@ -1684,6 +1696,7 @@ class ChunkListener implements TransferListener, Runnable {
 
         this.errorOccurred = av.isUnspecified();
         this.av = av;
+        this.segmentUrl = segmentUrl;
 
         this.movieInfo = movieInfo;
         this.eventSource = eventSource;
@@ -1769,10 +1782,8 @@ class ChunkListener implements TransferListener, Runnable {
 
         try {
             if (needDecrypt) {
-                byte[] iv = getIV(movieInfo, av, filenameRel.substring(
-                    filenameRel.lastIndexOf('/') + 1));
-                byte[] key = getEncKey(movieInfo, av, filenameRel.substring(
-                    filenameRel.lastIndexOf('/') + 1));
+                byte[] iv = getIV(movieInfo, av, segmentUrl);
+                byte[] key = getEncKey(movieInfo, av, segmentUrl);
                 this.decrypter = createDecrypter(iv, key, av);
             };
         } catch (NoSuchAlgorithmException e) {
@@ -1856,21 +1867,21 @@ class ChunkListener implements TransferListener, Runnable {
     };
 
     private static byte[] getIV(
-        DomandCVIEntry movieInfo, AV av, String filename) {
+        DomandCVIEntry movieInfo, AV av, String segmentUrl) {
         if (av.isAudio()) {
-            return movieInfo.getAudioIV(filename);
+            return movieInfo.getAudioIV(segmentUrl);
         } else if (av.isVideo()) {
-            return movieInfo.getVideoIV(filename);
+            return movieInfo.getVideoIV(segmentUrl);
         };
         return null;
     };
 
     private static byte[] getEncKey(
-        DomandCVIEntry movieInfo, AV av, String filename) {
+        DomandCVIEntry movieInfo, AV av, String segmentUrl) {
         if (av.isAudio()) {
-            return movieInfo.getAudioKey(filename);
+            return movieInfo.getAudioKey(segmentUrl);
         } else if (av.isVideo()) {
-            return movieInfo.getVideoKey(filename);
+            return movieInfo.getVideoKey(segmentUrl);
         };
         return null;
     };
@@ -2035,9 +2046,9 @@ class ChunkListener implements TransferListener, Runnable {
             // まだ復号情報の用意が出来ていない. run()呼び出しを予約.
             Runnable async = new AsyncExecute(this, executor);
             if (av.isAudio()) {
-                movieInfo.addAudioDecryptInfoListener(async);
+                movieInfo.addAudioDecryptInfoListener(segmentUrl, async);
             } else {
-                movieInfo.addVideoDecryptInfoListener(async);
+                movieInfo.addVideoDecryptInfoListener(segmentUrl, async);
             };
         };
     };

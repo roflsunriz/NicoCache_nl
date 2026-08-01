@@ -50,7 +50,8 @@ HTTP サーバーを利用する。
   Extension が同じ `CommentSavingProcessor` をローカル HTTP fixture に登録する）
 - DOMAND/CMAF の access-rights、master/sub playlist、AES key、初期化 chunk、
   暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生と、
-  アニメ公式動画で使われる `hlsext` 経路
+  アニメ公式動画で使われる `hlsext` 経路、署名更新前後で同名セグメントが続く
+  `shlsbid` 経路の鍵・IV世代分離
 - `/cache/*` の情報取得、配信、Range、削除、不正入力と既存エラー形式
 - 単一 MP4・FLV・SWF、旧 DMC MP4・HLS の検索、配信、削除
 - Extension と Extension2 のロード、および Processor、stopper Processor、

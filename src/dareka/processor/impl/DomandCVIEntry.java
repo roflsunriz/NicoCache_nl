@@ -71,7 +71,7 @@ public class DomandCVIEntry {
     private Cache cacheOfCacheForUsing = null;
 
     private Boolean cacheSaveFlag = true; // キャッシュしないならfalse.
-    // 実装時点ではAES-128, AES/CBC/NoPaddingしか扱わないからmethodは記録しない.
+    // 実装時点ではHLS AES-128（AES/CBC/PKCS7Padding）だけを扱うためmethodは記録しない.
     private byte[] audioIV = null; // 復号に使う初期化ベクトル
     private byte[] videoIV = null; // 復号に使う初期化ベクトル
     private byte[] audioKey = null; // 復号に使うキー
@@ -80,11 +80,11 @@ public class DomandCVIEntry {
     // HLSの#EXT-X-KEYは、次の#EXT-X-KEYまで後続セグメントへ適用される。
     // そのためプレイリスト内で鍵・IVが切り替わる配信では、品質全体で一つの
     // 値を共有すると後続セグメントを別の鍵で復号してしまう。
-    private Map<String, String> audioKeyUrlsByFilename = new HashMap<>();
-    private Map<String, byte[]> audioIVsByFilename = new HashMap<>();
+    private Map<String, String> audioKeyUrlsBySegmentUrl = new HashMap<>();
+    private Map<String, byte[]> audioIVsBySegmentUrl = new HashMap<>();
     private Map<String, byte[]> audioKeysByUrl = new HashMap<>();
-    private Map<String, String> videoKeyUrlsByFilename = new HashMap<>();
-    private Map<String, byte[]> videoIVsByFilename = new HashMap<>();
+    private Map<String, String> videoKeyUrlsBySegmentUrl = new HashMap<>();
+    private Map<String, byte[]> videoIVsBySegmentUrl = new HashMap<>();
     private Map<String, byte[]> videoKeysByUrl = new HashMap<>();
 
     // - 復号に使う初期化ベクトルとキーは復号対象よりも後にダウンロードされるかも知れない.
@@ -92,6 +92,10 @@ public class DomandCVIEntry {
     // - いまのところは順序が重要な処理は担わせないからHashSet.
     private Set<Runnable> gotAudioDecryptInfoListeners = new HashSet<>();
     private Set<Runnable> gotVideoDecryptInfoListeners = new HashSet<>();
+    private Map<String, Set<Runnable>> gotAudioDecryptInfoListenersBySegmentUrl =
+        new HashMap<>();
+    private Map<String, Set<Runnable>> gotVideoDecryptInfoListenersBySegmentUrl =
+        new HashMap<>();
 
     // - 動画チャンクをダウンロードし始めてからキャッシュ一時ディレクトリを作るようにするための
     //   変数たち.
@@ -354,36 +358,51 @@ public class DomandCVIEntry {
         };
     };
 
-    // セグメント固有の鍵を待つ処理用。既存の公開APIは「品質全体の鍵が揃ったら
-    // 即時実行」という互換挙動を維持し、こちらは呼び出し側がセグメント固有の
-    // 鍵の有無を確認した後にだけ待機集合へ追加する。
-    synchronized void addAudioDecryptInfoListener(Runnable r) {
-        gotAudioDecryptInfoListeners.add(r);
+    // セグメント固有の鍵を待つ処理用。署名更新後の同名セグメントと混同しないよう、
+    // ファイル名ではなくNicoCache内部パラメータを除いた要求URL単位で待機する。
+    synchronized void addAudioDecryptInfoListener(String segmentUrl, Runnable r) {
+        String segmentKey = urlWithoutNicoCacheParameters(segmentUrl);
+        if (isAudioDecryptInfoReady(segmentKey)) {
+            r.run();
+            return;
+        }
+        gotAudioDecryptInfoListenersBySegmentUrl
+            .computeIfAbsent(segmentKey, ignored -> new HashSet<>()).add(r);
     };
 
-    synchronized void addVideoDecryptInfoListener(Runnable r) {
-        gotVideoDecryptInfoListeners.add(r);
+    synchronized void addVideoDecryptInfoListener(String segmentUrl, Runnable r) {
+        String segmentKey = urlWithoutNicoCacheParameters(segmentUrl);
+        if (isVideoDecryptInfoReady(segmentKey)) {
+            r.run();
+            return;
+        }
+        gotVideoDecryptInfoListenersBySegmentUrl
+            .computeIfAbsent(segmentKey, ignored -> new HashSet<>()).add(r);
     };
 
     synchronized void setAudioDecryptInfo(
-        String filename, String keyUrl, byte[] iv) {
-        audioKeyUrlsByFilename.put(filename, keyUrl);
-        audioIVsByFilename.put(filename, iv);
+        String segmentUrl, String keyUrl, byte[] iv) {
+        String segmentKey = urlWithoutNicoCacheParameters(segmentUrl);
+        audioKeyUrlsBySegmentUrl.put(segmentKey, keyUrl);
+        audioIVsBySegmentUrl.put(segmentKey, iv);
         mightCallAudioListeners();
+        mightCallAudioSegmentListeners();
     };
 
     synchronized void setVideoDecryptInfo(
-        String filename, String keyUrl, byte[] iv) {
-        videoKeyUrlsByFilename.put(filename, keyUrl);
-        videoIVsByFilename.put(filename, iv);
+        String segmentUrl, String keyUrl, byte[] iv) {
+        String segmentKey = urlWithoutNicoCacheParameters(segmentUrl);
+        videoKeyUrlsBySegmentUrl.put(segmentKey, keyUrl);
+        videoIVsBySegmentUrl.put(segmentKey, iv);
         mightCallVideoListeners();
+        mightCallVideoSegmentListeners();
     };
 
-    // プレイリストの鍵URLには署名付きクエリを残したまま、ブラウザーへ
-    // 付与したNicoCache内部パラメータだけを除去して照合する。
+    // プレイリストの鍵・セグメントURLには署名付きクエリを残したまま、
+    // ブラウザーへ付与したNicoCache内部パラメータだけを除去して照合する。
     // パスだけに縮めると、同じ鍵パスで署名や鍵が切り替わったときに
     // 古い鍵を再利用してしまい、復号結果がBadPaddingになる。
-    private static String keyUrlWithoutNicoCacheParameters(String url) {
+    private static String urlWithoutNicoCacheParameters(String url) {
         if (url == null) {
             return null;
         };
@@ -416,7 +435,7 @@ public class DomandCVIEntry {
     private static void putKey(
         Map<String, byte[]> keysByUrl, String keyUrl, byte[] key) {
         keysByUrl.put(keyUrl, key);
-        keysByUrl.put(keyUrlWithoutNicoCacheParameters(keyUrl), key);
+        keysByUrl.put(urlWithoutNicoCacheParameters(keyUrl), key);
     };
 
     private static byte[] findKey(
@@ -425,19 +444,77 @@ public class DomandCVIEntry {
         if (key != null) {
             return key;
         };
-        return keysByUrl.get(keyUrlWithoutNicoCacheParameters(keyUrl));
+        return keysByUrl.get(urlWithoutNicoCacheParameters(keyUrl));
+    };
+
+    private boolean isAudioDecryptInfoReady(String segmentKey) {
+        String keyUrl = audioKeyUrlsBySegmentUrl.get(segmentKey);
+        return audioIVsBySegmentUrl.get(segmentKey) != null
+            && keyUrl != null && findKey(audioKeysByUrl, keyUrl) != null;
+    };
+
+    private boolean isVideoDecryptInfoReady(String segmentKey) {
+        String keyUrl = videoKeyUrlsBySegmentUrl.get(segmentKey);
+        return videoIVsBySegmentUrl.get(segmentKey) != null
+            && keyUrl != null && findKey(videoKeysByUrl, keyUrl) != null;
+    };
+
+    synchronized boolean hasAudioDecryptInfo(String segmentUrl) {
+        String segmentKey = urlWithoutNicoCacheParameters(segmentUrl);
+        return audioKeyUrlsBySegmentUrl.containsKey(segmentKey)
+            && audioIVsBySegmentUrl.containsKey(segmentKey);
+    };
+
+    synchronized boolean hasVideoDecryptInfo(String segmentUrl) {
+        String segmentKey = urlWithoutNicoCacheParameters(segmentUrl);
+        return videoKeyUrlsBySegmentUrl.containsKey(segmentKey)
+            && videoIVsBySegmentUrl.containsKey(segmentKey);
+    };
+
+    private void mightCallAudioSegmentListeners() {
+        List<String> ready = new ArrayList<>();
+        for (String segmentKey : gotAudioDecryptInfoListenersBySegmentUrl.keySet()) {
+            if (isAudioDecryptInfoReady(segmentKey)) {
+                ready.add(segmentKey);
+            }
+        }
+        for (String segmentKey : ready) {
+            Set<Runnable> listeners =
+                gotAudioDecryptInfoListenersBySegmentUrl.remove(segmentKey);
+            for (Runnable run : listeners) {
+                run.run();
+            }
+        }
+    };
+
+    private void mightCallVideoSegmentListeners() {
+        List<String> ready = new ArrayList<>();
+        for (String segmentKey : gotVideoDecryptInfoListenersBySegmentUrl.keySet()) {
+            if (isVideoDecryptInfoReady(segmentKey)) {
+                ready.add(segmentKey);
+            }
+        }
+        for (String segmentKey : ready) {
+            Set<Runnable> listeners =
+                gotVideoDecryptInfoListenersBySegmentUrl.remove(segmentKey);
+            for (Runnable run : listeners) {
+                run.run();
+            }
+        }
     };
 
     synchronized void setAudioKeyForUrl(String keyUrl, byte[] key) {
         putKey(audioKeysByUrl, keyUrl, key);
         audioKey = key;
         mightCallAudioListeners();
+        mightCallAudioSegmentListeners();
     };
 
     synchronized void setVideoKeyForUrl(String keyUrl, byte[] key) {
         putKey(videoKeysByUrl, keyUrl, key);
         videoKey = key;
         mightCallVideoListeners();
+        mightCallVideoSegmentListeners();
     };
 
     public synchronized void setAudioIV(byte[] v) {
@@ -460,30 +537,24 @@ public class DomandCVIEntry {
         mightCallVideoListeners();
     };
 
-    synchronized byte[] getAudioIV(String filename) {
-        byte[] iv = audioIVsByFilename.get(filename);
-        return iv == null ? audioIV : iv;
+    synchronized byte[] getAudioIV(String segmentUrl) {
+        return audioIVsBySegmentUrl.get(urlWithoutNicoCacheParameters(segmentUrl));
     };
 
-    synchronized byte[] getVideoIV(String filename) {
-        byte[] iv = videoIVsByFilename.get(filename);
-        return iv == null ? videoIV : iv;
+    synchronized byte[] getVideoIV(String segmentUrl) {
+        return videoIVsBySegmentUrl.get(urlWithoutNicoCacheParameters(segmentUrl));
     };
 
-    synchronized byte[] getAudioKey(String filename) {
-        String keyUrl = audioKeyUrlsByFilename.get(filename);
-        if (keyUrl == null) {
-            return audioKey;
-        };
-        return findKey(audioKeysByUrl, keyUrl);
+    synchronized byte[] getAudioKey(String segmentUrl) {
+        String keyUrl = audioKeyUrlsBySegmentUrl.get(
+            urlWithoutNicoCacheParameters(segmentUrl));
+        return keyUrl == null ? null : findKey(audioKeysByUrl, keyUrl);
     };
 
-    synchronized byte[] getVideoKey(String filename) {
-        String keyUrl = videoKeyUrlsByFilename.get(filename);
-        if (keyUrl == null) {
-            return videoKey;
-        };
-        return findKey(videoKeysByUrl, keyUrl);
+    synchronized byte[] getVideoKey(String segmentUrl) {
+        String keyUrl = videoKeyUrlsBySegmentUrl.get(
+            urlWithoutNicoCacheParameters(segmentUrl));
+        return keyUrl == null ? null : findKey(videoKeysByUrl, keyUrl);
     };
 
     public synchronized byte[] getAudioIV() {

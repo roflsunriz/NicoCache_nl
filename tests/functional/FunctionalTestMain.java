@@ -110,6 +110,8 @@ public final class FunctionalTestMain {
             run("nvcomment response saving", this::testCommentSaving);
             run("hlsext encrypted CMAF completion and playback",
                     this::testHlsextEncryptedCmafFlow);
+            run("shlsbid playlist refresh keeps segment decrypt generation",
+                    this::testShlsbidPlaylistRefreshDecryptInfo);
             run("DOMAND/CMAF completion and offline playback", this::testCmafMasterFlow);
             run("cache info and legacy cache playback", this::testCacheInfoAndPlayback);
             run("cache removal API and validation", this::testCacheRemoval);
@@ -364,8 +366,10 @@ public final class FunctionalTestMain {
                 exchange.getResponseBody().write(body);
                 return;
             }
-            if ("/watch/9000100001".equals(path) || "/watch/9000110001".equals(path)) {
-                String smid = path.contains("900011") ? "sm900011" : "sm900010";
+            if ("/watch/9000100001".equals(path) || "/watch/9000110001".equals(path)
+                    || "/watch/9000120001".equals(path)) {
+                String smid = path.contains("900012") ? "sm900012"
+                        : path.contains("900011") ? "sm900011" : "sm900010";
                 byte[] body = ("{\"video\":{\"id\":\"" + smid + "\","
                         + "\"title\":\"Functional CMAF\",\"duration\":1,"
                         + "\"isDeleted\":false},\"media\":{\"domand\":{"
@@ -382,8 +386,8 @@ public final class FunctionalTestMain {
                 return;
             }
             if (path.endsWith("/access-rights/hls")) {
-                String masterUrl = path.contains("sm900011")
-                        ? hlsextMasterUrl() : cmafMasterUrl();
+                String masterUrl = path.contains("sm900012") ? shlsbidMasterUrl()
+                        : path.contains("sm900011") ? hlsextMasterUrl() : cmafMasterUrl();
                 byte[] body = ("{\"data\":{\"contentUrl\":\""
                         + masterUrl + "?session=functional\"}}")
                         .getBytes(StandardCharsets.UTF_8);
@@ -393,7 +397,9 @@ public final class FunctionalTestMain {
                 return;
             }
             if (path.contains("/playlists/variants/")) {
-                String base = cmafBase(path.contains("/hlsext/") ? "hlsext" : "hlsbid");
+                String route = path.contains("/hlsext/") ? "hlsext"
+                        : path.contains("/shlsbid/") ? "shlsbid" : "hlsbid";
+                String base = cmafBase(route);
                 String playlist = "#EXTM3U\n"
                         + "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"audio-aac-128kbps\",NAME=\"128kbps\",URI=\""
                         + base + "/playlists/media/audio-aac-128kbps.m3u8?token=a\"\n"
@@ -411,15 +417,26 @@ public final class FunctionalTestMain {
                 String sourceId = audio ? "audio-aac-128kbps" : "video-h264-720p";
                 String extension = audio ? "cmfa" : "cmfv";
                 boolean rotating = path.contains("/hlsext/");
-                String base = cmafBase(rotating ? "hlsext" : "hlsbid");
+                boolean refreshing = path.contains("/shlsbid/");
+                String rawQuery = exchange.getRequestURI().getRawQuery();
+                boolean secondGeneration = refreshing && rawQuery != null
+                        && rawQuery.contains("generation=2");
+                String route = rotating ? "hlsext" : refreshing ? "shlsbid" : "hlsbid";
+                String base = cmafBase(route);
+                String firstKeyToken = rotating || refreshing
+                        ? (secondGeneration ? "k2" : "k1") : "k";
+                int firstIv = secondGeneration ? 2 : 1;
+                String firstSegmentToken = secondGeneration ? "c2" : "c1";
                 String playlist = "#EXTM3U\n"
-                        + "#EXT-X-KEY:IV=0x00000000000000000000000000000001,URI=\""
+                        + "#EXT-X-KEY:IV=0x0000000000000000000000000000000"
+                        + firstIv + ",URI=\""
                         + base + "/keys/" + sourceId + ".key?token="
-                        + (rotating ? "k1" : "k") + "\",METHOD=AES-128\n"
+                        + firstKeyToken + "\",METHOD=AES-128\n"
                         + "#EXT-X-MAP:URI=\"" + base + "/" + mediaType + "/1/"
                         + sourceId + "/init001." + extension + "?token=i\"\n"
                         + "#EXTINF:1.0,\n" + base + "/" + mediaType + "/1/"
-                        + sourceId + "/01." + extension + "?token=c1\n"
+                        + sourceId + "/01." + extension + "?token="
+                        + firstSegmentToken + "\n"
                         + (rotating
                                 ? "#EXT-X-KEY:METHOD=AES-128,URI=\""
                                 + base + "/keys/" + sourceId + ".key?token=k2\","
@@ -436,7 +453,7 @@ public final class FunctionalTestMain {
             }
             if (path.contains("/keys/")) {
                 byte[] body = new byte[16];
-                boolean secondKey = path.contains("/hlsext/")
+                boolean secondKey = (path.contains("/hlsext/") || path.contains("/shlsbid/"))
                         && exchange.getRequestURI().getRawQuery() != null
                         && exchange.getRequestURI().getRawQuery().contains("token=k2");
                 Arrays.fill(body, secondKey ? (byte) 0x2b : (byte) 0x2a);
@@ -450,14 +467,17 @@ public final class FunctionalTestMain {
                 if (path.substring(path.lastIndexOf('/') + 1).startsWith("init")) {
                     body = (mediaType + "-init").getBytes(StandardCharsets.US_ASCII);
                 } else {
-                    boolean secondSegment = path.contains("/hlsext/")
-                            && path.substring(path.lastIndexOf('/') + 1).startsWith("02.");
+                    String rawQuery = exchange.getRequestURI().getRawQuery();
+                    boolean secondSegment = (path.contains("/hlsext/")
+                            && path.substring(path.lastIndexOf('/') + 1).startsWith("02."))
+                            || (path.contains("/shlsbid/") && rawQuery != null
+                            && rawQuery.contains("token=c2"));
                     body = encryptCmafSegment(
                             mediaType + "-segment" + (secondSegment ? "-2" : ""),
                             secondSegment ? (byte) 0x2b : (byte) 0x2a,
                             secondSegment ? 2 : 1);
                 }
-                boolean chunkedCmaf = path.contains("/hlsbid/");
+                boolean chunkedCmaf = path.contains("/hlsbid/") || path.contains("/shlsbid/");
                 exchange.sendResponseHeaders(200, chunkedCmaf ? 0 : body.length);
                 if ((path.contains("/hlsext/") || path.contains("/hlsbid/"))
                         && path.substring(path.lastIndexOf('/') + 1).startsWith("01.")) {
@@ -1109,6 +1129,75 @@ public final class FunctionalTestMain {
                 "hlsext second decrypted audio body");
     }
 
+    private void testShlsbidPlaylistRefreshDecryptInfo() throws Exception {
+        Response watch = request("GET http://www.nicovideo.jp/watch/9000120001 HTTP/1.1\r\n"
+                + "Host: www.nicovideo.jp\r\nConnection: close\r\n\r\n");
+        assertEquals(200, watch.status, "shlsbid watch status");
+
+        Response accessRights = request("GET http://nvapi.nicovideo.jp/v1/watch/sm900012/access-rights/hls"
+                + "?actionTrackId=shlsbid HTTP/1.1\r\n"
+                + "Host: nvapi.nicovideo.jp\r\nConnection: close\r\n\r\n");
+        assertEquals(200, accessRights.status, "shlsbid access-rights status");
+        assertContains(accessRights.bodyText(), shlsbidMasterUrl(), "shlsbid contentUrl");
+
+        Response master = request(absoluteRequest(
+                shlsbidMasterUrl() + "?session=shlsbid", "delivery.domand.nicovideo.jp"));
+        assertEquals(200, master.status, "shlsbid master status");
+
+        String sourceId = "audio-aac-128kbps";
+        String key = "sm900012" + sourceId;
+        String base = cmafBase("shlsbid");
+        String internal = "&nicocachenl_domandcvikey=" + key;
+
+        Response firstPlaylist = request(absoluteRequest(base + "/playlists/media/"
+                + sourceId + ".m3u8?generation=1" + internal,
+                "delivery.domand.nicovideo.jp"));
+        assertEquals(200, firstPlaylist.status, "shlsbid first playlist status");
+        Response secondPlaylist = request(absoluteRequest(base + "/playlists/media/"
+                + sourceId + ".m3u8?generation=2" + internal,
+                "delivery.domand.nicovideo.jp"));
+        assertEquals(200, secondPlaylist.status, "shlsbid refreshed playlist status");
+
+        Response firstKey = request(absoluteRequest(base + "/keys/" + sourceId
+                + ".key?token=k1" + internal, "delivery.domand.nicovideo.jp"));
+        assertEquals(16, firstKey.body.length, "shlsbid first key length");
+        Response secondKey = request(absoluteRequest(base + "/keys/" + sourceId
+                + ".key?token=k2" + internal, "delivery.domand.nicovideo.jp"));
+        assertEquals(16, secondKey.body.length, "shlsbid second key length");
+
+        Response init = request(absoluteRequest(base + "/audio/1/" + sourceId
+                + "/init001.cmfa?token=i" + internal, "delivery.domand.nicovideo.jp"));
+        assertEquals(200, init.status, "shlsbid init status");
+        Response firstSegment = request(absoluteRequest(base + "/audio/1/" + sourceId
+                + "/01.cmfa?token=c1" + internal, "delivery.domand.nicovideo.jp"));
+        assertEquals(200, firstSegment.status, "shlsbid first-generation segment status");
+
+        Path cachedSegment = waitForCmafSegment("sm900012", "audio/01.cmfa",
+                Duration.ofSeconds(5));
+        assertFileContains(cachedSegment, "audio-segment");
+    }
+
+    private Path waitForCmafSegment(String smid, String relativePath, Duration timeout)
+            throws Exception {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            try (var caches = Files.list(sandbox.resolve("cache"))) {
+                Path cache = caches
+                        .filter(Files::isDirectory)
+                        .filter(path -> path.getFileName().toString().startsWith("nltmp_" + smid))
+                        .findFirst().orElse(null);
+                if (cache != null) {
+                    Path segment = cache.resolve(relativePath);
+                    if (Files.isRegularFile(segment)) {
+                        return segment;
+                    }
+                }
+            }
+            Thread.sleep(50L);
+        }
+        throw new AssertionError(smid + " segment was not decrypted: " + relativePath);
+    }
+
     private Path waitForCompletedCmafCache(String smid, Duration timeout) throws Exception {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < deadline) {
@@ -1158,13 +1247,15 @@ public final class FunctionalTestMain {
         }
 
         Response init = request(absoluteRequest(base + "/" + mediaType + "/1/"
-                + sourceId + "/init001." + extension + query,
+                + sourceId + "/init001." + extension + "?token=i"
+                + "&nicocachenl_domandcvikey=" + key,
                 "delivery.domand.nicovideo.jp"));
         assertEquals(200, init.status, "CMAF " + mediaType + " init chunk status");
         assertContains(init.bodyText(), mediaType + "-init", "CMAF " + mediaType + " init chunk");
 
         String segmentRequest = absoluteRequest(base + "/" + mediaType + "/1/"
-                + sourceId + "/01." + extension + query,
+                + sourceId + "/01." + extension + "?token=c1"
+                + "&nicocachenl_domandcvikey=" + key,
                 "delivery.domand.nicovideo.jp");
         boolean duplicateRequest = rotating || "hlsbid".equals(route);
         if (duplicateRequest) {
@@ -1187,7 +1278,8 @@ public final class FunctionalTestMain {
         }
         if (rotating) {
             Response secondSegment = request(absoluteRequest(base + "/" + mediaType + "/1/"
-                    + sourceId + "/02." + extension + query,
+                    + sourceId + "/02." + extension + "?token=c2"
+                    + "&nicocachenl_domandcvikey=" + key,
                     "delivery.domand.nicovideo.jp"));
             assertEquals(200, secondSegment.status,
                     "CMAF " + mediaType + " second media segment status");
@@ -1220,10 +1312,15 @@ public final class FunctionalTestMain {
         return cmafBase("hlsext") + "/playlists/variants/cccccccccccccccc.m3u8";
     }
 
+    private static String shlsbidMasterUrl() {
+        return cmafBase("shlsbid") + "/playlists/variants/eeeeeeeeeeeeeeee.m3u8";
+    }
+
     private static String cmafBase(String route) {
         return "http://delivery.domand.nicovideo.jp/" + route + "/"
-                + ("hlsext".equals(route)
-                        ? "dddddddddddddddddddddddd" : "aaaaaaaaaaaaaaaaaaaaaaaa");
+                + ("hlsext".equals(route) ? "dddddddddddddddddddddddd"
+                        : "shlsbid".equals(route) ? "eeeeeeeeeeeeeeeeeeeeeeee"
+                        : "aaaaaaaaaaaaaaaaaaaaaaaa");
     }
 
     private void testCacheRemoval() throws Exception {
