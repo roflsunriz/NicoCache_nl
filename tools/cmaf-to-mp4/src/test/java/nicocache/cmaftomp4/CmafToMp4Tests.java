@@ -17,6 +17,7 @@ public final class CmafToMp4Tests {
         testMultipleCacheLocation();
         testCliOptions();
         testFfmpegCommand();
+        testExtensionPickyCompatibilityDetection();
         testMissingFfmpegRemovesTemporaryFile();
         System.out.println("CMAF/Domand converter tests passed (" + assertions + " assertions)");
     }
@@ -88,6 +89,9 @@ public final class CmafToMp4Tests {
         assertEquals("ffmpeg-test", command.get(0));
         assertContains(command, "-protocol_whitelist");
         assertContains(command, "file,crypto,data");
+        assertContains(command, "-extension_picky");
+        assertContains(command, "0");
+        assertNotContains(command, "-safe");
         assertContains(command, "0:v:0?");
         assertContains(command, "0:a:0?");
         assertContains(command, "title=Test title");
@@ -113,8 +117,23 @@ public final class CmafToMp4Tests {
         }
     }
 
+    private static void testExtensionPickyCompatibilityDetection() {
+        assertTrue(
+                FfmpegConverter.isUnsupportedExtensionPicky(
+                        List.of("Unrecognized option 'extension_picky'.")),
+                "unsupported extension_picky must trigger compatibility mode");
+        assertTrue(
+                !FfmpegConverter.isUnsupportedExtensionPicky(
+                        List.of("detected format extension mismatches allowed extensions")),
+                "ordinary FFmpeg errors must not trigger compatibility mode");
+    }
+
     private static void assertContains(List<String> values, String expected) {
         assertTrue(values.contains(expected), "command contains " + expected);
+    }
+
+    private static void assertNotContains(List<String> values, String expected) {
+        assertTrue(!values.contains(expected), "command does not contain " + expected);
     }
 
     private static void assertEquals(Object expected, Object actual) {

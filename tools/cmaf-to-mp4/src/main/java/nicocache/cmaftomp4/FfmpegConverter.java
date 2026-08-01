@@ -11,6 +11,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -58,16 +59,32 @@ public final class FfmpegConverter {
             List<String> command = buildCommand(request, temporary);
             safeListener.onStarted(Collections.unmodifiableList(command));
             process = startProcess(command);
-            int exitCode = runProcess(process, safeListener, safeCancellation);
+            ProcessResult result = runProcess(process, safeListener, safeCancellation);
             if (safeCancellation.isCancelled()) {
                 throw new ConversionException(
                         ConversionException.Kind.CANCELLED,
                         Messages.get("error.cancelled"));
             }
-            if (exitCode != 0) {
+
+            // extension_picky は比較的新しいHLS demuxerオプションであるため、
+            // それ自体を知らない古いFFmpegでは、旧来のコマンドへ一度だけ戻す。
+            if (result.exitCode != 0 && isUnsupportedExtensionPicky(result.output)) {
+                Files.deleteIfExists(temporary);
+                safeListener.onOutput(Messages.get("conversion.retry-without-extension-picky"));
+                command = buildCommand(request, temporary, false);
+                safeListener.onStarted(Collections.unmodifiableList(command));
+                process = startProcess(command);
+                result = runProcess(process, safeListener, safeCancellation);
+                if (safeCancellation.isCancelled()) {
+                    throw new ConversionException(
+                            ConversionException.Kind.CANCELLED,
+                            Messages.get("error.cancelled"));
+                }
+            }
+            if (result.exitCode != 0) {
                 throw new ConversionException(
                         ConversionException.Kind.CONVERSION_FAILED,
-                        Messages.format("error.ffmpeg-failed", exitCode));
+                        Messages.format("error.ffmpeg-failed", result.exitCode));
             }
             if (!Files.isRegularFile(temporary) || Files.size(temporary) == 0) {
                 throw new ConversionException(
@@ -119,6 +136,11 @@ public final class FfmpegConverter {
     }
 
     static List<String> buildCommand(ConversionRequest request, Path temporaryOutput) {
+        return buildCommand(request, temporaryOutput, true);
+    }
+
+    private static List<String> buildCommand(
+            ConversionRequest request, Path temporaryOutput, boolean extensionPickyOption) {
         List<String> command = new ArrayList<>();
         command.add(request.getFfmpeg());
         command.add("-hide_banner");
@@ -129,8 +151,13 @@ public final class FfmpegConverter {
         command.add(ALLOWED_EXTENSIONS);
         command.add("-protocol_whitelist");
         command.add(PROTOCOL_WHITELIST);
-        command.add("-safe");
-        command.add("0");
+        if (extensionPickyOption) {
+            // .cmfv/.cmfa は内容が ISO BMFF でも、mov/mp4 demuxer の登録拡張子ではない。
+            // FFmpeg 4.3 以降の HLS extension_picky がこの不一致を拒否するため、
+            // 保存済みローカルCMAFを読む用途に限って拡張子整合チェックを無効化する。
+            command.add("-extension_picky");
+            command.add("0");
+        }
         command.add("-i");
         command.add(request.getPlaylist().toString());
         command.add("-map");
@@ -150,6 +177,20 @@ public final class FfmpegConverter {
         command.add("-y");
         command.add(temporaryOutput.toString());
         return command;
+    }
+
+    static boolean isUnsupportedExtensionPicky(List<String> output) {
+        if (output == null || output.isEmpty()) {
+            return false;
+        }
+        String joined = String.join(" ", output).toLowerCase(Locale.ROOT);
+        if (!joined.contains("extension_picky")) {
+            return false;
+        }
+        return joined.contains("not found")
+                || joined.contains("unrecognized")
+                || joined.contains("unknown option")
+                || joined.contains("option not found");
     }
 
     private static void validateRequest(ConversionRequest request) throws ConversionException {
@@ -194,15 +235,17 @@ public final class FfmpegConverter {
         }
     }
 
-    private static int runProcess(
+    private static ProcessResult runProcess(
             Process process, ConversionListener listener, CancellationToken cancellation)
             throws IOException, InterruptedException {
+        List<String> output = Collections.synchronizedList(new ArrayList<>());
         AtomicReference<IOException> outputFailure = new AtomicReference<>();
         Thread outputReader = new Thread(() -> {
             try (BufferedReader reader = new BufferedReader(
                     new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    output.add(line);
                     listener.onOutput(line);
                 }
             } catch (IOException e) {
@@ -229,7 +272,21 @@ public final class FfmpegConverter {
         if (outputFailure.get() != null) {
             throw outputFailure.get();
         }
-        return process.exitValue();
+        List<String> capturedOutput;
+        synchronized (output) {
+            capturedOutput = new ArrayList<>(output);
+        }
+        return new ProcessResult(process.exitValue(), capturedOutput);
+    }
+
+    private static final class ProcessResult {
+        private final int exitCode;
+        private final List<String> output;
+
+        private ProcessResult(int exitCode, List<String> output) {
+            this.exitCode = exitCode;
+            this.output = output;
+        }
     }
 
     private static void moveIntoPlace(Path temporary, Path output, boolean overwrite)

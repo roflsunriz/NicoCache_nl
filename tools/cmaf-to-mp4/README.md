@@ -21,6 +21,24 @@ FFmpegは本アプリに同梱せず、各OSで導入した実行ファイルを
 部分キャッシュや欠落セグメントはFFmpegのエラーになります。変換中は一時ファイルへ
 書き込み、成功時だけ出力先へ移動するため、入力キャッシュは変更しません。
 
+## CMAFを読むためのFFmpeg設定
+
+`.cmfv`（映像）と`.cmfa`（音声）は中身がISO BMFFでも、FFmpegの`mov/mp4` demuxerが
+通常登録している拡張子とは異なります。近年のHLS demuxerは、プレイリストに書かれた
+拡張子と検出した形式が一致しないセグメントを`extension_picky`で拒否するため、
+本ツールは保存済みローカルCMAFに限って次の入力オプションを付けます。
+
+```text
+-allowed_extensions m3u8,cmfv,cmfa,m4s,m4a,mp4,ts,webm,flv,key
+-protocol_whitelist file,crypto,data
+-extension_picky 0
+```
+
+`-safe 0`はconcat demuxer用のオプションでHLS入力には使わないため、本ツールの
+コマンドには含めません。`-extension_picky`自体を認識しない古いFFmpegでは、オプション
+未対応エラーを検出して同オプションなしで一度だけ再試行します。FFmpegの実行ファイル
+を更新できる場合は、HLS demuxerのCMAF拡張子対応を含む新しい版を推奨します。
+
 ## ビルド
 
 Windows PowerShell:
@@ -93,6 +111,6 @@ CLIの終了コードは、成功が`0`、引数・入力エラーが`2`、FFmpe
 ./test.sh
 ```
 
-テストはFFmpeg本体を必要としない入力探索・引数・コマンド構築・起動失敗・一時
-ファイル後始末を確認します。実際のMP4変換は、利用するOSのFFmpegと完成済み
-キャッシュを使ってGUIまたはCLIから確認してください。
+テストはFFmpeg本体を必要としない入力探索・引数・CMAF用コマンド構築・互換モード
+判定・起動失敗・一時ファイル後始末を確認します。実際のMP4変換は、利用するOSの
+FFmpegと完成済みキャッシュを使ってGUIまたはCLIから確認してください。

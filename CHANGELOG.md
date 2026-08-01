@@ -8,6 +8,9 @@
 
 ### Fixed
 
+- 保存済みCMAFの`.cmfv`/`.cmfa`をFFmpegのHLS demuxerが拡張子不一致で拒否しないよう、
+  `extension_picky`を無効化し、HLSで無効な`-safe 0`を除去した。旧FFmpegで同オプションが
+  未対応の場合は互換コマンドへ一度だけ再試行するようにした。
 - CI、リリース、依存関係更新が対応外のJDK 11で本体ビルドを開始して停止しないよう、
   最小サポート版のJDK 17を明示してビルドするようにした。
 - Linuxの`jpackage`アプリイメージで`bin`、`lib/app`、`lib/runtime`へ分かれる配置を、
