@@ -107,8 +107,7 @@ public final class LauncherMain {
             return 0;
         case TASK_INSTALL:
             new TaskScheduler(paths).install(new TaskDefinition(
-                    options.getTaskName(), options.getSchedule(),
-                    options.getIntervalMinutes(), true));
+                    options.getTaskName(), true));
             System.out.println("task installed: " + options.getTaskName());
             return 0;
         case TASK_REMOVE:
@@ -140,8 +139,7 @@ public final class LauncherMain {
         for (TaskDefinition oldTask : scheduler.list()) {
             if (oldTask.getName().equals(options.getTaskName())) {
                 TaskDefinition newTask = new TaskDefinition(
-                        options.getTaskName(), options.getSchedule(),
-                        options.getIntervalMinutes(), true);
+                        options.getTaskName(), true);
                 scheduler.update(oldTask, newTask);
                 System.out.println("task updated: " + options.getTaskName());
                 return 0;
@@ -157,6 +155,11 @@ public final class LauncherMain {
         System.out.println("pid=" + status.getProperty("pid"));
         System.out.println("host=" + status.getProperty("host"));
         System.out.println("port=" + status.getProperty("port"));
+        System.out.println("proxyPort=" + status.getProperty("proxyPort", "8080"));
+        String problem = status.getProperty("problem");
+        if (problem != null && !problem.isBlank()) {
+            System.out.println("problem=" + problem);
+        }
         System.out.println("version=" + status.getProperty("version"));
     }
 
@@ -171,8 +174,7 @@ public final class LauncherMain {
         System.out.println("  --start / --stop / --force-stop / --status");
         System.out.println("  --headless [--start]  起動して待機（--startは非同期）");
         System.out.println("  --task-list / --task-install / --task-update / --task-remove");
-        System.out.println("  --task-name=<name> --schedule=on-logon|interval");
-        System.out.println("  --interval-minutes=<1..10080>");
+        System.out.println("  --task-name=<name>  (ログオン時に1回だけ実行)");
         System.out.println("  --setup --headless <初回セットアップ引数>");
     }
 }

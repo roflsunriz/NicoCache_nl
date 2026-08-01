@@ -13,9 +13,9 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
-$installerIcon = Join-Path $root 'packaging\windows\assets\nicocache-installer.ico'
-if (-not (Test-Path -LiteralPath $installerIcon -PathType Leaf)) {
-    throw "本体インストーラー用アイコンが見つかりません: $installerIcon"
+$launcherIcon = Join-Path $root 'packaging\windows\assets\nicocache-launcher.ico'
+if (-not (Test-Path -LiteralPath $launcherIcon -PathType Leaf)) {
+    throw "本体ランチャー用アイコンが見つかりません: $launcherIcon"
 }
 $testRoot = Join-Path $root '.test-work'
 $workRoot = Join-Path $testRoot 'windows-package'
@@ -470,7 +470,7 @@ $jpackageArguments = @(
     '--dest', $outputRoot,
     '--main-jar', 'NicoCacheLauncher.jar',
     '--main-class', 'nicocache.launcher.LauncherMain',
-    '--icon', $installerIcon
+    '--icon', $launcherIcon
 )
 foreach ($javaOption in $sharedJavaOptions) {
     $jpackageArguments += @('--java-options', $javaOption)

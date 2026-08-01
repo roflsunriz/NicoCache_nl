@@ -59,7 +59,8 @@ public class TlsEndPoint {
             }
             processHostPortPatterns(mitmHostPort);
             if (!validateTargetHosts()) {
-                Logger.warning("証明書の対象ドメインとMitM機能の対象ドメインが一致していません．\ngenCerts.bat (genCerts.sh)を再実行してください．");
+            Logger.warning("証明書の対象ドメインとMitM機能の対象ドメインが一致していません．\n"
+                    + "NicoCacheCA.jarをcertificate-targets.txtで再実行してください．");
                 return false;
             }
         } catch (Exception ex) {

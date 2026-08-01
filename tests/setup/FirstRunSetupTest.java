@@ -92,7 +92,7 @@ public final class FirstRunSetupTest {
             Files.writeString(
                     app.resolve("config.properties"),
                     "userDataRoot="
-                            + data.toString().replace("\\", "\\\\")
+                            + data.toString()
                             + System.lineSeparator(),
                     StandardCharsets.ISO_8859_1);
 
@@ -115,6 +115,21 @@ public final class FirstRunSetupTest {
                     app.resolve("defaults"),
                     NicoCachePaths.applicationPath("defaults"),
                     "distribution path must use application root");
+
+            Path systemCacerts = app.resolve("data/tlsclient/cacerts2");
+            Files.createDirectories(systemCacerts.getParent());
+            Files.writeString(systemCacerts, "system-cacerts");
+            assertEquals(
+                    systemCacerts,
+                    NicoCachePaths.tlsClientCacertsFile().toPath(),
+                    "TLS client store must fall back to system assets");
+            Path userCacerts = data.resolve("data/tlsclient/cacerts2");
+            Files.createDirectories(userCacerts.getParent());
+            Files.writeString(userCacerts, "user-cacerts");
+            assertEquals(
+                    userCacerts,
+                    NicoCachePaths.tlsClientCacertsFile().toPath(),
+                    "user TLS client store must override system assets");
 
             boolean rejected = false;
             try {
@@ -560,13 +575,15 @@ public final class FirstRunSetupTest {
             assertTrue(targets.contains(required),
                     "certificate target is missing: " + required);
         }
-        String batch = Files.readString(
-                repository.resolve("genCerts.bat"),
+        String generator = Files.readString(
+                repository.resolve("src/nicocacheca/NicoCacheCA.java"),
                 StandardCharsets.UTF_8);
-        assertContains(batch, "certificate-targets.txt",
-                "legacy certificate generator must use shared targets");
-        assertFalse(batch.contains("set DOMAINS=*."),
-                "legacy batch must not keep a second target list");
+        assertContains(generator, "certificate-targets.txt",
+                "certificate generator must use shared targets");
+        assertContains(generator, "--targets-file",
+                "certificate generator must accept a target file");
+        assertFalse(generator.contains("*.nicovideo.jp"),
+                "certificate generator must not hard-code target domains");
         System.out.println("PASS shared production certificate targets");
     }
 

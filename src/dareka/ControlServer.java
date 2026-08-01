@@ -52,6 +52,7 @@ final class ControlServer implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean();
     private final AtomicReference<String> state =
             new AtomicReference<>("starting");
+    private volatile String problem = "";
     private final String token = createToken();
     private ServerSocket serverSocket;
     private Thread acceptThread;
@@ -91,7 +92,6 @@ final class ControlServer implements AutoCloseable {
             socket.bind(new InetSocketAddress(HOST, configuredPort));
             serverSocket = socket;
             port = socket.getLocalPort();
-            state.set("running");
             writeStatus();
         } catch (IOException error) {
             try {
@@ -106,6 +106,18 @@ final class ControlServer implements AutoCloseable {
         acceptThread = new Thread(this::acceptLoop, "nicocache-control-accept");
         acceptThread.setDaemon(true);
         acceptThread.start();
+    }
+
+    void markReady() throws IOException {
+        problem = "";
+        state.set("running");
+        writeStatus();
+    }
+
+    void markDegraded(String reason) throws IOException {
+        problem = reason == null ? "unknown" : reason;
+        state.set("degraded");
+        writeStatus();
     }
 
     private void acceptLoop() {
@@ -235,8 +247,12 @@ final class ControlServer implements AutoCloseable {
         if (closed.get()) {
             return;
         }
-        if (!force && !state.compareAndSet("running", "stopping")) {
-            return;
+        if (!force) {
+            boolean accepted = state.compareAndSet("running", "stopping")
+                    || state.compareAndSet("degraded", "stopping");
+            if (!accepted) {
+                return;
+            }
         }
         if (force) {
             state.set("stopping");
@@ -272,7 +288,9 @@ final class ControlServer implements AutoCloseable {
         return "{\"status\":\"" + jsonEscape(state.get())
                 + "\",\"pid\":" + ProcessHandle.current().pid()
                 + ",\"port\":" + port
-                + ",\"version\":\"" + jsonEscape(Main.getVersion())
+                + ",\"proxyPort\":" + Integer.getInteger("listenPort", 8080)
+                + ",\"problem\":\"" + jsonEscape(problem)
+                + "\",\"version\":\"" + jsonEscape(Main.getVersion())
                 + "\"}";
     }
 
@@ -320,9 +338,14 @@ final class ControlServer implements AutoCloseable {
         properties.setProperty("version", "1");
         properties.setProperty("host", HOST);
         properties.setProperty("port", Integer.toString(port));
+        properties.setProperty("proxyPort",
+                Integer.toString(Integer.getInteger("listenPort", 8080)));
         properties.setProperty("pid", Long.toString(ProcessHandle.current().pid()));
         properties.setProperty("token", token);
         properties.setProperty("state", state.get());
+        if (!problem.isBlank()) {
+            properties.setProperty("problem", problem);
+        }
         properties.setProperty("startedAt", Instant.now().toString());
         Path temporary = statusPath.resolveSibling(
                 statusPath.getFileName() + ".tmp");

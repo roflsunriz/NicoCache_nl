@@ -3,6 +3,7 @@ package nicocache.launcher;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -115,7 +116,10 @@ final class LauncherPaths {
             Properties properties = new Properties();
             try (var input = Files.newInputStream(config)) {
                 properties.load(input);
-                String configured = properties.getProperty("userDataRoot");
+                String configured = readRawDataRoot(config);
+                if (configured == null) {
+                    configured = properties.getProperty("userDataRoot");
+                }
                 if (configured != null && !configured.isBlank()) {
                     Path value = Path.of(configured);
                     return (value.isAbsolute()
@@ -130,6 +134,33 @@ final class LauncherPaths {
             }
         }
         return defaultDataRoot(applicationRoot);
+    }
+
+    private static String readRawDataRoot(Path config) throws IOException {
+        for (String line : Files.readAllLines(config,
+                StandardCharsets.ISO_8859_1)) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")
+                    || trimmed.startsWith("!")) {
+                continue;
+            }
+            int separator = trimmed.indexOf('=');
+            if (separator < 0) {
+                separator = trimmed.indexOf(':');
+            }
+            if (separator <= 0
+                    || !"userDataRoot".equals(trimmed.substring(0,
+                            separator).trim())) {
+                continue;
+            }
+            String value = trimmed.substring(separator + 1).trim();
+            if (value.indexOf('\\') >= 0
+                    && !value.matches(".*\\\\u[0-9a-fA-F]{4}.*")) {
+                return value.replace("\\\\", "\\");
+            }
+            return null;
+        }
+        return null;
     }
 
     static Path defaultDataRoot(Path applicationRoot) {

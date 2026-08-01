@@ -31,6 +31,7 @@ final class TaskScheduler {
         try (var input = Files.newInputStream(store)) {
             properties.load(input);
         }
+        boolean migrate = !"2".equals(properties.getProperty("version"));
         int count;
         try {
             count = Integer.parseInt(properties.getProperty("count", "0"));
@@ -44,6 +45,7 @@ final class TaskScheduler {
         for (int index = 0; index < count; index++) {
             String prefix = "task." + index + ".";
             try {
+                migrate |= TaskDefinition.needsMigration(properties, prefix);
                 tasks.add(TaskDefinition.fromProperties(properties, prefix));
             } catch (IllegalArgumentException error) {
                 throw new IOException("タスク一覧を読み取れません: " + prefix,
@@ -52,12 +54,16 @@ final class TaskScheduler {
         }
         tasks.sort(Comparator.comparing(TaskDefinition::getName,
                 String.CASE_INSENSITIVE_ORDER));
+        if (migrate) {
+            migrateLegacyTasks(tasks);
+        }
         return tasks;
     }
 
     void install(TaskDefinition task) throws IOException {
-        installNative(task);
         List<TaskDefinition> tasks = list();
+        removeNative(task);
+        installNative(task);
         tasks.removeIf(existing -> existing.getId().equals(task.getId()));
         tasks.add(task);
         save(tasks);
@@ -65,6 +71,7 @@ final class TaskScheduler {
 
     void update(TaskDefinition oldTask, TaskDefinition newTask)
             throws IOException {
+        List<TaskDefinition> tasks = list();
         removeNative(oldTask);
         try {
             installNative(newTask);
@@ -76,7 +83,6 @@ final class TaskScheduler {
             }
             throw error;
         }
-        List<TaskDefinition> tasks = list();
         tasks.removeIf(existing -> existing.getId().equals(oldTask.getId())
                 || existing.getId().equals(newTask.getId()));
         tasks.add(newTask);
@@ -84,10 +90,21 @@ final class TaskScheduler {
     }
 
     void remove(TaskDefinition task) throws IOException {
-        removeNative(task);
         List<TaskDefinition> tasks = list();
+        removeNative(task);
         tasks.removeIf(existing -> existing.getId().equals(task.getId()));
         save(tasks);
+    }
+
+    private void migrateLegacyTasks(List<TaskDefinition> tasks)
+            throws IOException {
+        for (TaskDefinition task : tasks) {
+            removeNative(task);
+        }
+        save(tasks);
+        for (TaskDefinition task : tasks) {
+            installNative(task);
+        }
     }
 
     private void save(List<TaskDefinition> tasks) throws IOException {
@@ -97,7 +114,7 @@ final class TaskScheduler {
             Files.createDirectories(parent);
         }
         Properties properties = new Properties();
-        properties.setProperty("version", "1");
+        properties.setProperty("version", "2");
         properties.setProperty("count", Integer.toString(tasks.size()));
         for (int index = 0; index < tasks.size(); index++) {
             tasks.get(index).writeProperties(properties, "task." + index + ".");
@@ -171,13 +188,7 @@ final class TaskScheduler {
         arguments.add("/TN");
         arguments.add(windowsTaskName(task));
         arguments.add("/SC");
-        if (task.getSchedule() == TaskDefinition.Schedule.ON_LOGON) {
-            arguments.add("ONLOGON");
-        } else {
-            arguments.add("MINUTE");
-            arguments.add("/MO");
-            arguments.add(Integer.toString(task.getIntervalMinutes()));
-        }
+        arguments.add("ONLOGON");
         arguments.add("/TR");
         arguments.add(renderWindowsCommand());
         arguments.add("/RL");
@@ -202,13 +213,7 @@ final class TaskScheduler {
             xml.append("<string>").append(xml(argument)).append("</string>\n");
         }
         xml.append("</array>\n");
-        if (task.getSchedule() == TaskDefinition.Schedule.ON_LOGON) {
-            xml.append("<key>RunAtLoad</key><true/>\n");
-        } else {
-            xml.append("<key>StartInterval</key><integer>")
-                    .append(task.getIntervalMinutes() * 60)
-                    .append("</integer>\n");
-        }
+        xml.append("<key>RunAtLoad</key><true/>\n");
         xml.append("</dict></plist>\n");
         Files.writeString(plist, xml, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
@@ -218,38 +223,15 @@ final class TaskScheduler {
     }
 
     private void installLinux(TaskDefinition task) throws IOException {
-        if (task.getSchedule() == TaskDefinition.Schedule.ON_LOGON) {
-            Path directory = linuxAutostartDirectory();
-            Files.createDirectories(directory);
-            StringBuilder desktop = new StringBuilder();
-            desktop.append("[Desktop Entry]\nType=Application\n")
-                    .append("Name=NicoCache_nl\nX-GNOME-Autostart-enabled=true\n")
-                    .append("Exec=").append(renderDesktopCommand()).append("\n");
-            Files.writeString(directory.resolve(task.getId() + ".desktop"), desktop,
-                    StandardCharsets.UTF_8, StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-            return;
-        }
-        if (!commandExists("systemctl")) {
-            throw new IOException("Linuxの間隔タスクには systemctl --user が必要です");
-        }
-        Path directory = linuxSystemdDirectory();
+        Path directory = linuxAutostartDirectory();
         Files.createDirectories(directory);
-        String service = "[Unit]\nDescription=NicoCache_nl launcher task\n\n"
-                + "[Service]\nType=oneshot\nExecStart="
-                + renderSystemdCommand() + "\n";
-        String timer = "[Unit]\nDescription=NicoCache_nl launcher timer\n\n"
-                + "[Timer]\nOnUnitActiveSec=" + task.getIntervalMinutes()
-                + "min\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n";
-        Files.writeString(directory.resolve(task.getId() + ".service"), service,
+        StringBuilder desktop = new StringBuilder();
+        desktop.append("[Desktop Entry]\nType=Application\n")
+                .append("Name=NicoCache_nl\nX-GNOME-Autostart-enabled=true\n")
+                .append("Exec=").append(renderDesktopCommand()).append("\n");
+        Files.writeString(directory.resolve(task.getId() + ".desktop"), desktop,
                 StandardCharsets.UTF_8, StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-        Files.writeString(directory.resolve(task.getId() + ".timer"), timer,
-                StandardCharsets.UTF_8, StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
-        runChecked("systemctl", List.of("--user", "daemon-reload"));
-        runChecked("systemctl", List.of("--user", "enable", "--now",
-                task.getId() + ".timer"));
     }
 
     private String windowsTaskName(TaskDefinition task) {
@@ -265,12 +247,6 @@ final class TaskScheduler {
     private String renderDesktopCommand() {
         return paths.getTaskCommand().stream()
                 .map(TaskScheduler::desktopQuote)
-                .collect(Collectors.joining(" "));
-    }
-
-    private String renderSystemdCommand() {
-        return paths.getTaskCommand().stream()
-                .map(TaskScheduler::systemdQuote)
                 .collect(Collectors.joining(" "));
     }
 
@@ -301,14 +277,6 @@ final class TaskScheduler {
             return value.isEmpty() ? "0" : value;
         } catch (IOException error) {
             return "0";
-        }
-    }
-
-    private boolean commandExists(String command) {
-        try {
-            return run(command, List.of("--version"), true).exitCode == 0;
-        } catch (IOException error) {
-            return false;
         }
     }
 
@@ -389,11 +357,6 @@ final class TaskScheduler {
         if (value.matches("[A-Za-z0-9_./:=+-]+")) {
             return value;
         }
-        return "\"" + value.replace("\\", "\\\\")
-                .replace("\"", "\\\"") + "\"";
-    }
-
-    private static String systemdQuote(String value) {
         return "\"" + value.replace("\\", "\\\\")
                 .replace("\"", "\\\"") + "\"";
     }

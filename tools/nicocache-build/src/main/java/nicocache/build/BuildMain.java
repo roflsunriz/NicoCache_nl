@@ -120,8 +120,11 @@ public final class BuildMain {
                     "lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar", null);
             createJar(outputRoot.resolve("NicoCacheLauncher.jar"),
                     launcherClasses, "nicocache.launcher.LauncherMain", "", null);
-            createJar(outputRoot.resolve("NicoCacheBuild.jar"), buildClasses,
-                    "nicocache.build.BuildMain", "", null);
+            Path buildJar = outputRoot.resolve("NicoCacheBuild.jar");
+            if (!isRunningBuildJar(buildJar)) {
+                createJar(buildJar, buildClasses,
+                        "nicocache.build.BuildMain", "", null);
+            }
 
             System.out.println("NicoCache_nl.jar="
                     + outputRoot.resolve("NicoCache_nl.jar"));
@@ -215,6 +218,19 @@ public final class BuildMain {
                         .filter(path -> !path.getFileName().toString()
                                 .equals("package-info.java"))
                         .sorted().collect(Collectors.toList());
+            }
+        }
+
+        private static boolean isRunningBuildJar(Path candidate) {
+            try {
+                Path location = Path.of(BuildMain.class.getProtectionDomain()
+                        .getCodeSource().getLocation().toURI())
+                        .toAbsolutePath().normalize();
+                return Files.isRegularFile(location)
+                        && Files.isSameFile(location,
+                                candidate.toAbsolutePath().normalize());
+            } catch (Exception error) {
+                return false;
             }
         }
 

@@ -32,7 +32,12 @@ class DirectoryWatcher extends Thread {
     private static String corsLiar = new String("corsLiar");
 
     private static ScheduledExecutorService executor =
-            Executors.newSingleThreadScheduledExecutor();
+            Executors.newSingleThreadScheduledExecutor(runnable -> {
+                Thread thread = new Thread(runnable,
+                        "nicocache-directory-watcher-task");
+                thread.setDaemon(true);
+                return thread;
+            });
     private static ConcurrentHashMap<String, ScheduledFuture<?>> futures =
             new ConcurrentHashMap<>();
 
@@ -160,11 +165,25 @@ Logger.debugWithThread(name + " " + kind + " count=" + event.count());
             }
         } catch (InterruptedException e) {
             Logger.debugWithThread(e);
-        }
-        nicoCacheFolder.cancel();
-        nlFiltersFolder.cancel();
-        if (systemNlFiltersFolder != nlFiltersFolder) {
-            systemNlFiltersFolder.cancel();
+        } finally {
+            if (nicoCacheFolder != null) {
+                nicoCacheFolder.cancel();
+            }
+            if (nlFiltersFolder != null) {
+                nlFiltersFolder.cancel();
+            }
+            if (systemNlFiltersFolder != null
+                    && systemNlFiltersFolder != nlFiltersFolder) {
+                systemNlFiltersFolder.cancel();
+            }
+            if (watchService != null) {
+                try {
+                    watchService.close();
+                } catch (IOException e) {
+                    Logger.debugWithThread(e);
+                }
+            }
+            executor.shutdownNow();
         }
     }
 

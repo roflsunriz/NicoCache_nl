@@ -47,6 +47,7 @@ public class Main {
         if (server != null) {
             server.stop();
         }
+        shutdownProcessorSchedulers();
     }
 
     public static void main(String[] args) {
@@ -89,7 +90,24 @@ public class Main {
         if (server != null) {
             server.forceStop();
         }
+        shutdownProcessorSchedulers();
         Runtime.getRuntime().halt(0);
+    }
+
+    private static void shutdownProcessorSchedulers() {
+        for (String className : new String[] {
+                "dareka.processor.impl.ExtThumbProcessor",
+                "dareka.processor.impl.GetThumbInfoProcessor" }) {
+            try {
+                Class<?> processor = Class.forName(className);
+                java.lang.reflect.Method method =
+                        processor.getDeclaredMethod("shutdownScheduler");
+                method.setAccessible(true);
+                method.invoke(null);
+            } catch (ReflectiveOperationException | SecurityException error) {
+                Logger.debug(error);
+            }
+        }
     }
 
     static boolean isDone() { // [nl]
@@ -299,13 +317,20 @@ public class Main {
                 // 終了してしまうとGUIの場合エラーメッセージが読めないので
                 // 何もしないループを回しておく
                 Logger.info("TLS MitM機能の有効化に失敗したため動作を停止します．");
+                controlServer.markDegraded("tls-keystore-missing-or-invalid");
                 server.startNop();
                 return;
             }
         }
 
-        TlsClientContextFactory.init();
+        if (!TlsClientContextFactory.init()) {
+            Logger.info("TLSクライアント証明書ストアの初期化に失敗したため動作を停止します．");
+            controlServer.markDegraded("tls-client-keystore-missing-or-invalid");
+            server.startNop();
+            return;
+        }
 
+        controlServer.markReady();
         server.start();
     }
 

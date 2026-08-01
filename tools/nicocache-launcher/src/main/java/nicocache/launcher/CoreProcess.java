@@ -22,13 +22,11 @@ final class CoreProcess {
         Properties existing = ControlClient.readStatusIfPresent(
                 paths.getControlStatusFile());
         if (ControlClient.isAlive(existing)) {
-            try {
-                if (ControlClient.ping(paths).statusCode() == 200) {
-                    return;
-                }
-            } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
-                throw new IOException("本体の起動確認が中断されました", error);
+            if ("degraded".equals(existing.getProperty("state"))) {
+                forceStop();
+            } else {
+                ControlClient.waitUntilReady(paths, null, START_TIMEOUT);
+                return;
             }
         }
 
@@ -54,22 +52,21 @@ final class CoreProcess {
                     logDirectory.resolve("nicocache-core.log").toFile()));
         }
         startedProcess = builder.start();
-        ControlClient.waitUntilReady(paths, startedProcess, START_TIMEOUT);
+        try {
+            ControlClient.waitUntilReady(paths, startedProcess, START_TIMEOUT);
+        } catch (IOException error) {
+            stopFailedStart();
+            throw error;
+        }
     }
 
     int startAndWait() throws IOException {
         Properties existing = ControlClient.readStatusIfPresent(
                 paths.getControlStatusFile());
         if (ControlClient.isAlive(existing)) {
-            try {
-                if (ControlClient.ping(paths).statusCode() == 200) {
-                    waitForExistingProcess(existing);
-                    return 0;
-                }
-            } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
-                throw new IOException("本体の起動確認が中断されました", error);
-            }
+            ControlClient.waitUntilReady(paths, null, START_TIMEOUT);
+            waitForExistingProcess(existing);
+            return 0;
         }
         start(true);
         try {
@@ -179,6 +176,21 @@ final class CoreProcess {
         String commandLine = handle.info().commandLine().orElse("");
         return commandLine.contains(paths.getCoreJar().getFileName().toString())
                 || commandLine.contains("NicoCache_nl.jar");
+    }
+
+    private void stopFailedStart() {
+        if (startedProcess == null || !startedProcess.isAlive()) {
+            return;
+        }
+        startedProcess.destroy();
+        try {
+            if (!startedProcess.waitFor(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                startedProcess.destroyForcibly();
+            }
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            startedProcess.destroyForcibly();
+        }
     }
 
     private Path javaExecutable() {

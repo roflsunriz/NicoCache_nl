@@ -77,7 +77,11 @@ public class Server {
 
     private Config config;
     private ServerSocket serverSocket;
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final ExecutorService executor = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "nicocache-server-worker");
+        thread.setDaemon(true);
+        return thread;
+    });
     private final Set<ConnectionManager> liveWorkers =
             Collections.synchronizedSet(new HashSet<>());
     private volatile boolean stopped = false;

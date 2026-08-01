@@ -34,6 +34,10 @@ try {
         Join-Path (Join-Path $root 'tests') 'e2e'
     ) -File -Filter '*.java' |
         Select-Object -ExpandProperty FullName
+    $launcherTestSources = Get-ChildItem -LiteralPath (
+        Join-Path (Join-Path $root 'tests') 'launcher'
+    ) -File -Filter '*.java' |
+        Select-Object -ExpandProperty FullName
     $launcherSourceRoot = (Resolve-Path -LiteralPath (
         Join-Path $root 'tools/nicocache-launcher/src/main/java'
     )).Path
@@ -43,7 +47,7 @@ try {
 
     & javac --release 11 --add-modules jdk.httpserver -encoding UTF-8 `
         -Xlint:all -Werror -d $classes `
-        $productSources $testSources $launcherSources
+        $productSources $testSources $launcherTestSources $launcherSources
     if ($LASTEXITCODE -ne 0) {
         throw '本体またはE2Eテストのコンパイルに失敗しました'
     }
@@ -82,6 +86,11 @@ try {
         e2e.EndToEndTestMain $root $httpSandbox $testJar $coreJar
     if ($LASTEXITCODE -ne 0) {
         throw '実JAR E2Eテストに失敗しました'
+    }
+
+    & java -cp $classes nicocache.launcher.LauncherTaskTest
+    if ($LASTEXITCODE -ne 0) {
+        throw '起動管理タスクの回帰テストに失敗しました'
     }
 
     & java '-Djava.awt.headless=false' -cp $classes `

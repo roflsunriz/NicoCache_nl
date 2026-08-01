@@ -65,6 +65,15 @@ foreach ($requiredPath in @(
         throw "アプリイメージに必要なファイルがありません: $requiredPath"
     }
 }
+Add-Type -AssemblyName System.Drawing
+$launcherIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($launcherPath)
+try {
+    if ($null -eq $launcherIcon -or $launcherIcon.Width -lt 16) {
+        throw "本体ランチャーに独自アイコンがありません: $launcherPath"
+    }
+} finally {
+    if ($launcherIcon) { $launcherIcon.Dispose() }
+}
 $systemFilesManifest = Join-Path $root 'packaging\system-files.txt'
 $systemFiles = @(
     Get-Content -LiteralPath $systemFilesManifest |

@@ -128,8 +128,7 @@ final class LauncherSetupDialog {
             }
             if (autostart.isSelected()) {
                 new TaskScheduler(setupPaths).install(new TaskDefinition(
-                        "NicoCache_nl", TaskDefinition.Schedule.ON_LOGON, 60,
-                        true));
+                        "NicoCache_nl", true));
             }
             return true;
         } catch (Exception error) {

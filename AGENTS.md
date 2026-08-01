@@ -35,7 +35,8 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 - `certs/`: 生成された認証局・サイト証明書などの秘密情報。内容を表示・コミットしない。
 - `data/`, `list/`: 実行時データとユーザー設定。配布用サンプル以外は管理しない。
 - `lib/`: 本体と証明書生成に使う依存ライブラリ。
-- `build.xml`, `build-javac.ps1`, `manifest-nl.mf`: 本体のビルド定義と正規ビルドスクリプト。
+- `build-javac.ps1`, `build-javac.sh`, `manifest-nl.mf`: 独立Javaアプリを生成する
+  正規ビルドのブートストラップと定義。
 
 ## 変更時の注意
 
@@ -46,13 +47,15 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## ビルド
 
-- `build-javac.ps1` は JDK の `javac`、`jar`、`manifest-nl.mf` を使用する唯一の正規ビルドスクリプトである。
+- `build-javac.ps1` と `build-javac.sh` は、クリーンなチェックアウトから
+  `NicoCacheBuild.jar`を生成して起動する唯一の正規ビルドブートストラップである。
 - `build-javac.ps1` は `src/` と `NicoCache_nl.jar` を更新し得るため、依頼されたビルドまたは検証の範囲でのみ実行する。
 - ビルド前に対象ソース、生成先、復旧方法を確認し、既存の `.class` や JAR を無関係に上書きしない。
 
 ## 起動・終了・デバッグ
 
-- GUI起動には `RunNicoCache.ps1` を使い、実行前に対象JARの存在を確認する。
-- 終了時に `Stop-Process -Name java`、`taskkill /IM java.exe` など、名前だけで全 Java プロセスを終了しない。`stop-nicocache.ps1` を利用して安全にプロセスを終了する。
+- GUI起動には `NicoCacheLauncher.jar` または配布物のネイティブランチャーを使い、
+  実行前に対象JARの存在を確認する。
+- 終了時に `Stop-Process -Name java`、`taskkill /IM java.exe` など、名前だけで全 Java プロセスを終了しない。`NicoCacheLauncher.jar --headless --stop` または `--force-stop` を利用して対象本体だけを終了する。
 - 再起動は旧プロセスの終了を確認してから行い、起動後は新しい PID と対象 JAR を確認する。
 - デバッグでは `NicoCacheGUI.property` の変更前の値を記録する。検証後は、継続指定がない限り元へ戻す。ログには秘密情報や個人情報が含まれ得るため、無制限に表示・コミットしない。

@@ -77,7 +77,12 @@ public class GetThumbInfoProcessor implements Processor {
     // 定期的に期限切れのキャッシュを消去してメモリを有効活用
     private final static ScheduledExecutorService scheduler;
     static {
-        scheduler = Executors.newScheduledThreadPool(1);
+        scheduler = Executors.newScheduledThreadPool(1, runnable -> {
+            Thread thread = new Thread(runnable,
+                    "nicocache-getthumbinfo-expirer");
+            thread.setDaemon(true);
+            return thread;
+        });
         long expire = Long.getLong("cacheGetThumbInfoExpire", 0);
         long period = expire / 3;
         if (period >= 10) {
@@ -85,5 +90,9 @@ public class GetThumbInfoProcessor implements Processor {
                 GetThumbInfoUtil.expires();
             }, period, period, TimeUnit.SECONDS);
         }
+    }
+
+    static void shutdownScheduler() {
+        scheduler.shutdownNow();
     }
 }

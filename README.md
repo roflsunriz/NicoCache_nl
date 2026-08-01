@@ -34,8 +34,8 @@ Linux/macOSでは同じJavaビルドアプリをPOSIXラッパーから実行で
 ./build-javac.sh
 ```
 
-`NicoCacheLauncher.jar`は引数なしならGUIで起動し、タスクトレイ常駐、ログオン時・
-一定間隔の自動起動タスクの登録・更新・削除、本体の起動状態表示を管理します。
+`NicoCacheLauncher.jar`は引数なしならGUIで起動し、タスクトレイ常駐、ログオン時に
+一回だけ実行する自動起動タスクの登録・更新・削除、本体の起動状態表示を管理します。
 画面のない環境では同じJARを次のように使えます。
 
 ```powershell
@@ -47,14 +47,35 @@ java -jar .\NicoCacheLauncher.jar --headless --stop
 初回は`--setup --headless`に`--user-data-root`、`--https`、
 `--trust-certificate`、`--proxy`、`--autostart`を明示してセットアップします。
 
-Linux/macOSでも同じCLIを利用できます。`RunNicoCache.ps1`と`NicoCache_nl.sh`は
-既存の呼び出し元向けの薄い互換ラッパーで、配布パッケージの入口は全OSで同じ
-起動管理アプリです。`--setup --headless`は初回セットアップへ転送されます。
+Linux/macOSでも同じCLIを利用できます。旧来のGUI起動・証明書生成スクリプトは削除し、
+配布パッケージの入口は全OSで同じ起動管理アプリに統一しています。
+`--setup --headless`は初回セットアップへ転送されます。
+
+HTTPS MitMを有効にした場合は、ユーザーデータルートの`certs/site.jks`が必要です。
+証明書が未生成の移行先では、本体を起動する前に次を実行してください。
+
+```powershell
+java -Dnicocache.applicationRoot="C:\NicoCache_nl" `
+  -Dnicocache.userDataRoot="C:\Users\利用者名\Documents\NicoCache_nl" `
+  -jar .\NicoCacheCA.jar --headless `
+  --targets-file="C:\NicoCache_nl\certificate-targets.txt"
+```
+
+`NicoCacheCA.jar`は`config.properties`の`userDataRoot`も読み取ります。生成後は
+Firefoxへユーザーデータ側の`certs/ca.cer`をインポートし、本体を再起動してください。
+JAR自体にはOSのファイルアイコンを持たせられないため、GUIのウィンドウ・タスクトレイと
+`jpackage`のネイティブランチャーには専用アイコンを割り当てます。
 
 本体はランダムトークンで保護したループバック限定の管理APIを提供し、起動管理アプリが
 グレイスフル停止・強制停止・状態確認を呼び出します。ポートは設定の
 `controlPort=0`（空きポート自動選択）が既定です。証明書生成対象は
 `certificate-targets.txt`から読み込み、ドメインをJavaソースへ埋め込みません。
+
+Firefoxなどのブラウザーで指定するプロキシーは、設定の`listenPort`（既定値
+`8080`）です。`--status`に表示される`port`は起動管理API用なので、ブラウザーの
+プロキシーには指定しないでください。HTTPS MitMを有効にしたまま
+`userDataRoot/certs/site.jks`がない場合、本体は`degraded`状態になり、8080番では
+待ち受けません。移行後は証明書を生成してから再起動してください。
 
 ## GUIログを検索する
 

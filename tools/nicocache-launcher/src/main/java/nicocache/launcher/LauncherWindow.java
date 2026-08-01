@@ -23,17 +23,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSpinner;
 import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
-import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 
@@ -156,6 +153,18 @@ final class LauncherWindow {
             statusLabel.setText(messages.getString("status.stopped"));
             return;
         }
+        if ("degraded".equals(status.getProperty("state"))) {
+            statusLabel.setText(MessageFormat.format(
+                    messages.getString("status.degraded"),
+                    status.getProperty("problem", "unknown")));
+            return;
+        }
+        if (!"running".equals(status.getProperty("state"))) {
+            statusLabel.setText(MessageFormat.format(
+                    messages.getString("status.starting"),
+                    status.getProperty("state", "unknown")));
+            return;
+        }
         try {
             HttpResponse<String> response = ControlClient.getStatus(paths);
             statusLabel.setText(MessageFormat.format(
@@ -224,20 +233,11 @@ final class LauncherWindow {
     private TaskDefinition editTaskDialog(TaskDefinition current) {
         JTextField name = new JTextField(current == null
                 ? "NicoCache_nl" : current.getName(), 24);
-        JComboBox<String> schedule = new JComboBox<>(new String[] {
-            "on-logon", "interval"
-        });
-        schedule.setSelectedItem(current == null
-                ? "on-logon" : current.getSchedule().serialized());
-        JSpinner interval = new JSpinner(new SpinnerNumberModel(
-                current == null ? 60 : current.getIntervalMinutes(), 1, 10080, 1));
         JPanel panel = new JPanel(new GridLayout(0, 2, 6, 6));
         panel.add(new JLabel(messages.getString("tasks.name")));
         panel.add(name);
-        panel.add(new JLabel(messages.getString("tasks.schedule")));
-        panel.add(schedule);
-        panel.add(new JLabel(messages.getString("tasks.interval")));
-        panel.add(interval);
+        panel.add(new JLabel(messages.getString("tasks.trigger")));
+        panel.add(new JLabel(messages.getString("tasks.onLogon")));
         int result = JOptionPane.showConfirmDialog(frame, panel,
                 messages.getString(current == null
                         ? "tasks.add.title" : "tasks.edit.title"),
@@ -246,9 +246,7 @@ final class LauncherWindow {
             return null;
         }
         try {
-            return new TaskDefinition(name.getText(),
-                    TaskDefinition.Schedule.parse((String) schedule.getSelectedItem()),
-                    (Integer) interval.getValue(), true);
+            return new TaskDefinition(name.getText(), true);
         } catch (IllegalArgumentException error) {
             showError(error);
             return null;
@@ -341,11 +339,32 @@ final class LauncherWindow {
         BufferedImage image = new BufferedImage(size, size,
                 BufferedImage.TYPE_INT_ARGB);
         java.awt.Graphics2D graphics = image.createGraphics();
-        graphics.setColor(new Color(38, 110, 190));
+        graphics.setRenderingHint(
+                java.awt.RenderingHints.KEY_ANTIALIASING,
+                java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+        graphics.setColor(new Color(13, 25, 101));
         graphics.fillRoundRect(1, 1, size - 2, size - 2, size / 3, size / 3);
+        graphics.setColor(new Color(142, 164, 255));
+        int left = Math.max(3, size / 4);
+        int right = Math.max(left + 1, size - Math.max(3, size / 4));
+        for (int row = 1; row <= 3; row++) {
+            int y = Math.max(2, row * size / 4);
+            graphics.fillRoundRect(left, y - 1, right - left, 2,
+                    Math.max(1, size / 16), Math.max(1, size / 16));
+        }
         graphics.setColor(Color.WHITE);
-        graphics.fillOval(size / 4, size / 4, size / 5, size / 5);
-        graphics.fillOval(size / 2, size / 4, size / 5, size / 5);
+        int dot = Math.max(2, size / 6);
+        for (int row = 1; row <= 3; row++) {
+            int y = row * size / 4 - dot / 2;
+            graphics.fillOval(left - dot / 2, y, dot, dot);
+        }
+        graphics.setColor(new Color(255, 194, 49));
+        int block = Math.max(2, size / 6);
+        for (int row = 1; row <= 3; row++) {
+            int y = row * size / 4 - block / 2;
+            graphics.fillRoundRect(right - block / 2, y, block, block,
+                    Math.max(1, size / 12), Math.max(1, size / 12));
+        }
         graphics.dispose();
         return image;
     }

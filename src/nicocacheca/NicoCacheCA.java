@@ -69,6 +69,10 @@ public class NicoCacheCA {
     final static String CA_DN = "CN=NicoCache_nl CA";
     final static String CERTS_DIRECTORY_PROPERTY =
             "nicocacheca.certsDirectory";
+    private static final String USER_DATA_ROOT_PROPERTY =
+            "nicocache.userDataRoot";
+    private static final String APPLICATION_ROOT_PROPERTY =
+            "nicocache.applicationRoot";
     final static File CERTS_DIR = getCertsDirectory();
     final static File CA_KEYSTORE_FILE =
             new File(CERTS_DIR, "ca.jks");
@@ -86,10 +90,69 @@ public class NicoCacheCA {
 
     private static File getCertsDirectory() {
         String configured = System.getProperty(CERTS_DIRECTORY_PROPERTY);
-        if (configured == null || configured.isBlank()) {
-            return new File("certs");
+        if (configured != null && !configured.isBlank()) {
+            return new File(configured).getAbsoluteFile();
         }
-        return new File(configured).getAbsoluteFile();
+        String dataRoot = System.getProperty(USER_DATA_ROOT_PROPERTY);
+        if (dataRoot == null || dataRoot.isBlank()) {
+            dataRoot = readConfiguredDataRoot();
+        }
+        if (dataRoot != null && !dataRoot.isBlank()) {
+            Path root = Path.of(dataRoot);
+            if (!root.isAbsolute()) {
+                root = applicationRoot().resolve(root);
+            }
+            return root.toAbsolutePath().normalize().resolve("certs").toFile();
+        }
+        return new File("certs").getAbsoluteFile();
+    }
+
+    private static Path applicationRoot() {
+        String configured = System.getProperty(APPLICATION_ROOT_PROPERTY);
+        return configured == null || configured.isBlank()
+                ? Path.of("").toAbsolutePath().normalize()
+                : Path.of(configured).toAbsolutePath().normalize();
+    }
+
+    private static String readConfiguredDataRoot() {
+        Path config = applicationRoot().resolve("config.properties");
+        if (!Files.isRegularFile(config)) {
+            return null;
+        }
+        try {
+            for (String line : Files.readAllLines(config,
+                    StandardCharsets.ISO_8859_1)) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")
+                        || trimmed.startsWith("!")) {
+                    continue;
+                }
+                int separator = trimmed.indexOf('=');
+                if (separator < 0) {
+                    separator = trimmed.indexOf(':');
+                }
+                if (separator <= 0 || !"userDataRoot".equals(
+                        trimmed.substring(0, separator).trim())) {
+                    continue;
+                }
+                String raw = trimmed.substring(separator + 1).trim();
+                if (raw.indexOf('\\') >= 0
+                        && !raw.matches(".*\\\\u[0-9a-fA-F]{4}.*")) {
+                    return raw.replace("\\\\", "\\");
+                }
+                break;
+            }
+            java.util.Properties properties = new java.util.Properties();
+            try (java.io.InputStream input = Files.newInputStream(config)) {
+                properties.load(input);
+            }
+            return properties.getProperty("userDataRoot");
+        } catch (IOException | java.nio.file.InvalidPathException error) {
+            throw new IllegalStateException(
+                    "設定ファイルのユーザーデータ先を読み取れません: "
+                            + config,
+                    error);
+        }
     }
 
     public static boolean generateCA() {

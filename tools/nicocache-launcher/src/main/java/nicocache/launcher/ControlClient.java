@@ -53,6 +53,11 @@ final class ControlClient {
         }
     }
 
+    static boolean isReady(Properties status) {
+        return isAlive(status)
+                && "running".equals(status.getProperty("state"));
+    }
+
     static HttpResponse<String> getStatus(LauncherPaths paths)
             throws IOException, InterruptedException {
         return request(paths, "GET", "/api/control/status");
@@ -78,13 +83,23 @@ final class ControlClient {
             }
             Properties status = readStatusIfPresent(paths.getControlStatusFile());
             if (isAlive(status)) {
+                if ("degraded".equals(status.getProperty("state"))) {
+                    throw new IOException("本体は起動しましたがプロキシーを提供できません: "
+                            + status.getProperty("problem", "unknown"));
+                }
                 try {
                     HttpResponse<String> response = ping(paths);
-                    if (response.statusCode() == 200) {
+                    if (response.statusCode() == 200
+                            && "running".equals(status.getProperty("state"))) {
                         return;
                     }
-                    last = new IOException("管理APIの応答が不正です: "
-                            + response.statusCode());
+                    if (response.statusCode() == 200) {
+                        last = new IOException("本体のプロキシー準備中です: "
+                                + status.getProperty("state", "unknown"));
+                    } else {
+                        last = new IOException("管理APIの応答が不正です: "
+                                + response.statusCode());
+                    }
                 } catch (IOException | InterruptedException error) {
                     if (error instanceof InterruptedException) {
                         Thread.currentThread().interrupt();

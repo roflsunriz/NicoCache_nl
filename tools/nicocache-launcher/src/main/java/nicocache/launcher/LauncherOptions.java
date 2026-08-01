@@ -25,21 +25,16 @@ final class LauncherOptions {
     private final Path applicationRoot;
     private final Path dataRoot;
     private final String taskName;
-    private final TaskDefinition.Schedule schedule;
-    private final int intervalMinutes;
     private final List<String> setupArguments;
 
     private LauncherOptions(boolean headless, Action action,
             Path applicationRoot, Path dataRoot, String taskName,
-            TaskDefinition.Schedule schedule, int intervalMinutes,
             List<String> setupArguments) {
         this.headless = headless;
         this.action = action;
         this.applicationRoot = applicationRoot;
         this.dataRoot = dataRoot;
         this.taskName = taskName;
-        this.schedule = schedule;
-        this.intervalMinutes = intervalMinutes;
         this.setupArguments = List.copyOf(setupArguments);
     }
 
@@ -50,8 +45,6 @@ final class LauncherOptions {
         Path applicationRoot = null;
         Path dataRoot = null;
         String taskName = "NicoCache_nl";
-        TaskDefinition.Schedule schedule = TaskDefinition.Schedule.ON_LOGON;
-        int intervalMinutes = 60;
         List<String> setupArguments = new ArrayList<>();
 
         for (String arg : args) {
@@ -84,17 +77,6 @@ final class LauncherOptions {
                 selected = select(selected, Action.TASK_UPDATE);
             } else if (arg.startsWith("--task-name=")) {
                 taskName = requiredValue(arg, "--task-name=");
-            } else if (arg.startsWith("--schedule=")) {
-                schedule = TaskDefinition.Schedule.parse(
-                        requiredValue(arg, "--schedule="));
-            } else if (arg.startsWith("--interval-minutes=")) {
-                String value = requiredValue(arg, "--interval-minutes=");
-                try {
-                    intervalMinutes = Integer.parseInt(value);
-                } catch (NumberFormatException error) {
-                    throw new IllegalArgumentException(
-                            "--interval-minutes は整数で指定してください: " + value);
-                }
             } else if (arg.startsWith("--user-data-root=")
                     || arg.startsWith("--https=")
                     || arg.startsWith("--trust-certificate=")
@@ -127,7 +109,7 @@ final class LauncherOptions {
         }
         if (selected == Action.HELP) {
             return new LauncherOptions(headless, selected, applicationRoot,
-                    dataRoot, taskName, schedule, intervalMinutes,
+                    dataRoot, taskName,
                     setupArguments);
         }
         if (!setup && selected == Action.SETUP) {
@@ -136,12 +118,8 @@ final class LauncherOptions {
         if (taskName.isBlank()) {
             throw new IllegalArgumentException("--task-name は空にできません");
         }
-        if (intervalMinutes < 1 || intervalMinutes > 10080) {
-            throw new IllegalArgumentException(
-                    "--interval-minutes は1〜10080分で指定してください");
-        }
         return new LauncherOptions(headless, selected, applicationRoot,
-                dataRoot, taskName, schedule, intervalMinutes,
+                dataRoot, taskName,
                 setupArguments);
     }
 
@@ -188,14 +166,6 @@ final class LauncherOptions {
 
     String getTaskName() {
         return taskName;
-    }
-
-    TaskDefinition.Schedule getSchedule() {
-        return schedule;
-    }
-
-    int getIntervalMinutes() {
-        return intervalMinutes;
     }
 
     List<String> getSetupArguments() {

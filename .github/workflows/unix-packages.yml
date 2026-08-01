@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/unix-packages.yml'
       - 'packaging/unix/**'
+      - 'packaging/windows/assets/nicocache-launcher.png'
       - 'packaging/windows/dependency-lock.psd1'
       - 'packaging/windows/THIRD-PARTY-NOTICES.txt'
       - 'packaging/system-files.txt'
@@ -28,6 +29,7 @@ on:
     paths:
       - '.github/workflows/unix-packages.yml'
       - 'packaging/unix/**'
+      - 'packaging/windows/assets/nicocache-launcher.png'
       - 'packaging/windows/dependency-lock.psd1'
       - 'packaging/windows/THIRD-PARTY-NOTICES.txt'
       - 'packaging/system-files.txt'

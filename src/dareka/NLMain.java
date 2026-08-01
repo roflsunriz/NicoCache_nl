@@ -143,7 +143,7 @@ public class NLMain {
             } catch (Throwable t) {
                 Logger.error(t);
             } finally {
-                if (startedGUI) {
+                if (startedGUI || launchOptions.isHeadless()) {
                     System.exit(0);
                 }
             }

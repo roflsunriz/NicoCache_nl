@@ -18,7 +18,7 @@ import dareka.common.Logger;
 
 public class TlsClientContextFactory {
     private final static File CACERTS_KEYSTORE_FILE =
-            NicoCachePaths.userFile("data/tlsclient/cacerts2");
+            NicoCachePaths.tlsClientCacertsFile();
     private final static String KEYSTORE_PASSPHRASE = "NicoCache";
 
     private static SSLContext context;

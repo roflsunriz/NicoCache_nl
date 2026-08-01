@@ -30,14 +30,16 @@
   応答や空の鍵本体を暗号鍵として登録しないようにした。
 - 初期化や終了通知で例外が発生しても終了状態の判定と後始末を継続し、タスクトレイの
   「NicoCache_nl を終了」がタイムアウトまで待ち続ける問題を防ぐようにした。
+- ユーザーデータをドキュメントへ移した構成で、未エスケープのWindowsパスを設定から
+  正しく復元し、移動先の証明書不足を「起動中」と誤表示せず原因を管理画面へ示すようにした。
 
 ### Added
 
 - ビルド、証明書生成、本体起動管理を独立したJavaアプリへ分離し、JDK 11互換の
   `NicoCacheBuild.jar`から本体・CA生成・起動管理の4成果物をマルチプラットフォームで
   生成できるようにした。起動管理はGUI、タスクトレイ、ヘッドレスCLIに対応する。
-- 起動管理からログオン時・一定間隔の自動起動タスクを登録・編集・更新・削除できる
-  Windowsタスクスケジューラー、macOS LaunchAgents、Linux XDG/systemd user向けの
+- 起動管理からログオン時に一回だけ起動するタスクを登録・編集・更新・削除できる
+  Windowsタスクスケジューラー、macOS LaunchAgents、Linux XDG autostart向けの
   アダプターを追加した。
 - 本体へループバック限定・トークン認証の状態確認、グレイスフル停止、強制停止APIを
   追加し、証明書生成対象を`certificate-targets.txt`から読み込むようにした。
@@ -54,10 +56,10 @@
 
 ### Changed
 
-- `RunNicoCache.ps1`、`NicoCache_nl.sh`、`genCerts.bat`、`genCerts.sh`を新しい
-  独立Javaアプリへの互換ラッパーへ整理し、配布パッケージの単一入口を起動管理アプリへ
-  統一した。`build-javac.sh`を追加し、Antの`jar`/`ca-jar`も独立ビルドへの互換入口
-  として扱う。
+- 置き換えが完了した`RunNicoCache.ps1`、`NicoCache_nl.sh`、`genCerts.bat`、
+  `genCerts.sh`、空の旧ランチャーバッチを削除し、配布パッケージと開発手順の入口を
+  独立Javaアプリへ統一した。クリーン環境からビルドするための`build-javac.ps1`/
+  `build-javac.sh`だけはブートストラップとして残した。
 - 保存済みCMAF/Domand変換器を本体のWindows/Linux/macOSパッケージとアプリイメージZIPへ
   同梱し、各パッケージ作成時にJava 11互換のJARを再生成して、実行時ルートの
   `tools/cmaf-to-mp4/`へ配置するようにした。FFmpeg本体は引き続き同梱しない。

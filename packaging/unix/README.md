@@ -9,8 +9,8 @@ LinuxとmacOSの配布物は、対象OS上のJDK 25 `jpackage`で生成します
 
 アプリイメージの単一ランチャーは起動管理アプリである。引数なしではGUIとタスクトレイを
 表示し、ヘッドレスでは同じランチャーが本体の起動、状態確認、グレイスフル停止、強制停止、
-初回セットアップを処理する。ログオン時・一定間隔の自動起動はmacOS LaunchAgents、
-Linux XDG autostart/systemd userへ登録する。
+初回セットアップを処理する。ログオン時に一回だけの自動起動はmacOS LaunchAgents、
+Linux XDG autostartへ登録する。
 
 ```powershell
 ./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 0.1.0

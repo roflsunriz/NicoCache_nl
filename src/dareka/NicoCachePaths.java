@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 
@@ -96,12 +97,42 @@ final class NicoCachePaths {
         Properties properties = new Properties();
         try (FileInputStream input = new FileInputStream(config)) {
             properties.load(input);
-            return properties.getProperty(USER_DATA_ROOT_KEY);
+            String raw = readRawDataRoot(config.toPath());
+            return raw == null
+                    ? properties.getProperty(USER_DATA_ROOT_KEY)
+                    : raw;
         } catch (IOException error) {
             throw new IllegalStateException(
                     "設定ファイルを読み取れません: " + config,
                     error);
         }
+    }
+
+    private static String readRawDataRoot(Path config) throws IOException {
+        for (String line : Files.readAllLines(config,
+                StandardCharsets.ISO_8859_1)) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")
+                    || trimmed.startsWith("!")) {
+                continue;
+            }
+            int separator = trimmed.indexOf('=');
+            if (separator < 0) {
+                separator = trimmed.indexOf(':');
+            }
+            if (separator <= 0
+                    || !USER_DATA_ROOT_KEY.equals(trimmed.substring(0,
+                            separator).trim())) {
+                continue;
+            }
+            String value = trimmed.substring(separator + 1).trim();
+            if (value.indexOf('\\') >= 0
+                    && !value.matches(".*\\\\u[0-9a-fA-F]{4}.*")) {
+                return value.replace("\\\\", "\\");
+            }
+            return null;
+        }
+        return null;
     }
 
     static void publishDataRoot(Path root) {
@@ -170,6 +201,13 @@ final class NicoCachePaths {
 
     static File proxyPacFile() {
         return userFile("proxy.pac");
+    }
+
+    static File tlsClientCacertsFile() {
+        File userStore = userFile("data/tlsclient/cacerts2");
+        return Files.isRegularFile(userStore.toPath())
+                ? userStore
+                : applicationFile("data/tlsclient/cacerts2");
     }
 
     static File localDirectory() {

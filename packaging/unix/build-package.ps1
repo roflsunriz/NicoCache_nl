@@ -34,6 +34,10 @@ if ($PackageType -ne 'All' -and $allowedTypes -notcontains $PackageType) {
 }
 
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
+$launcherPng = Join-Path $root 'packaging/windows/assets/nicocache-launcher.png'
+if (-not (Test-Path -LiteralPath $launcherPng -PathType Leaf)) {
+    throw "本体ランチャー用アイコンが見つかりません: $launcherPng"
+}
 $workRoot = Join-Path $root (Join-Path '.test-work' ('unix-package-' + $Platform.ToLowerInvariant()))
 $buildRoot = Join-Path $workRoot 'build'
 $dependencyRoot = Join-Path $workRoot 'dependencies'
@@ -81,6 +85,40 @@ function Get-JPackageVersion {
 $jpackageVersion = Get-JPackageVersion
 if ($jpackageVersion -ne $AppVersion) {
     Write-Output "macOSのjpackage内部版を $AppVersion から $jpackageVersion へ変換します"
+}
+
+function New-MacosLauncherIcon {
+    $sips = Get-Command sips -ErrorAction SilentlyContinue
+    $iconutil = Get-Command iconutil -ErrorAction SilentlyContinue
+    if (-not $sips -or -not $iconutil) {
+        throw 'macOSランチャーアイコンの生成にsipsとiconutilが必要です'
+    }
+    $iconset = Join-Path $workRoot 'NicoCache_nl.iconset'
+    $icns = Join-Path $workRoot 'nicocache-launcher.icns'
+    New-Item -ItemType Directory -Path $iconset -Force | Out-Null
+    foreach ($entry in @(
+            @{ Name = 'icon_16x16.png'; Size = 16 },
+            @{ Name = 'icon_16x16@2x.png'; Size = 32 },
+            @{ Name = 'icon_32x32.png'; Size = 32 },
+            @{ Name = 'icon_32x32@2x.png'; Size = 64 },
+            @{ Name = 'icon_128x128.png'; Size = 128 },
+            @{ Name = 'icon_128x128@2x.png'; Size = 256 },
+            @{ Name = 'icon_256x256.png'; Size = 256 },
+            @{ Name = 'icon_256x256@2x.png'; Size = 512 },
+            @{ Name = 'icon_512x512.png'; Size = 512 },
+            @{ Name = 'icon_512x512@2x.png'; Size = 1024 }
+        )) {
+        & $sips.Source -z $entry.Size $entry.Size $launcherPng `
+            --out (Join-Path $iconset $entry.Name) | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "macOSランチャーアイコンのPNG生成に失敗しました: $($entry.Name)"
+        }
+    }
+    & $iconutil.Source -c icns -o $icns $iconset | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'macOSランチャーアイコンのicns生成に失敗しました'
+    }
+    return $icns
 }
 
 function Assert-ChildPath {
@@ -294,9 +332,12 @@ $appImageArguments = @(
     '--main-jar', 'NicoCacheLauncher.jar',
     '--main-class', 'nicocache.launcher.LauncherMain'
 )
-if ($Platform -eq 'Linux') {
-    $appImageArguments += @('--icon', (Join-Path $root 'packaging/windows/assets/nicocache-installer.png'))
+$launcherIcon = if ($Platform -eq 'MacOS') {
+    New-MacosLauncherIcon
+} else {
+    $launcherPng
 }
+$appImageArguments += @('--icon', $launcherIcon)
 foreach ($javaOption in $sharedJavaOptions) { $appImageArguments += @('--java-options', $javaOption) }
 Invoke-NativeCommand -FilePath $jpackage -ArgumentList $appImageArguments `
     -FailureMessage "${Platform}アプリイメージの作成に失敗しました"

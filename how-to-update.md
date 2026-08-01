@@ -39,7 +39,7 @@ Linux/macOSでは次のPOSIXラッパーも利用できる。
 
 - `NicoCache_nl.jar`: 本体。`dareka.UserDataMain`を持つ。
 - `NicoCacheCA.jar`: `certificate-targets.txt`を読み込む証明書生成アプリ。
-- `NicoCacheLauncher.jar`: GUI、タスクトレイ、タスクスケジューラー、ヘッドレスCLI。
+- `NicoCacheLauncher.jar`: GUI、タスクトレイ、ログオン時自動起動タスク、ヘッドレスCLI。
 - `NicoCacheBuild.jar`: 上記3アプリを生成するビルドアプリ。
 
 GUIを使わずに本体を常駐起動する場合は、起動管理アプリを次のように実行する。
@@ -90,10 +90,12 @@ GUIログのタブ、検索、メニュー、履歴保存など画面操作を�
 .\build-javac.ps1 -JavaVersion 17
 ```
 
-起動時も同じ選択ができる。無指定時は検出された最新版を使用する。
+起動時は生成した`NicoCacheLauncher.jar`を直接実行する。GUIは`javaw`または
+パッケージのネイティブランチャー、ヘッドレスは`java`を使用する。
 
 ```powershell
-.\RunNicoCache.ps1 -JavaVersion 21
+java -jar .\NicoCacheLauncher.jar
+java -jar .\NicoCacheLauncher.jar --headless --start
 ```
 
 初回起動ウィザードを変更した場合は、OS設定を変更しない専用テストも実行する。
@@ -108,8 +110,9 @@ GUIログのタブ、検索、メニュー、履歴保存など画面操作を�
 ローカルで実行せず、対象OSの一時GitHub Actionsランナーへ限定する。
 
 証明書の対象ドメインを更新する場合は `certificate-targets.txt` だけを変更する。
-従来の `genCerts.bat` と初回起動ウィザードは同じ一覧を参照するため、別々の
-ドメイン一覧を追加しない。
+初回起動ウィザードと`NicoCacheCA.jar`は同じ一覧を参照するため、別々のドメイン一覧を
+追加しない。ユーザーデータを移動した場合は証明書も移動先の`certs/`へ生成し、
+`enableMitM=true`のまま`site.jks`がない状態で起動しない。
 
 ビルドスクリプトはルートの4つのJARを更新するため、必要な検証が終わったら
 `git status --short --branch` で生成物や無関係な差分が混入していないことを確認する。
@@ -253,6 +256,9 @@ XDG autostartを使い、macOSでは`security`、`networksetup`、`LaunchAgents`
 
 Windowsパッケージ版では、アプリケーションフォルダーの
 `config.properties` にある `userDataRoot` で利用者データの保存先を指定する。
+Windowsのパスは、設定ファイルでは`C:/Users/利用者名/Documents/NicoCache_nl`のように
+スラッシュで記述するか、バックスラッシュを二重化する。起動管理アプリと本体は、
+既存設定の単一バックスラッシュも移行時に正しく解釈する。
 初回ウィザードは既定の「ドキュメント」内 `NicoCache_nl` を候補として表示し、
 選択した絶対パスをこの設定へ保存する。`NICOCACHE_DATA_ROOT` 環境変数と
 `nicocache.dataRoot` Javaシステムプロパティは使用しない。
@@ -261,6 +267,10 @@ Windowsパッケージ版では、アプリケーションフォルダーの
 同名の利用者資材は `userDataRoot` 側から後に読み込んで上書きする。キャッシュ、
 証明書、個人設定などの書き込み先は利用者データ側だけにする。更新時は
 `config.properties` と利用者データを保持し、復旧時も利用者データを削除しない。
+Firefoxのプロキシーは`listenPort`（既定値`8080`）へ接続する。起動管理APIの
+`controlPort`／状態ファイルの`port`はブラウザー用ではない。移行先でHTTPS MitMを
+有効にする場合は、`userDataRoot/certs/site.jks`が存在することと、Firefoxへ
+`userDataRoot/certs/ca.cer`をインポート済みであることも確認する。
 同じアプリイメージを入力にするWindowsのMSIとZIPにも、ルートの
 `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`を収録する。
 
