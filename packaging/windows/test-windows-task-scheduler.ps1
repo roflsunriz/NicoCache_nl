@@ -62,18 +62,32 @@ function Invoke-LauncherTaskCommand {
 function Get-TaskXml {
     param([Parameter(Mandatory)][string]$TaskPath)
 
+    $taskName = Split-Path -Path $TaskPath -Leaf
+    $taskFolder = Split-Path -Path $TaskPath -Parent
+    if ([string]::IsNullOrWhiteSpace($taskFolder)) {
+        $taskFolder = '\'
+    }
     $lastOutput = @()
     for ($attempt = 1; $attempt -le 10; $attempt++) {
-        $output = @(& schtasks.exe /Query /TN $TaskPath /XML 2>&1)
+        $output = @(& schtasks.exe /Query /TN $TaskPath /XML ONE 2>&1)
         if ($LASTEXITCODE -eq 0) {
             try {
                 return [xml]($output -join [Environment]::NewLine)
             } catch {
-                throw "WindowsタスクのXMLを解析できません: $TaskPath"
+                throw "WindowsタスクのXMLを解析できません: $TaskPath / $($_.Exception.Message)"
             }
         }
         $lastOutput = $output
         Start-Sleep -Milliseconds 500
+    }
+
+    try {
+        $exported = @(Export-ScheduledTask -TaskName $taskName -TaskPath $taskFolder -ErrorAction Stop)
+        if ($exported.Count -gt 0) {
+            return [xml]($exported -join [Environment]::NewLine)
+        }
+    } catch {
+        $lastOutput += $_.Exception.Message
     }
     throw "登録したWindowsタスクを照会できません: $TaskPath / $($lastOutput -join ' ')"
 }
