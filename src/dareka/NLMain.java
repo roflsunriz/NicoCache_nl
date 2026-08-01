@@ -315,7 +315,7 @@ public class NLMain {
             if (NLMain.isDebugMode()) {
                 String debugMes = "DEBUG: " + message;
                 writeLine(withTimestamp(debugMes));
-                GUILauncher.appendDebug(debugMes);
+                GUILauncher.append(debugMes);
             }
         }
 
@@ -384,8 +384,8 @@ public class NLMain {
                 String debugMes = "DEBUG: " + prefix + message;
                 if (!guiOnly) super.info(debugMes, false);
                 if (extPane != null) {
-                    // GUIの場合はdebugPaneのみに出力する
-                    GUILauncher.appendDebug(debugMes);
+                    // GUIではデバッグログもMainへ出力する
+                    GUILauncher.append(debugMes);
                     SwingUtilities.invokeLater(() ->
                             extPane.append("DEBUG: " + message));
                 }
@@ -553,13 +553,8 @@ public class NLMain {
             return;
         }
         Runnable f = () -> {
-            if (NLMain.isDebugMode()) {
-                getTabbedPane().setSelectedIndex(1);
-                logWindow.debugPane.setBackLog(false);
-            } else {
-                getTabbedPane().setSelectedIndex(0);
-                logWindow.mainPane.setBackLog(false);
-            }
+            getTabbedPane().setSelectedIndex(0);
+            logWindow.mainPane.setBackLog(false);
         };
         if (SwingUtilities.isEventDispatchThread()) {
             f.run();
@@ -642,18 +637,6 @@ public class NLMain {
             SwingUtilities.invokeLater(() -> {
                 if (logWindow == window && window.mainPane != null) {
                     window.mainPane.append(log);
-                }
-            });
-            appendDebug(log);
-        }
-    }
-
-    static void appendDebug(String log) {
-        LogWindow window = logWindow;
-        if (window != null && window.debugPane != null) {
-            SwingUtilities.invokeLater(() -> {
-                if (logWindow == window && window.debugPane != null) {
-                    window.debugPane.append(log);
                 }
             });
         }
@@ -867,7 +850,7 @@ public class NLMain {
                 new LinkedHashMap<>();
         LogSearchHistory searchHistory = new LogSearchHistory(config);
         JCheckBox debugLoggingCheckBox;
-        LogPane mainPane, debugPane;
+        LogPane mainPane;
         String windowTitle = "NicoCache_nl";
 
         LogWindow(boolean debugMode) {
@@ -901,7 +884,6 @@ public class NLMain {
                     Config.removeObserver(this);
                 }
             });
-            debugPane = addTab("debug", "デバッグログ", maxLines * 10, false);
             setDebugModeTitle(debugMode);
             tabbedPane.addChangeListener((ChangeEvent e) -> {
                 LogPane pane = tabs.get(tabbedPane.getSelectedIndex());
@@ -984,7 +966,7 @@ public class NLMain {
         LogPane addTab(String title, String tip, int maxLines, boolean dedupe) {
             int tabIndex = tabbedPane.getTabCount();
             String historyKey;
-            if ("main".equals(title) || "debug".equals(title)) {
+            if ("main".equals(title)) {
                 historyKey = title;
             } else {
                 int occurrence = extensionTitleOccurrences.getOrDefault(
@@ -1095,7 +1077,7 @@ public class NLMain {
                 int tabIndex, LogSearchHistory searchHistory,
                 String historyKey) {
             String componentPrefix;
-            if ("main".equals(title) || "debug".equals(title)) {
+            if ("main".equals(title)) {
                 componentPrefix = "log." + title;
             } else {
                 componentPrefix = "log.extension-" + tabIndex;

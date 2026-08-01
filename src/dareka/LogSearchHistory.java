@@ -44,6 +44,7 @@ final class LogSearchHistory {
             }
             changed = true;
         }
+        changed |= removeTab("debug");
         boolean persisted = !changed || save();
         if (persisted && !legacy.isEmpty()
                 && removePropertiesWithPrefix(
@@ -148,6 +149,20 @@ final class LogSearchHistory {
         String tabPrefix = PREFIX + "Tab.";
         return properties.stringPropertyNames().stream()
                 .anyMatch(key -> key.startsWith(tabPrefix));
+    }
+
+    private boolean removeTab(String tabKey) {
+        String keyPrefix = tabPrefix(tabKey);
+        List<String> matchedKeys = new ArrayList<>();
+        for (String key : properties.stringPropertyNames()) {
+            if (key.startsWith(keyPrefix)) {
+                matchedKeys.add(key);
+            }
+        }
+        for (String key : matchedKeys) {
+            properties.remove(key);
+        }
+        return !matchedKeys.isEmpty();
     }
 
     private static Properties copyPropertiesWithPrefix(

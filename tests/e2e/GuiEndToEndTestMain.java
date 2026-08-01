@@ -148,6 +148,11 @@ public final class GuiEndToEndTestMain {
                         "LogWindowLineWrap=invalid",
                         "DebugMode=true",
                         "DebugLog=legacy-custom.log",
+                        "LogSearchHistory.Tab.ZGVidWc.Count=1",
+                        "LogSearchHistory.Tab.ZGVidWc.0.Query=legacy-debug-query",
+                        "LogSearchHistory.Tab.ZGVidWc.0.Timestamp=1700000000001",
+                        "LogSearchHistory.Tab.ZGVidWc.0.Regex=false",
+                        "LogSearchHistory.Tab.ZGVidWc.0.CaseSensitive=false",
                         "ExitOnClose=false",
                         "FlipColor=false",
                         "FontName=Monospaced",
@@ -201,9 +206,9 @@ public final class GuiEndToEndTestMain {
             assertEquals("log.main.text",
                     GUILauncher.logWindow.mainPane.textArea.getName(),
                     "main text identity");
-            assertEquals("log.debug.text",
-                    GUILauncher.logWindow.debugPane.textArea.getName(),
-                    "debug text identity");
+            assertEquals(1,
+                    GUILauncher.logWindow.tabbedPane.getTabCount(),
+                    "only the main tab must be present initially");
             assertEquals("log.main.query",
                     GUILauncher.logWindow.mainPane.searchPanel
                             .queryField.getName(),
@@ -212,15 +217,9 @@ public final class GuiEndToEndTestMain {
                     GUILauncher.logWindow.mainPane.searchPanel
                             .regexCheckBox.getName(),
                     "main regex identity");
-            assertEquals("log.debug.history",
-                    GUILauncher.logWindow.debugPane.searchPanel
-                            .historyCombo.getName(),
-                    "debug history identity");
             assertMenuIdentity(GUILauncher.logWindow.mainPane.popup,
                     "log.copy", "log.select-all", "log.wrap",
                     "log.always-on-top");
-            assertMenuIdentity(GUILauncher.logWindow.debugPane.popup,
-                    "log.copy", "log.select-all");
             assertTrue(GUILauncher.logWindow.mainPane.textArea.getLineWrap(),
                     "invalid line-wrap value must use the true default");
             assertEquals(14,
@@ -248,6 +247,7 @@ public final class GuiEndToEndTestMain {
         onEdt(() -> {
             assertTrue(GUILauncher.logWindow.debugLoggingCheckBox.isSelected(),
                     "DebugMode=true must select the checkbox");
+            GUILauncher.logWindow.mainPane.clearLog();
             GUILauncher.logWindow.debugLoggingCheckBox.doClick();
         });
         assertFalse(NLMain.isDebugMode(),
@@ -258,6 +258,10 @@ public final class GuiEndToEndTestMain {
         Logger.debug("DISABLED_DEBUG_MARKER");
         assertEquals(disabledSize, Files.size(debugLog),
                 "disabled debug logging must not append to debug.log");
+        onEdt(() -> assertFalse(
+                GUILauncher.logWindow.mainPane.textArea.getText()
+                        .contains("DISABLED_DEBUG_MARKER"),
+                "disabled debug messages must not reach Main"));
 
         onEdt(() -> GUILauncher.logWindow.debugLoggingCheckBox.doClick());
         assertTrue(NLMain.isDebugMode(),
@@ -270,6 +274,12 @@ public final class GuiEndToEndTestMain {
                 "enabled debug logging must append to debug.log");
         assertFalse(enabled.contains("DISABLED_DEBUG_MARKER"),
                 "disabled debug messages must not appear after reopening");
+        onEdt(() -> {
+            GUILauncher.logWindow.mainPane.refreshDisplay();
+            assertContains(GUILauncher.logWindow.mainPane.textArea.getText(),
+                    "ENABLED_DEBUG_MARKER",
+                    "enabled debug messages must reach Main");
+        });
         assertTrue(Files.size(debugLog) <= BoundedLogFile.DEFAULT_MAX_BYTES,
                 "debug.log must remain within the 1 MiB limit");
 
@@ -351,9 +361,6 @@ public final class GuiEndToEndTestMain {
             assertEquals(!initialWrap, main.textArea.getLineWrap(),
                     "main line-wrap state");
             assertEquals(!initialWrap,
-                    GUILauncher.logWindow.debugPane.textArea.getLineWrap(),
-                    "debug line-wrap state");
-            assertEquals(!initialWrap,
                     GUILauncher.config.getBoolean("LogWindowLineWrap"),
                     "line-wrap configuration");
 
@@ -392,11 +399,11 @@ public final class GuiEndToEndTestMain {
 
             GUILauncher.LogPane extension = launcher.addExtPane(
                     "fixture", "E2E extension tab");
-            assertEquals(3, GUILauncher.logWindow.tabbedPane.getTabCount(),
+            assertEquals(2, GUILauncher.logWindow.tabbedPane.getTabCount(),
                     "extension tab count");
-            assertEquals("log.extension-2.text", extension.textArea.getName(),
+            assertEquals("log.extension-1.text", extension.textArea.getName(),
                     "extension text identity");
-            GUILauncher.logWindow.tabbedPane.setSelectedIndex(2);
+            GUILauncher.logWindow.tabbedPane.setSelectedIndex(1);
             assertEquals("NicoCache_nl：デバッグモード",
                     GUILauncher.logWindow.frame.getTitle(),
                     "extension tab title");
@@ -441,14 +448,13 @@ public final class GuiEndToEndTestMain {
                     pane.textArea.getText(), "caching sm1:"),
                     "cache progress line count");
 
-            GUILauncher.LogPane primary = GUILauncher.logWindow.debugPane;
-            primary.setBackLog(true);
-            primary.updateLogWindowTitle();
+            pane.setBackLog(true);
+            pane.updateLogWindowTitle();
             assertContains(GUILauncher.logWindow.frame.getTitle(),
                     "バックログ", "backlog title");
             launcher.activatePrimaryTab();
-            assertFalse(primary.isBackLog(),
-                    "primary tab activation must leave backlog mode");
+            assertFalse(pane.isBackLog(),
+                    "main tab activation must leave backlog mode");
         });
     }
 
@@ -611,6 +617,10 @@ public final class GuiEndToEndTestMain {
                 .anyMatch(value -> value != null
                         && value.matches("\\d{10,}"));
         assertTrue(migratedQuery, "legacy search query migration");
+        assertFalse(history.stringPropertyNames().stream()
+                        .anyMatch(name ->
+                                name.startsWith("LogSearchHistory.Tab.ZGVidWc.")),
+                "removed debug tab history");
         assertFalse(obsoleteQuery, "obsolete history schema recovery");
         assertTrue(savedQuery, "search query persistence");
         assertTrue(savedTimestamp, "search timestamp persistence");
