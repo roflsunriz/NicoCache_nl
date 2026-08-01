@@ -16,6 +16,7 @@ list/
 .agents/
 /.test-work/
 debug.log
+*.tmp
 
 # Local configuration, caches, generated data, and secrets
 /config.properties
