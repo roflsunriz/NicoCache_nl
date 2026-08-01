@@ -456,7 +456,12 @@ public final class FunctionalTestMain {
                 boolean secondKey = (path.contains("/hlsext/") || path.contains("/shlsbid/"))
                         && exchange.getRequestURI().getRawQuery() != null
                         && exchange.getRequestURI().getRawQuery().contains("token=k2");
-                Arrays.fill(body, secondKey ? (byte) 0x2b : (byte) 0x2a);
+                boolean duplicateHlsbidKey = path.contains("/hlsbid/")
+                        && exchange.getRequestURI().getRawQuery() != null
+                        && exchange.getRequestURI().getRawQuery().contains("token=k")
+                        && requestNumber > 1;
+                Arrays.fill(body, secondKey || duplicateHlsbidKey
+                        ? (byte) 0x2b : (byte) 0x2a);
                 exchange.sendResponseHeaders(200, body.length);
                 exchange.getResponseBody().write(body);
                 return;
@@ -1236,6 +1241,18 @@ public final class FunctionalTestMain {
                 + ".key" + firstKeyQuery, "delivery.domand.nicovideo.jp"));
         assertEquals(200, keyResponse.status, "CMAF " + mediaType + " key status");
         assertEquals(16, keyResponse.body.length, "CMAF " + mediaType + " key length");
+        assertEquals(0x2a, keyResponse.body[0] & 0xff,
+                "CMAF " + mediaType + " first key value");
+        if ("hlsbid".equals(route)) {
+            Response duplicateKeyResponse = request(absoluteRequest(base + "/keys/" + sourceId
+                    + ".key" + firstKeyQuery, "delivery.domand.nicovideo.jp"));
+            assertEquals(200, duplicateKeyResponse.status,
+                    "CMAF " + mediaType + " duplicate key status");
+            assertEquals(16, duplicateKeyResponse.body.length,
+                    "CMAF " + mediaType + " duplicate key length");
+            assertEquals(0x2b, duplicateKeyResponse.body[0] & 0xff,
+                    "CMAF " + mediaType + " duplicate key value");
+        }
         if (rotating) {
             Response secondKeyResponse = request(absoluteRequest(base + "/keys/" + sourceId
                     + ".key?token=k2&nicocachenl_domandcvikey=" + key,

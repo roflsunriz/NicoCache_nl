@@ -373,6 +373,37 @@ public class CmafCachingProcessor implements Processor {
         URLResource resource = rr.first;
         byte[] binContent = rr.second;
 
+        HttpResponseHeader responseHeader = null;
+        try {
+            if (resource != null) {
+                responseHeader = resource.getResponseHeader(null, null);
+            };
+        } catch (IOException e) {
+            movieInfo.setCacheSaveFlag(false);
+            Logger.info("CMAF key response headerの取得に失敗しました: "
+                        + movieInfo.getSmid());
+            return resource;
+        };
+        int statusCode = responseHeader == null
+            ? -1 : responseHeader.getStatusCode();
+
+        // 鍵レスポンスのエラーボディがたまたま16バイトでも、暗号鍵として
+        // 登録してはならない。誤った鍵を保存すると後続セグメントが
+        // BadPaddingExceptionになる。
+        if (statusCode < 200 || statusCode >= 300) {
+            movieInfo.setCacheSaveFlag(false);
+            Logger.info("CMAF key HTTP statusが成功ではありません: "
+                        + statusCode + ": " + movieInfo.getSmid());
+            return resource;
+        };
+
+        if (binContent == null) {
+            movieInfo.setCacheSaveFlag(false);
+            Logger.info("CMAF key response bodyがありません: "
+                        + movieInfo.getSmid());
+            return resource;
+        };
+
         if (binContent.length != 16) {
             // 唯一対応しているAES-128の鍵長ではない
             movieInfo.setCacheSaveFlag(false);
@@ -382,8 +413,9 @@ public class CmafCachingProcessor implements Processor {
 
         // Logger.info("-- thread[" + Thread.currentThread().getId() + "]");
 
-        // 既に鍵をセットしていても上書きする。プレイリスト内で鍵が
-        // 切り替わる場合に備え、要求URLごとの値も保持する。
+        // 要求URLごとの値を保持する。同一署名付きURLへの重複要求では
+        // DomandCVIEntry側が最初の鍵を維持し、鍵世代の切り替えはURLの
+        // 変化として扱う。
         if (av.isAudio()) {
             // Logger.info("-- audio key: ok");
             movieInfo.setAudioKeyForUrl(requestHeader.getURI(), binContent);

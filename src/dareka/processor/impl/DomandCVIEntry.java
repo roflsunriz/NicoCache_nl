@@ -434,8 +434,20 @@ public class DomandCVIEntry {
 
     private static void putKey(
         Map<String, byte[]> keysByUrl, String keyUrl, byte[] key) {
-        keysByUrl.put(keyUrl, key);
-        keysByUrl.put(urlWithoutNicoCacheParameters(keyUrl), key);
+        // 同一の署名付きURLに対する重複要求が、上流の応答タイミングに
+        // よって異なる鍵を返すことがある。後から返った鍵で上書きすると、
+        // 先に取得済みのセグメントを誤った鍵で復号してしまう。鍵世代の
+        // 切り替えは署名付きURLの変化で表現されるため、同一URLは最初の
+        // 応答を保持し、URLが変わった場合だけ別エントリとして保存する。
+        String normalizedKeyUrl = urlWithoutNicoCacheParameters(keyUrl);
+        byte[] firstKey = keysByUrl.get(normalizedKeyUrl);
+        if (firstKey == null) {
+            firstKey = key;
+            keysByUrl.put(normalizedKeyUrl, firstKey);
+        };
+        if (!keysByUrl.containsKey(keyUrl)) {
+            keysByUrl.put(keyUrl, firstKey);
+        };
     };
 
     private static byte[] findKey(
