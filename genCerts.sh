@@ -1,12 +1,20 @@
 #!/bin/sh
 
 java="${NICOCACHE_JAVA:-java}"
-DOMAINS='*.nicovideo.jp *.ce.nicovideo.jp *.sl.nicovideo.jp *.sv.nicovideo.jp *.live.nicovideo.jp *.live2.nicovideo.jp *.nicoad.nicovideo.jp *.seiga.nicovideo.jp *.ch.nicovideo.jp *.ads.nicovideo.jp *.i.nicovideo.jp *.account.nicovideo.jp *.upload.nicovideo.jp *.search.nicovideo.jp *.news.nicovideo.jp *.api.nicovideo.jp *.domand.nicovideo.jp *.smilevideo.jp *.nimg.jp *.cdn.nimg.jp *.video.nimg.jp *.dmc.nico *.nvcomment.nicovideo.jp'
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$script_dir" || exit 1
 
-cd `dirname $0`
+if [ ! -e "certificate-targets.txt" ]; then
+  echo "certificate-targets.txt is empty or not found."
+  exit 1
+fi
+if [ ! -e "NicoCacheCA.jar" ]; then
+  echo "NicoCacheCA.jar is not found."
+  exit 1
+fi
 
 for libfile in "lib/bcprov.jar" "lib/bcpkix.jar" "lib/bcutil.jar"; do
-  if [ ! -e $libfile ]; then
+  if [ ! -e "$libfile" ]; then
     echo "$libfile is not found."
     echo
     echo "NicoCacheCA.jar require lib/bcprov.jar and lib/bcpkix.jar and lib/bcutil.jar"
@@ -16,5 +24,5 @@ for libfile in "lib/bcprov.jar" "lib/bcpkix.jar" "lib/bcutil.jar"; do
   fi
 done
 
-$java -jar NicoCacheCA.jar $DOMAINS
-
+exec "$java" -jar NicoCacheCA.jar --headless \
+  --targets-file="$script_dir/certificate-targets.txt"

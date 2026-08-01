@@ -1,16 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project name="NicoCache_nl" default="jar">
-  <!-- CA(証明書生成)関係は全て"ca-"プレフィックス. -->
+<project name="NicoCache_nl" default="java-apps">
+  <!-- 正規ビルドはNicoCacheBuildが担当する。Antターゲットは互換入口。 -->
 
   <property name="nicocache.jar" value="NicoCache_nl.jar"/>
+  <property name="build-tool.jar" value="NicoCacheBuild.jar"/>
   <property name="extproj-dir" value="../NicoCache_nl-ext"/>
   <property environment="env"/>
   <available file="src" type="dir" property="srcdir-exists"/>
+  <available file="${build-tool.jar}" property="build-tool-exists"/>
   <available file="${extproj-dir}/deploy.xml" property="extdeploy-exists"/>
   <path id="extensions-classpath">
     <pathelement location="."/>
     <pathelement location="./NicoCache_nl.jar"/>
   </path>
+
+  <target name="java-apps" description="独立Javaアプリ4本を生成">
+    <fail unless="build-tool-exists"
+          message="先に build-javac.ps1 を実行して NicoCacheBuild.jar を生成してください。"/>
+    <java jar="${build-tool.jar}" fork="true" failonerror="true">
+      <arg value="--root=${basedir}"/>
+      <arg value="--output-dir=${basedir}"/>
+      <arg value="--library-dir=${basedir}/lib"/>
+      <arg value="--clean"/>
+    </java>
+  </target>
 
   <target name="version" description="java version">
     <echoproperties prefix="java."/>
@@ -95,7 +108,7 @@
 
   <target name="extensions" depends="extensions-pre-jdk8,extensions-post-jdk9" unless="eclipse.running"/>
 
-  <target name="jar" depends="compile" if="srcdir-exists">
+  <target name="legacy-jar" depends="compile" if="srcdir-exists">
     <move file="${nicocache.jar}" tofile="${nicocache.jar}.old"
           failonerror="false"/>
     <jar destfile="${nicocache.jar}">
@@ -114,6 +127,9 @@
       </fileset>
     </jar>
   </target>
+
+  <target name="jar" depends="java-apps"
+          description="互換名。独立Javaアプリを生成"/>
 
   <target name="archive">
     <zip destfile="development.zip" compress="false">
@@ -144,6 +160,9 @@
     <delete>
       <fileset dir="src" includes="**/*.class"/>
       <fileset file="${nicocache.jar}"/>
+      <fileset file="NicoCacheCA.jar"/>
+      <fileset file="NicoCacheLauncher.jar"/>
+      <fileset file="NicoCacheBuild.jar"/>
       <fileset file="development.zip"/>
     </delete>
     <delete dir="documents/javadoc"/>
@@ -205,7 +224,7 @@
     </javac>
   </target>
 
-  <target name="ca-jar" depends="ca-compile" if="ca-srcdir-exists">
+  <target name="legacy-ca-jar" depends="ca-compile" if="ca-srcdir-exists">
     <move file="${ca-jar}" tofile="${ca-jar}.old"
           failonerror="false"/>
     <jar destfile="${ca-jar}">
@@ -220,6 +239,9 @@
       </fileset>
     </jar>
   </target>
+
+  <target name="ca-jar" depends="java-apps"
+          description="互換名。CAを含む独立Javaアプリを生成"/>
 
   <target name="ca-clean" if="ca-srcdir-exists">
     <delete>

@@ -18,6 +18,44 @@ Windows・Linux・macOSパッケージ版の初回セットアップでは、キ
 `$XDG_DATA_HOME/NicoCache_nl`（未設定時は`~/.local/share/NicoCache_nl`）です。
 初回ウィザードから別の絶対パスへ変更できます。
 
+## 独立アプリと起動管理
+
+ビルド、証明書生成、本体起動管理はそれぞれ独立したJavaアプリです。正規ビルドは
+次のコマンドで実行し、`NicoCache_nl.jar`、`NicoCacheCA.jar`、
+`NicoCacheLauncher.jar`、`NicoCacheBuild.jar`を生成します。
+
+```powershell
+.\build-javac.ps1
+```
+
+Linux/macOSでは同じJavaビルドアプリをPOSIXラッパーから実行できます。
+
+```sh
+./build-javac.sh
+```
+
+`NicoCacheLauncher.jar`は引数なしならGUIで起動し、タスクトレイ常駐、ログオン時・
+一定間隔の自動起動タスクの登録・更新・削除、本体の起動状態表示を管理します。
+画面のない環境では同じJARを次のように使えます。
+
+```powershell
+java -jar .\NicoCacheLauncher.jar --headless --start
+java -jar .\NicoCacheLauncher.jar --headless --status
+java -jar .\NicoCacheLauncher.jar --headless --stop
+```
+
+初回は`--setup --headless`に`--user-data-root`、`--https`、
+`--trust-certificate`、`--proxy`、`--autostart`を明示してセットアップします。
+
+Linux/macOSでも同じCLIを利用できます。`RunNicoCache.ps1`と`NicoCache_nl.sh`は
+既存の呼び出し元向けの薄い互換ラッパーで、配布パッケージの入口は全OSで同じ
+起動管理アプリです。`--setup --headless`は初回セットアップへ転送されます。
+
+本体はランダムトークンで保護したループバック限定の管理APIを提供し、起動管理アプリが
+グレイスフル停止・強制停止・状態確認を呼び出します。ポートは設定の
+`controlPort=0`（空きポート自動選択）が既定です。証明書生成対象は
+`certificate-targets.txt`から読み込み、ドメインをJavaソースへ埋め込みません。
+
 ## GUIログを検索する
 
 main、debug、Extensionの各ログタブには独立した検索欄があります。入力中に一致する

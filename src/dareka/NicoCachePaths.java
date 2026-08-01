@@ -85,6 +85,10 @@ final class NicoCachePaths {
     }
 
     private static String readConfiguredDataRoot() {
+        String override = System.getProperty(USER_DATA_ROOT_PROPERTY);
+        if (override != null && !override.isBlank()) {
+            return override;
+        }
         File config = configFile();
         if (!Files.isRegularFile(config.toPath())) {
             return null;

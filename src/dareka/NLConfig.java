@@ -59,9 +59,11 @@ public class NLConfig extends BasicConfig {
         }
         switch (key) {
         case "listenPort":
+        case "controlPort":
         case "proxyPort": {
             int port = parseInt(value, 0);
-            if (port < 1 || 65535 < port) {
+            if (port < 0 || 65535 < port
+                    || ("listenPort".equals(key) && port == 0)) {
                 warnInvalidProperty(key, value);
                 return null;
             }

@@ -33,6 +33,14 @@
 
 ### Added
 
+- ビルド、証明書生成、本体起動管理を独立したJavaアプリへ分離し、JDK 11互換の
+  `NicoCacheBuild.jar`から本体・CA生成・起動管理の4成果物をマルチプラットフォームで
+  生成できるようにした。起動管理はGUI、タスクトレイ、ヘッドレスCLIに対応する。
+- 起動管理からログオン時・一定間隔の自動起動タスクを登録・編集・更新・削除できる
+  Windowsタスクスケジューラー、macOS LaunchAgents、Linux XDG/systemd user向けの
+  アダプターを追加した。
+- 本体へループバック限定・トークン認証の状態確認、グレイスフル停止、強制停止APIを
+  追加し、証明書生成対象を`certificate-targets.txt`から読み込むようにした。
 - 保存済みCMAF/Domandキャッシュの`master.m3u8`と相対セグメントをFFmpegで単一MP4へ
   変換できる独立Javaアプリを追加した。GUIのフォルダ選択・ドラッグ・アンド・ドロップ、
   出力先指定、出力先を開く操作、変換後の自動オープン、CLI／ヘッドレス実行を同じ変換
@@ -46,6 +54,10 @@
 
 ### Changed
 
+- `RunNicoCache.ps1`、`NicoCache_nl.sh`、`genCerts.bat`、`genCerts.sh`を新しい
+  独立Javaアプリへの互換ラッパーへ整理し、配布パッケージの単一入口を起動管理アプリへ
+  統一した。`build-javac.sh`を追加し、Antの`jar`/`ca-jar`も独立ビルドへの互換入口
+  として扱う。
 - 保存済みCMAF/Domand変換器を本体のWindows/Linux/macOSパッケージとアプリイメージZIPへ
   同梱し、各パッケージ作成時にJava 11互換のJARを再生成して、実行時ルートの
   `tools/cmaf-to-mp4/`へ配置するようにした。FFmpeg本体は引き続き同梱しない。

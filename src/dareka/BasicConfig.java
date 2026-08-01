@@ -22,6 +22,7 @@ public class BasicConfig extends Config {
     @Override
     protected void doSetDefaults(Properties properties) {
         properties.setProperty("listenPort", "8080");
+        properties.setProperty("controlPort", "0");
         properties.setProperty("proxyHost", "");
         properties.setProperty("proxyPort", "8081");
         properties.setProperty("title", "true");

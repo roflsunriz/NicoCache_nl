@@ -82,12 +82,12 @@ foreach ($step in @(
 $compatibilityBuilds = @(
     @{
         Path = $workflowPath
-        BuildStep = 'Build NicoCache_nl.jar'
+        BuildStep = 'Build NicoCache Java applications'
         BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17'
     }
     @{
         Path = Join-Path $root '.github\workflows\ci.yml'
-        BuildStep = 'Build NicoCache_nl.jar'
+        BuildStep = 'Build NicoCache Java applications'
         BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17'
     }
     @{

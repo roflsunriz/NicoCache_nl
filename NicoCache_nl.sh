@@ -1,29 +1,11 @@
 #!/bin/sh
 
 java="${NICOCACHE_JAVA:-java}"
-opts="${NICOCACHE_OPTS:--Xmx128m}"
-
-if [ "$1" = "debug" ]; then
-  opts="$opts -Ddareka.debug=true -Ddareka.logfile=debug.log -ea"
-elif [ $# != 0 ]; then
-  opts="$*"
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+launcher="$script_dir/NicoCacheLauncher.jar"
+if [ ! -f "$launcher" ]; then
+  echo "NicoCacheLauncher.jar is not found. Run build-javac.ps1 first: $launcher" >&2
+  exit 1
 fi
 
-# この長いオプションはjava18以降でリフレクションを使うためのもの.
-opts21="--add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-exports=java.base/java.lang.invoke=ALL-UNNAMED --add-exports=java.base/jdk.internal.access=ALL-UNNAMED --add-exports=java.base/sun.nio.ch=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.io=ALL-UNNAMED --add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED"
-
-cd `dirname $0`
-
-while :
-do
-  $java $opts21 $opts -jar `basename $0 .sh`.jar
-  case $? in
-  25) echo "waiting 5 seconds for restarting..."
-     sleep 5
-     continue;;
-  *) echo "exit status is $?"
-     break;;
-  esac
-done
-
-exit 0
+exec "$java" -jar "$launcher" "$@"

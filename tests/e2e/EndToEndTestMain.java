@@ -5,9 +5,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.HttpURLConnection;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,6 +42,7 @@ public final class EndToEndTestMain {
     private final Path repository;
     private final Path sandbox;
     private final Path productJar;
+    private final Path coreJar;
     private final Path application;
     private final Path data;
     private HttpServer upstream;
@@ -47,23 +51,27 @@ public final class EndToEndTestMain {
     private int upstreamPort;
     private int productPort;
 
-    private EndToEndTestMain(Path repository, Path sandbox, Path productJar) {
+    private EndToEndTestMain(Path repository, Path sandbox, Path productJar,
+            Path coreJar) {
         this.repository = repository;
         this.sandbox = sandbox;
         this.productJar = productJar;
+        this.coreJar = coreJar;
         this.application = sandbox.resolve("application");
         this.data = sandbox.resolve("data");
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 3) {
+        if (args.length != 4) {
             throw new IllegalArgumentException(
-                    "usage: EndToEndTestMain <repository> <sandbox> <product-jar>");
+                    "usage: EndToEndTestMain <repository> <sandbox> "
+                            + "<launcher-jar> <core-jar>");
         }
         EndToEndTestMain suite = new EndToEndTestMain(
                 Path.of(args[0]).toAbsolutePath().normalize(),
                 Path.of(args[1]).toAbsolutePath().normalize(),
-                Path.of(args[2]).toAbsolutePath().normalize());
+                Path.of(args[2]).toAbsolutePath().normalize(),
+                Path.of(args[3]).toAbsolutePath().normalize());
         suite.execute();
     }
 
@@ -73,6 +81,7 @@ public final class EndToEndTestMain {
             prepareSandbox();
             startProduct();
 
+            run("launcher and control API", this::testControlApi);
             run("real JAR local-file user flow", this::testLocalFileFlow);
             run("local-file path containment", this::testPathContainment);
             run("malformed and ambiguous HTTP rejection",
@@ -95,7 +104,7 @@ public final class EndToEndTestMain {
             }
             throw new AssertionError("end-to-end tests failed");
         }
-        System.out.println("End-to-end tests passed: 6");
+        System.out.println("End-to-end tests passed: 7");
     }
 
     private void prepareSandbox() throws IOException {
@@ -118,6 +127,8 @@ public final class EndToEndTestMain {
                 application.resolve("nlFilter_sys.txt"));
         copy(repository.resolve("data/tlsclient/cacerts2"),
                 data.resolve("data/tlsclient/cacerts2"));
+        Files.copy(coreJar, application.resolve("NicoCache_nl.jar"),
+                StandardCopyOption.REPLACE_EXISTING);
 
         Files.writeString(data.resolve("local/e2e.txt"),
                 "end-to-end-content", StandardCharsets.UTF_8);
@@ -177,7 +188,9 @@ public final class EndToEndTestMain {
                 "-Dnicocache.applicationRoot=" + application,
                 "-jar",
                 productJar.toString(),
-                "--headless");
+                "--headless",
+                "--app-root=" + application,
+                "--data-root=" + data);
         builder.directory(data.toFile());
         builder.redirectErrorStream(true);
         builder.redirectOutput(log.toFile());
@@ -204,12 +217,77 @@ public final class EndToEndTestMain {
         if (product == null || !product.isAlive()) {
             return;
         }
+        try {
+            requestGracefulShutdown();
+        } catch (IOException ignored) {
+            // The process-specific fallback below keeps cleanup bounded.
+        }
+        if (product.waitFor(STOP_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
+            return;
+        }
         product.destroy();
         if (!product.waitFor(STOP_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
             product.destroyForcibly();
             if (!product.waitFor(STOP_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
                 throw new AssertionError("product process could not be terminated");
             }
+        }
+    }
+
+    private void requestGracefulShutdown() throws IOException {
+        Path statusFile = data.resolve("data/nicocache-control.properties");
+        Properties status = new Properties();
+        try (InputStream input = Files.newInputStream(statusFile)) {
+            status.load(input);
+        }
+        URL endpoint = new URL("http://127.0.0.1:"
+                + status.getProperty("port")
+                + "/api/control/graceful-shutdown");
+        HttpURLConnection connection = (HttpURLConnection) endpoint.openConnection();
+        try {
+            connection.setConnectTimeout(CLIENT_TIMEOUT_MILLIS);
+            connection.setReadTimeout(CLIENT_TIMEOUT_MILLIS);
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Authorization",
+                    "Bearer " + status.getProperty("token"));
+            connection.setDoOutput(true);
+            connection.connect();
+            int code = connection.getResponseCode();
+            if (code != 202 && code != 200) {
+                throw new IOException("unexpected control response: " + code);
+            }
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private void testControlApi() throws Exception {
+        Path statusFile = data.resolve("data/nicocache-control.properties");
+        Properties status = new Properties();
+        try (InputStream input = Files.newInputStream(statusFile)) {
+            status.load(input);
+        }
+        int unauthorized = controlRequest(status, "/api/control/status", null);
+        assertEquals(401, unauthorized, "control API unauthorized response");
+        int authorized = controlRequest(status, "/api/control/status",
+                status.getProperty("token"));
+        assertEquals(200, authorized, "control API authorized response");
+    }
+
+    private int controlRequest(Properties status, String endpoint,
+            String token) throws IOException {
+        URL url = new URL("http://127.0.0.1:" + status.getProperty("port")
+                + endpoint);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        try {
+            connection.setConnectTimeout(CLIENT_TIMEOUT_MILLIS);
+            connection.setReadTimeout(CLIENT_TIMEOUT_MILLIS);
+            if (token != null) {
+                connection.setRequestProperty("Authorization", "Bearer " + token);
+            }
+            return connection.getResponseCode();
+        } finally {
+            connection.disconnect();
         }
     }
 

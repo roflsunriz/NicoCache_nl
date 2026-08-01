@@ -205,7 +205,9 @@ function Copy-DevelopmentPayload {
         'NicoCache_nl.jar.old',
         'NicoCache_nl.jar.sig',
         'NicoCacheCA.jar',
-        'NicoCacheCA.jar.sig'
+        'NicoCacheCA.jar.sig',
+        'NicoCacheLauncher.jar',
+        'NicoCacheBuild.jar'
     )
 
     $trackedPaths = @(& git -C $root ls-files --cached --others --exclude-standard)
@@ -310,8 +312,6 @@ New-Item -ItemType Directory -Path $buildRoot, $dependencyRoot, $inputRoot,
     $outputRoot | Out-Null
 
 $java = Get-RequiredCommand -Name 'java'
-$javac = Get-RequiredCommand -Name 'javac'
-$jar = Get-RequiredCommand -Name 'jar'
 $jpackage = Get-RequiredCommand -Name 'jpackage'
 $javaMajorVersion = Get-JavaMajorVersion -JavaPath $java
 if ($PackageType -in @('Msi', 'All')) {
@@ -335,70 +335,23 @@ foreach ($artifact in $dependencyLock.Artifacts) {
     Move-Item -LiteralPath $download -Destination $destination
 }
 
-$mainClasses = Join-Path $buildRoot 'main-classes'
-$caClasses = Join-Path $buildRoot 'ca-classes'
-New-Item -ItemType Directory -Path $mainClasses, $caClasses | Out-Null
-
-$mainSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'src\dareka') `
-        -Recurse -File -Filter '*.java' |
-        Where-Object { $_.Name -ne 'package-info.java' } |
-        Select-Object -ExpandProperty FullName)
-Invoke-NativeCommand -FilePath $javac -ArgumentList (@(
-        '--release', '11',
-        '-encoding', 'UTF-8',
-        '-Xlint:-options',
-        '-d', $mainClasses
-    ) + $mainSources) `
-    -FailureMessage 'NicoCache_nl本体のコンパイルに失敗しました'
-Copy-Item -LiteralPath (Join-Path $root 'src\dareka\GUILauncherIcon.gif') `
-    -Destination (Join-Path $mainClasses 'dareka\GUILauncherIcon.gif')
-Get-ChildItem -LiteralPath (Join-Path $root 'src\dareka') `
-        -File -Filter 'setup_messages*.properties' |
-    Copy-Item -Destination (Join-Path $mainClasses 'dareka')
-
-$packageManifest = Join-Path $buildRoot 'manifest-package.mf'
-@(
-    'Manifest-Version: 1.0'
-    'Main-Class: dareka.UserDataMain'
-    'Class-Path: sqlite-jdbc.jar igo.jar library.jar NicoCacheCA.jar lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar'
-    ''
-) | Set-Content -LiteralPath $packageManifest -Encoding ascii
-$mainJar = Join-Path $inputRoot 'NicoCache_nl.jar'
-Invoke-NativeCommand -FilePath $jar -ArgumentList @(
-    'cfm', $mainJar,
-    $packageManifest,
-    '-C', $mainClasses, 'dareka',
-    '-C', (Join-Path $root 'src'), 'native'
-) -FailureMessage 'NicoCache_nl.jarの作成に失敗しました'
-
-$bcClasspath = ($dependencyLock.Artifacts | ForEach-Object {
-        Join-Path $dependencyRoot $_.FileName
-    }) -join [System.IO.Path]::PathSeparator
-$caSources = @(Get-ChildItem -LiteralPath (Join-Path $root 'src\nicocacheca') `
-        -File -Filter '*.java' |
-        Select-Object -ExpandProperty FullName)
-Invoke-NativeCommand -FilePath $javac -ArgumentList (@(
-        '--release', '11',
-        '-encoding', 'UTF-8',
-        '-Xlint:-options',
-        '-classpath', $bcClasspath,
-        '-d', $caClasses
-    ) + $caSources) `
-    -FailureMessage 'NicoCacheCAのコンパイルに失敗しました'
-
-$caManifest = Join-Path $buildRoot 'manifest-ca.mf'
-@(
-    'Manifest-Version: 1.0'
-    'Main-Class: nicocacheca.NicoCacheCA'
-    'Class-Path: lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar'
-    ''
-) | Set-Content -LiteralPath $caManifest -Encoding ascii
-$caJar = Join-Path $inputRoot 'NicoCacheCA.jar'
-Invoke-NativeCommand -FilePath $jar -ArgumentList @(
-    'cfm', $caJar,
-    $caManifest,
-    '-C', $caClasses, 'nicocacheca'
-) -FailureMessage 'NicoCacheCA.jarの作成に失敗しました'
+$javaBuildScript = Join-Path $root 'build-javac.ps1'
+if (-not (Test-Path -LiteralPath $javaBuildScript -PathType Leaf)) {
+    throw "Javaビルドアプリのブートストラップが見つかりません: $javaBuildScript"
+}
+& $javaBuildScript -JavaVersion $javaMajorVersion `
+    -LibraryDirectory $dependencyRoot -Clean
+if ($LASTEXITCODE -ne 0) {
+    throw 'NicoCacheBuildによる本体・補助アプリのビルドに失敗しました'
+}
+foreach ($artifactName in @(
+        'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar')) {
+    $artifactPath = Join-Path $root $artifactName
+    if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf)) {
+        throw "Javaビルド成果物がありません: $artifactPath"
+    }
+    Copy-Item -LiteralPath $artifactPath -Destination $inputRoot -Force
+}
 
 $distributionFiles = @(
     'certificate-targets.txt',
@@ -499,6 +452,8 @@ $runtimeModules = @(
         }
     }
     'jdk.charsets'
+    'java.desktop'
+    'java.net.http'
 ) | Sort-Object -Unique
 if ($runtimeModules.Count -le 1) {
     throw '既定Javaモジュールの一覧が空です'
@@ -513,8 +468,8 @@ $jpackageArguments = @(
     '--description', 'ニコニコ動画向けローカルプロキシー兼キャッシュサーバー',
     '--input', $inputRoot,
     '--dest', $outputRoot,
-    '--main-jar', 'NicoCache_nl.jar',
-    '--main-class', 'dareka.UserDataMain',
+    '--main-jar', 'NicoCacheLauncher.jar',
+    '--main-class', 'nicocache.launcher.LauncherMain',
     '--icon', $installerIcon
 )
 foreach ($javaOption in $sharedJavaOptions) {

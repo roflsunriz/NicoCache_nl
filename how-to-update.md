@@ -3,7 +3,12 @@
 ## 前提
 
 - JDK 17、21、25 のいずれか（`build-javac.ps1` が検出して選択）
-- PowerShell
+- PowerShell（Windowsまたは`build-javac.ps1`を使う場合）、またはPOSIX互換シェル
+
+`build-javac.ps1`はJavaで実装した`NicoCacheBuild.jar`をブートストラップして、
+本体、CA生成、起動管理、ビルド管理の4アプリを生成する。コンパイル済みクラスは
+`.build/`へ隔離し、`src/`へ`.class`を生成しない。JDKが同じならWindows、Linux、
+macOSで同じビルドアプリを実行できる。
 
 作業前に `git status --short --branch` を確認する。`cache/`、`certs/`、
 `data/`、ローカル `extensions/`、`NicoCacheGUI.property`、
@@ -23,6 +28,36 @@
 ```powershell
 .\build-javac.ps1
 ```
+
+Linux/macOSでは次のPOSIXラッパーも利用できる。
+
+```sh
+./build-javac.sh
+```
+
+生成物は次の4つである。
+
+- `NicoCache_nl.jar`: 本体。`dareka.UserDataMain`を持つ。
+- `NicoCacheCA.jar`: `certificate-targets.txt`を読み込む証明書生成アプリ。
+- `NicoCacheLauncher.jar`: GUI、タスクトレイ、タスクスケジューラー、ヘッドレスCLI。
+- `NicoCacheBuild.jar`: 上記3アプリを生成するビルドアプリ。
+
+GUIを使わずに本体を常駐起動する場合は、起動管理アプリを次のように実行する。
+
+```powershell
+java -jar .\NicoCacheLauncher.jar --headless --start
+java -jar .\NicoCacheLauncher.jar --headless --status
+java -jar .\NicoCacheLauncher.jar --headless --stop
+```
+
+未設定環境では先に`--setup --headless`を実行し、ユーザーデータ先とHTTPS、CA信頼、
+OSプロキシー、自動起動の各`true`/`false`を明示する。
+
+管理APIは`127.0.0.1`だけで待ち受け、`data/nicocache-control.properties`に保存した
+ランダムトークンを要求する。起動管理アプリ以外から呼ぶ場合も、状態ファイルの
+`host`、`port`、`token`を読み、Bearer認証を付ける。主なエンドポイントは
+`GET /api/control/status`、`GET /api/control/ping`、
+`POST /api/control/graceful-shutdown`、`POST /api/control/force-shutdown`である。
 
 保存済みCMAF/Domandを単一MP4へ変換する独立ツールを変更した場合は、同ツールの
 ビルドと単体テストを実行する。ツールはJava 11以上でビルドでき、実際の変換確認には
@@ -76,9 +111,8 @@ GUIログのタブ、検索、メニュー、履歴保存など画面操作を�
 従来の `genCerts.bat` と初回起動ウィザードは同じ一覧を参照するため、別々の
 ドメイン一覧を追加しない。
 
-ビルドスクリプトは `src/` の `.class` と `NicoCache_nl.jar` を更新するため、
-必要な検証が終わったら `git status --short --branch` で生成物や無関係な差分が
-混入していないことを確認する。
+ビルドスクリプトはルートの4つのJARを更新するため、必要な検証が終わったら
+`git status --short --branch` で生成物や無関係な差分が混入していないことを確認する。
 
 ## GitHub Actions とリリース
 

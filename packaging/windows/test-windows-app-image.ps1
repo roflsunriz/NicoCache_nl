@@ -44,6 +44,7 @@ foreach ($requiredPath in @(
         $launcherPath,
         (Join-Path $internalAppDirectory 'NicoCache_nl.jar'),
         (Join-Path $internalAppDirectory 'NicoCacheCA.jar'),
+        (Join-Path $internalAppDirectory 'NicoCacheLauncher.jar'),
         $certificateTargetsPath,
         (Join-Path $internalAppDirectory 'lib\bcprov.jar'),
         (Join-Path $internalAppDirectory 'lib\bcpkix.jar'),
@@ -103,6 +104,23 @@ try {
     }
 } finally {
     $archive.Dispose()
+}
+$launcherJarPath = Join-Path $internalAppDirectory 'NicoCacheLauncher.jar'
+$launcherArchive = [System.IO.Compression.ZipFile]::OpenRead($launcherJarPath)
+try {
+    $launcherEntries = @($launcherArchive.Entries |
+        Select-Object -ExpandProperty FullName)
+    foreach ($requiredEntry in @(
+            'nicocache/launcher/LauncherMain.class',
+            'nicocache/launcher/messages.properties',
+            'nicocache/launcher/messages_ja.properties'
+        )) {
+        if ($requiredEntry -notin $launcherEntries) {
+            throw "ランチャーJARに必要な要素がありません: $requiredEntry"
+        }
+    }
+} finally {
+    $launcherArchive.Dispose()
 }
 $cmafJarPath = Join-Path $appDirectory 'tools\cmaf-to-mp4\nico-cmaf-to-mp4.jar'
 $cmafArchive = [System.IO.Compression.ZipFile]::OpenRead($cmafJarPath)

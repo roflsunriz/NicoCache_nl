@@ -43,7 +43,7 @@ jobs:
           .\packaging\windows\test-dependency-lock.ps1
           .\packaging\windows\test-dependency-update.ps1
 
-      - name: Build NicoCache_nl.jar
+      - name: Build NicoCache Java applications
         shell: pwsh
         run: .\build-javac.ps1 -JavaVersion 17
 

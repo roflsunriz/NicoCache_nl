@@ -73,6 +73,23 @@ if ($Platform -eq 'Linux') {
 }
 Assert-File (Join-Path $applicationDirectory 'NicoCache_nl.jar')
 Assert-File (Join-Path $applicationDirectory 'NicoCacheCA.jar')
+Assert-File (Join-Path $applicationDirectory 'NicoCacheLauncher.jar')
+$launcherJarPath = Join-Path $applicationDirectory 'NicoCacheLauncher.jar'
+$launcherArchive = [System.IO.Compression.ZipFile]::OpenRead($launcherJarPath)
+try {
+    $launcherEntries = @($launcherArchive.Entries |
+        Select-Object -ExpandProperty FullName)
+    foreach ($requiredEntry in @(
+            'nicocache/launcher/LauncherMain.class',
+            'nicocache/launcher/messages.properties',
+            'nicocache/launcher/messages_ja.properties'
+        )) {
+        Assert-True ($requiredEntry -in $launcherEntries) `
+            "ランチャーJARに必要な要素がありません: $requiredEntry"
+    }
+} finally {
+    $launcherArchive.Dispose()
+}
 Assert-File (Join-Path $applicationDirectory 'lib/bcpkix.jar')
 Assert-File (Join-Path $applicationDirectory 'lib/bcprov.jar')
 Assert-File (Join-Path $applicationDirectory 'lib/bcutil.jar')

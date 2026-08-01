@@ -85,6 +85,13 @@ HTTP サーバーを利用する。
 .\tests\compat\get-extension-api.ps1 -JarPath .\NicoCache_nl.jar
 ```
 
+## 独立アプリと管理APIのヘッドレススモークテスト
+
+`test-e2e.ps1`は独立した`NicoCacheLauncher.jar`から本体JARを子プロセスとして起動し、
+`--headless`の前景動作、ループバック限定管理APIのBearer認証、グレイスフル停止、
+本体のHTTP応答を隔離領域で確認する。タスク登録の実適用はOSごとのCIランナーで行い、
+ローカル環境のタスクスケジューラーは変更しない。
+
 ## Windows パッケージの隔離スモークテスト
 
 `packaging/windows/test-windows-app-image.ps1` は自己完結アプリイメージの

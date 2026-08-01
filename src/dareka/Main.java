@@ -37,6 +37,7 @@ public class Main {
     private static volatile TlsEndPoint tlsEndPoint;
     private static volatile Thread cleanerHookThread;          // [nl]
     private static volatile DirectoryWatcher directoryWatcher; // [nl]
+    private static volatile ControlServer controlServer;
     private static volatile boolean done = true;
 
     public static void stop() {
@@ -56,6 +57,13 @@ public class Main {
             Logger.error(e);
         } finally {
             try {
+                if (controlServer != null) {
+                    controlServer.close();
+                }
+            } catch (Throwable e) {
+                Logger.error(e);
+            }
+            try {
                 if (cleanerHookThread != null
                         && cleanerHookThread.isAlive()) { // [nl]
                     cleanerHookThread.interrupt();
@@ -71,6 +79,17 @@ public class Main {
             cleanerHookThread = null;
             done = true;
         }
+    }
+
+    /** Immediately terminate the process after closing active resources. */
+    static void forceStop() {
+        if (directoryWatcher != null) {
+            directoryWatcher.interrupt();
+        }
+        if (server != null) {
+            server.forceStop();
+        }
+        Runtime.getRuntime().halt(0);
     }
 
     static boolean isDone() { // [nl]
@@ -271,6 +290,9 @@ public class Main {
         startupDirectoryWatcher(config); // [nl]
 
         server = new Server(config);
+        controlServer = ControlServer.start(
+                NicoCachePaths.dataRoot(), NLMain::shutdown, Main::forceStop);
+        Logger.info("controlPort=" + controlServer.getPort());
         tlsEndPoint = new TlsEndPoint();
         if (Boolean.getBoolean("enableMitm")) {
             if (!tlsEndPoint.init()) {

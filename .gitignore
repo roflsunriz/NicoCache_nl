@@ -2,6 +2,7 @@
 *.class
 *.jar
 *.jar.sig
+/.build/
 
 # Editor and temporary files
 *~

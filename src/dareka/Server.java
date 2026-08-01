@@ -203,6 +203,17 @@ public class Server {
         executor.shutdown();
     }
 
+    synchronized void forceStop() {
+        stopped = true;
+
+        if (periodicalCaller != null) {
+            periodicalCaller.interrupt();
+        }
+        cleanupServerSocket();
+        cleanupWorkers();
+        executor.shutdownNow();
+    }
+
     private void bindServerSocket() {
         int port = Integer.getInteger("listenPort");
         String from = System.getProperty("allowFrom", "local");

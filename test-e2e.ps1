@@ -9,7 +9,8 @@ $classes = Join-Path $workRoot 'classes'
 $httpSandbox = Join-Path $workRoot 'http'
 $guiSandbox = Join-Path $workRoot 'gui'
 $preview = Join-Path $guiSandbox 'preview'
-$testJar = Join-Path $workRoot 'NicoCache_nl-e2e.jar'
+$coreJar = Join-Path $workRoot 'NicoCache_nl-e2e-core.jar'
+$testJar = Join-Path $workRoot 'NicoCacheLauncher-e2e.jar'
 
 if (Test-Path -LiteralPath $workRoot) {
     $resolvedWork = (Resolve-Path -LiteralPath $workRoot).Path
@@ -33,10 +34,16 @@ try {
         Join-Path (Join-Path $root 'tests') 'e2e'
     ) -File -Filter '*.java' |
         Select-Object -ExpandProperty FullName
+    $launcherSourceRoot = (Resolve-Path -LiteralPath (
+        Join-Path $root 'tools/nicocache-launcher/src/main/java'
+    )).Path
+    $launcherSources = Get-ChildItem -LiteralPath $launcherSourceRoot `
+        -Recurse -File -Filter '*.java' |
+        Select-Object -ExpandProperty FullName
 
     & javac --release 11 --add-modules jdk.httpserver -encoding UTF-8 `
         -Xlint:all -Werror -d $classes `
-        $productSources $testSources
+        $productSources $testSources $launcherSources
     if ($LASTEXITCODE -ne 0) {
         throw '本体またはE2Eテストのコンパイルに失敗しました'
     }
@@ -47,14 +54,32 @@ try {
     ) -Destination (Join-Path (Join-Path $classes 'dareka') `
         'GUILauncherIcon.gif')
 
-    & jar cfm $testJar (Join-Path $root 'manifest-nl.mf') `
+    $launcherResourceRoot = (Resolve-Path -LiteralPath (
+        Join-Path $root 'tools/nicocache-launcher/src/main/resources'
+    )).Path
+    foreach ($resource in (Get-ChildItem -LiteralPath $launcherResourceRoot `
+            -Recurse -File)) {
+        $relative = $resource.FullName.Substring(
+            $launcherResourceRoot.Length).TrimStart('\', '/')
+        $target = Join-Path $classes $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) `
+            -Force | Out-Null
+        Copy-Item -LiteralPath $resource.FullName -Destination $target -Force
+    }
+
+    & jar cfm $coreJar (Join-Path $root 'manifest-nl.mf') `
         -C $classes dareka
     if ($LASTEXITCODE -ne 0) {
-        throw 'E2E用製品JARの作成に失敗しました'
+        throw 'E2E用本体JARの作成に失敗しました'
+    }
+    & jar cfe $testJar nicocache.launcher.LauncherMain `
+        -C $classes nicocache
+    if ($LASTEXITCODE -ne 0) {
+        throw 'E2E用起動管理JARの作成に失敗しました'
     }
 
     & java --add-modules jdk.httpserver -cp $classes `
-        e2e.EndToEndTestMain $root $httpSandbox $testJar
+        e2e.EndToEndTestMain $root $httpSandbox $testJar $coreJar
     if ($LASTEXITCODE -ne 0) {
         throw '実JAR E2Eテストに失敗しました'
     }

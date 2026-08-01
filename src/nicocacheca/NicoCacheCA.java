@@ -8,10 +8,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.security.GeneralSecurityException;
-import java.security.Key;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
@@ -287,11 +287,14 @@ public class NicoCacheCA {
     }
 
     public static void main(String[] args) {
-        if (args.length == 0) {
-            System.out.println(VER_STRING);
-            System.out.println("Usage: java -jar dist/NicoCacheCA.jar domain ...");
-            System.out.println("e.g. \"*.nicovideo.jp\" \"*.ce.nicovideo.jp\" \"*.smilevideo.jp\" ...");
+        if (hasHelpOption(args)) {
+            printUsage();
             return;
+        }
+        String[] domains = readTargets(args);
+        if (domains.length == 0) {
+            throw new IllegalArgumentException(
+                    "証明書対象一覧が空です。--targets-file を確認してください");
         }
         if (!CERTS_DIR.exists()) {
             CERTS_DIR.mkdirs();
@@ -303,7 +306,7 @@ public class NicoCacheCA {
         if (!CA_KEYSTORE_FILE.exists()) {
             if (!generateCA()) {
                 System.out.println("[ERROR] Failed to generate CA.");
-                return;
+                throw new IllegalStateException("認証局の生成に失敗しました");
             }
             showMessage = true;
             System.out.println("CA is generated. Please import " + CA_CERT_FILE.getPath() + " to your browser!");
@@ -312,7 +315,7 @@ public class NicoCacheCA {
         // CA_KEYSTORE_FILEだけあって、CA_CERT_FILEがない場合に対処.
         if (!CA_CERT_FILE.exists()) {
             if (!createCerFromJks(CA_CERT_FILE, CA_KEYSTORE_FILE)) {
-                return;
+                throw new IllegalStateException("CA証明書の復元に失敗しました");
             };
         };
 
@@ -320,27 +323,109 @@ public class NicoCacheCA {
         if (!CA_PEM_FILE.exists()) {
             if (!createPemFromCer(CA_PEM_FILE, CA_CERT_FILE)) {
                 System.out.println("[ERROR] Failed to convert to PEM.");
-                return;
+                throw new IllegalStateException("CA PEMの生成に失敗しました");
             }
         }
 
         // SITE_CERT_FILE, SITE_KEYSTORE_FILE
-        if (!generateCertificate(args)) {
+        if (!generateCertificate(domains)) {
             System.out.println("[ERROR] Failed to generate site certificate.");
-            return;
+            throw new IllegalStateException("サイト証明書の生成に失敗しました");
         }
 
         // SITE_TARGETS_FILE
-        if (!writeSiteTargetsFile(args)) {
+        if (!writeSiteTargetsFile(domains)) {
             System.out.println("[ERROR] Failed to write target list file: " + SITE_TARGETS_FILE.getName());
-            return;
+            throw new IllegalStateException("証明書対象一覧の保存に失敗しました");
         }
 
         if (showMessage) {
-            System.out.println("Certificate is generated for " + String.join(", ", args));
+            System.out.println("Certificate is generated for " + String.join(", ", domains));
             System.out.println("");
             System.out.println("*** Please import " + CA_CERT_FILE.getPath() + " to your browser! ***");
         }
+    }
+
+    private static boolean hasHelpOption(String[] args) {
+        for (String arg : args) {
+            if ("--help".equals(arg) || "-h".equals(arg)
+                    || "--headless".equals(arg)) {
+                if (!"--headless".equals(arg)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static void printUsage() {
+        System.out.println(VER_STRING);
+        System.out.println("Usage: java -jar NicoCacheCA.jar"
+                + " [--headless] [--targets-file=<path>]");
+        System.out.println("対象ホストは指定したUTF-8の一覧ファイルから"
+                + "空行と#コメントを除いて読み込みます。");
+    }
+
+    private static String[] readTargets(String[] args) {
+        Path targetsFile = Path.of(System.getProperty(
+                "nicocacheca.targetsFile", "certificate-targets.txt"));
+        java.util.List<String> positional = new java.util.ArrayList<>();
+        for (int index = 0; index < args.length; index++) {
+            String arg = args[index];
+            if ("--headless".equals(arg)) {
+                continue;
+            }
+            if (arg.startsWith("--targets-file=")) {
+                String value = arg.substring("--targets-file=".length()).trim();
+                if (value.isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "--targets-file は空にできません");
+                }
+                targetsFile = Path.of(value);
+                continue;
+            }
+            if ("--targets-file".equals(arg)) {
+                if (++index >= args.length || args[index].isBlank()) {
+                    throw new IllegalArgumentException(
+                            "--targets-file の値がありません");
+                }
+                targetsFile = Path.of(args[index]);
+                continue;
+            }
+            if (arg.startsWith("--")) {
+                throw new IllegalArgumentException("不明なオプションです: " + arg);
+            }
+            positional.add(arg);
+        }
+        if (!positional.isEmpty()) {
+            return validateTargets(positional);
+        }
+        try {
+            java.util.List<String> lines = Files.readAllLines(
+                    targetsFile, StandardCharsets.UTF_8);
+            java.util.List<String> targets = new java.util.ArrayList<>();
+            for (String line : lines) {
+                String target = line.trim();
+                if (!target.isEmpty() && !target.startsWith("#")) {
+                    targets.add(target);
+                }
+            }
+            return validateTargets(targets);
+        } catch (IOException error) {
+            throw new IllegalArgumentException(
+                    "証明書対象一覧を読み取れません: " + targetsFile, error);
+        }
+    }
+
+    private static String[] validateTargets(java.util.List<String> targets) {
+        for (String target : targets) {
+            if (target.isEmpty() || target.indexOf('\0') >= 0
+                    || target.chars().anyMatch(Character::isWhitespace)) {
+                throw new IllegalArgumentException(
+                        "証明書対象ホストが不正です: " + target);
+            }
+        }
+        return targets.toArray(new String[0]);
     }
 
 }
