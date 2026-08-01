@@ -59,8 +59,33 @@ function Invoke-LauncherTaskCommand {
     }
 }
 
+function Get-TaskXmlFromAll {
+    param(
+        [Parameter(Mandatory)][string[]]$Output,
+        [Parameter(Mandatory)][string]$DataRoot
+    )
+    try {
+        $document = [xml]($Output -join [Environment]::NewLine)
+    } catch {
+        throw "Windowsタスク一覧のXMLを解析できません: $($_.Exception.Message)"
+    }
+    foreach ($taskNode in $document.SelectNodes("//*[local-name()='Task']")) {
+        $argumentsNode = $taskNode.SelectSingleNode(
+            ".//*[local-name()='Arguments']")
+        if ($null -ne $argumentsNode -and
+                ([string]$argumentsNode.InnerText).IndexOf(
+                    $DataRoot, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+            return [xml]$taskNode.OuterXml
+        }
+    }
+    return $null
+}
+
 function Get-TaskXml {
-    param([Parameter(Mandatory)][string]$TaskPath)
+    param(
+        [Parameter(Mandatory)][string]$TaskPath,
+        [Parameter(Mandatory)][string]$DataRoot
+    )
 
     $taskName = Split-Path -Path $TaskPath -Leaf
     $taskFolder = Split-Path -Path $TaskPath -Parent
@@ -78,6 +103,23 @@ function Get-TaskXml {
             }
         }
         $lastOutput = $output
+        Start-Sleep -Milliseconds 500
+    }
+
+    for ($attempt = 1; $attempt -le 10; $attempt++) {
+        $allOutput = @(& schtasks.exe /Query /XML ONE 2>&1)
+        if ($LASTEXITCODE -eq 0) {
+            try {
+                $taskXml = Get-TaskXmlFromAll $allOutput $DataRoot
+                if ($null -ne $taskXml) {
+                    return $taskXml
+                }
+            } catch {
+                $lastOutput = @($_.Exception.Message)
+            }
+        } else {
+            $lastOutput = $allOutput
+        }
         Start-Sleep -Milliseconds 500
     }
 
@@ -106,7 +148,7 @@ try {
         throw "登録したタスクを一意に特定できません: $($nativeTasks -join ', ')"
     }
     $nativeTask = $nativeTasks[0]
-    $taskXml = Get-TaskXml $nativeTask
+    $taskXml = Get-TaskXml $nativeTask $dataRoot
     $logonTrigger = $taskXml.Task.Triggers.LogonTrigger
     if ($null -eq $logonTrigger) {
         throw '登録タスクにLogonTriggerがありません'
@@ -146,7 +188,7 @@ try {
         ('--data-root=' + $dataRoot),
         ('--task-name=' + $taskLabel)
     )
-    $updatedXml = Get-TaskXml $nativeTask
+    $updatedXml = Get-TaskXml $nativeTask $dataRoot
     if ($null -eq $updatedXml.Task.Triggers.LogonTrigger) {
         throw '更新後のタスクからLogonTriggerが消えています'
     }

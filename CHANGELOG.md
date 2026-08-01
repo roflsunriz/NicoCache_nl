@@ -12,7 +12,8 @@
   LinuxのDEB/RPMへCMAF/Domand変換器を保持し、macOSアプリバンドルの`Contents/app`にある
   本体JARを起動管理アプリが解決できるようにした。
 - Windowsタスクスケジューラーの登録直後に行うCIのXML照会を単一XMLモードで安定させ、
-  Runner差異に備えてPowerShellのタスクエクスポートへフォールバックするようにした。
+  個別照会が失敗するRunnerでは一意なデータルートから対象を抽出し、PowerShellの
+  タスクエクスポートへもフォールバックするようにした。
 - `/cache/info`と`/cache/info/v2`の空入力を空JSONとして扱い、`rm`、`rmtmp`、
   `echo`の引数なし・不正入力を例外ではなく400で返すようにした。`echo`のJSON
   エスケープと`getxml?type=...`の標準クエリ解析も修正し、外部APIの応答を機械的に
