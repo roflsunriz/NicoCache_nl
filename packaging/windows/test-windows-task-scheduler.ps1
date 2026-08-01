@@ -62,15 +62,20 @@ function Invoke-LauncherTaskCommand {
 function Get-TaskXml {
     param([Parameter(Mandatory)][string]$TaskPath)
 
-    $output = @(& schtasks.exe /Query /TN $TaskPath /XML 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "登録したWindowsタスクを照会できません: $TaskPath"
+    $lastOutput = @()
+    for ($attempt = 1; $attempt -le 10; $attempt++) {
+        $output = @(& schtasks.exe /Query /TN $TaskPath /XML 2>&1)
+        if ($LASTEXITCODE -eq 0) {
+            try {
+                return [xml]($output -join [Environment]::NewLine)
+            } catch {
+                throw "WindowsタスクのXMLを解析できません: $TaskPath"
+            }
+        }
+        $lastOutput = $output
+        Start-Sleep -Milliseconds 500
     }
-    try {
-        return [xml]($output -join [Environment]::NewLine)
-    } catch {
-        throw "WindowsタスクのXMLを解析できません: $TaskPath"
-    }
+    throw "登録したWindowsタスクを照会できません: $TaskPath / $($lastOutput -join ' ')"
 }
 
 try {

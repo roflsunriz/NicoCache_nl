@@ -11,6 +11,8 @@
 - クリーンチェックアウトのCIでもロック済みBouncy Castleを取得してJava 17/25ビルドへ渡すようにし、
   LinuxのDEB/RPMへCMAF/Domand変換器を保持し、macOSアプリバンドルの`Contents/app`にある
   本体JARを起動管理アプリが解決できるようにした。
+- Windowsタスクスケジューラーの登録直後に行うCIのXML照会が、Runner側の反映遅延で失敗しないよう
+  限定的に再試行し、最終的な照会エラーの出力も確認できるようにした。
 - `/cache/info`と`/cache/info/v2`の空入力を空JSONとして扱い、`rm`、`rmtmp`、
   `echo`の引数なし・不正入力を例外ではなく400で返すようにした。`echo`のJSON
   エスケープと`getxml?type=...`の標準クエリ解析も修正し、外部APIの応答を機械的に
