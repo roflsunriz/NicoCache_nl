@@ -28,7 +28,7 @@ final class LauncherSetupDialog {
                 32);
         JCheckBox https = new JCheckBox(messages.getString("setup.https"), true);
         JCheckBox trust = new JCheckBox(messages.getString("setup.trust"), false);
-        JCheckBox proxy = new JCheckBox(messages.getString("setup.proxy"), false);
+        JCheckBox proxy = new JCheckBox(messages.getString("setup.proxy"), true);
         JCheckBox autostart = new JCheckBox(
                 messages.getString("setup.autostart"), false);
         JPanel rootPanel = new JPanel(new BorderLayout(8, 8));

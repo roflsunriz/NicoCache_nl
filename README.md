@@ -53,14 +53,15 @@ java -jar .\NicoCacheLauncher.jar --headless --stop
 java -jar .\NicoCacheLauncher.jar --headless --check-data-root
 ```
 
-初回は`--setup --headless`に`--user-data-root`、`--https`、
-`--trust-certificate`、`--proxy`、`--autostart`を明示してセットアップします。
+初回は`--setup --headless`に`--user-data-root`、`--https=true`、
+`--trust-certificate`、`--proxy=true`、`--autostart`を明示してセットアップします。
 
 Linux/macOSでも同じCLIを利用できます。旧来のGUI起動・証明書生成スクリプトは削除し、
 配布パッケージの入口は全OSで同じ起動管理アプリに統一しています。
 `--setup --headless`は初回セットアップへ転送されます。
 
-HTTPS MitMを有効にした場合は、ユーザーデータルートの`certs/site.jks`が必要です。
+現行ニコニコ動画向けの通常構成ではHTTPS MitMが必須で、ユーザーデータルートの
+`certs/site.jks`と`proxy.pac`が必要です。
 証明書が未生成の移行先では、本体を起動する前に次を実行してください。
 
 ```powershell
@@ -84,7 +85,7 @@ Firefoxなどのブラウザーで指定するプロキシーは、設定の`lis
 `8080`）です。`--status`に表示される`port`は起動管理API用なので、ブラウザーの
 プロキシーには指定しないでください。HTTPS MitMを有効にしたまま
 `userDataRoot/certs/site.jks`がない場合、本体は`degraded`状態になり、8080番では
-待ち受けません。移行後は証明書を生成してから再起動してください。
+待ち受けません。移行後は証明書と`proxy.pac`を用意してから再起動してください。
 
 ## GUIログを検索する
 

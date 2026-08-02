@@ -18,18 +18,19 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
 - TLSクライアント証明書ストア。ユーザーデータ側にない場合は、アプリケーション側の
   既定資材を代替利用できるかも確認します
 - `data/first-run-setup.properties` の完了状態と、記録された `userDataRoot` の一致
-- `enableMitm=true` の場合の `certs/site.jks`、`certs/site.targets`、
-  `mitmHostPort` の一致、`certs/ca.cer` の有無
-- セットアップでOSプロキシーを有効にした場合の `proxy.pac`
+- 現行ニコニコ動画向けに必須となる HTTPS MitM の `enableMitm=true`、
+  `certs/site.jks`、`certs/site.targets`、`mitmHostPort` の一致、`certs/ca.cer` の有無
+- 現行ニコニコ動画の対象通信をプロキシーへ送るために必須となる `proxy.pac`
 - 旧来のアプリケーションルートを移したことを示す `config.ini`、
   `config.properties`、`NicoCache_nl.jar` の混在
 
 画面の判定は次の3種類です。
 
 - **完全（起動可能）**: 必須資材と移行確認がそろっています。
-- **要確認**: 初回セットアップで作成できるフォルダー、既定資材による代替、CA未登録、
-  または移行完了記録などが不足しています。本体を起動できる場合もありますが、診断の
-  詳細に原因、起動への影響、完全にするための「対応」が項目ごとに表示されます。
+- **要確認**: 初回セットアップで作成できるフォルダー、HTTPS MitMの無効化、`proxy.pac`、
+  既定資材による代替、CA未登録、または移行完了記録などが不足しています。本体を起動
+  できる場合もありますが、診断の詳細に原因、起動への影響、完全にするための「対応」が
+  項目ごとに表示されます。
 - **起動不可**: 権限、TLSストア、MitMキーストア、対象一覧など、本体が正常に起動できない
   不足または不整合があります。
 
@@ -47,13 +48,14 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
    `NicoCacheGUI.property` を対象にします。
 4. `config.properties`、`NicoCache_nl.jar`、アプリケーションの `defaults/` はユーザーデータ
    ルートへコピーしません。新しいルートには本体が必要とするユーザーデータだけを置きます。
-5. HTTPS MitMを使う場合、診断で `site.jks` と `site.targets` が確認済みになるまで本体を
-   再起動しません。証明書を作り直すときは、アプリケーション側の
+5. HTTPS MitMは現行ニコニコ動画に必須です。診断で `site.jks` と `site.targets` が確認済み
+   になるまで本体を再起動しません。証明書を作り直すときは、アプリケーション側の
    `certificate-targets.txt` を入力に `NicoCacheCA.jar` を実行します。対象ドメインはJava
    ソースへ埋め込まず、この一覧から読み込みます。
-6. `certs/ca.cer` をFirefoxまたはOSの信頼済み証明書ストアへ登録し、診断を再実行します。
-   「完全」になったら本体を起動し、ブラウザーは起動管理APIのポートではなく
-   `listenPort`（既定値 `8080`）へプロキシー接続します。
+6. `certs/ca.cer` をFirefoxまたはOSの信頼済み証明書ストアへ登録し、`proxy.pac`を
+   ユーザーデータルート直下に用意してから診断を再実行します。「完全」になったら本体を
+   起動し、ブラウザーは起動管理APIのポートではなく`proxy.pac`（NicoCache_nlの
+   `listenPort`、既定値 `8080`）を使用します。
 
 GUIを使えない場合は、同じ判定をヘッドレスで実行できます。
 

@@ -33,11 +33,11 @@ final class DataRootInspector {
         addApplicationConfigChecks(items, application);
         Properties effectiveConfig = loadEffectiveConfig(items, application);
         addConfiguredRootCheck(items, application, data, effectiveConfig);
-        Properties setupState = addSetupStateCheck(items, data);
+        addSetupStateCheck(items, data);
         addSetupDirectories(items, data);
         addTlsClientStoreCheck(items, application, data);
         addMitmChecks(items, application, data, effectiveConfig);
-        addProxyCheck(items, data, setupState);
+        addProxyCheck(items, data);
         addGuiPropertiesCheck(items, data);
         addLegacyLayoutCheck(items, application, data);
 
@@ -352,9 +352,10 @@ final class DataRootInspector {
                 "enableMitm", "enableMitM", "httpsMitm"));
         if (!enabled) {
             add(items, "mitm-certificates",
-                    DataRootInspection.Severity.INFORMATIONAL,
-                    DataRootInspection.ItemState.NOT_APPLICABLE, null, null,
-                    "not-applicable");
+                    DataRootInspection.Severity.REQUIRED,
+                    DataRootInspection.ItemState.ATTENTION,
+                    resolve(application, "config.properties"), null,
+                    "disabled.required");
             return;
         }
 
@@ -546,23 +547,10 @@ final class DataRootInspector {
     }
 
     private static void addProxyCheck(List<DataRootInspection.Item> items,
-            Path data, Properties setupState) {
+            Path data) {
         Path proxy = resolve(data, "proxy.pac");
-        boolean configured = setupState != null
-                && Boolean.parseBoolean(setupState.getProperty(
-                        "configureProxy", "false"));
-        if (configured) {
-            addRegularFileCheck(items, "proxy-pac",
-                    DataRootInspection.Severity.REQUIRED, proxy, "proxy");
-        } else if (proxy != null && existsRegularFile(proxy)) {
-            add(items, "proxy-pac", DataRootInspection.Severity.INFORMATIONAL,
-                    DataRootInspection.ItemState.OK, proxy, null, "present");
-        } else {
-            add(items, "proxy-pac",
-                    DataRootInspection.Severity.INFORMATIONAL,
-                    DataRootInspection.ItemState.NOT_APPLICABLE, proxy, null,
-                    "not-applicable");
-        }
+        addRegularFileCheck(items, "proxy-pac",
+                DataRootInspection.Severity.REQUIRED, proxy, "proxy");
     }
 
     private static void addGuiPropertiesCheck(

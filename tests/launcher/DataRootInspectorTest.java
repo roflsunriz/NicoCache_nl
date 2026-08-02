@@ -55,6 +55,15 @@ public final class DataRootInspectorTest {
         assertEquals("missing.create.list",
                 item(inspection, "directory-list").getReasonKey(),
                 "missing list directory reason");
+        assertEquals(DataRootInspection.ItemState.ATTENTION,
+                item(inspection, "mitm-certificates").getState(),
+                "disabled MitM is incomplete");
+        assertEquals("disabled.required",
+                item(inspection, "mitm-certificates").getReasonKey(),
+                "disabled MitM reason");
+        assertEquals(DataRootInspection.ItemState.ATTENTION,
+                item(inspection, "proxy-pac").getState(),
+                "missing proxy PAC is incomplete");
         ResourceBundle messages = messages(Locale.JAPANESE);
         String details = DataRootInspectionFormatter.details(inspection,
                 messages);
@@ -62,13 +71,19 @@ public final class DataRootInspectorTest {
                 "list purpose must be visible in diagnosis");
         assertTrue(details.contains("本体起動に影響しません"),
                 "optional list directory guidance must be visible");
+        assertTrue(details.contains("現行ニコニコ動画ではHTTPS MitMが必須です"),
+                "disabled MitM guidance must be visible");
+        assertTrue(details.contains("proxy.pacを配置してください"),
+                "proxy PAC guidance must be visible");
         assertEquals(1, inspection.getExitCode(),
                 "incomplete root exit code");
     }
 
     private static void testCompleteRoot(Path work) throws Exception {
         Path application = createApplication(work.resolve("complete-app"),
-                false, false);
+                true, false);
+        Files.writeString(application.resolve("certificate-targets.txt"),
+                "expected.example\n", StandardCharsets.US_ASCII);
         Path data = work.resolve("complete-data");
         createCompleteRoot(data);
 
@@ -82,6 +97,9 @@ public final class DataRootInspectorTest {
         assertEquals(DataRootInspection.ItemState.OK,
                 item(inspection, "tls-client-store").getState(),
                 "user TLS store");
+        assertEquals(DataRootInspection.ItemState.OK,
+                item(inspection, "proxy-pac").getState(),
+                "proxy PAC");
         assertEquals(0, inspection.getExitCode(),
                 "complete root exit code");
         for (Locale locale : List.of(Locale.ENGLISH, Locale.JAPANESE)) {
@@ -123,6 +141,9 @@ public final class DataRootInspectorTest {
         assertEquals(DataRootInspection.ItemState.BLOCKED,
                 item(inspection, "tls-client-store").getState(),
                 "missing TLS store");
+        assertEquals(DataRootInspection.ItemState.ATTENTION,
+                item(inspection, "mitm-certificates").getState(),
+                "disabled MitM is incomplete");
     }
 
     private static void testMitmCertificateRequirements(Path work)
@@ -219,6 +240,10 @@ public final class DataRootInspectorTest {
             boolean enableMitm, boolean includeFallbackStore) throws Exception {
         Files.createDirectories(application);
         String config = "enableMitm=" + enableMitm + System.lineSeparator();
+        if (enableMitm) {
+            config += "mitmHostPort=expected.example"
+                    + System.lineSeparator();
+        }
         Files.writeString(application.resolve("config.properties"), config,
                 StandardCharsets.ISO_8859_1);
         if (includeFallbackStore) {
@@ -232,6 +257,13 @@ public final class DataRootInspectorTest {
         createBaseDirectories(data);
         Files.createDirectories(data.resolve("data/tlsclient"));
         writeKeyStore(data.resolve("data/tlsclient/cacerts2"));
+        writeKeyStore(data.resolve("certs/site.jks"));
+        Files.writeString(data.resolve("certs/site.targets"),
+                "expected.example\n", StandardCharsets.US_ASCII);
+        Files.writeString(data.resolve("certs/ca.cer"), "test-ca",
+                StandardCharsets.US_ASCII);
+        Files.writeString(data.resolve("proxy.pac"), "DIRECT",
+                StandardCharsets.US_ASCII);
         writeSetupState(data, "complete");
     }
 

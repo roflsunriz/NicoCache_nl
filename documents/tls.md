@@ -1,6 +1,7 @@
 # HTTPS MitM の設定
 
-NicoCache_nl の HTTPS MitM 機能を使う場合は、次の手順で証明書を生成します。
+現行ニコニコ動画ではHTTPS通信が必須のため、NicoCache_nlのHTTPS MitMを有効にし、
+次の手順で証明書を生成します。
 
 1. `certificate-targets.txt` の対象ドメインを確認します。
 2. アプリケーションルートで、ユーザーデータルートを明示して
@@ -15,7 +16,8 @@ NicoCache_nl の HTTPS MitM 機能を使う場合は、次の手順で証明書�
 
 3. 生成されたユーザーデータ側の`certs/ca.cer`を、利用するブラウザーまたはOSの
    信頼済み証明書ストアへ、認証局証明書として登録します。
-4. `config.properties` の HTTPS MitM 関連設定とプロキシー設定を確認して NicoCache_nl を起動します。
+4. `config.properties` の HTTPS MitM 関連設定とプロキシー設定を確認し、`proxy.pac`を
+   用意して NicoCache_nl を起動します。
    ブラウザーのプロキシーは`listenPort`（既定値`8080`）を使い、状態ファイルの
    `port`（起動管理API用）とは分けてください。`userDataRoot/certs/site.jks`が
    ない状態では本体は`degraded`となり、プロキシー待ち受けを開始しません。
