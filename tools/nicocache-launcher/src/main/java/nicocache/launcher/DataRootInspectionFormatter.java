@@ -54,9 +54,10 @@ final class DataRootInspectionFormatter {
                 + item.getState().name().toLowerCase(Locale.ROOT));
         String reason = messages.getString("dataRoot.reason."
                 + item.getReasonKey());
+        String action = actionText(item, messages);
         String result = MessageFormat.format(
                 messages.getString("dataRoot.item.format"), label, severity,
-                state, reason, pathText(item.getPath(), messages));
+                state, reason, pathText(item.getPath(), messages), action);
         Path fallback = item.getFallbackPath();
         if (fallback != null) {
             result += MessageFormat.format(
@@ -65,6 +66,28 @@ final class DataRootInspectionFormatter {
                     pathText(fallback, messages));
         }
         return result;
+    }
+
+    private static String actionText(DataRootInspection.Item item,
+            ResourceBundle messages) {
+        String reasonKey = item.getReasonKey();
+        if (reasonKey != null) {
+            String itemActionKey = "dataRoot.action.item." + item.getId()
+                    + "." + reasonKey;
+            if (messages.containsKey(itemActionKey)) {
+                return messages.getString(itemActionKey);
+            }
+            String reasonActionKey = "dataRoot.action.reason." + reasonKey;
+            if (messages.containsKey(reasonActionKey)) {
+                return messages.getString(reasonActionKey);
+            }
+        }
+        String stateActionKey = "dataRoot.action.state."
+                + item.getState().name().toLowerCase(Locale.ROOT);
+        if (messages.containsKey(stateActionKey)) {
+            return messages.getString(stateActionKey);
+        }
+        return messages.getString("dataRoot.action.default");
     }
 
     private static String pathText(Path path, ResourceBundle messages) {

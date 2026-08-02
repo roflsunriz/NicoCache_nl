@@ -2,7 +2,7 @@
 
 NicoCache_nl のパッケージ版は、アプリケーション側とユーザーデータ側を分けます。
 `config.properties` はアプリケーションフォルダーに置き、`userDataRoot` が指す場所へ
-キャッシュ、証明書、GUI設定、利用者が追加した `local/`・`nlFilters/`・Extensionを保存します。
+キャッシュ、証明書、GUI設定、LST、利用者が追加した `local/`・`nlFilters/`・Extensionを保存します。
 
 ## 起動管理アプリの自動診断
 
@@ -12,6 +12,9 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
 - ルートの存在、ディレクトリ種別、読み書き権限
 - 初回セットアップが作成する `cache/`、`certs/`、`cvcache/`、`data/`、`extensions/`、
   `list/`、`local/`、`nlFilters/`、`thcache/`
+- `list/` は nlFilter の LST（文字列・動画IDリスト）と `/cache/addlist`・`/cache/trimlist`
+  が使う保存先です。LSTを使わない場合は空のままでも本体起動を妨げませんが、標準構成を
+  そろえる場合はユーザーデータルート直下に空の `list/` を作成します。
 - TLSクライアント証明書ストア。ユーザーデータ側にない場合は、アプリケーション側の
   既定資材を代替利用できるかも確認します
 - `data/first-run-setup.properties` の完了状態と、記録された `userDataRoot` の一致
@@ -26,7 +29,7 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
 - **完全（起動可能）**: 必須資材と移行確認がそろっています。
 - **要確認**: 初回セットアップで作成できるフォルダー、既定資材による代替、CA未登録、
   または移行完了記録などが不足しています。本体を起動できる場合もありますが、診断の
-  詳細に次の操作が表示されます。
+  詳細に原因、起動への影響、完全にするための「対応」が項目ごとに表示されます。
 - **起動不可**: 権限、TLSストア、MitMキーストア、対象一覧など、本体が正常に起動できない
   不足または不整合があります。
 
@@ -40,7 +43,8 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
    設定します。起動管理アプリの画面下部に表示されるルートが移行先であることを確認します。
 3. 旧ルートから、必要な利用者資材だけを移します。少なくともキャッシュを保持する場合は
    `cache/`、`cvcache/`、`thcache/`、証明書を保持する場合は `certs/`、利用者の追加資材は
-   `local/`、`nlFilters/`、`extensions/`、個人設定は `NicoCacheGUI.property` を対象にします。
+   `local/`、`nlFilters/`、`extensions/`、LSTを使う場合は `list/`、個人設定は
+   `NicoCacheGUI.property` を対象にします。
 4. `config.properties`、`NicoCache_nl.jar`、アプリケーションの `defaults/` はユーザーデータ
    ルートへコピーしません。新しいルートには本体が必要とするユーザーデータだけを置きます。
 5. HTTPS MitMを使う場合、診断で `site.jks` と `site.targets` が確認済みになるまで本体を

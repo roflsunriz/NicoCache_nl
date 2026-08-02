@@ -52,6 +52,16 @@ public final class DataRootInspectorTest {
         assertEquals(DataRootInspection.ItemState.ATTENTION,
                 item(inspection, "setup-record").getState(),
                 "missing setup record");
+        assertEquals("missing.create.list",
+                item(inspection, "directory-list").getReasonKey(),
+                "missing list directory reason");
+        ResourceBundle messages = messages(Locale.JAPANESE);
+        String details = DataRootInspectionFormatter.details(inspection,
+                messages);
+        assertTrue(details.contains("LST用 list フォルダー"),
+                "list purpose must be visible in diagnosis");
+        assertTrue(details.contains("本体起動に影響しません"),
+                "optional list directory guidance must be visible");
         assertEquals(1, inspection.getExitCode(),
                 "incomplete root exit code");
     }
@@ -75,8 +85,7 @@ public final class DataRootInspectorTest {
         assertEquals(0, inspection.getExitCode(),
                 "complete root exit code");
         for (Locale locale : List.of(Locale.ENGLISH, Locale.JAPANESE)) {
-            ResourceBundle messages = ResourceBundle.getBundle(
-                    "nicocache.launcher.messages", locale);
+            ResourceBundle messages = messages(locale);
             String details = DataRootInspectionFormatter.details(inspection,
                     messages);
             assertTrue(details.contains("cache"),
@@ -84,7 +93,19 @@ public final class DataRootInspectorTest {
             assertTrue(details.contains(data.toString()),
                     "localized diagnosis must contain the selected root: "
                             + locale);
+            String actionMarker = locale.equals(Locale.JAPANESE)
+                    ? "対応: " : "Action: ";
+            assertEquals(inspection.getItems().size(),
+                    countOccurrences(details, actionMarker),
+                    "localized diagnosis must provide an action for every item: "
+                            + locale);
         }
+    }
+
+    private static ResourceBundle messages(Locale locale) {
+        return ResourceBundle.getBundle("nicocache.launcher.messages", locale,
+                ResourceBundle.Control.getNoFallbackControl(
+                        ResourceBundle.Control.FORMAT_PROPERTIES));
     }
 
     private static void testMissingTlsStoreIsBlocked(Path work)
@@ -263,6 +284,16 @@ public final class DataRootInspectorTest {
         if (!condition) {
             throw new AssertionError(message);
         }
+    }
+
+    private static int countOccurrences(String text, String needle) {
+        int count = 0;
+        int offset = 0;
+        while ((offset = text.indexOf(needle, offset)) >= 0) {
+            count++;
+            offset += needle.length();
+        }
+        return count;
     }
 
     private static void deleteTree(Path root) throws IOException {

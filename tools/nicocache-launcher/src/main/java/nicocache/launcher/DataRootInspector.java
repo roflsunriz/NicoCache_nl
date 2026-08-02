@@ -264,12 +264,16 @@ final class DataRootInspector {
             List<DataRootInspection.Item> items, Path data) {
         for (String directory : SETUP_DIRECTORIES) {
             Path path = resolve(data, directory);
-            addDirectoryCheck(items, directory.replace('/', '-'), path);
+            String missingReason = "list".equals(directory)
+                    ? "missing.create.list" : "missing.create";
+            addDirectoryCheck(items, directory.replace('/', '-'), path,
+                    missingReason);
         }
     }
 
     private static void addDirectoryCheck(
-            List<DataRootInspection.Item> items, String id, Path path) {
+            List<DataRootInspection.Item> items, String id, Path path,
+            String missingReason) {
         if (path == null) {
             add(items, "directory-" + id,
                     DataRootInspection.Severity.REQUIRED,
@@ -292,7 +296,7 @@ final class DataRootInspector {
                 add(items, "directory-" + id,
                         DataRootInspection.Severity.REQUIRED,
                         DataRootInspection.ItemState.MISSING, path, null,
-                        "missing.create");
+                        missingReason);
             }
         } catch (SecurityException error) {
             add(items, "directory-" + id,

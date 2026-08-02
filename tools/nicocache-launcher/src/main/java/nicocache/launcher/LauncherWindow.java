@@ -221,7 +221,8 @@ final class LauncherWindow {
         JTextArea details = new JTextArea(
                 DataRootInspectionFormatter.details(inspection, messages));
         details.setEditable(false);
-        details.setLineWrap(false);
+        details.setLineWrap(true);
+        details.setWrapStyleWord(true);
         details.setCaretPosition(0);
         JScrollPane scroll = new JScrollPane(details);
         scroll.setPreferredSize(new Dimension(820, 420));
