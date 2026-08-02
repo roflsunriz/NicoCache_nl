@@ -168,7 +168,7 @@ foreach ($packageWorkflow in @(
     $packageWorkflowContent = Get-Content -Raw -LiteralPath $packageWorkflow.Path
     foreach ($inputPath in @($packageInputPaths + $packageWorkflow.ExtraPaths)) {
         $escapedPath = [regex]::Escape($inputPath)
-        $pathLinePattern = "(?m)^[ `t]*-[ `t]*'$escapedPath'[ `t]*$"
+        $pathLinePattern = "(?m)^[ `t]*-[ `t]*'$escapedPath'[ `t]*\r?$"
         $occurrences = [regex]::Matches(
             $packageWorkflowContent, $pathLinePattern).Count
         if ($occurrences -ne 2) {
