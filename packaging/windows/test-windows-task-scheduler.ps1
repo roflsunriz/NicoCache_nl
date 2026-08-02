@@ -61,21 +61,37 @@ function Invoke-LauncherTaskCommand {
 
 function Get-TaskXmlFromAll {
     param(
-        [Parameter(Mandatory)][string[]]$Output,
+        [string[]]$Output,
         [Parameter(Mandatory)][string]$DataRoot
     )
-    try {
-        $document = [xml]($Output -join [Environment]::NewLine)
-    } catch {
-        throw "Windowsタスク一覧のXMLを解析できません: $($_.Exception.Message)"
+    if ($null -eq $Output -or $Output.Count -eq 0 -or
+            [string]::IsNullOrWhiteSpace($Output -join '')) {
+        return $null
     }
-    foreach ($taskNode in $document.SelectNodes("//*[local-name()='Task']")) {
-        $argumentsNode = $taskNode.SelectSingleNode(
-            ".//*[local-name()='Arguments']")
-        if ($null -ne $argumentsNode -and
-                ([string]$argumentsNode.InnerText).IndexOf(
-                    $DataRoot, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            return [xml]$taskNode.OuterXml
+    $text = $Output -join [Environment]::NewLine
+    try {
+        $document = [xml]$text
+    } catch {
+        $document = $null
+    }
+
+    if ($null -ne $document) {
+        $taskNodes = $document.SelectNodes("//*[local-name()='Task']")
+        foreach ($taskNode in $taskNodes) {
+            if ($taskNode.OuterXml.IndexOf(
+                    $DataRoot,
+                    [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                return [xml]$taskNode.OuterXml
+            }
+        }
+    } else {
+        foreach ($match in [regex]::Matches($text,
+                '(?s)<Task\b.*?</Task>')) {
+            if ($match.Value.IndexOf(
+                    $DataRoot,
+                    [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                return [xml]$match.Value
+            }
         }
     }
     return $null
@@ -116,6 +132,18 @@ function Get-TaskXml {
                 }
             } catch {
                 $lastOutput = @($_.Exception.Message)
+            }
+
+            $allOutput = @(& schtasks.exe /Query /XML 2>&1)
+            if ($LASTEXITCODE -eq 0) {
+                try {
+                    $taskXml = Get-TaskXmlFromAll $allOutput $DataRoot
+                    if ($null -ne $taskXml) {
+                        return $taskXml
+                    }
+                } catch {
+                    $lastOutput = @($_.Exception.Message)
+                }
             }
         } else {
             $lastOutput = $allOutput
