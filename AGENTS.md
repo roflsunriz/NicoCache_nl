@@ -18,6 +18,9 @@ Get-Content -Raw -LiteralPath .\COMMON-AGENTS.md
 NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキシー兼キャッシュサーバーである。Java の本体ソース、実行 JAR、設定例、GUI、ローカル配信用ファイル、拡張機構をこのリポジトリに含む。
 
 `nlFilters/` の標準フィルターと検証ツールはこのリポジトリで管理する。
+`nlFilters/AGENTS.md` の追加規律にも従う。100番台と`COMMON-AGENTS.md`は
+他リポジトリ・共通指示を参照するシンボリックリンクなので管理対象外とし、
+リンクの作成、置換、削除前には `LinkType` と `Target` を確認する。
 
 ## 主要な構成
 
