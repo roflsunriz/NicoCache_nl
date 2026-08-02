@@ -202,9 +202,14 @@ try {
         throw "JVM引数が実行ファイル欄へ混入しています: $command"
     }
     $arguments = [string]$exec.Arguments
-    if (($arguments -notmatch '--headless') -or
-            ($arguments -notmatch '--start') -or
-            ($arguments -notmatch [regex]::Escape($dataRoot))) {
+    if (($arguments -notmatch '(?i)(?:^|\s)-jar(?:\s|$)') -or
+            ($arguments -notmatch [regex]::Escape($launcherJar)) -or
+            ($arguments -notmatch [regex]::Escape(
+                '--app-root=' + $applicationRootPath)) -or
+            ($arguments -notmatch [regex]::Escape(
+                '--data-root=' + $dataRoot)) -or
+            ($arguments -match '--headless') -or
+            ($arguments -match '--start')) {
         throw "登録タスクの起動引数が不正です: $arguments"
     }
     if ($arguments -match '/MO') {
