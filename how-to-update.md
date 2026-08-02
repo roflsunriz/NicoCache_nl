@@ -70,7 +70,8 @@ java -jar .\NicoCacheLauncher.jar --headless --stop
 OSプロキシー、自動起動の各`true`/`false`を明示する。
 
 自動起動はタスク名を指定してログオン時に一回だけ登録する。間隔指定はなく、
-登録直後にOS側のタスク照会が失敗した場合は成功として保存しない。
+登録直後にOS側のタスク照会が失敗した場合は成功として保存しない。ログオン時は
+起動管理GUIを開き、本体もGUIモードで起動する。
 
 ```powershell
 java -jar .\NicoCacheLauncher.jar --headless --task-install `

@@ -86,7 +86,7 @@ public final class LauncherMain {
         case FOREGROUND:
             return core.startAndWait();
         case START:
-            core.start(false);
+            core.startHeadless(false);
             System.out.println("NicoCache_nl started");
             return 0;
         case STOP:

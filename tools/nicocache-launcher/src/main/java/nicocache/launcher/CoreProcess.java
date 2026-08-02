@@ -18,7 +18,15 @@ final class CoreProcess {
         this.paths = paths;
     }
 
-    void start(boolean foreground) throws IOException {
+    void startGui() throws IOException {
+        start(false, false);
+    }
+
+    void startHeadless(boolean foreground) throws IOException {
+        start(foreground, true);
+    }
+
+    private void start(boolean foreground, boolean headless) throws IOException {
         Properties existing = ControlClient.readStatusIfPresent(
                 paths.getControlStatusFile());
         if (ControlClient.isAlive(existing)) {
@@ -30,16 +38,7 @@ final class CoreProcess {
             }
         }
 
-        List<String> command = new ArrayList<>();
-        command.add(javaExecutable().toString());
-        command.add("-Xmx128m");
-        command.add("-Dnicocache.applicationRoot="
-                + paths.getApplicationRoot());
-        command.add("-Dnicocache.userDataRoot=" + paths.getDataRoot());
-        command.add("-jar");
-        command.add(paths.getCoreJar().toString());
-        command.add("--headless");
-
+        List<String> command = buildStartCommand(headless);
         ProcessBuilder builder = new ProcessBuilder(command)
                 .directory(paths.getApplicationRoot().toFile())
                 .redirectErrorStream(true);
@@ -60,6 +59,21 @@ final class CoreProcess {
         }
     }
 
+    List<String> buildStartCommand(boolean headless) {
+        List<String> command = new ArrayList<>();
+        command.add(javaExecutable().toString());
+        command.add("-Xmx128m");
+        command.add("-Dnicocache.applicationRoot="
+                + paths.getApplicationRoot());
+        command.add("-Dnicocache.userDataRoot=" + paths.getDataRoot());
+        command.add("-jar");
+        command.add(paths.getCoreJar().toString());
+        if (headless) {
+            command.add("--headless");
+        }
+        return command;
+    }
+
     int startAndWait() throws IOException {
         Properties existing = ControlClient.readStatusIfPresent(
                 paths.getControlStatusFile());
@@ -68,7 +82,7 @@ final class CoreProcess {
             waitForExistingProcess(existing);
             return 0;
         }
-        start(true);
+        startHeadless(true);
         try {
             return startedProcess == null ? 0 : startedProcess.waitFor();
         } catch (InterruptedException error) {

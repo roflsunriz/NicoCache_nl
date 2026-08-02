@@ -93,6 +93,11 @@ try {
         throw '起動管理タスクの回帰テストに失敗しました'
     }
 
+    & java -cp $classes nicocache.launcher.CoreProcessTest
+    if ($LASTEXITCODE -ne 0) {
+        throw '本体起動モードの回帰テストに失敗しました'
+    }
+
     & java -cp $classes nicocache.launcher.TaskSchedulerTest
     if ($LASTEXITCODE -ne 0) {
         throw 'タスクスケジューラーの単体・結合契約テストに失敗しました'

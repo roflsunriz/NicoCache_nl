@@ -67,14 +67,16 @@ public final class TaskSchedulerTest {
         assertContains(taskXml, "-jar", "task command must launch the JAR");
         assertFalse(taskXml.contains("&quot;-jar&quot;"),
                 "JVM options must not be quoted as executable paths");
-        assertContains(taskXml, "--headless", "task command must be headless");
-        assertContains(taskXml, "--start", "task command must start the core");
+        assertFalse(taskXml.contains("--headless"),
+                "logon task must open the interactive launcher GUI");
+        assertFalse(taskXml.contains("--start"),
+                "logon task must let the launcher GUI start the core");
         assertContains(taskXml, "--app-root=" + fixture.paths.getApplicationRoot(),
                 "task command must preserve the application root");
         assertContains(taskXml, "--data-root=" + fixture.paths.getDataRoot(),
                 "task command must preserve the data root");
         String java = Path.of(System.getProperty("java.home"), "bin",
-                "java.exe").toString();
+                "javaw.exe").toString();
         if (java.contains(" ")) {
             assertContains(taskXml, "<Command>" + java + "</Command>",
                     "task command must quote a Java path containing spaces");

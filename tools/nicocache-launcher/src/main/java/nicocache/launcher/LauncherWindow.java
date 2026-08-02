@@ -163,7 +163,7 @@ final class LauncherWindow {
     }
 
     private void startCoreAsync() {
-        runAsync(() -> core.start(false));
+        runAsync(core::startGui);
     }
 
     private void refreshStatus() {

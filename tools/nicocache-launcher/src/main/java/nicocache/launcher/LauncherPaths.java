@@ -285,12 +285,10 @@ final class LauncherPaths {
         List<String> command = new ArrayList<>();
         if (launcherExecutable != null) {
             command.add(launcherExecutable.toString());
-            command.add("--headless");
-            command.add("--start");
             return command;
         }
         Path java = Path.of(System.getProperty("java.home"), "bin",
-                getPlatform() == Platform.WINDOWS ? "java.exe" : "java");
+                getPlatform() == Platform.WINDOWS ? "javaw.exe" : "java");
         command.add(java.toString());
         command.add("-jar");
         if (launcherJar == null) {
@@ -298,8 +296,6 @@ final class LauncherPaths {
                     "タスク登録に必要なランチャーJARが見つかりません");
         }
         command.add(launcherJar.toString());
-        command.add("--headless");
-        command.add("--start");
         command.add("--app-root=" + applicationRoot);
         command.add("--data-root=" + dataRoot);
         return command;
