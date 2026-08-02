@@ -41,8 +41,10 @@ Append<
 
 
 # - 2024-09-06
+# - 2026-08-02
+# - server-responseとserver-contextのmetaタグはwatchページの初期化時に一時生成される.
 # - server-responseには動画情報(apiData)が入っている.
-# - server-responseのタグは公式jsが削除してしまう.
+# - 公式jsは読み取り後すぐに両方のmetaタグを削除するため、DOMContentLoaded時には存在しない.
 # - スクリプトファイル内で取得すると安定しない.
 # - 当該metaタグの直後で取得する方法で安定した.
 # - これをlocal/nllib_watch.jsが利用する. 利用後はundefined.

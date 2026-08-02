@@ -113,8 +113,9 @@
     },
 
     getVideoID: function() {
-      // 現行watchページはserver-responseのmetaタグを生成しないため、
-      // URLを最優先にして動画IDを取得する。SPA切替後などURLから取れない場合は
+      // 現行watchページではserver-responseのmetaタグが初期化時に一時生成され、
+      // 公式スクリプトが読み取った直後に削除される。URLを最優先にして動画IDを取得し、
+      // SPA切替後などURLから取れない場合は
       // 従来どおりapiDataをフォールバックとして参照する。
       var match = window.location.pathname.match(/^\/watch\/([a-z]{2}\d+)(?:\/|$)/i);
       if (match !== null) return match[1];
@@ -263,16 +264,19 @@
   window.addEventListener("DOMContentLoaded", function() {
     // - NicoCache_nl._metaServerResponseTag = document.querySelector('meta[name="server-response"]');
     // - nlFilters/20_watchFilter.txtで上記コード埋め込まれる.
+    // server-responseは初期化時だけ存在し、公式スクリプトが読み取り後に削除する。
+    // 20_watchFilterの直後捕捉が成功していればここで利用し、捕捉できない場合だけ
+    // URL由来の最小apiDataへフォールバックする。
     var serverResponse = NicoCache_nl._metaServerResponseTag;
     NicoCache_nl._metaServerResponseTag = undefined;
     if (!serverResponse) {
-      // 2026-08-02: 現行watchページにはserver-responseがない。
+      // 2026-08-02: 初期化中のserver-responseを捕捉できなかった場合。
       // URL由来の最小apiDataを設定し、getVideoID()やキャッシュ削除ボタンを有効にする。
       var fallbackVideoId = NicoCache_nl.watch.getVideoID();
       if (fallbackVideoId) {
         NicoCache_nl.watch.apiData = { video: { id: fallbackVideoId } };
       }
-      console.log('nllib_watch.js: server-response unavailable; URL fallback used');
+      console.log('nllib_watch.js: server-response capture unavailable; URL fallback used');
       return;
     };
 
@@ -283,7 +287,7 @@
       if (fallbackVideoId) {
         NicoCache_nl.watch.apiData = { video: { id: fallbackVideoId } };
       }
-      console.log('nllib_watch.js: server-response.content unavailable; URL fallback used');
+      console.log('nllib_watch.js: captured server-response content unavailable; URL fallback used');
       return;
     };
 
@@ -300,7 +304,7 @@
       if (fallbackVideoId) {
         NicoCache_nl.watch.apiData = { video: { id: fallbackVideoId } };
       }
-      console.log('nllib_watch.js: invalid server-response; URL fallback used');
+      console.log('nllib_watch.js: captured server-response payload invalid; URL fallback used');
     }
   });
 
