@@ -174,6 +174,11 @@ Assert-File (Join-Path $resourceDirectory 'config.properties')
 Assert-File (Join-Path $dataRoot 'data/first-run-setup.properties')
 Assert-File (Join-Path $dataRoot 'certs/ca.cer')
 Assert-File (Join-Path $dataRoot 'certs/site.jks')
+# OSの自動プロキシーは変更せず、診断に必要な利用者資材だけを隔離領域へ配置する。
+$proxyPacPath = Join-Path $dataRoot 'proxy.pac'
+Copy-Item -LiteralPath (Join-Path $resourceDirectory 'proxy_sample.pac') `
+    -Destination $proxyPacPath
+Assert-File $proxyPacPath
 $checkOutput = & $launcher '--headless' '--check-data-root' 2>&1
 Assert-True ($LASTEXITCODE -eq 0) `
     "ユーザーデータルート診断が完全になりません: $checkOutput"

@@ -195,7 +195,7 @@ try {
     }
     $command = [string]$exec.Command
     if ([string]::IsNullOrWhiteSpace($command) -or
-            $command -notmatch '(?i)(java|NicoCache_nl)\.exe$') {
+            $command -notmatch '(?i)(?:javaw?|NicoCache_nl)\.exe$') {
         throw "登録タスクの実行ファイルが不正です: $command"
     }
     if ($command -match '(?i)-jar') {
