@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+(?:\.\d+){0,2}$')]
-    [string]$AppVersion = '0.1.0',
+    [string]$AppVersion = '0.2.0',
 
     [ValidateSet('Linux', 'MacOS')]
     [string]$Platform,

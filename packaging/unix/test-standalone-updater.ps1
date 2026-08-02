@@ -5,7 +5,7 @@ param(
     [string]$Platform,
 
     [ValidatePattern('^\d+(?:\.\d+){0,2}$')]
-    [string]$AppVersion = '0.1.0'
+    [string]$AppVersion = '0.2.0'
 )
 
 Set-StrictMode -Version Latest
@@ -111,6 +111,8 @@ java-options=-Djpackage.app-version=1.0.1
 $validation = Invoke-Updater $launcher @('--validate-target-root', '--app-root', $target)
 Assert-True ($validation.Trim() -eq (Resolve-Path -LiteralPath $target).Path) `
     '更新対象の検証結果が不正です'
+$applicationCheck = Invoke-Updater $launcher @('--headless', '--application-check', '--app-root', $target)
+Assert-True ($applicationCheck.Contains('NicoCache_nl-')) 'ヘッドレス本体更新チェックがありません'
 $selfTest = Invoke-Updater $launcher @('--self-test', '--app-root', $target)
 Assert-True ($selfTest.Contains('SELF_TEST_OK')) '自己診断マーカーがありません'
 Assert-True ($selfTest.Contains('SYSTEM_DEPENDENCY_SELF_TEST_OK')) '依存関係自己診断がありません'

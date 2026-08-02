@@ -25,6 +25,14 @@ public final class UpdaterLauncher {
                 System.out.println(InstalledVersionDetector.detect(applicationRoot));
                 return;
             }
+            if (hasArgument(args, "--application-check")) {
+                System.out.print(NicoCacheUpdater.headlessApplicationCheck(applicationRoot));
+                return;
+            }
+            if (hasArgument(args, "--application-update")) {
+                System.out.print(NicoCacheUpdater.headlessApplicationUpdate(applicationRoot));
+                return;
+            }
             if (hasArgument(args, "--assert-application-stopped")) {
                 TargetRootResolver.requireInstallation(applicationRoot);
                 ApplicationProcessGuard.requireStopped(applicationRoot);
@@ -39,13 +47,33 @@ public final class UpdaterLauncher {
             }
             if (hasArgument(args, "--dependency-check")) {
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
-                System.out.print(engine.checkAll(intArgument(args, "--java-major", RECOMMENDED_LTS)));
+                int javaMajor = intArgument(args, "--java-major", RECOMMENDED_LTS);
+                String dependency = argument(args, "--dependency");
+                if (dependency == null) {
+                    System.out.print(engine.checkAll(javaMajor));
+                } else {
+                    DependencyStatus status = engine.inspectDependency(dependency, javaMajor);
+                    System.out.println(status.displayName + ": 導入版=" + status.installedLabel()
+                            + ", 最新版=" + status.latestLabel() + " " + status.message
+                            + (status.canInstall() ? " [インストール可能]" : " [インストール不可]"));
+                }
                 return;
             }
             if (hasArgument(args, "--dependency-update")) {
                 TargetRootResolver.requireInstallation(applicationRoot);
                 DependencyEngine engine = new DependencyEngine(applicationRoot);
-                System.out.print(engine.updateAll(intArgument(args, "--java-major", RECOMMENDED_LTS)));
+                int javaMajor = intArgument(args, "--java-major", RECOMMENDED_LTS);
+                String dependency = argument(args, "--dependency");
+                System.out.print(dependency == null
+                        ? engine.updateAll(javaMajor)
+                        : engine.installDependency(dependency, javaMajor));
+                return;
+            }
+            if (hasArgument(args, "--headless")) {
+                System.out.println("ヘッドレス実行では --self-test、--installed-version、"
+                        + "--application-check、--application-update、"
+                        + "--dependency-check、--dependency-update のいずれかを指定してください。");
+                System.exit(2);
                 return;
             }
             NicoCacheUpdater.main(args);

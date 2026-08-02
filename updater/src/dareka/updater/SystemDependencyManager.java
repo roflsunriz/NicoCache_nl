@@ -23,6 +23,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -38,6 +39,7 @@ final class SystemDependencyManager implements DependencyProvider {
     private static final Pattern JSON_URL = Pattern.compile("\\\"browser_download_url\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern JSON_DIGEST = Pattern.compile("\\\"digest\\\"\\s*:\\s*\\\"sha256:([0-9a-fA-F]{64})\\\"");
     private static final Pattern JSON_PUBLISHED = Pattern.compile("\\\"published_at\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
+    private static final Pattern JSON_TAG = Pattern.compile("\\\"tag_name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern ADOPTIUM_SEMVER = Pattern.compile("\\\"semver\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern ADOPTIUM_PACKAGE = Pattern.compile(
             "\\\"package\\\"\\s*:\\s*\\{.*?\\\"checksum\\\"\\s*:\\s*\\\"([0-9a-fA-F]{64})\\\".*?"
@@ -69,46 +71,107 @@ final class SystemDependencyManager implements DependencyProvider {
         out.append("導入方式: WinGet優先、公式配布APIフォールバック\n");
         out.append("対象スコープ: WinGetはユーザー優先（パッケージに応じてマシン）、公式配布APIは現在のWindowsユーザー\n");
         out.append("WinGet: ").append(isWingetAvailable() ? "利用可能" : "利用不可（フォールバックを使用）").append('\n');
-        for (Tool tool : tools(javaMajor)) {
-            CommandResult result = probe(tool.probe);
-            out.append(tool.displayName).append(": ")
-                    .append(result.exitCode == 0 ? firstLine(result.output) : "未導入またはPATH未登録");
-            if (tool.wingetId == null) out.append(" [WinGetパッケージ未提供]\n");
-            else out.append(" [winget id: ").append(tool.wingetId).append("]\n");
+        for (DependencyStatus status : inspectAll(javaMajor)) {
+            out.append(formatStatus(status)).append('\n');
         }
         return out.toString();
     }
 
     @Override
-    public String updateAll(int javaMajor) throws Exception {
-        StringBuilder out = new StringBuilder();
-        boolean winget = isWingetAvailable();
+    public List<DependencyStatus> inspectAll(int javaMajor) throws Exception {
+        List<DependencyStatus> result = new ArrayList<DependencyStatus>();
         for (Tool tool : tools(javaMajor)) {
-            boolean ready = false;
-            if (winget && tool.wingetId != null) {
-                CommandResult result;
-                try {
-                    result = runWinget(tool);
-                } catch (Exception failure) {
-                    result = new CommandResult(1, failure.getMessage() == null ? failure.toString() : failure.getMessage());
-                }
-                ready = result.exitCode == 0;
-                out.append(tool.displayName).append(ready ? ": WinGetで利用可能\n" : ": WinGet不成立、フォールバックへ移行\n");
-                if (!ready && !result.output.isBlank()) {
-                    out.append("  ").append(result.output.replace("\n", "\n  ").trim()).append('\n');
-                }
-            } else if (winget) {
-                out.append(tool.displayName).append(": WinGetパッケージ未提供、公式配布APIを使用\n");
-            }
-            if (!ready) {
-                Path command = installFallback(tool);
-                exposeToUser(tool, command);
-                verifyExecutable(command, tool.probe);
-                out.append(tool.displayName).append(": 公式配布APIから導入しました: ").append(command).append('\n');
+            try {
+                Release latest = resolveLatest(tool);
+                CommandResult current = probe(tool.probe);
+                String installed = installedVersion(tool, current);
+                if (installed == null) installed = readMarkedVersion(tool.id);
+                String normalizedInstalled = normalizeVersion(installed);
+                boolean update = normalizedInstalled == null
+                        || compareVersions(normalizedInstalled, latest.version) < 0;
+                boolean installable = tool.wingetId == null
+                        ? tool.fallbackSupported
+                        : isWingetAvailable() || tool.fallbackSupported;
+                String provider = tool.wingetId == null
+                        ? "公式配布API"
+                        : "WinGet" + (tool.fallbackSupported ? " / 公式配布API" : "");
+                result.add(new DependencyStatus(tool.id, tool.displayName,
+                        installed, latest.version,
+                        provider + (update ? "（更新あり）" : "（最新）"),
+                        true, update, installable));
+            } catch (Exception error) {
+                result.add(DependencyStatus.failure(tool.id, tool.displayName,
+                        rootMessage(error)));
             }
         }
-        out.append("新しいCMD/PowerShellを開くと各コマンドを使用できます。\n");
+        return result;
+    }
+
+    @Override
+    public String updateAll(int javaMajor) throws Exception {
+        StringBuilder out = new StringBuilder();
+        List<DependencyStatus> statuses = inspectAll(javaMajor);
+        boolean installed = false;
+        for (DependencyStatus status : statuses) {
+            if (!status.canInstall()) continue;
+            installed = true;
+            Tool tool = findTool(status.id, javaMajor);
+            out.append(installTool(tool, resolveLatest(tool)));
+        }
+        if (!installed) out.append("新しいWindows外部依存関係はありません。\n");
         return out.toString();
+    }
+
+    @Override
+    public String install(String dependencyId, int javaMajor) throws Exception {
+        Tool tool = findTool(dependencyId, javaMajor);
+        Release release = resolveLatest(tool);
+        return installTool(tool, release);
+    }
+
+    private static String formatStatus(DependencyStatus status) {
+        return status.displayName + ": 導入版=" + status.installedLabel()
+                + ", 最新版=" + status.latestLabel() + " " + status.message
+                + (status.canInstall() ? " [インストール可能]" : " [インストール不可]");
+    }
+
+    private String installTool(Tool tool, Release release) throws Exception {
+        StringBuilder out = new StringBuilder();
+        boolean ready = false;
+        if (isWingetAvailable() && tool.wingetId != null) {
+            CommandResult result;
+            try {
+                result = runWinget(tool);
+            } catch (Exception failure) {
+                result = new CommandResult(1, failure.getMessage() == null
+                        ? failure.toString() : failure.getMessage());
+            }
+            ready = result.exitCode == 0;
+            out.append(tool.displayName).append(ready
+                    ? ": WinGetでインストールしました\n"
+                    : ": WinGet不成立、フォールバックへ移行\n");
+            if (!ready && !result.output.isBlank()) {
+                out.append("  ").append(result.output.replace("\n", "\n  ").trim()).append('\n');
+            }
+        } else if (tool.wingetId != null && !tool.fallbackSupported) {
+            throw new IOException(tool.displayName
+                    + "はWinGet（" + tool.wingetId + "）が必要です。WinGetを導入して再試行してください");
+        }
+        if (!ready) {
+            Path command = installFallback(tool, release);
+            exposeToUser(tool, command);
+            verifyExecutable(command, tool.probe);
+            out.append(tool.displayName).append(": 公式配布APIから導入しました: ")
+                    .append(command).append('\n');
+        }
+        markInstalledVersion(tool.id, release.version);
+        return out.toString();
+    }
+
+    private static String rootMessage(Exception error) {
+        Throwable value = error;
+        while (value.getCause() != null) value = value.getCause();
+        return value.getMessage() == null ? value.toString() : value.getMessage();
     }
 
     @Override
@@ -144,12 +207,44 @@ final class SystemDependencyManager implements DependencyProvider {
         if (javaMajor != 17 && javaMajor != 21 && javaMajor != 25) {
             throw new IOException("未検証のTemurin LTSです: " + javaMajor);
         }
+        Pattern labeledVersion = Pattern.compile(
+                "(?i)\\bversion\\s+[\\\"']?v?([0-9]+(?:\\.[0-9]+){1,3})");
+        Pattern sevenZipVersion = Pattern.compile(
+                "(?i)\\b7-zip\\b.*?([0-9]+(?:\\.[0-9]+){1,3})");
         return Arrays.asList(
                 new Tool("temurin", "Eclipse Temurin JDK", "EclipseAdoptium.Temurin." + javaMajor + ".JDK",
-                        Arrays.asList("java", "-version"), "java.exe", true, javaMajor),
-                new Tool("ffmpeg", "FFmpeg", "Gyan.FFmpeg", Arrays.asList("ffmpeg", "-version"), "ffmpeg.exe", false, 0),
-                new Tool("ant", "Apache Ant", null, Arrays.asList("ant", "-version"), "ant.bat", false, 0),
-                new Tool("7zip", "7-Zip", "7zip.7zip", Arrays.asList("7z"), "7z.exe", false, 0));
+                        Arrays.asList("java", "-version"), "java.exe", true, javaMajor,
+                        labeledVersion, true),
+                new Tool("ffmpeg", "FFmpeg", "Gyan.FFmpeg", Arrays.asList("ffmpeg", "-version"),
+                        "ffmpeg.exe", false, 0, labeledVersion, true),
+                new Tool("ant", "Apache Ant", null, Arrays.asList("ant", "-version"),
+                        "ant.bat", false, 0, labeledVersion, true),
+                new Tool("7zip", "7-Zip", "7zip.7zip", Arrays.asList("7z"),
+                        "7z.exe", false, 0, sevenZipVersion, true),
+                new Tool("gpac", "GPAC / MP4Box", "GPAC.GPAC", Arrays.asList("MP4Box", "-version"),
+                        "MP4Box.exe", false, 0, labeledVersion, false));
+    }
+
+    private Tool findTool(String dependencyId, int javaMajor) throws IOException {
+        for (Tool tool : tools(javaMajor)) {
+            if (tool.id.equals(dependencyId)) return tool;
+        }
+        throw new IOException("未対応の外部依存関係です: " + dependencyId);
+    }
+
+    private Release resolveLatest(Tool tool) throws Exception {
+        if ("temurin".equals(tool.id)) return resolveTemurin(tool.javaMajor);
+        if ("ffmpeg".equals(tool.id)) return resolveFfmpeg();
+        if ("ant".equals(tool.id)) return resolveAnt();
+        if ("7zip".equals(tool.id)) return resolveSevenZip();
+        if ("gpac".equals(tool.id)) return resolveGpac();
+        throw new IOException("Windows側で処理しない依存関係です: " + tool.id);
+    }
+
+    private static String installedVersion(Tool tool, CommandResult result) {
+        if (result.exitCode != 0 || tool.versionPattern == null) return null;
+        Matcher matcher = tool.versionPattern.matcher(result.output);
+        return matcher.find() ? normalizeVersion(matcher.group(1)) : null;
     }
 
     static List<String> wingetArguments(String executable, String operation, String packageId) {
@@ -232,10 +327,10 @@ final class SystemDependencyManager implements DependencyProvider {
         return String.join(";", values);
     }
 
-    private Path installFallback(Tool tool) throws Exception {
-        Release release = "temurin".equals(tool.id) ? resolveTemurin(tool.javaMajor)
-                : "ffmpeg".equals(tool.id) ? resolveFfmpeg()
-                : "ant".equals(tool.id) ? resolveAnt() : resolveSevenZip();
+    private Path installFallback(Tool tool, Release release) throws Exception {
+        if (!tool.fallbackSupported || release.artifacts.isEmpty()) {
+            throw new IOException(tool.displayName + "の公式配布フォールバックは利用できません");
+        }
         Path destination = userProgramsRoot.resolve(release.id).resolve(sanitize(release.version));
         Path work = Files.createTempDirectory(userProgramsRoot, ".stage-" + release.id + "-");
         try {
@@ -346,11 +441,13 @@ final class SystemDependencyManager implements DependencyProvider {
 
     private Release resolveTemurin(int major) throws Exception {
         String json = text(URI.create("https://api.adoptium.net/v3/assets/latest/" + major
-                + "/hotspot?architecture=x64&image_type=jdk&os=windows&vendor=eclipse"), "application/json");
+                + "/hotspot?architecture=" + adoptiumArchitecture()
+                + "&image_type=jdk&os=windows&vendor=eclipse"), "application/json");
         Matcher semver = ADOPTIUM_SEMVER.matcher(json);
         Matcher pkg = ADOPTIUM_PACKAGE.matcher(json);
         if (!semver.find() || !pkg.find()) throw new IOException("Adoptium APIの応答を解釈できません");
-        return Release.zip("temurin", semver.group(1), URI.create(unescape(pkg.group(2))), pkg.group(3), pkg.group(1), "SHA-256");
+        return Release.zip("temurin", normalizeVersion(semver.group(1)),
+                URI.create(unescape(pkg.group(2))), pkg.group(3), pkg.group(1), "SHA-256");
     }
 
     private Release resolveFfmpeg() throws Exception {
@@ -361,8 +458,12 @@ final class SystemDependencyManager implements DependencyProvider {
         Matcher hash = Pattern.compile("(?m)^([0-9a-fA-F]{64})\\s+\\*?" + Pattern.quote(zip.name) + "\\s*$")
                 .matcher(text(sums.url, "text/plain"));
         if (!hash.find()) throw new IOException("FFmpeg SHA-256が見つかりません");
+        Matcher tag = JSON_TAG.matcher(json);
         Matcher published = JSON_PUBLISHED.matcher(json);
-        return Release.zip("ffmpeg", published.find() ? published.group(1) : "latest", zip.url, zip.name, hash.group(1), "SHA-256");
+        String releaseVersion = tag.find() ? normalizeVersion(tag.group(1)) : null;
+        if (releaseVersion == null && published.find()) releaseVersion = normalizeVersion(published.group(1));
+        if (releaseVersion == null) releaseVersion = "0";
+        return Release.zip("ffmpeg", releaseVersion, zip.url, zip.name, hash.group(1), "SHA-256");
     }
 
     private Release resolveAnt() throws Exception {
@@ -388,9 +489,33 @@ final class SystemDependencyManager implements DependencyProvider {
         Asset archive = findAsset(json, Pattern.compile("^7z[0-9]+-extra\\.7z$"));
         Asset bootstrap = findAsset(json, Pattern.compile("^7zr\\.exe$"));
         if (archive.digest == null || bootstrap.digest == null) throw new IOException("7-Zip SHA-256がありません");
-        return Release.sevenZip("7zip", archive.name.replaceAll("^7z([0-9]+)-extra\\.7z$", "$1"),
+        String digits = archive.name.replaceAll("^7z([0-9]+)-extra\\.7z$", "$1");
+        String version = digits.length() > 2
+                ? digits.substring(0, digits.length() - 2) + "." + digits.substring(digits.length() - 2)
+                : digits;
+        return Release.sevenZip("7zip", version,
                 new Artifact(archive.url, archive.name, archive.digest, "SHA-256"),
                 new Artifact(bootstrap.url, bootstrap.name, bootstrap.digest, "SHA-256"));
+    }
+
+    private Release resolveGpac() throws Exception {
+        String json = text(URI.create("https://api.github.com/repos/gpac/gpac/releases/latest"),
+                "application/vnd.github+json");
+        Matcher tag = JSON_TAG.matcher(json);
+        if (!tag.find()) throw new IOException("GPAC公式Release APIに版番号がありません");
+        String version = normalizeVersion(tag.group(1));
+        if (version == null) throw new IOException("GPAC公式Releaseの版番号が不正です");
+        return new Release("gpac", version, new ArrayList<Artifact>(), ArchiveType.ZIP);
+    }
+
+    private static String adoptiumArchitecture() throws IOException {
+        String architecture = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        if (architecture.equals("amd64") || architecture.equals("x86_64")
+                || architecture.equals("x64")) return "x64";
+        if (architecture.equals("aarch64") || architecture.equals("arm64")) return "aarch64";
+        if (architecture.equals("x86") || architecture.equals("i386")
+                || architecture.equals("i686")) return "x86";
+        throw new IOException("Temurinが対応していないCPUアーキテクチャです: " + architecture);
     }
 
     private Path download(Artifact artifact, Path directory) throws Exception {
@@ -535,10 +660,54 @@ final class SystemDependencyManager implements DependencyProvider {
 
     private static String sanitize(String value) { return value.replaceAll("[^0-9A-Za-z._-]", "_"); }
     private static String unescape(String value) { return value.replace("\\/", "/").replace("\\u0026", "&"); }
-    private static String firstLine(String value) { return value.lines().findFirst().orElse(value).trim(); }
+    private static String normalizeVersion(String value) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = value.trim().replace('-', '.');
+        Matcher matcher = Pattern.compile("(\\d+(?:\\.\\d+){0,3})").matcher(normalized);
+        return matcher.find() ? matcher.group(1) : null;
+    }
+
+    private Path versionMarkerFile() {
+        return userProgramsRoot.resolve(".installed-versions.properties");
+    }
+
+    private String readMarkedVersion(String dependencyId) {
+        Path marker = versionMarkerFile();
+        if (!Files.isRegularFile(marker)) return null;
+        Properties properties = new Properties();
+        try (InputStream input = Files.newInputStream(marker)) {
+            properties.load(input);
+            return normalizeVersion(properties.getProperty(dependencyId));
+        } catch (IOException error) {
+            return null;
+        }
+    }
+
+    private void markInstalledVersion(String dependencyId, String version) {
+        if (version == null || version.isBlank()) return;
+        Path marker = versionMarkerFile();
+        Properties properties = new Properties();
+        try {
+            if (Files.isRegularFile(marker)) {
+                try (InputStream input = Files.newInputStream(marker)) {
+                    properties.load(input);
+                }
+            }
+            properties.setProperty(dependencyId, version);
+            try (OutputStream output = Files.newOutputStream(marker)) {
+                properties.store(output, "NicoCache_nl updater dependency versions");
+            }
+        } catch (IOException ignored) {
+            // A marker only improves detection; the command probe remains authoritative.
+        }
+    }
+
     private static int compareVersions(String left, String right) {
-        String[] a = left.split("\\.");
-        String[] b = right.split("\\.");
+        String normalizedLeft = normalizeVersion(left);
+        String normalizedRight = normalizeVersion(right);
+        if (normalizedLeft == null || normalizedRight == null) return 0;
+        String[] a = normalizedLeft.split("\\.");
+        String[] b = normalizedRight.split("\\.");
         for (int i = 0; i < Math.max(a.length, b.length); i++) {
             int av = i < a.length ? Integer.parseInt(a[i]) : 0;
             int bv = i < b.length ? Integer.parseInt(b[i]) : 0;
@@ -560,8 +729,11 @@ final class SystemDependencyManager implements DependencyProvider {
         final List<String> probe;
         final boolean javaTool;
         final int javaMajor;
+        final Pattern versionPattern;
+        final boolean fallbackSupported;
         Tool(String id, String displayName, String wingetId, List<String> probe, String commandFileName,
-                boolean javaTool, int javaMajor) {
+                boolean javaTool, int javaMajor, Pattern versionPattern,
+                boolean fallbackSupported) {
             this.id = id;
             this.displayName = displayName;
             this.wingetId = wingetId;
@@ -569,6 +741,8 @@ final class SystemDependencyManager implements DependencyProvider {
             this.commandFileName = commandFileName;
             this.javaTool = javaTool;
             this.javaMajor = javaMajor;
+            this.versionPattern = versionPattern;
+            this.fallbackSupported = fallbackSupported;
         }
     }
     private static final class Artifact {

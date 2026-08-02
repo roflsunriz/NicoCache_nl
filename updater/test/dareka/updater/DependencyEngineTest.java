@@ -45,6 +45,7 @@ public final class DependencyEngineTest {
 
             String java25 = engine.checkAll(25);
             assertContains(java25, "Eclipse Temurin JDK", "Java 25 LTS dependency check");
+            assertContains(java25, "GPAC / MP4Box", "GPAC dependency check");
 
             boolean invalidLts = false;
             try {

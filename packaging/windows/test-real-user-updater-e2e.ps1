@@ -113,8 +113,8 @@ try {
     if ($detected -ne $productVersion) { throw "Installed version detection mismatch: expected=$productVersion actual=$detected" }
 
     $dependencyOutput = Invoke-Updater $updaterExe @('--dependency-update', '--app-root', $productRoot, '--java-major', '25') 'dependency-update' 3600
-    foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip', 'Bouncy Castle')) { if (-not $dependencyOutput.Contains($name)) { throw "Dependency result omitted: $name" } }
-    foreach ($route in @('Eclipse Temurin JDK', 'FFmpeg')) {
+    foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip', 'GPAC / MP4Box', 'Bouncy Castle')) { if (-not $dependencyOutput.Contains($name)) { throw "Dependency result omitted: $name" } }
+    foreach ($route in @('Eclipse Temurin JDK', 'FFmpeg', 'GPAC / MP4Box')) {
         $routeLines = @($dependencyOutput -split '\r?\n' | Where-Object { $_ -match "^${route}:" })
         if ($routeLines.Count -ne 1) {
             throw "$route is available from WinGet but its own route entered fallback`n$dependencyOutput"
@@ -123,9 +123,9 @@ try {
 
     $env:PATH = (([Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User')) | Where-Object { $_ }) -join ';'
     $javaHome = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'User'); if ($javaHome) { $env:JAVA_HOME = $javaHome }
-    Assert-FreshCommand java @('-version'); Assert-FreshCommand javac @('-version'); Assert-FreshCommand ffmpeg @('-version'); Assert-FreshCommand ffprobe @('-version'); Assert-FreshCommand ant @('-version'); Assert-FreshCommand 7z @()
+    Assert-FreshCommand java @('-version'); Assert-FreshCommand javac @('-version'); Assert-FreshCommand ffmpeg @('-version'); Assert-FreshCommand ffprobe @('-version'); Assert-FreshCommand ant @('-version'); Assert-FreshCommand 7z @(); Assert-FreshCommand MP4Box @('-version')
 
-    foreach ($command in @('java','javac','ffmpeg','ffprobe','ant','7z')) {
+    foreach ($command in @('java','javac','ffmpeg','ffprobe','ant','7z','MP4Box')) {
         $resolved = (Get-Command $command -ErrorAction Stop).Source
         Step "$command -> $resolved"
         if ([IO.Path]::GetFullPath($resolved).StartsWith($productRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "External dependency leaked into product root: $command -> $resolved" }

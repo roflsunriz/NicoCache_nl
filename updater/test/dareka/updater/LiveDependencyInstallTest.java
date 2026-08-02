@@ -28,6 +28,7 @@ public final class LiveDependencyInstallTest {
             assertContains(result, "FFmpeg", "FFmpeg result");
             assertContains(result, "Apache Ant", "Ant result");
             assertContains(result, "7-Zip", "7-Zip result");
+            assertContains(result, "GPAC / MP4Box", "GPAC result");
             assertContains(result, "Bouncy Castle", "Bouncy Castle result");
 
             String userPath = readUserEnvironment("Path");
@@ -42,6 +43,7 @@ public final class LiveDependencyInstallTest {
             verifyFreshShell(Arrays.asList("ffprobe", "-version"), effectivePath, javaHome);
             verifyFreshShell(Arrays.asList("ant", "-version"), effectivePath, javaHome);
             verifyFreshShell(Arrays.asList("7z"), effectivePath, javaHome);
+            verifyFreshShell(Arrays.asList("MP4Box", "-version"), effectivePath, javaHome);
 
             assertTrue(Files.isRegularFile(root.resolve("lib/bcprov.jar")), "Bouncy Castle was not installed locally");
             assertTrue(!Files.exists(root.resolve("runtime")), "Temurin leaked into the NicoCache_nl runtime directory");

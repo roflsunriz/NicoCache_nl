@@ -189,6 +189,10 @@ CA生成と証明書ストアが変わらないことを検証する。自動プ
 ## 依存関係
 
 Bouncy Castle 1.85 の取得URLとSHA-256を `dependency-lock.psd1` に固定している。
+
+独立アップデーターの外部依存関係タブでは、Eclipse Temurin、FFmpeg、Bouncy Castle、
+Apache Ant、7-Zipに加えてGPAC/MP4Boxを管理する。GPACはWinGet公式パッケージ
+`GPAC.GPAC`を使用し、各行の更新チェックで最新版がない場合はインストールを無効にする。
 ダウンロード後のハッシュが一致しない場合は生成を中止する。毎週のGitHub Actions
 はMaven Centralの公式メタデータから安定版を確認し、3成果物の版、公式URL、
 SHA-256とPOMのライセンスを検証して、更新がある場合だけレビュー用PRを作成する。

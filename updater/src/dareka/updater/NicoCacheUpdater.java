@@ -20,14 +20,18 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListCellRenderer;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
@@ -43,6 +47,9 @@ import javax.swing.SwingWorker;
 
 /** Standalone updater for NicoCache_nl and user-wide command-line dependencies. */
 public final class NicoCacheUpdater {
+    private static final String[] DEPENDENCY_IDS = {
+        "temurin", "ffmpeg", "bouncycastle", "ant", "7zip", "gpac"
+    };
     private static final URI RELEASE_URI = URI.create(
             "https://api.github.com/repos/roflsunriz/NicoCache_nl/releases/latest");
     private static final URI ADOPTIUM_RELEASES_URI = URI.create(
@@ -66,11 +73,17 @@ public final class NicoCacheUpdater {
     private final JTextArea dependencyOutput = createOutput();
     private final JButton applicationCheckButton = new JButton("更新を確認");
     private final JButton applicationUpdateButton = new JButton("NicoCache_nlを更新");
-    private final JButton dependencyCheckButton = new JButton("環境を確認");
-    private final JButton dependencyUpdateButton = new JButton("インストールまたは更新");
+    private final JButton dependencyCheckButton = new JButton("全てチェック");
+    private final JButton dependencyUpdateButton = new JButton("全てインストール");
     private final JButton changeTargetButton = new JButton("変更…");
     private final JComboBox<JavaChoice> javaChoice = new JComboBox<JavaChoice>();
+    private final JPanel dependencyRowsPanel = new JPanel();
+    private final Map<String, DependencyRow> dependencyRows =
+            new LinkedHashMap<String, DependencyRow>();
+    private final Map<String, DependencyStatus> dependencyStatuses =
+            new LinkedHashMap<String, DependencyStatus>();
     private Release latestRelease;
+    private boolean applicationUpdateAvailable;
 
     private NicoCacheUpdater(Path applicationRoot) {
         this.applicationRoot = applicationRoot.toAbsolutePath().normalize();
@@ -106,15 +119,20 @@ public final class NicoCacheUpdater {
         applicationUpdateButton.setEnabled(false);
         applicationCheckButton.addActionListener(event -> checkApplicationUpdate());
         applicationUpdateButton.addActionListener(event -> installApplicationUpdate());
-        dependencyCheckButton.addActionListener(event -> runDependencyUpdater(false));
-        dependencyUpdateButton.addActionListener(event -> runDependencyUpdater(true));
+        dependencyCheckButton.addActionListener(event -> checkAllDependencies());
+        dependencyUpdateButton.addActionListener(event -> installCheckedDependencies());
+        dependencyCheckButton.setName("dependency.checkAll");
+        dependencyUpdateButton.setName("dependency.installAll");
         changeTargetButton.addActionListener(event -> chooseTargetRoot());
         javaChoice.setRenderer(new JavaChoiceRenderer());
         javaChoice.addActionListener(event -> {
             JavaChoice selected = (JavaChoice) javaChoice.getSelectedItem();
             if (selected != null && !selected.supported) javaChoice.setSelectedItem(findRecommendedChoice());
+            dependencyStatuses.clear();
+            resetDependencyRows();
         });
         loadJavaChoices();
+        dependencyUpdateButton.setEnabled(false);
     }
 
     private JPanel buildApplicationPanel() {
@@ -131,19 +149,34 @@ public final class NicoCacheUpdater {
 
     private JPanel buildDependencyPanel() {
         JPanel panel = new JPanel(new BorderLayout(8, 8));
-        JPanel header = new JPanel();
-        header.add(new JLabel("Temurin LTS:"));
-        header.add(javaChoice);
-        header.add(new JLabel("OSのパッケージ管理を優先し、Bouncy Castleは本体専用として管理します。"));
+        JPanel header = new JPanel(new BorderLayout(8, 4));
+        JPanel javaPanel = new JPanel();
+        javaPanel.add(new JLabel("Temurin LTS:"));
+        javaPanel.add(javaChoice);
+        header.add(javaPanel, BorderLayout.WEST);
+        header.add(new JLabel("各行の確認結果を確認してから、必要な依存関係だけをインストールします。"),
+                BorderLayout.CENTER);
         panel.add(header, BorderLayout.NORTH);
-        dependencyOutput.setText("Temurin、FFmpeg、Apache Ant、7-ZipはOSのパッケージ管理を確認します。\n"
-                + "WindowsではWinGetまたは公式配布API、Linux/macOSでは各OSの管理方式を使用します。\n"
-                + "Bouncy CastleだけはNicoCache_nl専用ライブラリとして管理します。\n");
-        panel.add(new JScrollPane(dependencyOutput), BorderLayout.CENTER);
+        dependencyRowsPanel.setLayout(new BoxLayout(dependencyRowsPanel, BoxLayout.Y_AXIS));
+        for (String id : DEPENDENCY_IDS) {
+            DependencyRow row = new DependencyRow(id, dependencyDisplayName(id));
+            dependencyRows.put(id, row);
+            dependencyRowsPanel.add(row.panel);
+            dependencyRowsPanel.add(Box.createVerticalStrut(6));
+        }
+        dependencyRowsPanel.add(Box.createVerticalGlue());
+        panel.add(new JScrollPane(dependencyRowsPanel), BorderLayout.CENTER);
+        dependencyOutput.setText("「全てチェック」または各行の「更新チェック」で最新版を確認してください。\n"
+                + "インストール後は自動的に再確認し、再起動なしで各行のステータスを更新します。\n");
+        JScrollPane outputScroll = new JScrollPane(dependencyOutput);
+        outputScroll.setPreferredSize(new Dimension(10, 115));
+        JPanel footer = new JPanel(new BorderLayout(8, 6));
+        footer.add(outputScroll, BorderLayout.CENTER);
         JPanel buttons = new JPanel();
         buttons.add(dependencyCheckButton);
         buttons.add(dependencyUpdateButton);
-        panel.add(buttons, BorderLayout.SOUTH);
+        footer.add(buttons, BorderLayout.SOUTH);
+        panel.add(footer, BorderLayout.SOUTH);
         return panel;
     }
 
@@ -163,6 +196,7 @@ public final class NicoCacheUpdater {
             TargetRootResolver.remember(selected);
             applicationRoot = selected;
             latestRelease = null;
+            applicationUpdateAvailable = false;
             applicationUpdateButton.setEnabled(false);
             applicationOutput.setText("更新対象を変更しました: " + applicationRoot + "\n");
             refreshTargetLabel();
@@ -173,6 +207,7 @@ public final class NicoCacheUpdater {
     }
 
     private void checkApplicationUpdate() {
+        applicationUpdateAvailable = false;
         setApplicationBusy(true);
         applicationOutput.setText("最新版を確認しています…\n");
         new SwingWorker<Release, Void>() {
@@ -183,9 +218,10 @@ public final class NicoCacheUpdater {
                     String installed = InstalledVersionDetector.detect(applicationRoot);
                     applicationOutput.setText("対象: " + applicationRoot + "\n導入版: " + installed
                             + "\n最新版: " + latestRelease.version + "\n配布物: " + latestRelease.packageName + "\n");
-                    applicationUpdateButton.setEnabled("不明".equals(installed)
-                            || compareVersions(latestRelease.version, installed) > 0);
-                    if (!applicationUpdateButton.isEnabled()) applicationOutput.append("既に最新版です。\n");
+                    applicationUpdateAvailable = "不明".equals(installed)
+                            || compareVersions(latestRelease.version, installed) > 0;
+                    applicationUpdateButton.setEnabled(applicationUpdateAvailable);
+                    if (!applicationUpdateAvailable) applicationOutput.append("既に最新版です。\n");
                 } catch (Exception error) {
                     applicationOutput.append("確認に失敗しました: " + rootMessage(error) + "\n");
                 } finally {
@@ -204,20 +240,27 @@ public final class NicoCacheUpdater {
         if (answer != JOptionPane.OK_OPTION) return;
         setApplicationBusy(true);
         applicationOutput.append("配布物をダウンロードして検証しています…\n");
-        new SwingWorker<Path, Void>() {
-            @Override protected Path doInBackground() throws Exception { return downloadAndVerify(latestRelease); }
+        new SwingWorker<String, Void>() {
+            @Override protected String doInBackground() throws Exception {
+                Path packageFile = downloadAndVerify(latestRelease);
+                try {
+                    return applyApplicationPackage(packageFile, applicationRoot);
+                } finally {
+                    deleteDownloadedPackage(packageFile);
+                }
+            }
             @Override protected void done() {
                 try {
-                    Path packageFile = get();
-                    ApplicationProcessGuard.requireStopped(applicationRoot);
-                    if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
-                        new ProcessBuilder("msiexec.exe", "/i", packageFile.toString()).start();
-                        applicationOutput.append("Windows Installerを起動しました。\n");
-                    } else {
-                        ArchiveApplicationInstaller.install(packageFile, applicationRoot,
-                                UpdaterPlatform.current());
-                        applicationOutput.append("アプリイメージを更新しました。\n");
-                    }
+                    applicationOutput.append(get());
+                    applicationOutput.append("\n");
+                    String installed = InstalledVersionDetector.detect(applicationRoot);
+                    applicationUpdateAvailable = "不明".equals(installed)
+                            || latestRelease == null
+                            || compareVersions(latestRelease.version, installed) > 0;
+                    applicationOutput.append("更新後の導入版: ");
+                    applicationOutput.append(installed);
+                    applicationOutput.append("\n");
+                    if (!applicationUpdateAvailable) applicationOutput.append("最新版を反映しました。\n");
                 } catch (Exception error) {
                     applicationOutput.append("更新準備に失敗しました: " + rootMessage(error) + "\n");
                 } finally {
@@ -227,42 +270,201 @@ public final class NicoCacheUpdater {
         }.execute();
     }
 
-    private void runDependencyUpdater(boolean update) {
+    private int selectedJavaMajor() {
         JavaChoice selected = (JavaChoice) javaChoice.getSelectedItem();
-        if (selected == null || !selected.supported) {
-            JOptionPane.showMessageDialog(frame, "対応済みのTemurin LTSを選択してください。",
-                    "未対応バージョン", JOptionPane.WARNING_MESSAGE);
+        if (selected == null || !selected.supported) return -1;
+        return selected.major;
+    }
+
+    private void checkAllDependencies() {
+        int javaMajor = selectedJavaMajor();
+        if (javaMajor < 0) {
+            showUnsupportedJavaWarning();
             return;
         }
-        if (update) {
-            String updateMessage = UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS
-                    ? "WinGetを優先し、失敗または利用不可の場合は公式配布APIを使用します。\n"
-                            + "WinGetがマシン全体への導入を必要とする場合は、Windowsの許可画面が表示されます。\n"
-                            + "ユーザーPATHとJAVA_HOMEが必要に応じて更新されます。"
-                    : "OSのパッケージ管理を確認し、root権限を自動取得せずに更新案内を表示します。\n"
-                            + "Bouncy CastleはNicoCache_nl専用ライブラリとして更新します。";
-            int answer = JOptionPane.showConfirmDialog(frame,
-                    "Temurin、FFmpeg、Apache Ant、7-Zipを導入・更新します。\n"
-                            + updateMessage,
-                    "外部依存関係のインストール", JOptionPane.OK_CANCEL_OPTION,
-                    JOptionPane.QUESTION_MESSAGE);
-            if (answer != JOptionPane.OK_OPTION) return;
-        }
+        dependencyStatuses.clear();
+        resetDependencyRows();
         setDependencyBusy(true);
-        dependencyOutput.setText(update ? "インストールまたは更新を開始します…\n" : "ユーザー環境を確認しています…\n");
-        final int javaMajor = selected.major;
-        new SwingWorker<String, Void>() {
-            @Override protected String doInBackground() throws Exception {
-                DependencyEngine engine = new DependencyEngine(applicationRoot);
-                return update ? engine.updateAll(javaMajor) : engine.checkAll(javaMajor);
+        dependencyOutput.setText("全ての外部依存関係の最新版を確認しています…\n");
+        new SwingWorker<List<DependencyStatus>, Void>() {
+            @Override protected List<DependencyStatus> doInBackground() throws Exception {
+                return new DependencyEngine(applicationRoot).inspectAll(javaMajor);
             }
+
             @Override protected void done() {
-                try { dependencyOutput.setText(get()); }
-                catch (Exception error) {
-                    dependencyOutput.append("\n処理に失敗しました: " + rootMessage(error) + "\n");
-                } finally { setDependencyBusy(false); }
+                try {
+                    List<DependencyStatus> statuses = get();
+                    updateDependencyRows(statuses);
+                    dependencyOutput.setText("全ての更新チェックが完了しました。\n"
+                            + countUpdates(statuses) + "件の更新があります。\n");
+                } catch (Exception error) {
+                    dependencyOutput.setText("全ての更新チェックに失敗しました: "
+                            + rootMessage(error) + "\n");
+                } finally {
+                    setDependencyBusy(false);
+                }
             }
         }.execute();
+    }
+
+    private void checkDependency(String dependencyId) {
+        int javaMajor = selectedJavaMajor();
+        if (javaMajor < 0) {
+            showUnsupportedJavaWarning();
+            return;
+        }
+        dependencyStatuses.remove(dependencyId);
+        DependencyRow row = dependencyRows.get(dependencyId);
+        if (row != null) row.status.setText("確認中…");
+        refreshDependencyButtons();
+        setDependencyBusy(true);
+        dependencyOutput.setText(dependencyDisplayName(dependencyId)
+                + "の最新版を確認しています…\n");
+        new SwingWorker<DependencyStatus, Void>() {
+            @Override protected DependencyStatus doInBackground() throws Exception {
+                return new DependencyEngine(applicationRoot)
+                        .inspectDependency(dependencyId, javaMajor);
+            }
+
+            @Override protected void done() {
+                try {
+                    DependencyStatus status = get();
+                    updateDependencyRows(java.util.Collections.singletonList(status));
+                    dependencyOutput.setText(dependencyDisplayName(dependencyId)
+                            + "の更新チェックが完了しました。\n");
+                } catch (Exception error) {
+                    dependencyOutput.setText(dependencyDisplayName(dependencyId)
+                            + "の更新チェックに失敗しました: " + rootMessage(error) + "\n");
+                } finally {
+                    setDependencyBusy(false);
+                }
+            }
+        }.execute();
+    }
+
+    private void installDependency(String dependencyId) {
+        DependencyStatus status = dependencyStatuses.get(dependencyId);
+        if (status == null || !status.canInstall()) return;
+        int answer = JOptionPane.showConfirmDialog(frame,
+                status.displayName + "を " + status.latestLabel() + " に更新しますか？",
+                "外部依存関係のインストール", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION) return;
+        installDependencies(java.util.Collections.singletonList(dependencyId));
+    }
+
+    private void installCheckedDependencies() {
+        List<String> ids = new ArrayList<String>();
+        for (DependencyStatus status : dependencyStatuses.values()) {
+            if (status.canInstall()) ids.add(status.id);
+        }
+        if (ids.isEmpty()) {
+            dependencyOutput.setText("インストール対象がありません。先に更新チェックを行い、\n"
+                    + "新バージョンがある依存関係を確認してください。\n");
+            return;
+        }
+        StringBuilder names = new StringBuilder();
+        for (String id : ids) {
+            if (names.length() > 0) names.append('、');
+            names.append(dependencyStatuses.get(id).displayName);
+        }
+        int answer = JOptionPane.showConfirmDialog(frame,
+                names + "をインストールしますか？\n"
+                        + "更新チェック済みで新バージョンがある項目だけを対象にします。",
+                "外部依存関係の一括インストール", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+        if (answer == JOptionPane.OK_OPTION) installDependencies(ids);
+    }
+
+    private void installDependencies(List<String> ids) {
+        int javaMajor = selectedJavaMajor();
+        if (javaMajor < 0) {
+            showUnsupportedJavaWarning();
+            return;
+        }
+        setDependencyBusy(true);
+        dependencyOutput.setText("外部依存関係をインストールしています…\n");
+        new SwingWorker<DependencyOperationResult, Void>() {
+            @Override protected DependencyOperationResult doInBackground() throws Exception {
+                DependencyEngine engine = new DependencyEngine(applicationRoot);
+                StringBuilder output = new StringBuilder();
+                for (String id : ids) {
+                    try {
+                        output.append(engine.installDependency(id, javaMajor));
+                    } catch (Exception error) {
+                        output.append(dependencyDisplayName(id)).append("のインストールに失敗しました: ")
+                                .append(rootMessage(error)).append('\n');
+                    }
+                }
+                return new DependencyOperationResult(output.toString(),
+                        engine.inspectAll(javaMajor));
+            }
+
+            @Override protected void done() {
+                try {
+                    DependencyOperationResult result = get();
+                    updateDependencyRows(result.statuses);
+                    dependencyOutput.setText(result.output
+                            + "インストール後の更新チェックが完了しました。\n");
+                } catch (Exception error) {
+                    dependencyOutput.setText("インストール後の確認に失敗しました: "
+                            + rootMessage(error) + "\n");
+                } finally {
+                    setDependencyBusy(false);
+                }
+            }
+        }.execute();
+    }
+
+    private void updateDependencyRows(List<DependencyStatus> statuses) {
+        for (DependencyStatus status : statuses) {
+            dependencyStatuses.put(status.id, status);
+            DependencyRow row = dependencyRows.get(status.id);
+            if (row != null) {
+                row.status.setText("導入版: " + status.installedLabel()
+                        + " / 最新版: " + status.latestLabel() + " / " + status.message);
+            }
+        }
+        refreshDependencyButtons();
+    }
+
+    private void resetDependencyRows() {
+        for (DependencyRow row : dependencyRows.values()) {
+            row.status.setText("未確認");
+        }
+        refreshDependencyButtons();
+    }
+
+    private void refreshDependencyButtons() {
+        boolean busy = !dependencyCheckButton.isEnabled();
+        for (DependencyRow row : dependencyRows.values()) {
+            DependencyStatus status = dependencyStatuses.get(row.id);
+            row.check.setEnabled(!busy);
+            row.install.setEnabled(!busy && status != null && status.canInstall());
+        }
+        dependencyUpdateButton.setEnabled(!busy && dependencyStatuses.values().stream()
+                .anyMatch(DependencyStatus::canInstall));
+    }
+
+    private void showUnsupportedJavaWarning() {
+        JOptionPane.showMessageDialog(frame, "対応済みのTemurin LTSを選択してください。",
+                "未対応バージョン", JOptionPane.WARNING_MESSAGE);
+    }
+
+    private static int countUpdates(List<DependencyStatus> statuses) {
+        int count = 0;
+        for (DependencyStatus status : statuses) if (status.updateAvailable) count++;
+        return count;
+    }
+
+    private static String dependencyDisplayName(String id) {
+        if ("temurin".equals(id)) return "Eclipse Temurin JDK";
+        if ("ffmpeg".equals(id)) return "FFmpeg";
+        if ("bouncycastle".equals(id)) return "Bouncy Castle";
+        if ("ant".equals(id)) return "Apache Ant";
+        if ("7zip".equals(id)) return "7-Zip";
+        if ("gpac".equals(id)) return "GPAC / MP4Box";
+        return id;
     }
 
     private void loadJavaChoices() {
@@ -390,7 +592,7 @@ public final class NicoCacheUpdater {
         return response;
     }
 
-    private Path downloadAndVerify(Release release) throws IOException, InterruptedException {
+    private static Path downloadAndVerify(Release release) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT)
                 .followRedirects(HttpClient.Redirect.NORMAL).build();
         Path directory = Files.createTempDirectory("NicoCache_nl-update-");
@@ -417,17 +619,54 @@ public final class NicoCacheUpdater {
         return packageFile;
     }
 
+    private static String applyApplicationPackage(Path packageFile, Path root)
+            throws Exception {
+        ApplicationProcessGuard.requireStopped(root);
+        if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
+            Process installer = new ProcessBuilder("msiexec.exe", "/i", packageFile.toString()).start();
+            if (!installer.waitFor(30, java.util.concurrent.TimeUnit.MINUTES)) {
+                installer.destroyForcibly();
+                throw new IOException("Windows Installerが時間内に終了しませんでした");
+            }
+            if (installer.exitValue() != 0 && installer.exitValue() != 1641
+                    && installer.exitValue() != 3010) {
+                throw new IOException("Windows Installerが失敗しました (ExitCode: "
+                        + installer.exitValue() + ")");
+            }
+            return "Windows Installerで更新しました。";
+        }
+        ArchiveApplicationInstaller.install(packageFile, root, UpdaterPlatform.current());
+        return "アプリイメージを更新しました。";
+    }
+
+    private static void deleteDownloadedPackage(Path packageFile) {
+        if (packageFile == null) return;
+        try {
+            Path directory = packageFile.getParent();
+            Files.deleteIfExists(packageFile);
+            if (directory != null) Files.deleteIfExists(directory);
+        } catch (IOException ignored) {
+            // A failed cleanup must not hide the update result.
+        }
+    }
+
     private void setApplicationBusy(boolean busy) {
         applicationCheckButton.setEnabled(!busy);
-        applicationUpdateButton.setEnabled(!busy && latestRelease != null);
+        applicationUpdateButton.setEnabled(!busy && applicationUpdateAvailable);
         changeTargetButton.setEnabled(!busy);
     }
 
     private void setDependencyBusy(boolean busy) {
         dependencyCheckButton.setEnabled(!busy);
-        dependencyUpdateButton.setEnabled(!busy);
+        dependencyUpdateButton.setEnabled(!busy && dependencyStatuses.values().stream()
+                .anyMatch(DependencyStatus::canInstall));
         javaChoice.setEnabled(!busy);
         changeTargetButton.setEnabled(!busy);
+        for (DependencyRow row : dependencyRows.values()) {
+            DependencyStatus status = dependencyStatuses.get(row.id);
+            row.check.setEnabled(!busy);
+            row.install.setEnabled(!busy && status != null && status.canInstall());
+        }
     }
 
     private static String sha256(Path file) throws IOException {
@@ -464,9 +703,91 @@ public final class NicoCacheUpdater {
         return value.getMessage() == null ? value.toString() : value.getMessage();
     }
 
+    static String headlessApplicationCheck(Path root) throws Exception {
+        Path applicationRoot = TargetRootResolver.requireInstallation(root);
+        Release release = fetchLatestReleaseHeadless();
+        String installed = InstalledVersionDetector.detect(applicationRoot);
+        boolean update = "不明".equals(installed)
+                || compareVersions(release.version, installed) > 0;
+        return "対象: " + applicationRoot + "\n導入版: " + installed
+                + "\n最新版: " + release.version + "\n配布物: " + release.packageName
+                + "\n" + (update ? "更新があります。" : "既に最新版です。") + "\n";
+    }
+
+    static String headlessApplicationUpdate(Path root) throws Exception {
+        Path applicationRoot = TargetRootResolver.requireInstallation(root);
+        Release release = fetchLatestReleaseHeadless();
+        String installed = InstalledVersionDetector.detect(applicationRoot);
+        if (!"不明".equals(installed)
+                && compareVersions(release.version, installed) <= 0) {
+            return "既に最新版です: " + installed + System.lineSeparator();
+        }
+        Path packageFile = null;
+        try {
+            packageFile = downloadAndVerify(release);
+            String result = applyApplicationPackage(packageFile, applicationRoot);
+            String updated = InstalledVersionDetector.detect(applicationRoot);
+            return result + "\n更新後の導入版: " + updated + System.lineSeparator();
+        } finally {
+            deleteDownloadedPackage(packageFile);
+        }
+    }
+
+    private static Release fetchLatestReleaseHeadless()
+            throws IOException, InterruptedException {
+        return parseRelease(sendText(RELEASE_URI).body());
+    }
+
     public static void main(String[] args) {
+        if (java.awt.GraphicsEnvironment.isHeadless()
+                || java.util.Arrays.asList(args).contains("--headless")) {
+            System.err.println("GUIを表示できません。ヘッドレス実行では --application-check、"
+                    + "--application-update、--dependency-check などを指定してください。");
+            return;
+        }
         Path applicationRoot = TargetRootResolver.resolve(UpdaterLauncher.argument(args, "--app-root"));
         SwingUtilities.invokeLater(() -> new NicoCacheUpdater(applicationRoot).frame.setVisible(true));
+    }
+
+    private static final class DependencyOperationResult {
+        final String output;
+        final List<DependencyStatus> statuses;
+        DependencyOperationResult(String output, List<DependencyStatus> statuses) {
+            this.output = output;
+            this.statuses = statuses;
+        }
+    }
+
+    private final class DependencyRow {
+        final String id;
+        final JPanel panel = new JPanel(new BorderLayout(8, 2));
+        final JLabel status = new JLabel("未確認");
+        final JButton check = new JButton("更新チェック");
+        final JButton install = new JButton("インストール");
+
+        DependencyRow(String id, String name) {
+            this.id = id;
+            panel.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+                    javax.swing.BorderFactory.createEtchedBorder(),
+                    javax.swing.BorderFactory.createEmptyBorder(6, 8, 6, 8)));
+            JPanel labels = new JPanel();
+            labels.setLayout(new BoxLayout(labels, BoxLayout.Y_AXIS));
+            JLabel title = new JLabel(name);
+            title.setFont(title.getFont().deriveFont(Font.BOLD));
+            labels.add(title);
+            status.setName("dependency." + id + ".status");
+            labels.add(status);
+            panel.add(labels, BorderLayout.CENTER);
+            JPanel buttons = new JPanel();
+            check.setName("dependency." + id + ".check");
+            install.setName("dependency." + id + ".install");
+            buttons.add(check);
+            buttons.add(install);
+            panel.add(buttons, BorderLayout.EAST);
+            check.addActionListener(event -> checkDependency(this.id));
+            install.addActionListener(event -> installDependency(this.id));
+            install.setEnabled(false);
+        }
     }
 
     private static final class Release {

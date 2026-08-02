@@ -61,8 +61,8 @@ Linuxでは`lib/app/`、macOSでは`Contents/app/`がJARの配置先です。
 ## 独立アップデーター
 
 ```powershell
-./packaging/unix/build-standalone-updater.ps1 -Platform MacOS -PackageType All -AppVersion 0.1.0
-./packaging/unix/test-standalone-updater.ps1 -Platform MacOS -AppVersion 0.1.0
+./packaging/unix/build-standalone-updater.ps1 -Platform MacOS -PackageType All -AppVersion 0.2.0
+./packaging/unix/test-standalone-updater.ps1 -Platform MacOS -AppVersion 0.2.0
 ```
 
 本体更新では、GitHub Releaseのプラットフォーム・アーキテクチャ別アプリイメージ
@@ -71,9 +71,10 @@ ZIPをSHA-256検証して展開し、`config.properties`、`portable.flag`、キ
 Windows Installerへ渡し、Linux/macOSは安全なバックアップ・置換・ロールバックを
 Java内で行います。
 
-Unixの外部依存関係タブは、Java、FFmpeg、Apache Ant、7-Zipを確認します。root権限を
-自動取得せず、導入・更新は各OSのパッケージ管理へ案内します。Bouncy Castleは
-NicoCache_nl専用ライブラリとしてアップデーターがSHA-256検証付きで管理します。
+Unixの外部依存関係タブは、Java、FFmpeg、Apache Ant、7-Zip、GPAC/MP4Boxを確認します。
+各行の更新チェックとインストールから、macOSではHomebrew、Linuxでは検出したAPT/DNF/
+pacmanを明示操作で実行します。root権限が必要な場合はOSの認証または`sudo`が必要です。
+Bouncy CastleはNicoCache_nl専用ライブラリとしてアップデーターがSHA-256検証付きで管理します。
 
 ## CI
 

@@ -67,7 +67,9 @@ java -jar .\NicoCacheLauncher.jar --headless --stop
 ```
 
 未設定環境では先に`--setup --headless`を実行し、ユーザーデータ先とHTTPS、CA信頼、
-OSプロキシー、自動起動の各`true`/`false`を明示する。
+OSプロキシー、自動起動の各`true`/`false`を明示する。GUI初回ウィザードではこの4項目を
+推奨設定として初期ONにし、HTTPSの必須条件、`proxy.pac`による通常通信の性能維持、
+自動起動の利便性を説明する。
 
 自動起動はタスク名を指定してログオン時に一回だけ登録する。間隔指定はなく、
 登録直後にOS側のタスク照会が失敗した場合は成功として保存しない。ログオン時は
@@ -265,8 +267,8 @@ LinuxとmacOSのネイティブパッケージは対象OS上のJDK 25 `jpackage`
 ```powershell
 ./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 0.1.0
 ./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 0.1.0
-./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion 0.1.0
-./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion 0.1.0
+./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion 0.2.0
+./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion 0.2.0
 ```
 
 LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメージZIP、PKG、DMGを

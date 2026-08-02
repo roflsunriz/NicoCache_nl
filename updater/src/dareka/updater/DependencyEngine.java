@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.jar.JarFile;
 
 /** Coordinates user-wide command-line tools and the NicoCache_nl-local Bouncy Castle libraries. */
 final class DependencyEngine {
@@ -38,28 +39,99 @@ final class DependencyEngine {
     }
 
     String checkAll(int javaMajor) throws Exception {
-        StringBuilder output = new StringBuilder(systemDependencies.checkAll(javaMajor));
-        output.append(checkBouncyCastle());
+        StringBuilder output = new StringBuilder();
+        if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
+            output.append("WinGet/公式配布API: Windows依存関係の導入方式\n");
+        }
+        for (DependencyStatus status : inspectAll(javaMajor)) {
+            output.append(formatStatus(status)).append(System.lineSeparator());
+        }
         return output.toString();
     }
 
     String updateAll(int javaMajor) throws Exception {
-        StringBuilder output = new StringBuilder(systemDependencies.updateAll(javaMajor));
+        StringBuilder output = new StringBuilder();
+        boolean installed = false;
+        for (DependencyStatus status : inspectAll(javaMajor)) {
+            if (!status.canInstall()) continue;
+            installed = true;
+            output.append(installCheckedDependency(status.id, javaMajor));
+        }
+        if (!installed) output.append("新しい外部依存関係はありません。\n");
+        return output.toString();
+    }
+
+    List<DependencyStatus> inspectAll(int javaMajor) throws Exception {
+        List<DependencyStatus> statuses = new ArrayList<DependencyStatus>(
+                systemDependencies.inspectAll(javaMajor));
+        try {
+            statuses.add(checkBouncyCastleStatus());
+        } catch (Exception error) {
+            statuses.add(DependencyStatus.failure("bouncycastle", "Bouncy Castle",
+                    error.getMessage() == null ? error.toString() : error.getMessage()));
+        }
+        return statuses;
+    }
+
+    DependencyStatus inspectDependency(String dependencyId, int javaMajor)
+            throws Exception {
+        for (DependencyStatus status : inspectAll(javaMajor)) {
+            if (status.id.equals(dependencyId)) return status;
+        }
+        throw new IOException("未対応の外部依存関係です: " + dependencyId);
+    }
+
+    String installDependency(String dependencyId, int javaMajor) throws Exception {
+        DependencyStatus status = inspectDependency(dependencyId, javaMajor);
+        if (!status.canInstall()) {
+            throw new IOException(status.displayName
+                    + "にインストール可能な新バージョンがありません");
+        }
+        return installCheckedDependency(dependencyId, javaMajor);
+    }
+
+    private String installCheckedDependency(String dependencyId, int javaMajor)
+            throws Exception {
+        if ("bouncycastle".equals(dependencyId)) {
+            String result = updateBouncyCastle();
+            if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
+                UserToolAliasRepair.repair();
+            }
+            return result;
+        }
+        String result = systemDependencies.install(dependencyId, javaMajor);
         if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
             UserToolAliasRepair.repair();
         }
-        output.append(updateBouncyCastle());
-        return output.toString();
+        return result;
     }
 
     String selfTestTransactions() throws Exception {
         return systemDependencies.selfTest();
     }
 
-    private String checkBouncyCastle() throws Exception {
+    private DependencyStatus checkBouncyCastleStatus() throws Exception {
         BouncyRelease release = resolveBouncyCastle();
-        return "Bouncy Castle: " + release.version
-                + " [NicoCache_nl専用、SHA-256検証情報あり]" + System.lineSeparator();
+        String installed = installedBouncyCastleVersion();
+        boolean update = installed == null || compareVersions(installed, release.version) < 0;
+        return new DependencyStatus("bouncycastle", "Bouncy Castle", installed,
+                release.version, "NicoCache_nl専用、SHA-256検証情報あり"
+                        + (update ? "（更新あり）" : "（最新）"), true, update,
+                TargetRootResolver.isInstallation(applicationRoot));
+    }
+
+    private String installedBouncyCastleVersion() {
+        Path jar = applicationRoot.resolve("lib/bcprov.jar").normalize();
+        if (!jar.startsWith(applicationRoot) || !Files.isRegularFile(jar)) return null;
+        try (JarFile file = new JarFile(jar.toFile())) {
+            if (file.getManifest() == null
+                    || file.getManifest().getMainAttributes() == null) return null;
+            String version = file.getManifest().getMainAttributes()
+                    .getValue("Implementation-Version");
+            return version == null || version.isBlank() ? null : version.trim();
+        } catch (IOException error) {
+            return null;
+        }
     }
 
     private String updateBouncyCastle() throws Exception {
@@ -153,6 +225,28 @@ final class DependencyEngine {
                 actual.toString().getBytes(StandardCharsets.US_ASCII))) {
             throw new IOException("ハッシュが一致しません: " + file.getFileName());
         }
+    }
+
+    private static String formatStatus(DependencyStatus status) {
+        return status.displayName + ": 導入版=" + status.installedLabel()
+                + ", 最新版=" + status.latestLabel() + " " + status.message
+                + (status.canInstall() ? " [インストール可能]" : " [インストール不可]");
+    }
+
+    private static int compareVersions(String left, String right) {
+        String[] a = left.replace('-', '.').split("\\.");
+        String[] b = right.replace('-', '.').split("\\.");
+        for (int index = 0; index < Math.max(a.length, b.length); index++) {
+            int leftValue = index < a.length ? numericPart(a[index]) : 0;
+            int rightValue = index < b.length ? numericPart(b[index]) : 0;
+            if (leftValue != rightValue) return Integer.compare(leftValue, rightValue);
+        }
+        return 0;
+    }
+
+    private static int numericPart(String value) {
+        Matcher matcher = Pattern.compile("^\\d+").matcher(value);
+        return matcher.find() ? Integer.parseInt(matcher.group()) : 0;
     }
 
     private static void deleteTree(Path root) throws IOException {

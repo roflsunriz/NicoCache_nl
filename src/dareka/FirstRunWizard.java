@@ -139,6 +139,7 @@ final class FirstRunWizard {
     private final JTextField dataRootField;
     private final JLabel dataRootError;
     private final JCheckBox httpsCheckBox;
+    private final JCheckBox certificateCheckBox;
     private final JCheckBox proxyCheckBox;
     private final JCheckBox autoStartCheckBox;
     private final JTextArea summary;
@@ -183,6 +184,10 @@ final class FirstRunWizard {
                 "setup.https",
                 messages.text("option.https"),
                 true);
+        certificateCheckBox = checkBox(
+                "setup.ca",
+                messages.text("option.ca"),
+                true);
         proxyCheckBox = checkBox(
                 "setup.proxy",
                 messages.text("option.proxy"),
@@ -193,8 +198,10 @@ final class FirstRunWizard {
                 true);
         httpsCheckBox.addItemListener(event -> {
             boolean enabled = httpsCheckBox.isSelected();
+            certificateCheckBox.setEnabled(enabled);
             proxyCheckBox.setEnabled(enabled);
             if (!enabled) {
+                certificateCheckBox.setSelected(false);
                 proxyCheckBox.setSelected(false);
             }
         });
@@ -283,6 +290,8 @@ final class FirstRunWizard {
         panel.add(paragraph(messages.text("options.body")));
         panel.add(Box.createVerticalStrut(16));
         panel.add(httpsCheckBox);
+        panel.add(Box.createVerticalStrut(10));
+        panel.add(certificateCheckBox);
         panel.add(Box.createVerticalStrut(10));
         panel.add(proxyCheckBox);
         panel.add(Box.createVerticalStrut(10));
@@ -407,6 +416,9 @@ final class FirstRunWizard {
         appendChoice(text, httpsCheckBox.isSelected(),
                 messages.text("summary.https.on"),
                 messages.text("summary.https.off"));
+        appendChoice(text, certificateCheckBox.isSelected(),
+                messages.text("summary.ca.on"),
+                messages.text("summary.ca.off"));
         appendChoice(text, proxyCheckBox.isSelected(),
                 messages.text("summary.proxy.on"),
                 messages.text("summary.proxy.off"));
@@ -433,7 +445,7 @@ final class FirstRunWizard {
         return new SetupOptions(
                 Path.of(dataRootField.getText().trim()),
                 httpsCheckBox.isSelected(),
-                httpsCheckBox.isSelected(),
+                certificateCheckBox.isSelected(),
                 proxyCheckBox.isSelected(),
                 autoStartCheckBox.isSelected());
     }
@@ -449,6 +461,8 @@ final class FirstRunWizard {
         StringBuilder text = new StringBuilder();
         appendResult(text, messages.text("result.option.https"),
                 appliedOptions.isHttpsEnabled(), successful);
+        appendResult(text, messages.text("result.option.ca"),
+                appliedOptions.isCertificateTrusted(), successful);
         appendResult(text, messages.text("result.option.proxy"),
                 appliedOptions.isProxyConfigured(), successful);
         appendResult(text, messages.text("result.option.autostart"),
@@ -503,6 +517,7 @@ final class FirstRunWizard {
         applyButton.setEnabled(!busy);
         finishButton.setEnabled(!busy);
         httpsCheckBox.setEnabled(!busy);
+        certificateCheckBox.setEnabled(!busy && httpsCheckBox.isSelected());
         proxyCheckBox.setEnabled(!busy && httpsCheckBox.isSelected());
         autoStartCheckBox.setEnabled(!busy);
         dataRootField.setEnabled(!busy);
@@ -536,6 +551,10 @@ final class FirstRunWizard {
 
     JCheckBox getHttpsCheckBox() {
         return httpsCheckBox;
+    }
+
+    JCheckBox getCertificateCheckBox() {
+        return certificateCheckBox;
     }
 
     JCheckBox getProxyCheckBox() {

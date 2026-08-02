@@ -57,13 +57,16 @@ java-options=-Djpackage.app-version=1.0.1
     $version = Invoke-UpdaterCli $Executable @('--installed-version', '--app-root', $TargetRoot)
     Assert-True ($version.Output.Trim() -eq '1.0.1') "Installed launcher version was not detected: $($version.Output)"
 
+    $applicationCheck = Invoke-UpdaterCli $Executable @('--headless', '--application-check', '--app-root', $TargetRoot) 600
+    Assert-True $applicationCheck.Output.Contains('NicoCache_nl-') 'Headless application update check did not run'
+
     $self = Invoke-UpdaterCli $Executable @('--self-test', '--app-root', $TargetRoot)
     foreach ($marker in @('SELF_TEST_OK', 'SYSTEM_DEPENDENCY_SELF_TEST_OK', 'winget-source', 'winget-first', 'fallback')) {
         Assert-True $self.Output.Contains($marker) "Packaged self-test missing: $marker"
     }
 
     $check = Invoke-UpdaterCli $Executable @('--dependency-check', '--app-root', $TargetRoot, '--java-major', '25') 600
-    foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Bouncy Castle', 'Apache Ant', '7-Zip', 'WinGet')) {
+    foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Bouncy Castle', 'Apache Ant', '7-Zip', 'GPAC / MP4Box', 'WinGet')) {
         Assert-True $check.Output.Contains($name) "Dependency check output missing: $name"
     }
     Assert-True (-not (Test-Path (Join-Path $TargetRoot 'runtime'))) 'System Temurin was written into NicoCache_nl'
@@ -80,13 +83,13 @@ if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed' }
 foreach ($testClass in @('dareka.updater.NicoCacheUpdaterTest', 'dareka.updater.TargetRootResolverTest',
         'dareka.updater.InstalledVersionDetectorTest', 'dareka.updater.ApplicationProcessGuardTest',
         'dareka.updater.DependencyEngineTest', 'dareka.updater.ArchiveApplicationInstallerTest',
-        'dareka.updater.UpdaterPlatformTest')) {
+        'dareka.updater.UpdaterPlatformTest', 'dareka.updater.DependencyStatusTest')) {
     & java -cp $classes $testClass
     if ($LASTEXITCODE -ne 0) { throw "Updater Java test failed: $testClass" }
 }
 
 $packageType = if ($BuildMsi) { 'All' } else { 'AppImage' }
-& (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -PackageType $packageType -AppVersion 0.1.0
+& (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -PackageType $packageType -AppVersion 0.2.0
 $appImage = Join-Path $root '.test-work\standalone-updater\output\NicoCache_nl Updater'
 $appImageExe = Join-Path $appImage 'NicoCache_nl Updater.exe'
 Assert-File $appImageExe

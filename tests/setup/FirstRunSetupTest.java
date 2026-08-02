@@ -636,14 +636,29 @@ public final class FirstRunSetupTest {
             assertEquals(2, panel.getStep(), "options step");
             render(panel, 720, 500,
                     previewDirectory.resolve("wizard-step3-standard.png"));
+            assertTrue(panel.getHttpsCheckBox().isSelected(),
+                    "HTTPS MitM must be selected initially");
+            assertTrue(panel.getCertificateCheckBox().isSelected(),
+                    "CA trust registration must be selected initially");
+            assertTrue(panel.getProxyCheckBox().isSelected(),
+                    "proxy.pac must be selected initially");
+            assertTrue(panel.getAutoStartCheckBox().isSelected(),
+                    "auto-start must be selected initially");
             panel.getHttpsCheckBox().doClick();
+            assertFalse(panel.getCertificateCheckBox().isEnabled(),
+                    "CA trust must be disabled without HTTPS MitM");
+            assertFalse(panel.getCertificateCheckBox().isSelected(),
+                    "CA trust must be cleared without HTTPS MitM");
             assertFalse(panel.getProxyCheckBox().isEnabled(),
                     "proxy must be disabled without HTTPS");
             assertFalse(panel.getProxyCheckBox().isSelected(),
                     "proxy must be cleared without HTTPS");
             panel.getHttpsCheckBox().doClick();
+            assertTrue(panel.getCertificateCheckBox().isEnabled(),
+                    "CA trust must be enabled with HTTPS MitM");
             assertTrue(panel.getProxyCheckBox().isEnabled(),
                     "proxy must be enabled with HTTPS");
+            panel.getCertificateCheckBox().doClick();
             panel.getProxyCheckBox().doClick();
             panel.getAutoStartCheckBox().doClick();
 
@@ -666,8 +681,11 @@ public final class FirstRunSetupTest {
                     selectedDataRoot.toString(),
                     "summary data root");
             assertContains(panel.getSummary().getText(),
-                    "ローカルCAを生成",
-                    "summary HTTPS");
+                    "HTTPS MitMを有効にします",
+                    "summary HTTPS MitM");
+            assertContains(panel.getSummary().getText(),
+                    "ローカルCAを生成し、OSの信頼ストアへ登録します",
+                    "summary CA trust");
             assertContains(panel.getSummary().getText(),
                     "ログオン時起動へ追加しません",
                     "summary auto-start");
@@ -696,8 +714,11 @@ public final class FirstRunSetupTest {
                     "セットアップが完了しました",
                     "success result body");
             assertContains(panel.getResultSummary().getText(),
-                    "HTTPS証明書: 成功",
-                    "HTTPS success result");
+                    "HTTPS MitM: 成功",
+                    "HTTPS MitM success result");
+            assertContains(panel.getResultSummary().getText(),
+                    "ローカルCAの信頼登録: 成功",
+                    "CA trust success result");
             assertContains(panel.getResultSummary().getText(),
                     "自動プロキシー: 成功",
                     "proxy success result");
@@ -718,8 +739,8 @@ public final class FirstRunSetupTest {
                     "ロールバックしました",
                     "failure result body");
             assertContains(panel.getResultSummary().getText(),
-                    "HTTPS証明書: 失敗（ロールバック済み）",
-                    "HTTPS failure result");
+                    "HTTPS MitM: 失敗（ロールバック済み）",
+                    "HTTPS MitM failure result");
             assertContains(panel.getResultSummary().getText(),
                     "ログオン時自動起動: 未選択",
                     "unselected option must not be marked failed");

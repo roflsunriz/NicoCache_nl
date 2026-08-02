@@ -1,6 +1,6 @@
 # NicoCache_nl Updater
 
-NicoCache_nl本体と管理対象の外部依存関係を、一つの独立GUIから更新する純Javaアプリケーションです。
+NicoCache_nl本体と管理対象の外部依存関係を、独立GUIまたはヘッドレスCLIから更新する純Javaアプリケーションです。
 
 ## GUI
 
@@ -9,7 +9,10 @@ NicoCache_nl本体と管理対象の外部依存関係を、一つの独立GUI�
   - WindowsではMSI、Linux/macOSではOS・アーキテクチャ別アプリイメージZIPとSHA-256を取得して検証
   - WindowsではWindows Installerを起動し、Linux/macOSでは既存アプリイメージを安全に置換
 - `外部依存関係` タブ
-  - Eclipse Temurin、FFmpeg、Bouncy Castle、Apache Ant、7-Zipを確認・更新
+  - Eclipse Temurin、FFmpeg、Bouncy Castle、Apache Ant、7-Zip、GPAC/MP4Boxを確認・更新
+  - 各依存関係に「更新チェック」と「インストール」を表示し、最新版ならインストールを無効化
+  - 「全てチェック」は全行を確認し、「全てインストール」は確認済みで新バージョンがある行だけを処理
+  - インストール後は同じプロセス内で再確認し、再起動なしに導入版・最新版・ボタン状態を更新
   - Adoptium APIから公開中のLTSを動的に列挙
   - NicoCache_nlで動作確認済みのJava 17、21、25 LTSだけを選択可能にし、
     未対応LTSはグレー表示（推奨・既定はJava 25）
@@ -19,10 +22,15 @@ NicoCache_nl本体と管理対象の外部依存関係を、一つの独立GUI�
     WinGet App Execution Aliasを絶対パスで検出して使用
   - WinGetパッケージが提供されていないApache Antなどは、公式配布APIから
     現在のWindowsユーザー用ディレクトリへ導入
+  - GPACは[WinGet公式マニフェスト](https://github.com/microsoft/winget-pkgs/tree/master/manifests/g/GPAC/GPAC)
+    の`GPAC.GPAC`を使用し、[公式GPAC配布ページ](https://gpac.io/downloads/gpac-nightly-builds/)
+    と[公式Release API](https://api.github.com/repos/gpac/gpac/releases/latest)で最新版を確認
   - 取得、ハッシュ検証、展開、バックアップ、置換、ロールバックをJava内で実行
 
-Linux/macOSではOSのパッケージ管理が必要な外部依存関係を自動でroot導入しません。
-表示された案内に従って導入してから再確認してください。NicoCache_nl本体を更新するときは
+Linux/macOSでは外部依存関係のインストールボタンから、検出したOSのパッケージ管理を
+利用者の明示操作として実行します。root権限が必要な場合はOSの認証または`sudo`が
+要求されます。パッケージ管理が検出できない場合は、表示された案内に従って導入して
+から再確認してください。NicoCache_nl本体を更新するときは
 本体を先に終了してください。更新対象が使用中で置換できない場合、処理は失敗し、既存内容を復元します。
 
 ## 入手と検証
@@ -77,7 +85,11 @@ NicoCache_nl Updater.exe --app-root C:\path\to\NicoCache_nl
 ```text
 NicoCache_nl Updater.exe --self-test --app-root C:\temporary\target
 ./NicoCache_nl\ Updater --self-test --app-root /temporary/target
-./NicoCache_nl\ Updater --dependency-check --app-root /temporary/target --java-major 25
+./NicoCache_nl\ Updater --headless --application-check --app-root /temporary/target
+./NicoCache_nl\ Updater --headless --application-update --app-root /temporary/target
+./NicoCache_nl\ Updater --headless --dependency-check --app-root /temporary/target --java-major 25
+./NicoCache_nl\ Updater --headless --dependency-check --dependency gpac --app-root /temporary/target
+./NicoCache_nl\ Updater --headless --dependency-update --dependency gpac --app-root /temporary/target
 ```
 
 `--self-test`はOSごとの依存関係処理境界と一時ファイルを使う自己診断を検証します。
