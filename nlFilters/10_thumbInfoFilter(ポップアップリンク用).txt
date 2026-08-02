@@ -69,9 +69,12 @@ Replace<
 >
 
 #----------------------------------------------------------------------------------------
+# 2026-08-02: 新検索・タグページは11_thumbInfoFilterのDOMContentLoaded+
+# MutationObserverで処理する。ここで旧inline handlerも付けると、11側のイベント
+# リスナーと二重に呼び出されるため、対象URLから除外する。
 [Replace]
 Name = ポップアップ追加(wwwドメイン汎用)
-URL = www\.nicovideo\.jp/
+URL = (?!www\.nicovideo\.jp/(?:search|tag)(?:/|$))www\.nicovideo\.jp/
 ContentType = text/(?:html|plain|xml)
 Multi = TRUE
 Match<
@@ -118,6 +121,8 @@ $0 onMouseOver="return popThumb2('$1', 0)" onMouseOut="return nd()"
 >
 
 #----------------------------------------------------------------------------------------
+# 2026-08-02: Append内の\\\\w/\\\\dはRegExp文字列で二重に解釈され、
+# 現行TimelineItemの/watch/リンクにマッチしないため、正規表現リテラルへ変更。
 [Script]
 Name = ポップアップ追加(マイページ・ユーザーページ)
 URL = www\.nicovideo\.jp/(?:my|user/\d+)(?:/|\?|$)
@@ -129,7 +134,7 @@ NicoCache_nl.moHooks.addLazy(function(item) {
   for (var i = 0; i < anchors.length; i++) {
     var anchor = anchors[i];
     if (!anchor.href) continue;
-    var m = anchor.href.match(new RegExp("/((?:watch/|mylist/|user/|channel/|community/|seiga/)?(?:(?!nw|pk|ap|gm)\\\\w{2}\\\\d+))"));
+    var m = anchor.href.match(/\/((?:watch\/|mylist\/|user\/|channel\/|community\/|seiga\/)?(?:(?!nw|pk|ap|gm)\w{2}\d+))/);
     if (!m) continue;
     var id = m[1];
     (function(id) {

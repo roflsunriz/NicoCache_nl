@@ -1,5 +1,5 @@
 // watchページ用ライブラリ
-// 2021-03-20, 2024-09-06
+// 2021-03-20, 2024-09-06, 2026-08-02
 
 /**
  * NicoCache_nl.watch.apiData
@@ -113,7 +113,16 @@
     },
 
     getVideoID: function() {
-      return NicoCache_nl.watch.apiData.video.id;
+      // 現行watchページはserver-responseのmetaタグを生成しないため、
+      // URLを最優先にして動画IDを取得する。SPA切替後などURLから取れない場合は
+      // 従来どおりapiDataをフォールバックとして参照する。
+      var match = window.location.pathname.match(/^\/watch\/([a-z]{2}\d+)(?:\/|$)/i);
+      if (match !== null) return match[1];
+
+      var apiData = NicoCache_nl.watch.apiData;
+      if (apiData && apiData.video && apiData.video.id)
+        return apiData.video.id;
+      return null;
     },
   };
 
@@ -132,6 +141,12 @@
         }
       });
       observer.observe(body, {childList: true, subtree: true});
+      // 現行ページではDOMContentLoaded時点ですでにvideoが存在することがある。
+      // MutationObserverの登録後に追加されるとは限らないため、初回にも確認する。
+      if (document.querySelector('video[data-name="video-content"]') !== null) {
+        observer.disconnect();
+        callback();
+      }
     };
 
     // fire event.
@@ -250,22 +265,43 @@
     // - nlFilters/20_watchFilter.txtで上記コード埋め込まれる.
     var serverResponse = NicoCache_nl._metaServerResponseTag;
     NicoCache_nl._metaServerResponseTag = undefined;
-    if (serverResponse === null) {
-      console.log('nllib_watch.js: error: server-response===null');
+    if (!serverResponse) {
+      // 2026-08-02: 現行watchページにはserver-responseがない。
+      // URL由来の最小apiDataを設定し、getVideoID()やキャッシュ削除ボタンを有効にする。
+      var fallbackVideoId = NicoCache_nl.watch.getVideoID();
+      if (fallbackVideoId) {
+        NicoCache_nl.watch.apiData = { video: { id: fallbackVideoId } };
+      }
+      console.log('nllib_watch.js: server-response unavailable; URL fallback used');
       return;
     };
 
     var content = serverResponse.getAttribute('content');
-    if (content === null) {
+    if (!content) {
       // 異常だからログしておく.
-      console.log('nllib_watch.js: error: server-response.content===null');
+      var fallbackVideoId = NicoCache_nl.watch.getVideoID();
+      if (fallbackVideoId) {
+        NicoCache_nl.watch.apiData = { video: { id: fallbackVideoId } };
+      }
+      console.log('nllib_watch.js: server-response.content unavailable; URL fallback used');
       return;
     };
 
-    // 以下エラーしたらそのまま.
-    var json = JSON.parse(content);
-
-    NicoCache_nl.watch.apiData = json.data.response;
+    try {
+      var json = JSON.parse(content);
+      if (json && json.data && json.data.response
+          && json.data.response.video && json.data.response.video.id) {
+        NicoCache_nl.watch.apiData = json.data.response;
+      } else {
+        throw new Error('server-response.data.response.video.id unavailable');
+      }
+    } catch (error) {
+      var fallbackVideoId = NicoCache_nl.watch.getVideoID();
+      if (fallbackVideoId) {
+        NicoCache_nl.watch.apiData = { video: { id: fallbackVideoId } };
+      }
+      console.log('nllib_watch.js: invalid server-response; URL fallback used');
+    }
   });
 
   internalVideoChangedCallbacks.push(function() {

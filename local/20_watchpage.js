@@ -1,8 +1,9 @@
-// - 2024-09-06.
+// - 2024-09-06, 2026-08-02.
 // - watchページ 再生リスト のキャッシュアイコンの表示＆色変え＆進捗表示.
 // - nlFilters/20_watchFilter.txtに"watchページ 再生リスト のキャッシュアイコン
 //   の表示＆色変え＆進捗表示"という名前で直書きされていたjavascript.
-// - たぶん期待通りの動作をしていない.
+// - 旧watchページ用イベントは互換性のため残し、現行watchページの
+//   [data-decoration-video-id]にもキャッシュアイコンを追加する.
 
 (function() {
 
@@ -189,6 +190,111 @@
       }
     }, 0);
   };
+
+  // 現行watchページ(2026-08-02)ではPlaylistItemList/WatchRecommendationが廃止され、
+  // 関連動画が[data-decoration-video-id]のdivとして描画される。旧イベントが発火しない
+  // ページでも、同じ/cache/info/v2 APIからキャッシュ済みアイコンを表示する。
+  const currentWatchItemSelector =
+    '[data-anchor-page="watch"][data-anchor-href*="/watch/"][data-decoration-video-id]';
+  const currentWatchItems = new WeakSet();
+  const currentWatchQueue = new Map();
+  var currentWatchQueueTimer = null;
+
+  const getPreferredCacheData = function(videoInfo) {
+    if (!videoInfo || !videoInfo.caches) return null;
+    var preferred = videoInfo.preferredHTML5 || videoInfo.preferred;
+    if (preferred && videoInfo.caches[preferred]) return videoInfo.caches[preferred];
+    for (var id in videoInfo.caches) {
+      if (videoInfo.caches[id] && videoInfo.caches[id].complete)
+        return videoInfo.caches[id];
+    }
+    return null;
+  };
+
+  const getCurrentWatchCacheClass = function(cacheData) {
+    if (!cacheData || !cacheData.complete) return null;
+    if (cacheData.dmc) return cacheData.economy ? 'dmcEconomy' : 'dmcCache';
+    return cacheData.economy ? 'economy' : 'cache';
+  };
+
+  const insertCurrentWatchCacheIcon = function(item, cacheData) {
+    var cache = getCurrentWatchCacheClass(cacheData);
+    if (!cache || !item.isConnected || item.querySelector('.cacheIcon')) return;
+    var thumbnail = item.querySelector('a[href*="/watch/"] img[src*="/thumbnails/"]');
+    if (!thumbnail) return;
+
+    var cacheIcon = document.createElement('div');
+    cacheIcon.className = 'cacheIcon ' + cache + 'IconImgMin';
+    thumbnail.insertAdjacentElement('afterend', cacheIcon);
+  };
+
+  const flushCurrentWatchQueue = function() {
+    currentWatchQueueTimer = null;
+    var queue = new Map(currentWatchQueue);
+    currentWatchQueue.clear();
+    var smids = Array.from(queue.keys());
+    if (smids.length === 0) return;
+
+    $XHR('/cache/info/v2?' + smids.join(','), function(resp) {
+      if (!resp || resp.status != 200) return;
+      var json;
+      try {
+        json = JSON.parse(resp.responseText);
+      } catch (error) {
+        return;
+      }
+      for (var id in json) infoCache[id] = json[id];
+      smids.forEach(function(smid) {
+        var cacheData = getPreferredCacheData(json[smid] || infoCache[smid]);
+        (queue.get(smid) || []).forEach(function(item) {
+          insertCurrentWatchCacheIcon(item, cacheData);
+        });
+      });
+    });
+  };
+
+  const enqueueCurrentWatchItem = function(item) {
+    if (!item || currentWatchItems.has(item)) return;
+    var smid = item.getAttribute('data-decoration-video-id');
+    if (!smid || !/^\w{2}\d+$/.test(smid)) return;
+    if (!item.querySelector('img[src*="/thumbnails/"]')) return;
+
+    currentWatchItems.add(item);
+    if (!currentWatchQueue.has(smid)) currentWatchQueue.set(smid, []);
+    currentWatchQueue.get(smid).push(item);
+    if (currentWatchQueueTimer === null)
+      currentWatchQueueTimer = setTimeout(flushCurrentWatchQueue, 0);
+  };
+
+  const scanCurrentWatchItems = function(root) {
+    if (!root || (root.nodeType !== Node.ELEMENT_NODE
+        && root.nodeType !== Node.DOCUMENT_NODE)) return;
+    if (root.matches && root.matches(currentWatchItemSelector))
+      enqueueCurrentWatchItem(root);
+    if (root.closest) {
+      var parent = root.closest(currentWatchItemSelector);
+      if (parent) enqueueCurrentWatchItem(parent);
+    }
+    if (root.querySelectorAll) {
+      root.querySelectorAll(currentWatchItemSelector).forEach(enqueueCurrentWatchItem);
+    }
+  };
+
+  const startCurrentWatchObserver = function() {
+    scanCurrentWatchItems(document);
+    var observer = new MutationObserver(function(mutations) {
+      mutations.forEach(function(mutation) {
+        mutation.addedNodes.forEach(scanCurrentWatchItems);
+      });
+    });
+    observer.observe(document.body, {childList: true, subtree: true});
+  };
+
+  if (document.body) {
+    startCurrentWatchObserver();
+  } else {
+    document.addEventListener('DOMContentLoaded', startCurrentWatchObserver, {once: true});
+  }
 
   const clearCacheIcons = function(RouterLinkContainer) {
     var RouterLink = Array.from(RouterLinkContainer.getElementsByClassName('RouterLink'));

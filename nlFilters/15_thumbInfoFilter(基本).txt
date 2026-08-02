@@ -227,11 +227,18 @@ NicoCache_nl.moHooks.addLazy(function(item, info) {
   } else if (item.classList.contains("NC-VideoMediaObject")) {
     thumbQuery = ".NC-Thumbnail-image";
     titleQuery = ".NC-VideoMediaObject-title";
+  } else if (item.classList.contains("TimelineItem_video")) {
+    // 2026-08-02: 現行ユーザーページのタイムライン。
+    thumbQuery = ".TimelineItem-contentThumbnail .Thumbnail-image";
+    titleQuery = ".TimelineItem-contentTitle";
+    minIcon = true;
   } else {
     return;
   }
-  if (info == null || info.preferred == null) return;
-  var cacheData = info.caches[info.preferred];
+  var preferred = info && (info.preferred || info.preferredHTML5);
+  if (preferred == null || info.caches == null) return;
+  var cacheData = info.caches[preferred];
+  if (cacheData == null) return;
 
   var cache = !cacheData.dmc ?
     !cacheData.economy ? 'cache' : 'economy':
