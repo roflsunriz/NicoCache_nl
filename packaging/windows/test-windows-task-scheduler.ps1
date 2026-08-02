@@ -184,7 +184,9 @@ try {
     if ([string]::IsNullOrWhiteSpace([string]$logonTrigger.UserId)) {
         throw '登録タスクにログオンユーザーがありません'
     }
-    if ($null -ne $logonTrigger.Repetition) {
+    $repetition = $logonTrigger.SelectSingleNode(
+        "./*[local-name()='Repetition']")
+    if ($null -ne $repetition) {
         throw '登録タスクに不要な繰り返し間隔があります'
     }
     $exec = $taskXml.Task.Actions.Exec
