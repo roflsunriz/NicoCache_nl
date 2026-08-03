@@ -2,7 +2,6 @@ package dareka;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -14,6 +13,10 @@ import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.IllegalBlockingModeException;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -391,7 +394,7 @@ public class ConnectionManager implements Runnable {
     }
 
     private Resource getDebugResource(HttpRequestHeader requestHeader) throws IOException {
-        if (!requestHeader.getHost().equals("DEBUG")) {
+        if (!"DEBUG".equalsIgnoreCase(requestHeader.getHost())) {
             return null;
         }
         String path = requestHeader.getPath();
@@ -403,7 +406,11 @@ public class ConnectionManager implements Runnable {
             java.lang.management.ThreadMXBean threadMxBean =
                     java.lang.management.ManagementFactory.getThreadMXBean();
 
-            try (BufferedWriter bw = new BufferedWriter(new FileWriter("./debug-dump-stack.txt"))) {
+            Path dumpPath = NicoCachePaths.userPath("debug-dump-stack.txt");
+            Files.createDirectories(dumpPath.getParent());
+            try (BufferedWriter bw = Files.newBufferedWriter(dumpPath, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE)) {
                 for (java.lang.management.ThreadInfo ti : threadMxBean.dumpAllThreads(true, true)) {
                     dumpThreadInfo(bw, ti);
                 }

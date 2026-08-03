@@ -14,6 +14,7 @@ $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $launcherIcon = Join-Path $root 'packaging\windows\assets\nicocache-launcher.ico'
+$launcherDescription = 'NicoCache_nl local HTTP/HTTPS proxy and cache server'
 if (-not (Test-Path -LiteralPath $launcherIcon -PathType Leaf)) {
     throw "本体ランチャー用アイコンが見つかりません: $launcherIcon"
 }
@@ -498,7 +499,8 @@ $jpackageArguments = @(
     '--name', 'NicoCache_nl',
     '--app-version', $AppVersion,
     '--vendor', 'NicoCache_nl',
-    '--description', 'ニコニコ動画向けローカルプロキシー兼キャッシュサーバー',
+    # Keep Windows version-resource metadata ASCII; the GUI itself remains localized.
+    '--description', $launcherDescription,
     '--input', $inputRoot,
     '--dest', $outputRoot,
     '--main-jar', 'NicoCacheLauncher.jar',
@@ -537,7 +539,7 @@ foreach ($relativePath in $runtimeLayoutPaths) {
 }
 
 if ($PackageType -in @('Msi', 'All')) {
-    $msiDescription = 'Local HTTP/HTTPS proxy and cache server for NicoNico'
+    $msiDescription = $launcherDescription
     $sharedMsiArguments = @(
         '-J-Duser.language=ja',
         '-J-Duser.country=JP',

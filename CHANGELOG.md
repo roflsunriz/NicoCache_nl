@@ -6,6 +6,23 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Windowsの本体ランチャーとUpdaterの説明情報を実際の役割に合わせ、ロケール依存の
+  文字化けを避けるASCIIのネイティブメタデータへ修正した。Updater MSIは
+  `%LOCALAPPDATA%\NicoCache_nl Updater`へユーザー単位で導入し、通常のインストールで
+  不要なUAC昇格を要求しないようにした。
+- UpdaterのWindowsコマンド出力を実行環境のネイティブ文字コードで読み、CLIの結果はUTF-8
+  で出力するようにして、Java・Antなどの版確認とログ表示の文字化けを修正した。UTF-8や
+  BOM付き出力も判定し、Ant導入後もマシンPATHを失わず、`ant.bat`を確実に再確認できるようにした。
+- Bouncy Castleをjpackageの実配置先`app/lib`から検出・更新し、FFmpegはWinGetの
+  `Gyan.FFmpeg`の版情報で比較するようにして、公開日を版番号として誤表示する問題を修正した。
+  Bouncy Castleは標準版情報に加えてOSGiの`Export-Package`版情報も確認する。
+- OS共通の依存関係境界からWindows固有処理を分離し、`WindowsDependencyManager`と
+  `UnixDependencyManager`を明示的に選択する構造へ整理した。
+- `how-to-dump-stack-trace.txt`を、NicoCache_nlの`DEBUG`エンドポイントから利用者データ
+  フォルダーへUTF-8のスレッドダンプを取得する実際の手順へ書き直した。
+
 ## [1.2.1] - 2026-08-03
 
 ### Changed

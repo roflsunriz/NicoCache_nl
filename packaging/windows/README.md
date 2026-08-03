@@ -42,6 +42,12 @@ msiexec.exe /i .\NicoCache_nl-1.2.1.msi /qn /norestart
 msiexec.exe /x .\NicoCache_nl-1.2.1.msi /qn /norestart
 ```
 
+独立アップデーターのMSIは、依存コマンドとユーザー環境変数を現在のユーザーだけで
+管理できるよう、`%LOCALAPPDATA%\NicoCache_nl Updater`へユーザー単位で導入する。
+そのため通常の導入では管理者権限やUAC昇格を要求しない。本体MSIと同様、Windowsの
+SmartScreenや署名に関する警告はコード署名の有無による別の表示であり、インストール
+スコープとは別に扱う。
+
 固定したUpgrade UUIDにより、新版MSIは同じ製品の更新として扱う。対話導入では
 インストール先とショートカットを選択できる。スタートメニューに加えて
 デスクトップへ `NicoCache_nl` ショートカットを作成し、アンインストール時に
@@ -193,6 +199,8 @@ Bouncy Castle 1.85 の取得URLとSHA-256を `dependency-lock.psd1` に固定し
 独立アップデーターの外部依存関係タブでは、Eclipse Temurin、FFmpeg、Bouncy Castle、
 Apache Ant、7-Zipに加えてGPAC/MP4Boxを管理する。GPACはWinGet公式パッケージ
 `GPAC.GPAC`を使用し、各行の更新チェックで最新版がない場合はインストールを無効にする。
+FFmpegはWinGet公式パッケージ`Gyan.FFmpeg`を使用し、導入版と同じパッケージ情報から
+最新版を表示する。BtbNなど別配布元の公開日をFFmpegの版番号として比較しない。
 ダウンロード後のハッシュが一致しない場合は生成を中止する。毎週のGitHub Actions
 はMaven Centralの公式メタデータから安定版を確認し、3成果物の版、公式URL、
 SHA-256とPOMのライセンスを検証して、更新がある場合だけレビュー用PRを作成する。

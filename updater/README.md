@@ -18,6 +18,7 @@ NicoCache_nl本体と管理対象の外部依存関係を、独立GUIまたは�
     未対応LTSはグレー表示（推奨・既定はJava 25）
   - WindowsではWinGet標準のスコープ選択に任せ、既定ではユーザーを優先しつつ、
     パッケージがマシンスコープだけに対応する場合はWindowsの許可後にマシンへ導入
+  - WindowsのFFmpegはWinGetの`Gyan.FFmpeg`と同じ版情報を比較し、公開日をFFmpegの版番号として扱わない
   - Windows更新後にユーザーPATHからWindowsAppsが欠落していても、登録済みの
     WinGet App Execution Aliasを絶対パスで検出して使用
   - WinGetパッケージが提供されていないApache Antなどは、公式配布APIから
@@ -32,6 +33,10 @@ Linux/macOSでは外部依存関係のインストールボタンから、検出
 要求されます。パッケージ管理が検出できない場合は、表示された案内に従って導入して
 から再確認してください。NicoCache_nl本体を更新するときは
 本体を先に終了してください。更新対象が使用中で置換できない場合、処理は失敗し、既存内容を復元します。
+
+WindowsのUpdater MSIは現在のユーザー用に導入され、通常は管理者権限やUAC昇格を要求しません。
+導入先は`%LOCALAPPDATA%\NicoCache_nl Updater`です。これはユーザー環境変数へ
+依存コマンドを追加するUpdaterの権限範囲と一致します。
 
 ## 入手と検証
 

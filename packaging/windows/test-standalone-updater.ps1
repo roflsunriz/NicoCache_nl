@@ -43,6 +43,13 @@ function Assert-ExecutableHasIcon([string]$Executable) {
     try { Assert-True ($null -ne $icon -and $icon.Width -ge 16) "Packaged executable has no icon: $Executable" }
     finally { if ($icon) { $icon.Dispose() } }
 }
+function Assert-ExecutableMetadata([string]$Executable) {
+    $versionInfo = (Get-Item -LiteralPath $Executable).VersionInfo
+    Assert-True ($versionInfo.ProductName -eq 'NicoCache_nl Updater') "Updater ProductName is incorrect: $Executable"
+    Assert-True ($versionInfo.OriginalFilename -eq 'NicoCache_nl Updater.exe') "Updater OriginalFilename is incorrect: $Executable"
+    Assert-True ($versionInfo.FileDescription -eq
+        'NicoCache_nl updater for the application and external dependencies') "Updater FileDescription is incorrect: $Executable ($($versionInfo.FileDescription))"
+}
 function Invoke-PackagedE2E([string]$Executable, [string]$UpdaterRoot, [string]$TargetRoot) {
     Remove-Item $TargetRoot -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Path (Join-Path $TargetRoot 'app') -Force | Out-Null
@@ -83,7 +90,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Updater compilation failed' }
 foreach ($testClass in @('dareka.updater.NicoCacheUpdaterTest', 'dareka.updater.TargetRootResolverTest',
         'dareka.updater.InstalledVersionDetectorTest', 'dareka.updater.ApplicationProcessGuardTest',
         'dareka.updater.DependencyEngineTest', 'dareka.updater.ArchiveApplicationInstallerTest',
-        'dareka.updater.UpdaterPlatformTest', 'dareka.updater.DependencyStatusTest')) {
+        'dareka.updater.UpdaterPlatformTest', 'dareka.updater.DependencyStatusTest',
+        'dareka.updater.WindowsDependencyManagerTest')) {
     & java -cp $classes $testClass
     if ($LASTEXITCODE -ne 0) { throw "Updater Java test failed: $testClass" }
 }
@@ -97,6 +105,7 @@ Assert-File (Join-Path $appImage 'runtime\lib\modules')
 Assert-File (Join-Path $appImage 'app\NicoCacheUpdater.jar')
 Assert-NoPowerShellPayload $appImage
 Assert-ExecutableHasIcon $appImageExe
+Assert-ExecutableMetadata $appImageExe
 Invoke-PackagedE2E $appImageExe $appImage (Join-Path $work 'appimage-target')
 
 $isolatedLocalAppData = Join-Path $work 'isolated-localappdata'
@@ -112,13 +121,17 @@ if ($BuildMsi) {
     Assert-True (
         $jpackageLog.IndexOf('-cultures:ja-JP', [StringComparison]::OrdinalIgnoreCase) -ge 0
     ) 'Japanese MSI culture was not selected'
-    $installedRoot = Join-Path $env:ProgramFiles 'NicoCache_nl Updater'
+    Assert-True (-not $jpackageLog.Contains('-dJpIsSystemWide=yes')) 'Updater MSI unexpectedly requests a machine-wide install'
+    # jpackage's --win-per-user-install uses LocalAppData directly. It does not
+    # add the Programs segment used by the main application's launcher package.
+    $installedRoot = Join-Path $env:LOCALAPPDATA 'NicoCache_nl Updater'
     try {
         Invoke-MsiExec @('/i', $msi.FullName, '/qn', '/norestart', '/l*v', (Join-Path $work 'updater-msi.log')) 'Updater MSI install failed'
         $installedExe = Join-Path $installedRoot 'NicoCache_nl Updater.exe'
         Assert-File $installedExe
         Assert-NoPowerShellPayload $installedRoot
         Assert-ExecutableHasIcon $installedExe
+        Assert-ExecutableMetadata $installedExe
         Invoke-PackagedE2E $installedExe $installedRoot (Join-Path $work 'installed-target')
     }
     finally {

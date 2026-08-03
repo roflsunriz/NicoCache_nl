@@ -26,16 +26,17 @@ final class DependencyEngine {
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
     private static final Pattern MAVEN_RELEASE = Pattern.compile("<release>([^<]+)</release>");
+    private static final Pattern BOUNCY_EXPORT_VERSION = Pattern.compile(
+            "(?i)\\borg\\.bouncycastle\\s*;\\s*version\\s*=\\s*\\\"?"
+                    + "([0-9]+(?:\\.[0-9]+){1,3})");
     private static final Pattern SHA256 = Pattern.compile("(?i)^[0-9a-f]{64}$");
 
     private final Path applicationRoot;
-    private final DependencyProvider systemDependencies;
+    private final DependencyProvider platformDependencies;
 
     DependencyEngine(Path applicationRoot) throws IOException {
         this.applicationRoot = applicationRoot.toAbsolutePath().normalize();
-        this.systemDependencies = UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS
-                ? new SystemDependencyManager()
-                : new UnixDependencyManager();
+        this.platformDependencies = DependencyProvider.forPlatform(UpdaterPlatform.current());
     }
 
     String checkAll(int javaMajor) throws Exception {
@@ -63,7 +64,7 @@ final class DependencyEngine {
 
     List<DependencyStatus> inspectAll(int javaMajor) throws Exception {
         List<DependencyStatus> statuses = new ArrayList<DependencyStatus>(
-                systemDependencies.inspectAll(javaMajor));
+                platformDependencies.inspectAll(javaMajor));
         try {
             statuses.add(checkBouncyCastleStatus());
         } catch (Exception error) {
@@ -99,7 +100,7 @@ final class DependencyEngine {
             }
             return result;
         }
-        String result = systemDependencies.install(dependencyId, javaMajor);
+        String result = platformDependencies.install(dependencyId, javaMajor);
         if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
             UserToolAliasRepair.repair();
         }
@@ -107,7 +108,7 @@ final class DependencyEngine {
     }
 
     String selfTestTransactions() throws Exception {
-        return systemDependencies.selfTest();
+        return platformDependencies.selfTest();
     }
 
     private DependencyStatus checkBouncyCastleStatus() throws Exception {
@@ -121,14 +122,41 @@ final class DependencyEngine {
     }
 
     private String installedBouncyCastleVersion() {
-        Path jar = applicationRoot.resolve("lib/bcprov.jar").normalize();
+        Path jar = bouncyCastleLibraryDirectory(applicationRoot)
+                .resolve("bcprov.jar").normalize();
         if (!jar.startsWith(applicationRoot) || !Files.isRegularFile(jar)) return null;
+        return readBouncyCastleVersion(jar);
+    }
+
+    static Path bouncyCastleLibraryDirectory(Path applicationRoot) {
+        Path normalizedRoot = applicationRoot.toAbsolutePath().normalize();
+        Path applicationDirectory = UpdaterPlatform.applicationDirectory(normalizedRoot);
+        Path[] candidates = {
+            applicationDirectory.resolve("lib").normalize(),
+            normalizedRoot.resolve("lib").normalize()
+        };
+        for (Path candidate : candidates) {
+            if (Files.isRegularFile(candidate.resolve("bcprov.jar"))) return candidate;
+        }
+        return Files.isDirectory(applicationDirectory) ? candidates[0] : candidates[1];
+    }
+
+    static String readBouncyCastleVersion(Path jar) {
         try (JarFile file = new JarFile(jar.toFile())) {
             if (file.getManifest() == null
                     || file.getManifest().getMainAttributes() == null) return null;
-            String version = file.getManifest().getMainAttributes()
-                    .getValue("Implementation-Version");
-            return version == null || version.isBlank() ? null : version.trim();
+            java.util.jar.Attributes attributes = file.getManifest().getMainAttributes();
+            for (String key : new String[] {
+                    "Implementation-Version", "Bundle-Version", "Specification-Version" }) {
+                String version = attributes.getValue(key);
+                if (version != null && !version.isBlank()) return version.trim();
+            }
+            String exportPackages = attributes.getValue("Export-Package");
+            if (exportPackages != null) {
+                Matcher matcher = BOUNCY_EXPORT_VERSION.matcher(exportPackages);
+                if (matcher.find()) return matcher.group(1);
+            }
+            return null;
         } catch (IOException error) {
             return null;
         }
@@ -137,7 +165,7 @@ final class DependencyEngine {
     private String updateBouncyCastle() throws Exception {
         TargetRootResolver.requireInstallation(applicationRoot);
         BouncyRelease release = resolveBouncyCastle();
-        Path lib = applicationRoot.resolve("lib").normalize();
+        Path lib = bouncyCastleLibraryDirectory(applicationRoot).normalize();
         if (!lib.startsWith(applicationRoot)) throw new IOException("Bouncy Castleの導入先が不正です");
         Files.createDirectories(lib);
         Path staging = Files.createTempDirectory(applicationRoot, ".bouncycastle-update-");

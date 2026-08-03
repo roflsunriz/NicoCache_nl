@@ -8,6 +8,9 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.jar.Attributes;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 
 /** Unit tests for the winget-first dependency policy and automatic install scope selection. */
 public final class DependencyEngineTest {
@@ -16,6 +19,34 @@ public final class DependencyEngineTest {
     public static void main(String[] args) throws Exception {
         Path root = Files.createTempDirectory("dependency-engine-test-");
         try {
+            Path packagedLibrary = root.resolve("app/lib");
+            Files.createDirectories(packagedLibrary);
+            Path bouncyCastleJar = packagedLibrary.resolve("bcprov.jar");
+            Manifest manifest = new Manifest();
+            manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+            manifest.getMainAttributes().putValue("Implementation-Version", "1.85.0");
+            try (JarOutputStream output = new JarOutputStream(
+                    Files.newOutputStream(bouncyCastleJar), manifest)) {
+                // An empty valid JAR is sufficient for manifest detection.
+                output.flush();
+            }
+            assertTrue(DependencyEngine.bouncyCastleLibraryDirectory(root)
+                    .equals(packagedLibrary), "jpackage app/lib was not selected");
+            assertTrue("1.85.0".equals(DependencyEngine.readBouncyCastleVersion(bouncyCastleJar)),
+                    "Bouncy Castle manifest version was not detected");
+
+            Path osgiVersionJar = packagedLibrary.resolve("bcprov-osgi.jar");
+            Manifest osgiManifest = new Manifest();
+            osgiManifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+            osgiManifest.getMainAttributes().putValue(
+                    "Export-Package", "org.bouncycastle;version=\"1.85\",org.bouncycastle.asn1");
+            try (JarOutputStream output = new JarOutputStream(
+                    Files.newOutputStream(osgiVersionJar), osgiManifest)) {
+                output.flush();
+            }
+            assertTrue("1.85".equals(DependencyEngine.readBouncyCastleVersion(osgiVersionJar)),
+                    "Bouncy Castle OSGi export version was not detected");
+
             System.setProperty("nicocache.updater.userProgramsRoot", root.resolve("programs").toString());
             DependencyEngine engine = new DependencyEngine(root);
             String result = engine.selfTestTransactions();
@@ -24,7 +55,7 @@ public final class DependencyEngineTest {
             assertContains(result, "winget-auto-scope", "winget automatic scope selection");
             assertContains(result, "fallback", "fallback policy");
 
-            List<String> winget = SystemDependencyManager.wingetArguments(
+            List<String> winget = WindowsDependencyManager.wingetArguments(
                     "winget", "install", "EclipseAdoptium.Temurin.25.JDK");
             assertTrue(!winget.contains("--scope"),
                     "WinGet user scope requirement rejected machine-only packages: " + winget);
@@ -33,13 +64,13 @@ public final class DependencyEngineTest {
                     "WinGet source was not fixed to the community repository: " + winget);
             assertWingetAppExecutionAliasResolution();
 
-            String merged = SystemDependencyManager.mergePath(
+            String merged = WindowsDependencyManager.mergePath(
                     "C:\\Windows\\System32;C:\\Tools\\bin;C:\\TOOLS\\BIN\\",
                     Path.of("C:\\Tools\\bin"));
             int count = 0;
             for (String entry : merged.split(";")) {
-                if (SystemDependencyManager.normalizePathEntry(entry)
-                        .equals(SystemDependencyManager.normalizePathEntry("C:\\Tools\\bin"))) count++;
+                if (WindowsDependencyManager.normalizePathEntry(entry)
+                        .equals(WindowsDependencyManager.normalizePathEntry("C:\\Tools\\bin"))) count++;
             }
             assertTrue(count == 1, "User PATH contained duplicate entries: " + merged);
 
@@ -73,7 +104,7 @@ public final class DependencyEngineTest {
         if (!Files.exists(alias, LinkOption.NOFOLLOW_LINKS)) return;
         Map<String, String> environment = new LinkedHashMap<String, String>();
         environment.put("LOCALAPPDATA", localAppData);
-        assertTrue(alias.toString().equals(SystemDependencyManager.resolveWingetExecutable(environment)),
+        assertTrue(alias.toString().equals(WindowsDependencyManager.resolveWingetExecutable(environment)),
                 "WinGet App Execution Alias reparse point was ignored: " + alias);
     }
 

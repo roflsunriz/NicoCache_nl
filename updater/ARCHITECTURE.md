@@ -7,6 +7,10 @@
 - Linux/macOSのZIP更新では`config.properties`、`portable.flag`、キャッシュ、証明書、
   利用者データ、`local`、`nlFilters`、Extensionを保護し、製品ファイルだけを更新します。
 - 外部依存関係の処理はアップデーター内の純Javaエンジンで行い、PowerShellや対象側のスクリプトには依存しません。
+- 外部依存関係のOS差分は`DependencyProvider.forPlatform`で分離し、Windowsでは
+  `WindowsDependencyManager`、Linux/macOSでは`UnixDependencyManager`を選択します。
+  WindowsのWinGet、`reg.exe`、ユーザーPATH処理はWindows実装に閉じており、Updater全体を
+  Windows専用へ固定しません。
 - 外部依存関係は導入版・最新版・更新有無・インストール可否を行単位で保持し、
   更新チェック済みで新バージョンがある項目だけをインストール対象にします。
 - インストール完了後は同じプロセスで実コマンドとローカル依存状態を再検出し、

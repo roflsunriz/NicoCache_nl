@@ -1,5 +1,7 @@
 package dareka.updater;
 
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 
 /** CLI/GUI entry point kept small so packaged E2E exercises production engine paths. */
@@ -9,6 +11,7 @@ public final class UpdaterLauncher {
     private UpdaterLauncher() {}
 
     public static void main(String[] args) {
+        configureOutputEncoding();
         String explicitRoot = argument(args, "--app-root");
         Path applicationRoot = TargetRootResolver.resolve(explicitRoot);
         try {
@@ -81,6 +84,12 @@ public final class UpdaterLauncher {
             System.err.println("UPDATER_FAILED: " + rootMessage(error));
             System.exit(1);
         }
+    }
+
+    /** Keep CLI output readable when Windows uses a non-Unicode system code page. */
+    private static void configureOutputEncoding() {
+        System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
     }
 
     static String argument(String[] args, String name) {

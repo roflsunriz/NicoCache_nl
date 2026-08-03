@@ -17,6 +17,7 @@ $inputRoot = Join-Path $workRoot 'input'
 $outputRoot = Join-Path $workRoot 'output'
 $buildLog = Join-Path $workRoot 'jpackage.log'
 $icon = Join-Path $root 'packaging\windows\assets\nicocache-updater.ico'
+$description = 'NicoCache_nl updater for the application and external dependencies'
 
 if (Test-Path -LiteralPath $workRoot) {
     Remove-Item -LiteralPath $workRoot -Recurse -Force
@@ -71,7 +72,9 @@ $commonArguments = @(
     '--main-class', 'dareka.updater.UpdaterLauncher',
     '--dest', $outputRoot,
     '--vendor', 'NicoCache_nl',
-    '--description', 'NicoCache_nl本体と外部依存関係を一元管理する純Javaアップデーター',
+    # Keep Windows version-resource metadata ASCII so Task Manager does not replace
+    # the description with question marks on an English system.
+    '--description', $description,
     '--icon', $icon,
     '--verbose'
 )
@@ -111,6 +114,7 @@ if ($PackageType -in @('AppImage', 'All')) {
 if ($PackageType -in @('Msi', 'All')) {
     Invoke-JPackage -Arguments ($commonArguments + @(
             '--type', 'msi',
+            '--win-per-user-install',
             '--win-dir-chooser',
             '--win-menu',
             '--win-shortcut'

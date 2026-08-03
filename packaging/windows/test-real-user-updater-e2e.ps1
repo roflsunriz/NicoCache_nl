@@ -91,7 +91,7 @@ try {
 
     $updaterMsi = Get-ChildItem (Join-Path $root '.test-work\standalone-updater\output') -Filter '*.msi' -File | Select-Object -First 1
     if (-not $updaterMsi) { throw 'Built updater MSI is missing' }
-    $updaterRoot = Join-Path $env:ProgramFiles 'NicoCache_nl Updater'
+    $updaterRoot = Join-Path $env:LOCALAPPDATA 'NicoCache_nl Updater'
 
     Invoke-Msi @('/i', "`"$($updaterMsi.FullName)`"", '/qn', '/norestart') 'Install updater MSI' 'updater-install.log'
     $updaterInstalled = $true
@@ -139,6 +139,18 @@ try {
         }
     }
 
+    $dependencyAfter = Invoke-Updater $updaterExe @('--dependency-check', '--app-root', $productRoot, '--java-major', '25') 'dependency-check-after-update' 600
+    $ffmpegLine = @($dependencyAfter -split '\r?\n' | Where-Object { $_ -match '^FFmpeg:' })
+    if ($ffmpegLine.Count -ne 1 -or
+            $ffmpegLine[0] -notmatch '導入版=(?<installed>\d+(?:\.\d+){1,3}), 最新版=(?<latest>\d+(?:\.\d+){1,3})' -or
+            $Matches.installed -ne $Matches.latest) {
+        throw "FFmpeg installed/latest versions do not agree after update`n$dependencyAfter"
+    }
+    $bouncyLine = @($dependencyAfter -split '\r?\n' | Where-Object { $_ -match '^Bouncy Castle:' })
+    if ($bouncyLine.Count -ne 1 -or $bouncyLine[0] -match '導入版=不明|更新あり') {
+        throw "Bouncy Castle was not detected from the application classpath after update`n$dependencyAfter"
+    }
+
     $env:PATH = (([Environment]::GetEnvironmentVariable('Path', 'Machine'), [Environment]::GetEnvironmentVariable('Path', 'User')) | Where-Object { $_ }) -join ';'
     $javaHome = [Environment]::GetEnvironmentVariable('JAVA_HOME', 'User'); if ($javaHome) { $env:JAVA_HOME = $javaHome }
     Assert-FreshCommand java @('-version'); Assert-FreshCommand javac @('-version'); Assert-FreshCommand ffmpeg @('-version'); Assert-FreshCommand ffprobe @('-version'); Assert-FreshCommand ant @('-version'); Assert-FreshCommand 7z @(); Assert-FreshCommand MP4Box @('-version')
@@ -148,7 +160,14 @@ try {
         Step "$command -> $resolved"
         if ([IO.Path]::GetFullPath($resolved).StartsWith($productRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "External dependency leaked into product root: $command -> $resolved" }
     }
-    foreach ($jar in @('bcprov.jar','bcpkix.jar','bcutil.jar')) { if (-not (Test-Path (Join-Path $productRoot "lib\$jar") -PathType Leaf)) { throw "Bouncy Castle file missing: $jar" } }
+    foreach ($jar in @('bcprov.jar','bcpkix.jar','bcutil.jar')) {
+        if (-not (Test-Path (Join-Path $productRoot "app\lib\$jar") -PathType Leaf)) {
+            throw "Bouncy Castle file missing from the application classpath: $jar"
+        }
+        if (Test-Path (Join-Path $productRoot "lib\$jar") -PathType Leaf) {
+            throw "Bouncy Castle was written outside the application classpath: $jar"
+        }
+    }
 
     $disabledCfg = "$cfg.disabled"
     Move-Item $cfg $disabledCfg

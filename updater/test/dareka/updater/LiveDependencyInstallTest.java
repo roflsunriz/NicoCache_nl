@@ -61,7 +61,8 @@ public final class LiveDependencyInstallTest {
                 .redirectErrorStream(true).start();
         String output;
         try (InputStream input = process.getInputStream()) {
-            output = new String(input.readAllBytes(), StandardCharsets.UTF_8);
+            output = WindowsDependencyManager.decodeCommandOutput(
+                    input.readAllBytes(), WindowsDependencyManager.commandOutputCharset());
         }
         process.waitFor();
         if (process.exitValue() != 0) return "";
@@ -103,7 +104,9 @@ public final class LiveDependencyInstallTest {
             }
             reader.join(5000);
             assertTrue(process.exitValue() == 0,
-                    "Fresh-shell command failed: " + command + "\n" + output.toString(StandardCharsets.UTF_8));
+                    "Fresh-shell command failed: " + command + "\n"
+                            + WindowsDependencyManager.decodeCommandOutput(
+                                    output.toByteArray(), WindowsDependencyManager.commandOutputCharset()));
         } finally {
             Files.deleteIfExists(script);
         }

@@ -72,6 +72,7 @@ foreach ($requiredPath in @(
         (Join-Path $internalAppDirectory 'development\build-javac.ps1'),
         (Join-Path $internalAppDirectory 'development\src\dareka\NLMain.java'),
         (Join-Path $internalAppDirectory 'development\tests\functional\FunctionalTestMain.java'),
+        (Join-Path $internalAppDirectory 'development\how-to-dump-stack-trace.txt'),
         (Join-Path $internalAppDirectory 'development\nlFilters\how-to-update.md'),
         (Join-Path $internalAppDirectory 'development\nlFilters\tools\nlfilter-lab\README.md')
     )) {
@@ -87,6 +88,18 @@ try {
     }
 } finally {
     if ($launcherIcon) { $launcherIcon.Dispose() }
+}
+$launcherVersionInfo = (Get-Item -LiteralPath $launcherPath).VersionInfo
+if ($launcherVersionInfo.ProductName -ne 'NicoCache_nl' -or
+        $launcherVersionInfo.OriginalFilename -ne 'NicoCache_nl.exe' -or
+        $launcherVersionInfo.FileDescription -ne
+            'NicoCache_nl local HTTP/HTTPS proxy and cache server') {
+    throw (
+        '本体ランチャーのWindows説明情報が不正です: ' +
+        "ProductName=$($launcherVersionInfo.ProductName), " +
+        "OriginalFilename=$($launcherVersionInfo.OriginalFilename), " +
+        "FileDescription=$($launcherVersionInfo.FileDescription)"
+    )
 }
 $systemFilesManifest = Join-Path $root 'packaging\system-files.txt'
 $systemFiles = @(

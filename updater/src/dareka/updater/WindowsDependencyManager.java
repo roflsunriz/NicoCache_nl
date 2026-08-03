@@ -8,6 +8,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
@@ -30,15 +33,14 @@ import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-/** Installs command-line dependencies for the current Windows user. */
-final class SystemDependencyManager implements DependencyProvider {
+/** Installs Windows command-line dependencies for the current user. */
+final class WindowsDependencyManager implements DependencyProvider {
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(REQUEST_TIMEOUT)
             .followRedirects(HttpClient.Redirect.NORMAL).build();
     private static final Pattern JSON_NAME = Pattern.compile("\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern JSON_URL = Pattern.compile("\\\"browser_download_url\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern JSON_DIGEST = Pattern.compile("\\\"digest\\\"\\s*:\\s*\\\"sha256:([0-9a-fA-F]{64})\\\"");
-    private static final Pattern JSON_PUBLISHED = Pattern.compile("\\\"published_at\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern JSON_TAG = Pattern.compile("\\\"tag_name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern ADOPTIUM_SEMVER = Pattern.compile("\\\"semver\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"");
     private static final Pattern ADOPTIUM_PACKAGE = Pattern.compile(
@@ -46,6 +48,9 @@ final class SystemDependencyManager implements DependencyProvider {
                     + "\\\"link\\\"\\s*:\\s*\\\"([^\\\"]+)\\\".*?\\\"name\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"",
             Pattern.DOTALL);
     private static final Pattern ANT_ZIP = Pattern.compile("apache-ant-(\\d+\\.\\d+\\.\\d+)-bin\\.zip");
+    private static final Pattern WINGET_VERSION = Pattern.compile(
+            "(?im)^\\s*(?:Package\\s+)?(?:Version|バージョン)\\s*:\\s*v?"
+                    + "([0-9]+(?:\\.[0-9]+){1,3})\\s*$");
     private static final Pattern SHA512 = Pattern.compile("(?i)^[0-9a-f]{128}$");
     private static final int MAX_ARCHIVE_ENTRIES = 200_000;
     private static final long MAX_EXPANDED_BYTES = 8L * 1024 * 1024 * 1024;
@@ -54,11 +59,11 @@ final class SystemDependencyManager implements DependencyProvider {
     private final Map<String, String> environment;
     private final String wingetExecutable;
 
-    SystemDependencyManager() throws IOException {
+    WindowsDependencyManager() throws IOException {
         this(resolveUserProgramsRoot(), System.getenv());
     }
 
-    SystemDependencyManager(Path userProgramsRoot, Map<String, String> environment) throws IOException {
+    WindowsDependencyManager(Path userProgramsRoot, Map<String, String> environment) throws IOException {
         this.userProgramsRoot = userProgramsRoot.toAbsolutePath().normalize();
         this.environment = new LinkedHashMap<String, String>(environment);
         this.wingetExecutable = resolveWingetExecutable(this.environment);
@@ -83,7 +88,7 @@ final class SystemDependencyManager implements DependencyProvider {
         for (Tool tool : tools(javaMajor)) {
             try {
                 Release latest = resolveLatest(tool);
-                CommandResult current = probe(tool.probe);
+                CommandResult current = probe(tool);
                 String installed = installedVersion(tool, current);
                 if (installed == null) installed = readMarkedVersion(tool.id);
                 String normalizedInstalled = normalizeVersion(installed);
@@ -160,7 +165,7 @@ final class SystemDependencyManager implements DependencyProvider {
         if (!ready) {
             Path command = installFallback(tool, release);
             exposeToUser(tool, command);
-            verifyExecutable(command, tool.probe);
+            verifyExecutable(command, tool);
             out.append(tool.displayName).append(": 公式配布APIから導入しました: ")
                     .append(command).append('\n');
         }
@@ -216,7 +221,7 @@ final class SystemDependencyManager implements DependencyProvider {
                         Arrays.asList("java", "-version"), "java.exe", true, javaMajor,
                         labeledVersion, true),
                 new Tool("ffmpeg", "FFmpeg", "Gyan.FFmpeg", Arrays.asList("ffmpeg", "-version"),
-                        "ffmpeg.exe", false, 0, labeledVersion, true),
+                        "ffmpeg.exe", false, 0, labeledVersion, false),
                 new Tool("ant", "Apache Ant", null, Arrays.asList("ant", "-version"),
                         "ant.bat", false, 0, labeledVersion, true),
                 new Tool("7zip", "7-Zip", "7zip.7zip", Arrays.asList("7z"),
@@ -261,6 +266,26 @@ final class SystemDependencyManager implements DependencyProvider {
         command.add("--accept-source-agreements");
         command.add("--disable-interactivity");
         return command;
+    }
+
+    static List<String> wingetShowArguments(String executable, String packageId) {
+        List<String> command = new ArrayList<String>();
+        command.add(executable);
+        command.add("show");
+        command.add("--id");
+        command.add(packageId);
+        command.add("--exact");
+        command.add("--source");
+        command.add("winget");
+        command.add("--accept-source-agreements");
+        command.add("--disable-interactivity");
+        return command;
+    }
+
+    static String parseWingetVersion(String output) {
+        if (output == null) return null;
+        Matcher matcher = WINGET_VERSION.matcher(output);
+        return matcher.find() ? normalizeVersion(matcher.group(1)) : null;
     }
 
     private CommandResult runWinget(Tool tool) throws Exception {
@@ -314,7 +339,7 @@ final class SystemDependencyManager implements DependencyProvider {
         } catch (Exception ignored) { }
     }
 
-    private static String mergePathStrings(String first, String second) {
+    static String mergePathStrings(String first, String second) {
         Set<String> normalized = new LinkedHashSet<String>();
         List<String> values = new ArrayList<String>();
         for (String source : Arrays.asList(first, second)) {
@@ -379,8 +404,17 @@ final class SystemDependencyManager implements DependencyProvider {
         CommandResult result = run(Arrays.asList("reg.exe", "add", "HKCU\\Environment", "/v", name,
                 "/t", "REG_EXPAND_SZ", "/d", value, "/f"), Duration.ofSeconds(20));
         if (result.exitCode != 0) throw new IOException("ユーザー環境変数" + name + "の保存に失敗しました: " + result.output);
-        environment.put(name, value);
-        if ("Path".equalsIgnoreCase(name)) environment.put("PATH", value);
+        if ("Path".equalsIgnoreCase(name)) {
+            // Keep machine PATH entries (including a WinGet Temurin install) in the
+            // current updater process. The registry value contains only the user's
+            // PATH, so assigning it directly would make later probes lose java.exe.
+            String currentPath = environment.getOrDefault("PATH", environment.getOrDefault("Path", ""));
+            String effectivePath = mergePathStrings(currentPath, value);
+            environment.put("Path", effectivePath);
+            environment.put("PATH", effectivePath);
+        } else {
+            environment.put(name, value);
+        }
     }
 
     private static void notifyEnvironmentChanged() {
@@ -408,12 +442,17 @@ final class SystemDependencyManager implements DependencyProvider {
         return normalized.toLowerCase(Locale.ROOT);
     }
 
-    private void verifyExecutable(Path command, List<String> probeArguments) throws Exception {
-        List<String> direct = new ArrayList<String>();
-        direct.add(command.toString());
-        direct.addAll(probeArguments.subList(1, probeArguments.size()));
-        CommandResult result = run(direct, Duration.ofMinutes(2));
+    private void verifyExecutable(Path command, Tool tool) throws Exception {
+        CommandResult result = run(commandInvocation(command, tool.probe), Duration.ofMinutes(2));
         if (result.exitCode != 0) throw new IOException("導入したコマンドの実行確認に失敗しました: " + command + "\n" + result.output);
+    }
+
+    private CommandResult probe(Tool tool) {
+        try {
+            return run(toolInvocation(tool), Duration.ofMinutes(2));
+        } catch (Exception missing) {
+            return new CommandResult(127, missing.getMessage() == null ? missing.toString() : missing.getMessage());
+        }
     }
 
     private CommandResult probe(List<String> arguments) {
@@ -422,6 +461,54 @@ final class SystemDependencyManager implements DependencyProvider {
         } catch (Exception missing) {
             return new CommandResult(127, missing.getMessage() == null ? missing.toString() : missing.getMessage());
         }
+    }
+
+    private static List<String> toolInvocation(Tool tool) {
+        if (!isBatchFileName(tool.commandFileName)) return new ArrayList<String>(tool.probe);
+        List<String> command = new ArrayList<String>();
+        command.add("cmd.exe");
+        command.add("/d");
+        command.add("/c");
+        command.add(batchCommandLine(tool.commandFileName, tool.probe.subList(1, tool.probe.size())));
+        return command;
+    }
+
+    static List<String> commandInvocation(Path commandPath, List<String> probeArguments) {
+        List<String> command = new ArrayList<String>();
+        if (isBatchFileName(commandPath.getFileName().toString())) {
+            command.add("cmd.exe");
+            command.add("/d");
+            command.add("/c");
+            command.add(batchCommandLine(commandPath.toString(),
+                    probeArguments.subList(1, probeArguments.size())));
+        } else {
+            command.add(commandPath.toString());
+            command.addAll(probeArguments.subList(1, probeArguments.size()));
+        }
+        return command;
+    }
+
+    private static String batchCommandLine(String commandPath, List<String> arguments) {
+        StringBuilder value = new StringBuilder();
+        if (commandPath.indexOf(' ') >= 0 || commandPath.indexOf('\t') >= 0) {
+            value.append('"').append(commandPath).append('"');
+        } else {
+            value.append(commandPath);
+        }
+        for (String argument : arguments) {
+            value.append(' ');
+            if (argument.indexOf(' ') >= 0 || argument.indexOf('\t') >= 0) {
+                value.append('"').append(argument).append('"');
+            } else {
+                value.append(argument);
+            }
+        }
+        return value.toString();
+    }
+
+    private static boolean isBatchFileName(String value) {
+        String lower = value.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".bat") || lower.endsWith(".cmd");
     }
 
     private boolean isWingetAvailable() {
@@ -451,19 +538,21 @@ final class SystemDependencyManager implements DependencyProvider {
     }
 
     private Release resolveFfmpeg() throws Exception {
-        String json = text(URI.create("https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest"),
-                "application/vnd.github+json");
-        Asset zip = findAsset(json, Pattern.compile("^ffmpeg-master-latest-win64-gpl\\.zip$"));
-        Asset sums = findAsset(json, Pattern.compile("^checksums\\.sha256$"));
-        Matcher hash = Pattern.compile("(?m)^([0-9a-fA-F]{64})\\s+\\*?" + Pattern.quote(zip.name) + "\\s*$")
-                .matcher(text(sums.url, "text/plain"));
-        if (!hash.find()) throw new IOException("FFmpeg SHA-256が見つかりません");
-        Matcher tag = JSON_TAG.matcher(json);
-        Matcher published = JSON_PUBLISHED.matcher(json);
-        String releaseVersion = tag.find() ? normalizeVersion(tag.group(1)) : null;
-        if (releaseVersion == null && published.find()) releaseVersion = normalizeVersion(published.group(1));
-        if (releaseVersion == null) releaseVersion = "0";
-        return Release.zip("ffmpeg", releaseVersion, zip.url, zip.name, hash.group(1), "SHA-256");
+        if (!isWingetAvailable()) {
+            throw new IOException("FFmpegの最新版はWinGet（Gyan.FFmpeg）から確認します。WinGetを導入して再試行してください");
+        }
+        CommandResult result = run(wingetShowArguments(wingetExecutable, "Gyan.FFmpeg"),
+                Duration.ofMinutes(2));
+        if (result.exitCode != 0) {
+            throw new IOException("WinGetでFFmpeg（Gyan.FFmpeg）の最新版を確認できません: "
+                    + result.output);
+        }
+        String version = parseWingetVersion(result.output);
+        if (version == null) {
+            throw new IOException("WinGetのFFmpeg版情報を解釈できません");
+        }
+        // FFmpegの公開日は版番号ではないため、WinGetの同じパッケージ版を比較対象にする。
+        return new Release("ffmpeg", version, new ArrayList<Artifact>(), ArchiveType.ZIP);
     }
 
     private Release resolveAnt() throws Exception {
@@ -647,7 +736,58 @@ final class SystemDependencyManager implements DependencyProvider {
             throw new IOException("コマンドがタイムアウトしました: " + command);
         }
         reader.join(5000);
-        return new CommandResult(process.exitValue(), output.toString(StandardCharsets.UTF_8));
+        return new CommandResult(process.exitValue(),
+                decodeCommandOutput(output.toByteArray(), commandOutputCharset()));
+    }
+
+    static String decodeCommandOutput(byte[] output, Charset charset) {
+        if (output == null || output.length == 0) return "";
+        if (startsWith(output, (byte) 0xEF, (byte) 0xBB, (byte) 0xBF)) {
+            return new String(output, 3, output.length - 3, StandardCharsets.UTF_8);
+        }
+        if (startsWith(output, (byte) 0xFF, (byte) 0xFE)) {
+            return new String(output, 2, output.length - 2, StandardCharsets.UTF_16LE);
+        }
+        if (startsWith(output, (byte) 0xFE, (byte) 0xFF)) {
+            return new String(output, 2, output.length - 2, StandardCharsets.UTF_16BE);
+        }
+        if (isValidUtf8(output)) return new String(output, StandardCharsets.UTF_8);
+        return new String(output, charset == null ? StandardCharsets.UTF_8 : charset);
+    }
+
+    static Charset commandOutputCharset() {
+        for (String property : Arrays.asList(
+                "native.encoding", "sun.jnu.encoding", "file.encoding",
+                "stdout.encoding", "stderr.encoding")) {
+            String value = System.getProperty(property);
+            if (value == null || value.isBlank()) continue;
+            try {
+                return Charset.forName(value);
+            } catch (IllegalArgumentException ignored) {
+                // Try the next runtime-provided encoding name.
+            }
+        }
+        return StandardCharsets.UTF_8;
+    }
+
+    private static boolean startsWith(byte[] value, byte... prefix) {
+        if (value.length < prefix.length) return false;
+        for (int index = 0; index < prefix.length; index++) {
+            if (value[index] != prefix[index]) return false;
+        }
+        return true;
+    }
+
+    private static boolean isValidUtf8(byte[] value) {
+        try {
+            StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(value));
+            return true;
+        } catch (CharacterCodingException error) {
+            return false;
+        }
     }
 
     private static Path resolveUserProgramsRoot() {
