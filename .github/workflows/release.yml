@@ -265,6 +265,7 @@ jobs:
     env:
       APP_VERSION: ${{ needs.build.outputs.app_version }}
       UPDATER_VERSION: ${{ needs.build.outputs.updater_version }}
+      GITHUB_TOKEN: ${{ github.token }}
 
     steps:
       - name: Check out release tag
