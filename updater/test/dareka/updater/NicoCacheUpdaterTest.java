@@ -75,8 +75,8 @@ public final class NicoCacheUpdaterTest {
                 + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl.jar.sha256\"},"
                 + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-1.2.3.msi.sha256\"},"
                 + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-1.2.3.msi\"},"
-                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.0.msi\"},"
-                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.0.msi.sha256\"}"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.1.msi\"},"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.1.msi.sha256\"}"
                 + "]}");
         Class<?> releaseClass = release.getClass();
         assertFieldEquals(releaseClass, release, "version", "1.2.3");
@@ -102,8 +102,8 @@ public final class NicoCacheUpdaterTest {
         assertFieldEquals(linuxReleaseClass, linuxRelease, "msiUri", null);
         assertReleaseRejected(parseRelease,
                 "{\"tag_name\":\"v1.2.3\",\"assets\":["
-                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.0.msi\"},"
-                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.0.msi.sha256\"}"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.1.msi\"},"
+                + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.1.msi.sha256\"}"
                 + "]}");
 
         System.out.println("NicoCacheUpdater Java unit tests passed");

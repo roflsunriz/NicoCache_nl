@@ -161,35 +161,46 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 
 1. `src/dareka/Main.java` の `Main.VER_STRING` を
    `NicoCache_nl version <release-date> (v<version>)` に更新する。
-2. `CHANGELOG.md` の対象変更を `## [<version>] - <release-date>` の下へ整理する。
-3. 機能テストとExtension ABI互換テストを実行する。
+2. 独立アップデーターも更新する場合は `updater/VERSION` を `<major>.<minor>.<build>`
+   形式に更新する。
+3. `CHANGELOG.md` の対象変更を `## [<version>] - <release-date>` の下へ整理する。
+4. 継続パッケージ検証の版固定値を更新する。
+   `.github/workflows/unix-packages.yml` の `APP_VERSION` を本体版へ、
+   `UPDATER_VERSION` を `updater/VERSION` と同じ値へ揃える。
+5. 機能テストとExtension ABI互換テストを実行する。
 
    ```powershell
    .\test-functional.ps1
    ```
 
-4. 正規ビルドスクリプトで本体をビルドする。
+6. 正規ビルドスクリプトで本体をビルドする。
 
    ```powershell
    .\build-javac.ps1
    ```
 
-5. `git status --short --branch` と `git diff --check` で、生成物や無関係な
+7. `git status --short --branch` と `git diff --check` で、生成物や無関係な
    差分がないことを確認する。テストまたはビルドが失敗した場合はタグを作成せず、
    `.test-work/` のログを確認して原因を修正する。
-6. ソース、変更履歴、テスト結果を確認したコミットを作成してから、リリースタグを
+8. ソース、変更履歴、テスト結果を確認したコミットを作成してから、リリースタグを
    作成・pushする。タグは `v<major>.<minor>.<build>` 形式にする。
 
    ```powershell
    $ReleaseVersion = Read-Host 'リリース版（例: 1.2.3）'
-   git add src/dareka/Main.java CHANGELOG.md how-to-update.md
+   git add src/dareka/Main.java updater/VERSION .github/workflows/unix-packages.yml `
+     CHANGELOG.md how-to-update.md packaging/unix/README.md `
+     packaging/unix/build-standalone-updater.ps1 `
+     packaging/unix/test-standalone-updater.ps1 packaging/windows/README.md `
+     packaging/windows/build-standalone-updater.ps1 `
+     packaging/windows/test-standalone-updater.ps1 `
+     updater/test/dareka/updater/NicoCacheUpdaterTest.java
    git commit -m "release: v$ReleaseVersionを公開"
    git tag "v$ReleaseVersion"
    git push origin main
    git push origin "v$ReleaseVersion"
    ```
 
-7. GitHub Actionsのリリースワークフロー完了後、GitHub ReleaseにWindowsの
+9. GitHub Actionsのリリースワークフロー完了後、GitHub ReleaseにWindowsの
    `NicoCache_nl-<version>.zip`/MSI、LinuxのアプリイメージZIP/DEB/RPM、macOSの
    アプリイメージZIP/PKG/DMG、それぞれのSHA-256、および`updater/VERSION`に基づく
    各OSの独立アップデーター配布物が生成されていることを確認する。
@@ -265,10 +276,10 @@ LinuxとmacOSのネイティブパッケージは対象OS上のJDK 25 `jpackage`
 クロスプラットフォーム生成は行わない。Solarisは配布・CIの対象外とする。
 
 ```powershell
-./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.1
-./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.1
-./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion 0.2.0
-./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion 0.2.0
+./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.2
+./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.2
+./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion 0.2.1
+./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion 0.2.1
 ```
 
 LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメージZIP、PKG、DMGを
@@ -330,10 +341,10 @@ ZIPとMSIへ同じ内容を入れる変更を確認する場合は、共通ア�
 ```powershell
 .\packaging\windows\build-windows-package.ps1 `
   -PackageType Zip `
-  -AppVersion 1.2.1
+  -AppVersion 1.2.2
 .\packaging\windows\test-package-parity.ps1 `
   -AppImagePath .\.test-work\windows-package\output\NicoCache_nl `
-  -ZipPath .\.test-work\windows-package\output\NicoCache_nl-1.2.1.zip
+  -ZipPath .\.test-work\windows-package\output\NicoCache_nl-1.2.2.zip
 ```
 
 MSIを生成した場合は、インストールせずに内部テーブルを読み取り、デスクトップと

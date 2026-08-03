@@ -97,7 +97,7 @@ foreach ($testClass in @('dareka.updater.NicoCacheUpdaterTest', 'dareka.updater.
 }
 
 $packageType = if ($BuildMsi) { 'All' } else { 'AppImage' }
-& (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -PackageType $packageType -AppVersion 0.2.0
+& (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -PackageType $packageType -AppVersion 0.2.1
 $appImage = Join-Path $root '.test-work\standalone-updater\output\NicoCache_nl Updater'
 $appImageExe = Join-Path $appImage 'NicoCache_nl Updater.exe'
 Assert-File $appImageExe

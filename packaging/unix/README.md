@@ -13,8 +13,8 @@ LinuxとmacOSの配布物は、対象OS上のJDK 25 `jpackage`で生成します
 Linux XDG autostartへ登録する。
 
 ```powershell
-./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.1
-./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.1
+./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.2
+./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.2
 ```
 
 LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメージZIP、PKG、DMGを
@@ -61,8 +61,8 @@ Linuxでは`lib/app/`、macOSでは`Contents/app/`がJARの配置先です。
 ## 独立アップデーター
 
 ```powershell
-./packaging/unix/build-standalone-updater.ps1 -Platform MacOS -PackageType All -AppVersion 0.2.0
-./packaging/unix/test-standalone-updater.ps1 -Platform MacOS -AppVersion 0.2.0
+./packaging/unix/build-standalone-updater.ps1 -Platform MacOS -PackageType All -AppVersion 0.2.1
+./packaging/unix/test-standalone-updater.ps1 -Platform MacOS -AppVersion 0.2.1
 ```
 
 本体更新では、GitHub Releaseのプラットフォーム・アーキテクチャ別アプリイメージ

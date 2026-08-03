@@ -5,7 +5,7 @@ param(
     [string]$Platform,
 
     [ValidatePattern('^\d+(?:\.\d+){0,2}$')]
-    [string]$AppVersion = '0.2.0'
+    [string]$AppVersion = '0.2.1'
 )
 
 Set-StrictMode -Version Latest

@@ -38,8 +38,8 @@ MSIのインストール先とZIP展開先のどちらからも利用できる�
 MSI の無人操作には Windows Installer の標準オプションを使う。
 
 ```powershell
-msiexec.exe /i .\NicoCache_nl-1.2.1.msi /qn /norestart
-msiexec.exe /x .\NicoCache_nl-1.2.1.msi /qn /norestart
+msiexec.exe /i .\NicoCache_nl-1.2.2.msi /qn /norestart
+msiexec.exe /x .\NicoCache_nl-1.2.2.msi /qn /norestart
 ```
 
 独立アップデーターのMSIは、依存コマンドとユーザー環境変数を現在のユーザーだけで
