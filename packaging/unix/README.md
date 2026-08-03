@@ -13,8 +13,8 @@ LinuxとmacOSの配布物は、対象OS上のJDK 25 `jpackage`で生成します
 Linux XDG autostartへ登録する。
 
 ```powershell
-./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 0.1.0
-./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 0.1.0
+./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.1
+./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.1
 ```
 
 LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメージZIP、PKG、DMGを

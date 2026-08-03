@@ -265,8 +265,8 @@ LinuxとmacOSのネイティブパッケージは対象OS上のJDK 25 `jpackage`
 クロスプラットフォーム生成は行わない。Solarisは配布・CIの対象外とする。
 
 ```powershell
-./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 0.1.0
-./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 0.1.0
+./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.1
+./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.1
 ./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion 0.2.0
 ./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion 0.2.0
 ```
@@ -330,10 +330,10 @@ ZIPとMSIへ同じ内容を入れる変更を確認する場合は、共通ア�
 ```powershell
 .\packaging\windows\build-windows-package.ps1 `
   -PackageType Zip `
-  -AppVersion 0.1.0
+  -AppVersion 1.2.1
 .\packaging\windows\test-package-parity.ps1 `
   -AppImagePath .\.test-work\windows-package\output\NicoCache_nl `
-  -ZipPath .\.test-work\windows-package\output\NicoCache_nl-0.1.0.zip
+  -ZipPath .\.test-work\windows-package\output\NicoCache_nl-1.2.1.zip
 ```
 
 MSIを生成した場合は、インストールせずに内部テーブルを読み取り、デスクトップと

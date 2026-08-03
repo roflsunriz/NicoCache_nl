@@ -38,8 +38,8 @@ MSIのインストール先とZIP展開先のどちらからも利用できる�
 MSI の無人操作には Windows Installer の標準オプションを使う。
 
 ```powershell
-msiexec.exe /i .\NicoCache_nl-0.1.0.msi /qn /norestart
-msiexec.exe /x .\NicoCache_nl-0.1.0.msi /qn /norestart
+msiexec.exe /i .\NicoCache_nl-1.2.1.msi /qn /norestart
+msiexec.exe /x .\NicoCache_nl-1.2.1.msi /qn /norestart
 ```
 
 固定したUpgrade UUIDにより、新版MSIは同じ製品の更新として扱う。対話導入では
@@ -54,9 +54,9 @@ MSIからの最初の通常GUI起動で、アプリケーションフォルダ�
 
 1. 適用するまでOS設定を変更しないことを確認する
 2. キャッシュ、フィルター、拡張、個人設定を保存するユーザーデータフォルダーを指定する
-3. HTTPS証明書、Windows自動プロキシー、ログオン時自動起動を個別に選択する
+3. HTTPS MitM、ローカルCAの信頼登録、`proxy.pac`、ログオン時自動起動を個別に選択する
 4. 変更内容を確認して適用する
-5. 3項目それぞれの成功、失敗、未選択と、失敗時の詳細を確認する
+5. 4項目それぞれの成功、失敗、未選択と、失敗時の詳細を確認する
 
 既存の `config.properties` がある更新利用者と、通常の `--headless` 起動では
 表示しない。キャンセル時は設定ファイルを作らず終了する。

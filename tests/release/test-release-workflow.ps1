@@ -74,9 +74,11 @@ foreach ($step in @(
         'Test release app image',
         'Test ZIP and app image parity',
         'Test release Windows integration and rollback',
+        'Create Windows distribution archive checksum',
         'Create MSI checksum',
         'Check out release changelog',
-        'Stage CHANGELOG excerpt'
+        'Stage CHANGELOG excerpt',
+        'Stage release distribution table'
     )) {
     Get-StepBlock -Name $step | Out-Null
 }
@@ -220,6 +222,7 @@ $uploadedAssets = @($upload | ForEach-Object {
     })
 $expectedUploadedAssets = @(
     'NicoCache_nl-${{ steps.release-tag.outputs.tag }}.zip'
+    'NicoCache_nl-${{ steps.release-tag.outputs.tag }}.zip.sha256'
     'NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi'
     'NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi.sha256'
     'NicoCache_nl-Updater-${{ steps.updater-version.outputs.updater_version }}.msi'
@@ -254,6 +257,42 @@ foreach ($required in @('CHANGELOG.md', 'release-changelog.md', '^## \[')) {
     if (-not (($changelogStage -join "`n").Contains($required))) {
         throw "Release changelog staging is missing: $required"
     }
+}
+
+$distributionTable = Get-StepBlock -Name 'Stage release distribution table'
+foreach ($required in @(
+        '## 配布物一覧',
+        'プラットフォーム',
+        '独立アップデーター',
+        'SHA-256',
+        'release-changelog.md'
+    )) {
+    if (-not (($distributionTable -join "`n").Contains($required))) {
+        throw "Release distribution table staging is missing: $required"
+    }
+}
+
+$dependencyWorkflow = Get-Content -Raw -LiteralPath (
+    Join-Path $root '.github\workflows\update-repository-dependencies.yml'
+)
+foreach ($required in @(
+        'contents: write',
+        'pull-requests: write',
+        'git fetch origin --prune',
+        'git diff --cached --check',
+        'if ($LASTEXITCODE -ne 0)',
+        'gh pr list',
+        'gh pr create'
+    )) {
+    if (-not $dependencyWorkflow.Contains($required)) {
+        throw "Dependency update workflow validation is missing: $required"
+    }
+}
+
+$archiveChecksum = Get-StepBlock -Name 'Create Windows distribution archive checksum'
+if (-not (($archiveChecksum -join "`n").Contains(
+        'Get-FileHash -LiteralPath $archive -Algorithm SHA256'))) {
+    throw 'Windows distribution archive checksum does not use SHA-256'
 }
 
 Write-Output 'Release workflow contract tests passed'

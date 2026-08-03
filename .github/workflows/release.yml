@@ -143,6 +143,21 @@ jobs:
           }
           Copy-Item -LiteralPath $source -Destination $destination -Force
 
+      - name: Create Windows distribution archive checksum
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
+        run: |
+          $archive = Join-Path $env:GITHUB_WORKSPACE `
+            "NicoCache_nl-$env:RELEASE_TAG.zip"
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+            throw "Windows配布ZIP成果物がありません: $archive"
+          }
+          $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).
+            Hash.ToLowerInvariant()
+          "$hash  $(Split-Path -Leaf $archive)" |
+            Out-File -LiteralPath "$archive.sha256" -Encoding ascii
+
       - name: Test release MSI structure
         shell: pwsh
         env:
@@ -226,6 +241,7 @@ jobs:
           if-no-files-found: error
           path: |
             NicoCache_nl-${{ steps.release-tag.outputs.tag }}.zip
+            NicoCache_nl-${{ steps.release-tag.outputs.tag }}.zip.sha256
             NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi
             NicoCache_nl-${{ steps.release-tag.outputs.app_version }}.msi.sha256
             NicoCache_nl-Updater-${{ steps.updater-version.outputs.updater_version }}.msi
@@ -406,6 +422,114 @@ jobs:
           pattern: release-assets*
           path: release-assets
           merge-multiple: true
+
+      - name: Stage release distribution table
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $assetRoot = Join-Path $env:GITHUB_WORKSPACE 'release-assets'
+          $assetFiles = @(Get-ChildItem -LiteralPath $assetRoot -File |
+            Where-Object { $_.Name -notlike '*.sha256' })
+          if ($assetFiles.Count -eq 0) {
+            throw "リリース資産がありません: $assetRoot"
+          }
+
+          $definitions = @(
+            [pscustomobject]@{
+              Kind = 'Updater'
+              Pattern = [regex]::new(
+                '^NicoCache_nl-Updater-(?<version>\d+\.\d+\.\d+)' +
+                '(?:-(?<platform>linux|macos)-(?<architecture>[^.]+))?' +
+                '\.(?<type>zip|deb|rpm|pkg|dmg|msi)$')
+            }
+            [pscustomobject]@{
+              Kind = 'Application'
+              Pattern = [regex]::new(
+                '^NicoCache_nl-(?<version>v?\d+\.\d+\.\d+)' +
+                '(?:-(?<platform>linux|macos)-(?<architecture>[^.]+))?' +
+                '\.(?<type>zip|deb|rpm|pkg|dmg|msi)$')
+            }
+          )
+          $rows = @{}
+          $platformOrder = @{ Windows = 0; Linux = 1; macOS = 2 }
+          $typeOrder = @{ ZIP = 0; MSI = 1; DEB = 2; RPM = 3; PKG = 4; DMG = 5 }
+
+          foreach ($asset in $assetFiles) {
+            $definition = $null
+            $match = $null
+            foreach ($candidate in $definitions) {
+              $candidateMatch = $candidate.Pattern.Match($asset.Name)
+              if ($candidateMatch.Success) {
+                $definition = $candidate
+                $match = $candidateMatch
+                break
+              }
+            }
+            if ($null -eq $definition) {
+              throw "リリース資産を一覧表へ分類できません: $($asset.Name)"
+            }
+
+            $platformValue = $match.Groups['platform'].Value
+            $architecture = $match.Groups['architecture'].Value
+            if ([string]::IsNullOrWhiteSpace($platformValue)) {
+              $platform = 'Windows'
+              $platformKey = 'Windows'
+            } else {
+              $platformKey = if ($platformValue -eq 'macos') { 'macOS' } else { 'Linux' }
+              $platform = "$platformKey ($architecture)"
+            }
+            $type = $match.Groups['type'].Value.ToUpperInvariant()
+            $rowKey = "$platform|$type"
+            if (-not $rows.ContainsKey($rowKey)) {
+              $rows[$rowKey] = [ordered]@{
+                Platform = $platform
+                PlatformKey = $platformKey
+                Type = $type
+                Main = '—'
+                Updater = '—'
+              }
+            }
+
+            $checksumName = "$($asset.Name).sha256"
+            $checksumPath = Join-Path $assetRoot $checksumName
+            if (-not (Test-Path -LiteralPath $checksumPath -PathType Leaf)) {
+              throw "SHA-256資産がありません: $checksumName"
+            }
+            $assetUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/$([uri]::EscapeDataString($asset.Name))"
+            $checksumUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:RELEASE_TAG/$([uri]::EscapeDataString($checksumName))"
+            $cell = "[$($asset.Name)]($assetUrl) ([SHA-256]($checksumUrl))"
+            $row = $rows[$rowKey]
+            $column = if ($definition.Kind -eq 'Updater') { 'Updater' } else { 'Main' }
+            if ($row[$column] -ne '—') {
+              throw "同一プラットフォーム・種別の資産が重複しています: $rowKey"
+            }
+            $row[$column] = $cell
+          }
+
+          $orderedRows = @(
+            $rows.Values | Sort-Object `
+              @{ Expression = { $platformOrder[$_.PlatformKey] }; Ascending = $true }, `
+              @{ Expression = { $typeOrder[$_.Type] }; Ascending = $true }, `
+              @{ Expression = { $_.Platform }; Ascending = $true }
+          )
+          $table = [Collections.Generic.List[string]]::new()
+          [void]$table.Add('## 配布物一覧')
+          [void]$table.Add('')
+          [void]$table.Add('| プラットフォーム | 種類 | 本体 | 独立アップデーター |')
+          [void]$table.Add('|---|---|---|---|')
+          foreach ($row in $orderedRows) {
+            [void]$table.Add("| $($row.Platform) | $($row.Type) | $($row.Main) | $($row.Updater) |")
+          }
+          [void]$table.Add('')
+          foreach ($line in @(Get-Content -LiteralPath .\release-changelog.md)) {
+            [void]$table.Add([string]$line)
+          }
+          [IO.File]::WriteAllLines(
+            (Join-Path $env:GITHUB_WORKSPACE 'release-changelog.md'),
+            $table.ToArray(),
+            [Text.UTF8Encoding]::new($false))
 
       - name: Create GitHub release
         shell: bash

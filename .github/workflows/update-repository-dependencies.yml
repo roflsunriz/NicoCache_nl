@@ -107,19 +107,31 @@ jobs:
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin --prune
           git switch -C $branch
+          $changedLock = @(git diff --name-only -- packaging/windows/dependency-lock.psd1)
+          if ($changedLock.Count -ne 1 -or
+              $changedLock[0] -ne 'packaging/windows/dependency-lock.psd1') {
+            throw '依存ロック更新後の差分が想定と一致しません'
+          }
+          git diff --check
           git add packaging/windows/dependency-lock.psd1
+          git diff --cached --check
           git commit -m $title
+          if ($LASTEXITCODE -ne 0) { throw '依存更新コミットに失敗しました' }
           git push --force-with-lease origin "HEAD:refs/heads/$branch"
+          if ($LASTEXITCODE -ne 0) { throw '依存更新ブランチのpushに失敗しました' }
 
-          $existing = gh pr list `
+          $existing = @(gh pr list `
             --head $branch `
             --base main `
             --state open `
             --json number `
-            --jq '.[0].number'
-          if ($existing) {
-            gh pr edit $existing --title $title --body-file $report
+            --jq '.[0].number')
+          if ($LASTEXITCODE -ne 0) { throw '依存更新PRの検索に失敗しました' }
+          if ($existing.Count -gt 0) {
+            gh pr edit $existing[0] --title $title --body-file $report
+            if ($LASTEXITCODE -ne 0) { throw '依存更新PRの更新に失敗しました' }
           }
           else {
             gh pr create `
@@ -127,6 +139,7 @@ jobs:
               --head $branch `
               --title $title `
               --body-file $report
+            if ($LASTEXITCODE -ne 0) { throw '依存更新PRの作成に失敗しました' }
           }
 
       - name: Report no update
