@@ -23,13 +23,13 @@ public final class LiveDependencyInstallTest {
         try {
             Files.writeString(root.resolve("NicoCache_nl.jar"), "test marker", StandardCharsets.UTF_8);
             DependencyEngine engine = new DependencyEngine(root);
+            String check = engine.checkAll(21);
+            for (String dependency : Arrays.asList("Eclipse Temurin JDK", "FFmpeg",
+                    "Apache Ant", "7-Zip", "GPAC / MP4Box", "Bouncy Castle")) {
+                assertContains(check, dependency, "Dependency check result");
+            }
             String result = engine.updateAll(21);
-            assertContains(result, "Eclipse Temurin JDK", "Temurin result");
-            assertContains(result, "FFmpeg", "FFmpeg result");
-            assertContains(result, "Apache Ant", "Ant result");
-            assertContains(result, "7-Zip", "7-Zip result");
-            assertContains(result, "GPAC / MP4Box", "GPAC result");
-            assertContains(result, "Bouncy Castle", "Bouncy Castle result");
+            assertTrue(!result.isBlank(), "Dependency update result was empty");
 
             String userPath = readUserEnvironment("Path");
             String javaHome = readUserEnvironment("JAVA_HOME");

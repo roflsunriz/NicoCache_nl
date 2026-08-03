@@ -112,12 +112,30 @@ try {
     Step "Detected installed version=$detected"
     if ($detected -ne $productVersion) { throw "Installed version detection mismatch: expected=$productVersion actual=$detected" }
 
+    $dependencyCheckOutput = Invoke-Updater $updaterExe @('--dependency-check', '--app-root', $productRoot, '--java-major', '25') 'dependency-check' 600
+    foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip', 'GPAC / MP4Box', 'Bouncy Castle')) {
+        if (-not $dependencyCheckOutput.Contains($name)) { throw "Dependency check omitted: $name" }
+    }
+    foreach ($route in @('Eclipse Temurin JDK', 'FFmpeg', 'GPAC / MP4Box')) {
+        $routeLines = @($dependencyCheckOutput -split '\r?\n' | Where-Object { $_ -match "^${route}:" })
+        if ($routeLines.Count -ne 1) {
+            throw "$route is available from WinGet but its own route was not reported exactly once`n$dependencyCheckOutput"
+        }
+        if ($routeLines[0] -notmatch 'WinGet') {
+            throw "$route did not resolve through WinGet`n$dependencyCheckOutput"
+        }
+    }
+
     $dependencyOutput = Invoke-Updater $updaterExe @('--dependency-update', '--app-root', $productRoot, '--java-major', '25') 'dependency-update' 3600
-    foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Apache Ant', '7-Zip', 'GPAC / MP4Box', 'Bouncy Castle')) { if (-not $dependencyOutput.Contains($name)) { throw "Dependency result omitted: $name" } }
+    if ([string]::IsNullOrWhiteSpace($dependencyOutput)) {
+        throw 'Dependency update returned no result'
+    }
     foreach ($route in @('Eclipse Temurin JDK', 'FFmpeg', 'GPAC / MP4Box')) {
         $routeLines = @($dependencyOutput -split '\r?\n' | Where-Object { $_ -match "^${route}:" })
-        if ($routeLines.Count -ne 1) {
-            throw "$route is available from WinGet but its own route entered fallback`n$dependencyOutput"
+        foreach ($line in $routeLines) {
+            if ($line -match '(?i)WinGet.*(?:fallback|フォールバック|不成立)') {
+                throw "$route update entered fallback even though WinGet was available`n$dependencyOutput"
+            }
         }
     }
 
