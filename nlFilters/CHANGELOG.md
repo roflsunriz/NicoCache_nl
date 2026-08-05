@@ -16,6 +16,9 @@
 
 ### Changed
 
+- 実視聴ページと同じ`data-anchor-page`、`data-anchor-href`、
+  `data-decoration-video-id`構造で初期表示とSPA追加を検証できるよう、watch fixtureを
+  旧`WatchRecommendation`構造から更新しました。
 - 本体の版・配布物と同じコミットで標準フィルターを保守できるよう、
   独立リポジトリの全履歴をNicoCache_nlの`nlFilters/`へ統合しました。
 - 誤った疑似適用を防ぐため、本体が破棄する構文エラールールを除外し、未対応の状態機能・動的マクロは警告付きでスキップするよう互換性を強化しました。

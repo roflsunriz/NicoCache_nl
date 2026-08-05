@@ -58,18 +58,14 @@ Uninstall.exe
 !/local/05_cache_remove_button.js
 !/local/15_cached_link_color.js
 !/local/20_watchpage.js
-!/local/cacheeconomy.gif
-!/local/cacheicon.gif
 !/local/list.js.default
 !/local/mime.types.default
-!/local/nlThumbInfoRewriter.js
 !/local/nl_cacheIcon.css
 !/local/nllib.js
 !/local/nllib_watch.js
 !/local/nllib_xsStorage.html
 !/local/overlib_mini.js
 !/local/popThumb.js
-!/local/url_injection_sys.js
 
 # Files linked from outside this repository.
 # Git cannot ignore by link type, so every known link path is listed here.

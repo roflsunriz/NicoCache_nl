@@ -31,7 +31,7 @@ Replace<
 [Style]
 Name = キャッシュアイコン位置(watchページ HTML5)
 URL = www\.nicovideo\.jp/watch/
-# 2026-03-10: .RouterLink 廃止 → .Pressable[data-decoration-video-id] ベースに更新
+# 2026-08-06: 実視聴ページで現行の.Pressable[data-decoration-video-id]を再確認
 Append<
 	.Pressable[data-decoration-video-id] .cacheIcon { position:absolute; bottom:4px; left:4px; }
 	.Pressable[data-decoration-video-id] .cacheInfo {
@@ -80,9 +80,9 @@ Replace<
 
 
 #-----------------------------------------------------------------------------------------
-# watchページ 再生リスト のキャッシュアイコンの表示＆色変え＆進捗表示
+# watchページ 関連動画のキャッシュアイコン表示
 [Replace]
-Name = javascript埋め込み(watchページ HTML5)
+Name = 関連動画キャッシュアイコン用javascript埋め込み(watchページ HTML5)
 URL = www\.nicovideo\.jp/watch/
 ContentType = text/html
 Match<

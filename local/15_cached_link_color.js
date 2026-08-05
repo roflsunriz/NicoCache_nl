@@ -4,7 +4,7 @@
 // @match        https://www.nicovideo.jp/*
 // ==/UserScript==
 
-// - version 2026-06-13
+// - version 2026-08-06
 // - このファイルのライセンスはNicoCache Licenseです.
 // - リンク色をキャッシュ状況に応じてキャッシュ品質classを追加。
 // - 品質classによってリンクの見た目を変更.
@@ -28,14 +28,11 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
 (() => {
   'use strict';
 
+  if (window.__ncnlCachedLinkColorInitialized) return;
+  window.__ncnlCachedLinkColorInitialized = true;
+
   // 自分でCSS書きたい場合は true を false へ.
   const enablePresetCSS = true;
-
-  const sleep0 = function() {
-    return new Promise(resolve => {
-      setTimeout(resolve, 0);
-    });
-  };
 
   // css {{{
   (() => {
@@ -95,78 +92,20 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
 .nl-cached-dmc-economy:visited>.NC-MediaObject-body>.NC-MediaObject-bodyTitle>.NC-MediaObjectTitle
 { color: #606000}
 `;
-    document.head.appendChild(style);
+    const appendStyle = function() {
+      if (document.head && !document.getElementById("nl-cached-link-color-style")) {
+        style.id = "nl-cached-link-color-style";
+        document.head.appendChild(style);
+      };
+    };
+    if (document.head) {
+      appendStyle();
+    } else {
+      document.addEventListener("DOMContentLoaded", appendStyle, {once: true});
+    };
   })();
   // }}} css
 
-
-  // a-tag オブザーバー {{{
-  (() => {
-    'use strict';
-
-    const observe = function() {
-      const observer = new MutationObserver(onBodyChange);
-      observer.observe(document.body, {"childList": true, "subtree": true});
-    };
-
-    let promise = Promise.resolve();
-    const onBodyChange = function(mutationRecords) {
-
-      for (const mr of mutationRecords) {
-        if (null !== mr.addedNodes) {
-          promise = promise.then(processHooks.bind(null, mr.addedNodes));
-        };
-      };
-    };
-
-    const throwAsync = async function(error) {
-      throw error;
-    };
-
-    const processHooks = async function(addedNodes) {
-
-      // sleep0は負荷分散のために設置していたが不要かも.
-
-      for (const node of addedNodes) {
-        if (undefined === node.tagName) {
-          // テキストノード.
-          // do nothing.
-        }
-        else if ("A" === node.tagName) {
-          for (const hook of window.NicocacheNLVideoAnchorHooks) {
-            try {
-              await hook(node);
-            }
-            catch (e) {
-              throwAsync(e); // 例外を投げる. ループは継続.
-            };
-          };
-          await sleep0();
-        }
-        else {
-          for (const a of Array.from(node.getElementsByTagName("A"))) {
-            for (const hook of window.NicocacheNLVideoAnchorHooks) {
-              try {
-                await hook(a);
-              }
-              catch (e) {
-                throwAsync(e); // 例外を投げる. ループは継続.
-              };
-            };
-            await sleep0();
-          };
-        };
-      };
-    };
-
-
-    if (null === document.body) {
-      document.addEventListener("DOMContentLoaded", observe);
-    } else {
-      observe();
-    };
-  })();
-  // }}} a-tag オブザーバー
 
   function getDougaIDByAnchor(a) {
     const pickDougaID = RegExp("^[^/]*//[^/]*/(?:watch\|shorts)/([a-z][a-z][0-9]+)[#?]?.*");
@@ -180,89 +119,147 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
          parent = parent.parentElement) {
       // data-content-id="sm999"
       const dcid = parent.getAttribute("data-content-id");
-      if (dcid !== null) {
+      if (dcid !== null && /^[a-z]{2}\d+$/i.test(dcid)) {
         return dcid;
       };
     };
     return null;
   };
 
-  // 2 {{{
-  (async () => {
-    const mightAddColorClassToAnchor = async function(anchor) {
-      // const m = a.href.match(pickDougaID);
-      // if (null === m) {
-      //     return;
-      // };
-      if (anchor.getAttribute("data-nicoad-point") !== null) {
-        return;
-      };
-      const id = getDougaIDByAnchor(anchor);
-      if (id === null) {
-        return;
-      };
-      // console.log("id", id, anchor);
+  const cacheClassNames = [
+    "nl-cached-common",
+    "cached-v1-normal", "cached-v1-economy",
+    "cached-dmc-normal", "cached-dmc-economy",
+    "nl-cached-smile-normal", "nl-cached-smile-economy",
+    "nl-cached-dmc-normal", "nl-cached-dmc-economy",
+  ];
+  const checkedAnchorIds = new WeakMap();
+  const infoCache = new Map();
+  const pendingAnchors = new Map();
+  const cacheInfoTTL = 5000;
+  const maxIdsPerRequest = 100;
+  let flushTimer = null;
 
-      const response = await fetch("/cache/info/v2?" + id, {cache:"no-cache"});
-      const json = await response.json();
-
-      if (undefined === json || undefined === json[id] || undefined === json[id]["caches"]
-          || 0 === json[id]["caches"].length) {
-        return;
-      };
-
-      let cachePoint = 0; // 0:cacheなし, 1:旧エコ, 2:dmcエコ, 3:旧普通, 4:dmc普通
-      for (const cacheName in json[id]["caches"]) {
-        const cacheInfo = json[id]["caches"][cacheName];
-        if (cacheInfo.complete) {
-          let point = 0;
-          if (cacheInfo.dmc && cacheInfo.economy) {
-            point = 2;
-          } else if (cacheInfo.dmc && !cacheInfo.economy) {
-            point = 4;
-          } else if (!cacheInfo.dmc && cacheInfo.economy) {
-            point = 1;
-          } else if (!cacheInfo.dmc && !cacheInfo.economy) {
-            point = 3;
-          };
-          // 品質が複数ある場合は最も良いものを選ぶ.
-          cachePoint = Math.max(point);
+  const getCachePoint = function(videoInfo) {
+    if (!videoInfo || !videoInfo.caches) return 0;
+    let cachePoint = 0; // 0:cacheなし, 1:旧エコ, 2:dmcエコ, 3:旧普通, 4:dmc普通
+    for (const cacheName in videoInfo.caches) {
+      const cacheInfo = videoInfo.caches[cacheName];
+      if (cacheInfo.complete) {
+        let point = 0;
+        if (cacheInfo.dmc && cacheInfo.economy) {
+          point = 2;
+        } else if (cacheInfo.dmc && !cacheInfo.economy) {
+          point = 4;
+        } else if (!cacheInfo.dmc && cacheInfo.economy) {
+          point = 1;
+        } else if (!cacheInfo.dmc && !cacheInfo.economy) {
+          point = 3;
         };
-      };
-
-      // "nl-"なしのクラスは廃止予定.
-      if (1 === cachePoint) {
-        anchor.classList.add("nl-cached-common");
-        anchor.classList.add("cached-v1-economy");
-        anchor.classList.add("nl-cached-smile-economy");
-      } else if (2 === cachePoint) {
-        anchor.classList.add("nl-cached-common");
-        anchor.classList.add("cached-dmc-economy");
-        anchor.classList.add("nl-cached-dmc-economy");
-      } else if (3 === cachePoint) {
-        anchor.classList.add("nl-cached-common");
-        anchor.classList.add("cached-v1-normal");
-        anchor.classList.add("nl-cached-smile-normal");
-      } else if (4 === cachePoint) {
-        anchor.classList.add("nl-cached-common");
-        anchor.classList.add("cached-dmc-normal");
-        anchor.classList.add("nl-cached-dmc-normal");
+        cachePoint = Math.max(point, cachePoint);
       };
     };
+    return cachePoint;
+  };
 
-    const firstCall = async function() {
-      window.NicocacheNLVideoAnchorHooks.push(mightAddColorClassToAnchor);
-      for (const a of Array.from(document.getElementsByTagName("A"))) {
-        await mightAddColorClassToAnchor(a);
+  const applyCachePoint = function(anchor, cachePoint) {
+    cacheClassNames.forEach(function(className) {
+      anchor.classList.remove(className);
+    });
+
+    // "nl-"なしのclassは既存の利用者向け互換性のため残す.
+    if (1 === cachePoint) {
+      anchor.classList.add("nl-cached-common", "cached-v1-economy", "nl-cached-smile-economy");
+    } else if (2 === cachePoint) {
+      anchor.classList.add("nl-cached-common", "cached-dmc-economy", "nl-cached-dmc-economy");
+    } else if (3 === cachePoint) {
+      anchor.classList.add("nl-cached-common", "cached-v1-normal", "nl-cached-smile-normal");
+    } else if (4 === cachePoint) {
+      anchor.classList.add("nl-cached-common", "cached-dmc-normal", "nl-cached-dmc-normal");
+    };
+  };
+
+  const requestCacheInfo = async function(ids) {
+    const response = await fetch("/cache/info/v2?" + ids.join(","), {cache: "no-cache"});
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const json = await response.json();
+    if (!json || typeof json !== "object") throw new Error("invalid JSON response");
+    return json;
+  };
+
+  const flushPendingAnchors = async function() {
+    flushTimer = null;
+    const batch = new Map(pendingAnchors);
+    pendingAnchors.clear();
+    const ids = Array.from(batch.keys());
+
+    try {
+      for (let index = 0; index < ids.length; index += maxIdsPerRequest) {
+        const chunk = ids.slice(index, index + maxIdsPerRequest);
+        const json = await requestCacheInfo(chunk);
+        const expiresAt = Date.now() + cacheInfoTTL;
+        chunk.forEach(function(id) {
+          const videoInfo = Object.prototype.hasOwnProperty.call(json, id) ? json[id] : null;
+          infoCache.set(id, {videoInfo: videoInfo, expiresAt: expiresAt});
+          const cachePoint = getCachePoint(videoInfo);
+          (batch.get(id) || []).forEach(function(anchor) {
+            if (anchor.isConnected && checkedAnchorIds.get(anchor) === id) {
+              applyCachePoint(anchor, cachePoint);
+            };
+          });
+        });
       };
+    } catch (error) {
+      console.warn("NicoCache_nl: キャッシュ情報の一括取得に失敗しました。", error);
+    };
+  };
+
+  const mightAddColorClassToAnchor = function(anchor) {
+    if (anchor.getAttribute("data-nicoad-point") !== null) return;
+    const id = getDougaIDByAnchor(anchor);
+    if (id === null || !/^[a-z]{2}\d+$/i.test(id)) return;
+    if (checkedAnchorIds.get(anchor) === id) return;
+
+    checkedAnchorIds.set(anchor, id);
+    const cached = infoCache.get(id);
+    if (cached && cached.expiresAt > Date.now()) {
+      applyCachePoint(anchor, getCachePoint(cached.videoInfo));
+      return;
     };
 
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", firstCall);
-    } else {
-      firstCall();
-    };
-  })();
-  // }}} 2
+    if (!pendingAnchors.has(id)) pendingAnchors.set(id, []);
+    pendingAnchors.get(id).push(anchor);
+    if (flushTimer === null) flushTimer = setTimeout(flushPendingAnchors, 0);
+  };
+
+  const invokeHooks = function(anchor) {
+    window.NicocacheNLVideoAnchorHooks.forEach(function(hook) {
+      Promise.resolve(hook(anchor)).catch(function(error) {
+        console.warn("NicoCache_nl: 動画リンク処理に失敗しました。", error);
+      });
+    });
+  };
+
+  const processAddedNode = function(node) {
+    if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.matches("a")) invokeHooks(node);
+    node.querySelectorAll("a").forEach(invokeHooks);
+  };
+
+  const start = function() {
+    window.NicocacheNLVideoAnchorHooks.push(mightAddColorClassToAnchor);
+    document.querySelectorAll("a").forEach(invokeHooks);
+    const observer = new MutationObserver(function(mutationRecords) {
+      mutationRecords.forEach(function(record) {
+        record.addedNodes.forEach(processAddedNode);
+      });
+    });
+    observer.observe(document.body, {childList: true, subtree: true});
+  };
+
+  if (document.body) {
+    start();
+  } else {
+    document.addEventListener("DOMContentLoaded", start, {once: true});
+  };
 })();
-

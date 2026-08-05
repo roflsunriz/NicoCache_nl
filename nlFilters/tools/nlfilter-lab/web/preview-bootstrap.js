@@ -68,10 +68,20 @@
     const index = target.querySelectorAll("[data-lab-spa-added]").length + 10;
     const card = document.createElement("article");
     card.dataset.labSpaAdded = "";
-    card.className = "video-card";
-    const anime = document.documentElement.dataset.fixture === "anime";
-    card.innerHTML = `<a ${anime ? `href="https://www.nicovideo.jp/watch/sm${index}"` : `data-anchor-area="main" href="/watch/sm${index}"`}>
-      <img src="/thumbnails/sm${index}.svg" alt=""><span>SPAで追加した動画 sm${index}</span></a>`;
+    const fixture = document.documentElement.dataset.fixture;
+    const anime = fixture === "anime";
+    if (fixture === "watch") {
+      card.className = "video-card Pressable";
+      card.dataset.anchorPage = "watch";
+      card.dataset.anchorHref = `/watch/sm${index}`;
+      card.dataset.decorationVideoId = `sm${index}`;
+      card.innerHTML = `<a href="/watch/sm${index}"><img src="/thumbnails/sm${index}.svg" alt=""></a>
+        <a href="/watch/sm${index}">SPAで追加した動画 sm${index}</a>`;
+    } else {
+      card.className = "video-card";
+      card.innerHTML = `<a ${anime ? `href="https://www.nicovideo.jp/watch/sm${index}"` : `data-anchor-area="main" href="/watch/sm${index}"`}>
+        <img src="/thumbnails/sm${index}.svg" alt=""><span>SPAで追加した動画 sm${index}</span></a>`;
+    };
     target.append(card);
     setTimeout(notifyState, 80);
   }
