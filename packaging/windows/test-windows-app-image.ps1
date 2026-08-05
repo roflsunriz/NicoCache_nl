@@ -279,6 +279,7 @@ New-Item -ItemType Directory -Path $logRoot, $foreignWorkingDirectory -Force |
 
 $process = $null
 $setupProcess = $null
+$guiProcess = $null
 $knownProcessIds = @(Get-ProductProcesses | Select-Object -ExpandProperty Id)
 $testSucceeded = $false
 try {
@@ -363,6 +364,40 @@ try {
         ''
     ) | Set-Content -LiteralPath $configPath -Encoding utf8
 
+    $helpOutput = @(& $launcherPath '--help' 2>&1)
+    if ($LASTEXITCODE -ne 0 -or
+            -not (($helpOutput -join "`n").Contains('--tray')) -or
+            -not (($helpOutput -join "`n").Contains('--minimized'))) {
+        throw "Windowsランチャーの表示モードCLIが不正です: $helpOutput"
+    }
+
+    $guiProcess = Start-Process -FilePath $launcherPath `
+        -WorkingDirectory $appImage `
+        -PassThru
+    Start-Sleep -Seconds 3
+    if ($guiProcess.HasExited) {
+        throw "引数なしの起動管理GUIが終了しました (ExitCode: $($guiProcess.ExitCode))"
+    }
+    $implicitCoreProcesses = @(
+        Get-ProductProcesses |
+            Where-Object {
+                try {
+                    [string]::Equals(
+                        $_.Path, $coreJavaPath,
+                        [System.StringComparison]::OrdinalIgnoreCase
+                    )
+                } catch {
+                    $false
+                }
+            }
+    )
+    if ($implicitCoreProcesses.Count -ne 0) {
+        throw '引数なしの起動管理GUIがNicoCache_nl本体を暗黙起動しました'
+    }
+    Stop-Process -Id $guiProcess.Id -Force
+    $guiProcess.WaitForExit(10000) | Out-Null
+    Write-Output 'PASS 引数なしのGUI起動では本体を暗黙起動しない'
+
     $process = Start-Process -FilePath $launcherPath `
         -ArgumentList '--headless' `
         -WorkingDirectory $foreignWorkingDirectory `
@@ -435,7 +470,7 @@ try {
         Stop-Process -Id $startedProcess.Id -Force
         $startedProcess.WaitForExit(10000) | Out-Null
     }
-    foreach ($ownedProcess in @($process, $setupProcess)) {
+    foreach ($ownedProcess in @($process, $setupProcess, $guiProcess)) {
         if ($null -ne $ownedProcess) {
             $ownedProcess.Dispose()
         }

@@ -285,6 +285,8 @@ final class LauncherPaths {
         List<String> command = new ArrayList<>();
         if (launcherExecutable != null) {
             command.add(launcherExecutable.toString());
+            command.add("--tray");
+            command.add("--start");
             return command;
         }
         Path java = Path.of(System.getProperty("java.home"), "bin",
@@ -298,6 +300,8 @@ final class LauncherPaths {
         command.add(launcherJar.toString());
         command.add("--app-root=" + applicationRoot);
         command.add("--data-root=" + dataRoot);
+        command.add("--tray");
+        command.add("--start");
         return command;
     }
 

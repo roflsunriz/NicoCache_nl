@@ -59,12 +59,35 @@ final class LauncherWindow {
         createTray();
         refreshDataRoot();
         refreshTasks();
-        startCoreAsync();
         statusTimer = new Timer(1000, event -> refreshStatus());
         statusTimer.start();
     }
 
-    void show() {
+    void show(LauncherOptions.WindowMode mode, boolean startCore) {
+        switch (mode) {
+        case TRAY:
+            if (trayIcon == null) {
+                showMinimized();
+            } else {
+                frame.setVisible(false);
+            }
+            break;
+        case MINIMIZED:
+            showMinimized();
+            break;
+        case NORMAL:
+        default:
+            frame.setExtendedState(frame.getExtendedState() & ~JFrame.ICONIFIED);
+            frame.setVisible(true);
+            break;
+        }
+        if (startCore) {
+            startCoreAsync();
+        }
+    }
+
+    private void showMinimized() {
+        frame.setExtendedState(frame.getExtendedState() | JFrame.ICONIFIED);
         frame.setVisible(true);
     }
 

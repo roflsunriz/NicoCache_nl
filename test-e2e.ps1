@@ -93,6 +93,11 @@ try {
         throw '起動管理タスクの回帰テストに失敗しました'
     }
 
+    & java -cp $classes nicocache.launcher.LauncherOptionsTest
+    if ($LASTEXITCODE -ne 0) {
+        throw '起動管理CLIオプションの回帰テストに失敗しました'
+    }
+
     & java -cp $classes nicocache.launcher.CoreProcessTest
     if ($LASTEXITCODE -ne 0) {
         throw '本体起動モードの回帰テストに失敗しました'

@@ -57,7 +57,8 @@ public final class LauncherMain {
                     paths = LauncherPaths.resolve(
                             options.getApplicationRoot(), options.getDataRoot());
                 }
-                new LauncherWindow(paths, messages).show();
+                new LauncherWindow(paths, messages).show(
+                        options.getWindowMode(), options.shouldStartCore());
             } catch (Exception error) {
                 JOptionPane.showMessageDialog(null,
                         error.getMessage() == null ? error.toString()
@@ -183,6 +184,8 @@ public final class LauncherMain {
         System.out.println("NicoCacheLauncher");
         System.out.println("Usage: java -jar NicoCacheLauncher.jar [options]");
         System.out.println("  --start / --stop / --force-stop / --status");
+        System.out.println("  --tray [--start]  タスクトレイで起動");
+        System.out.println("  --minimized [--start]  最小化して起動");
         System.out.println("  --check-data-root  ユーザーデータルートを診断");
         System.out.println("  --headless [--start]  起動して待機（--startは非同期）");
         System.out.println("  --task-list / --task-install / --task-update / --task-remove");

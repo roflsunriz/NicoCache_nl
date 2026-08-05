@@ -20,6 +20,8 @@ final class TaskScheduler {
     private final LauncherPaths paths;
     private final LauncherPaths.Platform platform;
     private final TaskCommandRunner commandRunner;
+    private final Path userHome;
+    private final Path xdgConfigHome;
 
     TaskScheduler(LauncherPaths paths) {
         this(paths, paths.getPlatform(), null);
@@ -27,10 +29,27 @@ final class TaskScheduler {
 
     TaskScheduler(LauncherPaths paths, LauncherPaths.Platform platform,
             TaskCommandRunner commandRunner) {
+        this(paths, platform, commandRunner,
+                Path.of(System.getProperty("user.home")),
+                configuredXdgHome());
+    }
+
+    TaskScheduler(LauncherPaths paths, LauncherPaths.Platform platform,
+            TaskCommandRunner commandRunner, Path userHome,
+            Path xdgConfigHome) {
         this.paths = paths;
         this.platform = platform;
         this.commandRunner = commandRunner == null ? this::runSystemCommand
                 : commandRunner;
+        this.userHome = userHome.toAbsolutePath().normalize();
+        this.xdgConfigHome = xdgConfigHome == null ? null
+                : xdgConfigHome.toAbsolutePath().normalize();
+    }
+
+    private static Path configuredXdgHome() {
+        String configured = System.getenv("XDG_CONFIG_HOME");
+        return configured == null || configured.isBlank()
+                ? null : Path.of(configured);
     }
 
     List<TaskDefinition> list() throws IOException {
@@ -42,7 +61,7 @@ final class TaskScheduler {
         try (var input = Files.newInputStream(store)) {
             properties.load(input);
         }
-        boolean migrate = !"2".equals(properties.getProperty("version"));
+        boolean migrate = !"3".equals(properties.getProperty("version"));
         int count;
         try {
             count = Integer.parseInt(properties.getProperty("count", "0"));
@@ -112,10 +131,10 @@ final class TaskScheduler {
         for (TaskDefinition task : tasks) {
             removeNative(task);
         }
-        save(tasks);
         for (TaskDefinition task : tasks) {
             installNative(task);
         }
+        save(tasks);
     }
 
     private void save(List<TaskDefinition> tasks) throws IOException {
@@ -125,7 +144,7 @@ final class TaskScheduler {
             Files.createDirectories(parent);
         }
         Properties properties = new Properties();
-        properties.setProperty("version", "2");
+        properties.setProperty("version", "3");
         properties.setProperty("count", Integer.toString(tasks.size()));
         for (int index = 0; index < tasks.size(); index++) {
             tasks.get(index).writeProperties(properties, "task." + index + ".");
@@ -333,22 +352,18 @@ final class TaskScheduler {
     }
 
     private Path macosDirectory() {
-        return Path.of(System.getProperty("user.home"), "Library/LaunchAgents");
+        return userHome.resolve("Library/LaunchAgents");
     }
 
     private Path linuxAutostartDirectory() {
-        String config = System.getenv("XDG_CONFIG_HOME");
-        Path root = config == null || config.isBlank()
-                ? Path.of(System.getProperty("user.home"), ".config")
-                : Path.of(config);
+        Path root = xdgConfigHome == null
+                ? userHome.resolve(".config") : xdgConfigHome;
         return root.resolve("autostart");
     }
 
     private Path linuxSystemdDirectory() {
-        String config = System.getenv("XDG_CONFIG_HOME");
-        Path root = config == null || config.isBlank()
-                ? Path.of(System.getProperty("user.home"), ".config")
-                : Path.of(config);
+        Path root = xdgConfigHome == null
+                ? userHome.resolve(".config") : xdgConfigHome;
         return root.resolve("systemd/user");
     }
 

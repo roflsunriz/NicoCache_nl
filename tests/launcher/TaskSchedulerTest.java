@@ -25,9 +25,12 @@ public final class TaskSchedulerTest {
         Path root = Files.createTempDirectory("nicocache-task-test-");
         try {
             testWindowsInstallAndCommandContract(root);
+            testMacosInstallAndCommandContract(root);
+            testLinuxInstallAndCommandContract(root);
             testFailedNativeRegistrationDoesNotPersist(root);
             testUpdateAndRemove(root);
             testLegacyIntervalMigration(root);
+            testFailedCommandMigrationRemainsRetryable(root);
             System.out.println("Task scheduler tests passed");
         } finally {
             deleteTree(root);
@@ -69,8 +72,10 @@ public final class TaskSchedulerTest {
                 "JVM options must not be quoted as executable paths");
         assertFalse(taskXml.contains("--headless"),
                 "logon task must open the interactive launcher GUI");
-        assertFalse(taskXml.contains("--start"),
-                "logon task must let the launcher GUI start the core");
+        assertContains(taskXml, "--tray",
+                "logon task must start the launcher in the task tray");
+        assertContains(taskXml, "--start",
+                "logon task must explicitly start the core");
         assertContains(taskXml, "--app-root=" + fixture.paths.getApplicationRoot(),
                 "task command must preserve the application root");
         assertContains(taskXml, "--data-root=" + fixture.paths.getDataRoot(),
@@ -88,12 +93,57 @@ public final class TaskSchedulerTest {
         assertEquals(nativeName, argumentAfter(query.arguments, "/TN"),
                 "registration must verify the exact native task");
         Properties store = loadStore(fixture.paths.getTaskStore());
-        assertEquals("2", store.getProperty("version"),
+        assertEquals("3", store.getProperty("version"),
                 "task store schema version");
         assertEquals("on-logon", store.getProperty("task.0.schedule"),
                 "task store trigger");
         assertFalse(store.containsKey("task.0.intervalMinutes"),
                 "task store must not retain an interval");
+    }
+
+    private static void testMacosInstallAndCommandContract(Path root)
+            throws Exception {
+        Fixture fixture = createFixture(root, "macos-install");
+        fixture.commands.idOutput = "501\n";
+        TaskDefinition task = new TaskDefinition("NicoCache macOS Probe", true);
+        new TaskScheduler(fixture.paths, LauncherPaths.Platform.MACOS,
+                fixture.commands, fixture.userHome,
+                fixture.xdgConfigHome).install(task);
+
+        Path plist = fixture.userHome.resolve("Library/LaunchAgents")
+                .resolve(task.getId() + ".plist");
+        String content = Files.readString(plist, StandardCharsets.UTF_8);
+        assertContains(content, "<key>RunAtLoad</key><true/>",
+                "macOS task must run at logon");
+        assertContains(content, "<string>--tray</string>",
+                "macOS task must start in the task tray");
+        assertContains(content, "<string>--start</string>",
+                "macOS task must explicitly start the core");
+        assertFalse(content.contains("--headless"),
+                "macOS task must keep the interactive launcher available");
+        assertTrue(fixture.commands.hasCommand("launchctl", "bootstrap"),
+                "macOS task must be bootstrapped into the user session");
+    }
+
+    private static void testLinuxInstallAndCommandContract(Path root)
+            throws Exception {
+        Fixture fixture = createFixture(root, "linux-install");
+        TaskDefinition task = new TaskDefinition("NicoCache Linux Probe", true);
+        new TaskScheduler(fixture.paths, LauncherPaths.Platform.LINUX,
+                fixture.commands, fixture.userHome,
+                fixture.xdgConfigHome).install(task);
+
+        Path desktop = fixture.xdgConfigHome.resolve("autostart")
+                .resolve(task.getId() + ".desktop");
+        String content = Files.readString(desktop, StandardCharsets.UTF_8);
+        assertContains(content, "X-GNOME-Autostart-enabled=true",
+                "Linux task must use XDG autostart");
+        assertContains(content, "--tray",
+                "Linux task must start in the task tray");
+        assertContains(content, "--start",
+                "Linux task must explicitly start the core");
+        assertFalse(content.contains("--headless"),
+                "Linux task must keep the interactive launcher available");
     }
 
     private static void testFailedNativeRegistrationDoesNotPersist(Path root)
@@ -150,7 +200,7 @@ public final class TaskSchedulerTest {
                 LauncherPaths.Platform.WINDOWS, fixture.commands).list();
         assertEquals(1, tasks.size(), "migrated task count");
         Properties migrated = loadStore(fixture.paths.getTaskStore());
-        assertEquals("2", migrated.getProperty("version"),
+        assertEquals("3", migrated.getProperty("version"),
                 "migrated task store schema version");
         assertEquals("on-logon", migrated.getProperty("task.0.schedule"),
                 "legacy interval must become logon trigger");
@@ -158,6 +208,34 @@ public final class TaskSchedulerTest {
                 "legacy interval must be removed");
         assertTrue(tasks.get(0).toString().contains("on-logon"),
                 "migrated task display must state the logon trigger");
+    }
+
+    private static void testFailedCommandMigrationRemainsRetryable(Path root)
+            throws Exception {
+        Fixture fixture = createFixture(root, "failed-command-migration");
+        Properties previous = new Properties();
+        previous.setProperty("version", "2");
+        previous.setProperty("count", "1");
+        previous.setProperty("task.0.name", "NicoCache Retry Probe");
+        previous.setProperty("task.0.schedule", "on-logon");
+        previous.setProperty("task.0.enabled", "true");
+        Files.createDirectories(fixture.paths.getTaskStore().getParent());
+        try (var output = Files.newOutputStream(fixture.paths.getTaskStore())) {
+            previous.store(output, "previous command contract");
+        }
+        fixture.commands.failCreate = true;
+
+        boolean failed = false;
+        try {
+            new TaskScheduler(fixture.paths, LauncherPaths.Platform.WINDOWS,
+                    fixture.commands).list();
+        } catch (IOException expected) {
+            failed = true;
+        }
+        assertTrue(failed, "failed native migration must reach the caller");
+        assertEquals("2", loadStore(fixture.paths.getTaskStore())
+                .getProperty("version"),
+                "failed migration must retain the retryable schema version");
     }
 
     private static Fixture createFixture(Path root, String name)
@@ -170,7 +248,8 @@ public final class TaskSchedulerTest {
         Files.write(applicationRoot.resolve("NicoCacheLauncher.jar"),
                 new byte[] { 0 });
         return new Fixture(LauncherPaths.resolve(applicationRoot, dataRoot),
-                new FakeCommandRunner());
+                new FakeCommandRunner(), fixtureRoot.resolve("home"),
+                fixtureRoot.resolve("xdg-config"));
     }
 
     private static Properties loadStore(Path path) throws IOException {
@@ -247,10 +326,15 @@ public final class TaskSchedulerTest {
     private static final class Fixture {
         final LauncherPaths paths;
         final FakeCommandRunner commands;
+        final Path userHome;
+        final Path xdgConfigHome;
 
-        Fixture(LauncherPaths paths, FakeCommandRunner commands) {
+        Fixture(LauncherPaths paths, FakeCommandRunner commands,
+                Path userHome, Path xdgConfigHome) {
             this.paths = paths;
             this.commands = commands;
+            this.userHome = userHome;
+            this.xdgConfigHome = xdgConfigHome;
         }
     }
 
@@ -269,6 +353,7 @@ public final class TaskSchedulerTest {
         String xmlContents;
         boolean failCreate;
         String whoamiOutput = "";
+        String idOutput = "501\n";
 
         @Override
         public TaskCommandResult run(String command, List<String> arguments)
@@ -288,6 +373,9 @@ public final class TaskSchedulerTest {
             if ("whoami".equals(command)) {
                 return new TaskCommandResult(0, whoamiOutput);
             }
+            if ("id".equals(command)) {
+                return new TaskCommandResult(0, idOutput);
+            }
             if (failCreate && arguments.contains("/Create")) {
                 return new TaskCommandResult(42, "fake schtasks failure");
             }
@@ -302,6 +390,16 @@ public final class TaskSchedulerTest {
                 }
             }
             throw new AssertionError("missing schtasks invocation: " + option);
+        }
+
+        boolean hasCommand(String expectedCommand, String expectedArgument) {
+            for (Invocation invocation : invocations) {
+                if (expectedCommand.equals(invocation.command)
+                        && invocation.arguments.contains(expectedArgument)) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 }

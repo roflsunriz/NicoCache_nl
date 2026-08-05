@@ -38,8 +38,8 @@ MSIのインストール先とZIP展開先のどちらからも利用できる�
 MSI の無人操作には Windows Installer の標準オプションを使う。
 
 ```powershell
-msiexec.exe /i .\NicoCache_nl-1.2.2.msi /qn /norestart
-msiexec.exe /x .\NicoCache_nl-1.2.2.msi /qn /norestart
+msiexec.exe /i .\NicoCache_nl-1.2.3.msi /qn /norestart
+msiexec.exe /x .\NicoCache_nl-1.2.3.msi /qn /norestart
 ```
 
 独立アップデーターのMSIは、依存コマンドとユーザー環境変数を現在のユーザーだけで
@@ -95,6 +95,11 @@ Windowsタスクスケジューラーのログオン時一回起動タスクの�
 起動管理アプリが行う。アプリイメージ、MSI、ZIPのすべてに、本体JAR、証明書生成JAR、
 起動管理JAR、ビルド管理JARの独立アプリ4本を内部アプリ資材として含める。
 利用者が直接起動する入口はこのEXEだけである。
+
+引数なしの起動では管理GUIだけを表示し、本体は起動ボタンを押すまで起動しない。
+`--tray`はタスクトレイ格納、`--minimized`は最小化で起動する表示モードであり、
+本体も起動する場合だけ`--start`を併用する。ログオン時タスクの既定コマンドは
+`--tray --start`で、ランチャーを前面へ出さず本体を明示起動する。
 
 ```powershell
 .\NicoCache_nl.exe --setup --headless `

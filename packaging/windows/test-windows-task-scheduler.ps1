@@ -209,7 +209,8 @@ try {
             ($arguments -notmatch [regex]::Escape(
                 '--data-root=' + $dataRoot)) -or
             ($arguments -match '--headless') -or
-            ($arguments -match '--start')) {
+            ($arguments -notmatch '(?i)(?:^|\s)--tray(?:\s|$)') -or
+            ($arguments -notmatch '(?i)(?:^|\s)--start(?:\s|$)')) {
         throw "登録タスクの起動引数が不正です: $arguments"
     }
     if ($arguments -match '/MO') {

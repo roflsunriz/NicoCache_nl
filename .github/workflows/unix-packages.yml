@@ -90,7 +90,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      APP_VERSION: 1.2.2
+      APP_VERSION: 1.2.3
       UPDATER_VERSION: 0.2.1
       GITHUB_TOKEN: ${{ github.token }}
     steps:
@@ -145,7 +145,7 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 45
     env:
-      APP_VERSION: 1.2.2
+      APP_VERSION: 1.2.3
       UPDATER_VERSION: 0.2.1
       GITHUB_TOKEN: ${{ github.token }}
     steps:

@@ -8,13 +8,15 @@ LinuxとmacOSの配布物は、対象OS上のJDK 25 `jpackage`で生成します
 ## 本体
 
 アプリイメージの単一ランチャーは起動管理アプリである。引数なしではGUIとタスクトレイを
-表示し、ヘッドレスでは同じランチャーが本体の起動、状態確認、グレイスフル停止、強制停止、
-初回セットアップを処理する。ログオン時に一回だけの自動起動はmacOS LaunchAgents、
-Linux XDG autostartへ登録する。
+表示するが、本体は起動ボタンを押すまで起動しない。`--tray`はタスクトレイ格納、
+`--minimized`は最小化で起動する表示モードで、本体も起動する場合だけ`--start`を併用する。
+ヘッドレスでは同じランチャーが本体の起動、状態確認、グレイスフル停止、強制停止、
+初回セットアップを処理する。ログオン時に一回だけの自動起動は`--tray --start`を付けて
+macOS LaunchAgents、Linux XDG autostartへ登録する。
 
 ```powershell
-./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.2
-./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.2
+./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.3
+./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.3
 ```
 
 LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメージZIP、PKG、DMGを

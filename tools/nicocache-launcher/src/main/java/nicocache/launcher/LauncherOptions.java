@@ -5,6 +5,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 final class LauncherOptions {
+    enum WindowMode {
+        NORMAL,
+        MINIMIZED,
+        TRAY
+    }
+
     enum Action {
         GUI,
         FOREGROUND,
@@ -27,22 +33,30 @@ final class LauncherOptions {
     private final Path dataRoot;
     private final String taskName;
     private final List<String> setupArguments;
+    private final WindowMode windowMode;
+    private final boolean startCore;
 
     private LauncherOptions(boolean headless, Action action,
             Path applicationRoot, Path dataRoot, String taskName,
-            List<String> setupArguments) {
+            List<String> setupArguments, WindowMode windowMode,
+            boolean startCore) {
         this.headless = headless;
         this.action = action;
         this.applicationRoot = applicationRoot;
         this.dataRoot = dataRoot;
         this.taskName = taskName;
         this.setupArguments = List.copyOf(setupArguments);
+        this.windowMode = windowMode;
+        this.startCore = startCore;
     }
 
     static LauncherOptions parse(String[] args) {
         boolean headless = false;
         boolean setup = false;
+        boolean startRequested = false;
+        boolean windowModeExplicit = false;
         Action selected = null;
+        WindowMode windowMode = WindowMode.NORMAL;
         Path applicationRoot = null;
         Path dataRoot = null;
         String taskName = "NicoCache_nl";
@@ -51,6 +65,14 @@ final class LauncherOptions {
         for (String arg : args) {
             if ("--headless".equals(arg)) {
                 headless = true;
+            } else if ("--tray".equals(arg)) {
+                windowMode = selectWindowMode(windowMode, windowModeExplicit,
+                        WindowMode.TRAY);
+                windowModeExplicit = true;
+            } else if ("--minimized".equals(arg)) {
+                windowMode = selectWindowMode(windowMode, windowModeExplicit,
+                        WindowMode.MINIMIZED);
+                windowModeExplicit = true;
             } else if ("--help".equals(arg) || "-h".equals(arg)) {
                 selected = select(selected, Action.HELP);
             } else if ("--setup".equals(arg)) {
@@ -61,7 +83,7 @@ final class LauncherOptions {
             } else if (arg.startsWith("--data-root=")) {
                 dataRoot = pathValue(arg, "--data-root=");
             } else if ("--start".equals(arg)) {
-                selected = select(selected, Action.START);
+                startRequested = true;
             } else if ("--stop".equals(arg) || "--graceful-stop".equals(arg)) {
                 selected = select(selected, Action.STOP);
             } else if ("--force-stop".equals(arg)) {
@@ -108,13 +130,25 @@ final class LauncherOptions {
                 setupArguments.add(0, "--setup");
             }
         }
-        if (selected == null) {
-            selected = headless ? Action.FOREGROUND : Action.GUI;
-        }
         if (selected == Action.HELP) {
             return new LauncherOptions(headless, selected, applicationRoot,
-                    dataRoot, taskName,
-                    setupArguments);
+                    dataRoot, taskName, setupArguments, windowMode, false);
+        }
+        if (windowModeExplicit) {
+            if (headless) {
+                throw new IllegalArgumentException(
+                        "--tray と --minimized は --headless と同時に指定できません");
+            }
+            if (selected != null) {
+                throw new IllegalArgumentException(
+                        "表示モードと別の操作を同時に指定できません: " + selected);
+            }
+            selected = Action.GUI;
+        } else if (startRequested) {
+            selected = select(selected, Action.START);
+        }
+        if (selected == null) {
+            selected = headless ? Action.FOREGROUND : Action.GUI;
         }
         if (!setup && selected == Action.SETUP) {
             throw new IllegalArgumentException("--setup が必要です");
@@ -123,8 +157,17 @@ final class LauncherOptions {
             throw new IllegalArgumentException("--task-name は空にできません");
         }
         return new LauncherOptions(headless, selected, applicationRoot,
-                dataRoot, taskName,
-                setupArguments);
+                dataRoot, taskName, setupArguments, windowMode,
+                selected == Action.GUI && startRequested);
+    }
+
+    private static WindowMode selectWindowMode(WindowMode current,
+            boolean explicit, WindowMode next) {
+        if (explicit && current != next) {
+            throw new IllegalArgumentException(
+                    "表示モードを複数指定できません: " + current + " / " + next);
+        }
+        return next;
     }
 
     private static Action select(Action current, Action next) {
@@ -174,5 +217,13 @@ final class LauncherOptions {
 
     List<String> getSetupArguments() {
         return setupArguments;
+    }
+
+    WindowMode getWindowMode() {
+        return windowMode;
+    }
+
+    boolean shouldStartCore() {
+        return startCore;
     }
 }

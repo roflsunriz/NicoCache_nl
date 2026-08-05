@@ -145,6 +145,13 @@ Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*
 Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*.dll').Count) `
     'Windows DLLがUnixパッケージへ混入しています'
 
+$helpOutput = @(& $launcher '--help' 2>&1)
+Assert-True ($LASTEXITCODE -eq 0) "Unixランチャーの--helpに失敗しました: $helpOutput"
+Assert-True (($helpOutput -join "`n").Contains('--tray')) `
+    'Unixランチャーにタスクトレイ起動オプションがありません'
+Assert-True (($helpOutput -join "`n").Contains('--minimized')) `
+    'Unixランチャーに最小化起動オプションがありません'
+
 $sandbox = Join-Path $workRoot 'launcher-sandbox'
 if (Test-Path -LiteralPath $sandbox) { Remove-Item -LiteralPath $sandbox -Recurse -Force }
 New-Item -ItemType Directory -Path $sandbox | Out-Null

@@ -40,10 +40,12 @@ Linux/macOSでは同じJavaビルドアプリをPOSIXラッパーから実行で
 Windowsのアプリイメージ・MSI・ZIP、Linuxのアプリイメージ・ZIP・DEB/RPM、macOSの
 アプリバンドル・ZIP・PKG/DMGには、上記4本の独立アプリJARを同じ構成で収録します。
 
-`NicoCacheLauncher.jar`は引数なしならGUIで起動し、タスクトレイ常駐、ログオン時に
-一回だけ実行する自動起動タスクの登録・更新・削除、本体の起動状態表示を管理します。
+`NicoCacheLauncher.jar`は引数なしなら管理GUIだけを起動し、NicoCache_nl本体は自動で
+起動しません。タスクトレイ常駐、ログオン時に一回だけ実行する自動起動タスクの
+登録・更新・削除、本体の起動状態表示を管理します。
 起動管理画面またはタスクトレイから未起動の本体を起動すると、本体のGUIログも表示されます。
-ログオン時自動起動タスクも起動管理GUIを開いて本体を起動するため、ログオン後に本体のGUIログを操作できます。
+ログオン時自動起動タスクはランチャーをタスクトレイへ格納し、本体を明示起動するため、
+ログオン後もタスクトレイから本体のGUIログを操作できます。
 起動時にはユーザーデータルートも自動診断し、移行先の不足項目、既定資材による代替、
 HTTPS証明書や権限の問題を画面で確認できます。詳細は[ユーザーデータルートの診断と移行](documents/user-data-root.md)
 を参照してください。
@@ -54,6 +56,15 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 java -jar .\NicoCacheLauncher.jar --headless --status
 java -jar .\NicoCacheLauncher.jar --headless --stop
 java -jar .\NicoCacheLauncher.jar --headless --check-data-root
+```
+
+GUIを最初からタスクトレイへ格納する場合は`--tray`、最小化する場合は`--minimized`を
+指定します。どちらも単独では本体を起動せず、同時に起動する場合だけ`--start`を
+追加します。Windows、Linux、macOSで同じオプションを使用できます。
+
+```powershell
+java -jar .\NicoCacheLauncher.jar --tray --start
+java -jar .\NicoCacheLauncher.jar --minimized
 ```
 
 初回は`--setup --headless`に`--user-data-root`、`--https=true`、

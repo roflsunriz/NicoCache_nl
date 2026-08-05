@@ -67,6 +67,10 @@ jobs:
         shell: pwsh
         run: .\tools\cmaf-to-mp4\test.ps1
 
+      - name: Run cross-platform launcher contract tests
+        shell: pwsh
+        run: .\test-launcher.ps1
+
       - name: Run strict end-to-end and GUI tests
         timeout-minutes: 5
         shell: pwsh
@@ -132,6 +136,7 @@ jobs:
           ./build-javac.ps1 -LibraryDirectory ./.test-work/ci-dependencies -Clean
           ./test-functional.ps1
           ./test-first-run-setup.ps1
+          ./test-launcher.ps1
 
       - name: Run strict end-to-end and GUI tests with Java 25
         if: runner.os == 'Windows'
