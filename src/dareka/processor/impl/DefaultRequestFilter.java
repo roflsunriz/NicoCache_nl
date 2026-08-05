@@ -6,42 +6,12 @@ import java.net.URLDecoder;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import dareka.common.Logger;
 import dareka.extensions.RequestFilter;
 import dareka.processor.HttpRequestHeader;
 
 public class DefaultRequestFilter implements RequestFilter {
-    private static final String allowDomains =
-        "^(?:LOCAL" +
-        "|local\\.ptron" +
-        "|(.+\\.)?nicovideo\\.jp" +
-        "|(.+\\.)?smilevideo\\.jp" +
-        "|(.+\\.)?[ns]img\\.jp" +
-        "|(.+\\.)?dmc\\.nico" +
-        "|(|g-)ecx\\.images-amazon\\.com" +
-        "|(.+\\.)?nicovideo\\.photozou\\.jp" +
-        ")$";
-    private static final Pattern allowDomainPattern
-        = Pattern.compile(allowDomains);
-
-    private boolean isDenyDomain(String host) {
-        // [nl] niconicoMode
-        if (Boolean.getBoolean("niconicoMode")) {
-            boolean allow = allowDomainPattern.matcher(host).matches();
-            if (allow == false) {
-                Logger.warning("Forbidden host access: " + host);
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Override
     public int onRequest(HttpRequestHeader requestHeader) throws IOException {
-        // niconicoMode
-        if (isDenyDomain(requestHeader.getHost()))
-            return RequestFilter.DROP;
-
         // Refererを直す
         String referer = requestHeader.getMessageHeader("Referer");
         if (referer != null) {

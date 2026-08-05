@@ -30,19 +30,13 @@ public class Flv2mp4 {
         if (!src_codecs.vcodec.equals("h264")) {
             vcodec = "h264";
         }
-        if (Boolean.getBoolean("flv2Mp4AdaptToFlash")) {
-            if (!src_codecs.acodec.equals("aac")) {
+        if (src_codecs.acodec.equals("mp3")) {
+            if (src_codecs.ar < 44100) {
+                // Firefoxは 22050 Hz の mp3 を認識できない
                 acodec = "aac";
             }
-        } else {
-            if (src_codecs.acodec.equals("mp3")) {
-                if (src_codecs.ar < 44100) {
-                    // Firefoxは 22050 Hz の mp3 を認識できない
-                    acodec = "aac";
-                }
-            } else if (!src_codecs.acodec.equals("aac")) {
-                acodec = "aac";
-            }
+        } else if (!src_codecs.acodec.equals("aac")) {
+            acodec = "aac";
         }
 
         Logger.info("Converting flv to mp4 [vcodec: %s -> %s, acodec %s -> %s]: %s",

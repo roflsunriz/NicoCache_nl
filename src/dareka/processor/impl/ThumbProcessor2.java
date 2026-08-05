@@ -148,10 +148,6 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
                 resource = StringResource.getRawResource(rh, contentBody);
             }
             status404 = statusCode == 404;
-            if (Boolean.getBoolean("swfDebug")) {
-                Logger.info("thcache: %s (status=%d,len=%d)",
-                        requestHeader.getURI(), statusCode, rh.getContentLength());
-            }
         }
         public byte[] getBody() {
             if (resource != null && resource instanceof URLResource) {
@@ -291,8 +287,7 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
         int id = Integer.parseInt(m.group(3));
         String subid = m.group(4);
         String size = m.group(5);
-        Resource r = getThumbResourceFromCache(id, subid, size, requestHeader,
-                Boolean.getBoolean("thcacheFixEpoch"));
+        Resource r = getThumbResourceFromCache(id, subid, size, requestHeader);
         if (!Boolean.getBoolean("thcacheLargeSize") && size != null) {
             // thcacheLargeSizeがfalseの時は.Mや.Lを新たにキャッシュしない
             return new URLResource(uri);
@@ -303,7 +298,7 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
             Object lock = retrievingLocks.putIfAbsent(id, m); // mをロックオブジェクトに転用
             if (lock != null) {
                 synchronized (lock) {
-                    r = getThumbResourceFromCache(id, subid, size, requestHeader, false);
+                    r = getThumbResourceFromCache(id, subid, size, requestHeader);
                 }
             } else {
                 lock = m;
@@ -317,7 +312,7 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
     }
 
     private Resource getThumbResourceFromCache(int id, String subid, String size,
-            HttpRequestHeader requestHeader, boolean fixEpoch) {
+            HttpRequestHeader requestHeader) {
         if (subid == null) {
             Ref ref = refs.get(id);
             if (ref != null) subid = ref.subid;
@@ -326,11 +321,6 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
         if (!cacheFile.exists()) {
             cacheFile = getCacheFile(id, subid, size, ".gif");
             if (!cacheFile.exists()) return null;
-        }
-        if (fixEpoch && cacheFile.lastModified() == 0L) {
-            // サムネ鯖から取得できない場合に備えてEpochを現在時刻にしておく
-            cacheFile.setLastModified(System.currentTimeMillis());
-            return null;
         }
         if (cacheFile.length() == 0L) {
             return getReplace404(0, null, null);
@@ -357,8 +347,7 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
             Logger.info("thcache: " + m.group() + " failed");
             // サムネ鯖が404を返す場合は次回アクセスしないように代替サムネを使う
             if (status404) {
-                // fixEpochの場合はキャッシュにあるので取得してみる
-                Resource r = getThumbResourceFromCache(id, subid, size, null, false);
+                Resource r = getThumbResourceFromCache(id, subid, size, null);
                 if (r == null) {
                     r = getReplace404(id, subid, size);
                 }

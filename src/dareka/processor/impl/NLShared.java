@@ -281,8 +281,7 @@ public class NLShared implements ConfigObserver {
             br = new BufferedReader(new FileReader(vid2cidFile));
             String line; Matcher m;
             while ((line = br.readLine()) != null) {
-                if ((m = VID2CID_LINE_PATTERN.matcher(line)).lookingAt() &&
-                        !NLConfig.matches("deletedVideoId", m.group(1))) {
+                if ((m = VID2CID_LINE_PATTERN.matcher(line)).lookingAt()) {
                     map.put(m.group(1), m.group(2));
                 }
             }

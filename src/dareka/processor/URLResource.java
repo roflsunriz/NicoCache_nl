@@ -41,10 +41,7 @@ public class URLResource extends Resource {
     private static final int BUFFERED_POST_MAX = 0;//5 * 1024 * 1024;
 
     static {
-        if (Boolean.getBoolean("useWorkaroundForEncoding")) {
-            Workarounds.dirtyChangeHttpURLConnectionImplEncoding();
-        }
-        // See http://stackoverflow.com/questions/8335501/
+        // Origin など、プロキシー処理に必要な制限ヘッダーを転送する。
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
     }
 
@@ -434,13 +431,10 @@ public class URLResource extends Resource {
         return canContinue;
     }
 
+    /** 公開Extension ABIとの互換性を維持する。 */
     @Override
     public void stopTransfer() {
         super.stopTransfer();
-
-        if (Boolean.getBoolean("useWorkaroundFastFinalize")) {
-            Workarounds.dirtyCloseHttpURLConnectionImplSocket(con);
-        }
     }
 
     /**

@@ -16,6 +16,13 @@ Windows・Linux・macOSパッケージ版の初回セットアップでは、キ
 同名の利用者資材を後から読み込んで上書きします。書き込みはユーザーデータ側だけに
 行います。
 
+アプリケーションの`defaults/`は、`application.properties`、`network.properties`、
+`video-cache.properties`、`legacy-cache-compatibility.properties`、
+`rewriting.properties`、`thumbnail-cache.properties`、`https-mitm.properties`に
+目的別で分かれています。これらは初期値と説明の参照用で、直接編集せず、変更するキーだけを
+`config.properties`へ記述してください。廃止設定からの移行は
+[更新・検証手順](how-to-update.md#旧取得設定からの移行)を参照してください。
+
 パッケージ版の既定ユーザーデータ先は、Windowsではドキュメント内の
 `NicoCache_nl`、macOSでは`~/Library/Application Support/NicoCache_nl`、Linuxでは
 `$XDG_DATA_HOME/NicoCache_nl`（未設定時は`~/.local/share/NicoCache_nl`）です。

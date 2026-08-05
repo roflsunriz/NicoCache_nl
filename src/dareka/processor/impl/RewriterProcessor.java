@@ -47,7 +47,6 @@ public class RewriterProcessor implements Processor {
 
         // デフォルトのRewriterを登録
         rewriterList.add(new WatchRewriter());
-        rewriterList.add(new SearchRewriter());
         rewriterList.add(new ThumbWatchRewriter());
     }
 

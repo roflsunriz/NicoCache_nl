@@ -86,10 +86,12 @@ public class CacheDirProcessor implements Processor {
         ")"
         );
 
-    private static final Pattern LOCAL_FLV_PATTERN = Pattern.compile(
-            "^[a-z]{2}[0-9]+(?:low)?(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\]\\w*)?(?:\\.(?:flv|swf|mp4|webm|mkv)){1,2}$"); // double suffix for cachemanager workaround
-    private static final Pattern LOCAL_HLS_PATTERN = Pattern.compile(
+    private static final Pattern LEGACY_SINGLE_FILE_PATTERN = Pattern.compile(
+            "^[a-z]{2}[0-9]+(?:low)?(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\]\\w*)?"
+                    + "(?:\\.(?:flv|swf|mp4|webm|mkv)){1,2}$");
+    private static final Pattern LEGACY_HLS_PATTERN = Pattern.compile(
             "^[a-z]{2}[0-9]+(?:low)?(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\]\\w*)?\\.hls$");
+
     private static final Pattern AUDIO_EXTRACT_PATTERN = Pattern.compile(
             "^[a-z]{2}[0-9]+(?:low)?(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\]\\w*\\.(?:flv|mp4|hls|webm|mkv))?\\.(?:mp3|m4a)$");
     private static final Pattern HLS_CONVERT_PATTERN = Pattern.compile(
@@ -241,41 +243,36 @@ public class CacheDirProcessor implements Processor {
             };
         };
 
-        // [nl] ローカルFLV（単一ファイルでキャッシュを送る）
-        if (Boolean.getBoolean("localFlv") &&
-            (m = LOCAL_FLV_PATTERN.matcher(path)).matches()) {
-
+        // 保存済み単一ファイルキャッシュは互換機能として常時直接配信する。
+        if ((m = LEGACY_SINGLE_FILE_PATTERN.matcher(path)).matches()) {
             if (cache == null || !cache.exists()) {
                 return StringResource.getNotFound();
             }
-            Logger.info("Local Flv: " + cache.getId() + " " + cache.getTitle());
+            Logger.info("Local cache: " + cache.getId() + " " + cache.getTitle());
             if (Boolean.getBoolean("touchCache")) {
                 cache.touch();
             }
 
             if (cache.getPostfix().equals(Cache.HLS)) {
-                Hls2SingleConverter o = new Hls2SingleConverter(
-                    cache, path, requestHeader.getMessageHeader("User-Agent"));
-                return o.convert();
-            };
+                Hls2SingleConverter converter = new Hls2SingleConverter(
+                        cache, path,
+                        requestHeader.getMessageHeader("User-Agent"));
+                return converter.convert();
+            }
 
-            Resource r = new LocalFileResource(cache.getCacheFile());
-            LimitFlvSpeedListener.addTo(r);
-            r.addCacheControlResponseHeaders(12960000);
-            return r;
-        };
+            Resource resource = new LocalFileResource(cache.getCacheFile());
+            LimitFlvSpeedListener.addTo(resource);
+            resource.addCacheControlResponseHeaders(12960000);
+            return resource;
+        }
 
-        // [nl] ローカルHLS（複数ファイルでキャッシュを送る）
-        if (Boolean.getBoolean("localFlv") &&
-            (m = LOCAL_HLS_PATTERN.matcher(path)).matches()) {
-
+        // 保存済み旧HLSキャッシュを現行のローカルHLS配信へ接続する。
+        if ((m = LEGACY_HLS_PATTERN.matcher(path)).matches()) {
             return StringResource.getRedirect(
-                requestHeader.getScheme()
-                + "://www.nicovideo.jp/cache/file/nicocachenl_refcache="
-                + m.group(0)
-                + "//");
-        };
-
+                    requestHeader.getScheme()
+                    + "://www.nicovideo.jp/cache/file/nicocachenl_refcache="
+                    + m.group(0) + "//");
+        }
 
         // 音声ファイル抽出
         if ((m = AUDIO_EXTRACT_PATTERN.matcher(path)).matches()) {

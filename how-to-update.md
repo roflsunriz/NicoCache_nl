@@ -403,6 +403,25 @@ Smile、DMC単一ファイル、DMC-HLSの新規取得経路は廃止した。�
 - `swfCacheV3`
 - `swfConvertAll`
 
+今回の初期設定整理では、現行ページや配信経路では動作しない、または実装上効果がなかった
+次の設定も廃止した。`config.properties`に残っていても参照されないため削除してよい。
+
+- `niconicoMode`（現行Domand・NV API・NVCommentホストを許可できない旧接続先制限）
+- `localFlv`（保存済み単一ファイルの`/cache/<動画ID>.<拡張子>`配信は常時利用可能）
+- `scriptOn`、`scriptTarget`、`scriptText`（旧watch HTMLへの固定スクリプト注入）
+- `useSearchExtension`、`searchResultMax`、`insertSearchResultToTagPage`
+  （旧検索・タグHTMLへの検索結果注入）
+- `thcacheMode`、`quickThumbnailCache`（旧`tn.smilevideo.jp`用単一ファイルサムネイル）
+- `thcacheFixEpoch`、`swfDebug`（旧サムネイル移行・デバッグ）
+- `deletedVideoId`（廃止済みgetflv固有の削除動画例外）
+- `resumeDownload`、`cacheAllocateFirst`、`reportCachingProgress`（実装上効果がなかった設定）
+- `useWorkaroundForEncoding`、`useWorkaroundFastFinalize`（旧Java実装向け実験設定）
+- `flv2Mp4AdaptToFlash`（Flash再生向け音声変換）
+
+同梱Extension本体が存在しなかった`NGCommentExtension.properties`と
+`nlMovieFetcher.properties`も初期設定から削除した。該当Extensionを別途導入している場合は、
+そのExtensionが提供する現行設定例を利用者の`config.properties`へ明示的に移す。
+
 既存のFLV、SWF、MP4、旧HLSキャッシュは削除しない。更新後も `/cache/` APIと
 ローカルキャッシュ配信から利用できる。ここで廃止する `swfConvert*` は上流から
 取得中にSWFを書き換える設定であり、保存済みSWFの読取りには影響しない。

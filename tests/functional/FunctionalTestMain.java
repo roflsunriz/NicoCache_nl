@@ -103,6 +103,8 @@ public final class FunctionalTestMain {
                 run("control force-shutdown contract", this::testControlForceShutdown);
             } else {
                 run("URL resource cache response policies", this::testUrlResourceCachePolicies);
+                run("default settings layout and obsolete key removal",
+                        () -> DefaultsLayoutUnitTest.run(repository));
                 run("template reload and CMAF utility validation",
                         this::testTemplateAndCmafUtility);
                 run("CMAF cache progress size stability",
@@ -625,19 +627,15 @@ public final class FunctionalTestMain {
                 "cacheFolder=cache",
                 "convertedCacheFolder=cvcache",
                 "needFreeSpace=0",
-                "cacheAllocateFirst=false",
                 "disableDirectoryWatcher=true",
                 "disableVideoCacheSystem=false",
                 "enableMitm=true",
                 "mitmHostPort=www.nicovideo.jp",
                 "cacheThumbnail=true",
-                "thcacheMode=folder",
                 "thcacheFolder=thcache",
                 "cacheGetThumbInfo=false",
                 "cacheExtThumb=false",
                 "autoCacheComment=true",
-                "useSearchExtension=false",
-                "scriptOn=0",
                 "localFileServer=true",
                 "localRewriter=true",
                 "rewriterDefaultCharset=UTF-8",

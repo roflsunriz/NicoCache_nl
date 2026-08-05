@@ -15,7 +15,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import dareka.Main;
-import dareka.NLConfig;
 import dareka.common.LRUMap;
 import dareka.common.Logger;
 import dareka.common.TextUtil;
@@ -340,11 +339,7 @@ public class WatchVars {
             String vid = m_url.group(2);
             String cid = videoId.substring(2);
             if (!vid.equals(cid) && !json.getBoolean("video", "isDeleted")) {
-                if (NLConfig.matches("deletedVideoId", vid)) {
-                    deleted = true;
-                } else {
-                    NLShared.INSTANCE.put_vid2cid(vid, cid);
-                }
+                NLShared.INSTANCE.put_vid2cid(vid, cid);
             }
         }
     }
@@ -396,7 +391,6 @@ public class WatchVars {
     // - 登録がなければNicoIdInfoCacheにそれらを登録.
     // - 既にjsonから取得した品質リストから最高品質のものを除外してeconomy(low)として登録.
     // - 動画番号とキャッシュ用動画番号の紐づけをキャッシュする.
-    // - deletedVideoIdってサイト側APIのgetflv(廃止済み)の問題だからもう関係ないよね？
     private void analyzeDmc() {
         if (isDmcDelivery()
             // && videos != null
@@ -437,11 +431,7 @@ public class WatchVars {
             String vid = dmcId;
             String cid = videoId.substring(2);
             if (!vid.equals(cid) && !deleted) {
-                if (NLConfig.matches("deletedVideoId", vid)) {
-                    deleted = true;
-                } else {
-                    NLShared.INSTANCE.put_vid2cid(vid, cid);
-                }
+                NLShared.INSTANCE.put_vid2cid(vid, cid);
             }
         }
     }

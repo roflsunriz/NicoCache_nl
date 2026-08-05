@@ -12,8 +12,6 @@ import dareka.common.DiskFreeSpace;
 import dareka.common.Logger;
 import dareka.common.TextUtil;
 import dareka.processor.impl.Cache;
-import dareka.processor.impl.EasyRewriter;
-import dareka.processor.impl.ThumbProcessor;
 import dareka.processor.impl.ThumbProcessor2;
 import dareka.processor.impl.ViewableLoggerHandler;
 import dareka.processor.impl.RewriterProcessor;
@@ -191,11 +189,6 @@ public class Main {
             Logger.info(" => Invalid allowFrom setting. Assumes 'local' mode.");
         }
 
-        // [nl] 接続先制限
-        if (Boolean.getBoolean("niconicoMode")) {
-            Logger.info(" => Only nico|smilevideo.jp domains are processed.");
-        }
-
         // [nl] 速度制限
         int speedLimit = Integer.getInteger("speedLimit", 0);
         if (speedLimit > 0) {
@@ -204,34 +197,12 @@ public class Main {
 
         Logger.info("title=" + Boolean.getBoolean("title"));
 
-        if (Boolean.getBoolean("resumeDownload")) {
-            Logger.info("Resume suspended download: On");
-        }
-
         if (Boolean.getBoolean(("touchCache"))) {
             Logger.info("Touch Cache File: On");
         }
 
         if (Boolean.getBoolean("dareka.debug")) {
             Logger.info("debug mode");
-        }
-
-        // [nl] スクリプト埋め込み設定
-        if (Integer.getInteger("scriptOn", 0) != 0) {
-            String uri = System.getProperty("scriptTarget", "no_uri_to_replace");
-            String text = System.getProperty("scriptText", "");
-            if (!uri.equals("no_uri_to_replace") && text.length() > 0) {
-                Logger.info("Script replace: On");
-                // 簡易フィルタに登録(夏.01)
-                EasyRewriter.addSystemFilter("script",
-                        "^https?://www\\.nicovideo\\.jp" + uri + "$",
-                        "</body>", text + "<CRLF></body>");
-            }
-        }
-
-        // [nl] ローカルFLVサーバ
-        if (Boolean.getBoolean("localFlv")) {
-            Logger.info("LocalFlv Server: On");
         }
 
         // [nl] ローカルファイルサーバ
@@ -270,22 +241,11 @@ public class Main {
                     System.getProperty("os.name"));
         }
 
-        // [nl] キャッシュ領域の事前確保
-        if (Boolean.getBoolean("cacheAllocateFirst")) {
-            Logger.info("Allocate cache space before download: On");
-        }
-
         // [nl] サムネイルキャッシュ
         if (Boolean.getBoolean("cacheThumbnail")) {
-            String message = "Thumbnail Cache: On";
-            if (!"folder".equals(System.getProperty("thcacheMode"))) {
-                Logger.info(message);
-                ThumbProcessor.init();
-            } else {
-                Logger.info(String.format("%s (folder=%s)",
-                        message, NicoCachePaths.thumbnailCacheDirectory()));
-                ThumbProcessor2.init();
-            }
+            Logger.info(String.format("Thumbnail Cache: On (folder=%s)",
+                    NicoCachePaths.thumbnailCacheDirectory()));
+            ThumbProcessor2.init();
         }
 
         // [nl] api/getthumbinfoキャッシュ

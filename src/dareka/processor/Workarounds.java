@@ -18,27 +18,6 @@ class Workarounds {
     /**
      * dirty hack!!
      *
-     * change internal variable to avoid broken char problem.
-     * see {@link HttpHeader}
-     */
-    static void dirtyChangeHttpURLConnectionImplEncoding() {
-        try {
-            Field encoding =
-                    dirtyGetAccessibleField("sun.net.NetworkClient", "encoding");
-            String originalEncoding = (String) encoding.get(null);
-            encoding.set(null, "ISO8859_1");
-            Logger.debugWithThread("changed NetworkClient.encoding from "
-                    + originalEncoding + " to " + encoding.get(null));
-        } catch (Exception e) {
-            Logger.warning("failed to set workaround for multi bytes chars: "
-                    + e.getMessage());
-            Logger.debugWithThread(e);
-        }
-    }
-
-    /**
-     * dirty hack!!
-     *
      * Slow server response prevent quick stop because HttpURLConnection
      * wait the response and we can not abort it in the normal way.
      * This method closes socket forcedly to avoid waiting inside

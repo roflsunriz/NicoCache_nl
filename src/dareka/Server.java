@@ -46,7 +46,6 @@ import dareka.processor.impl.GetThumbInfoProcessor;
 import dareka.processor.impl.LocalDirProcessor;
 import dareka.processor.impl.RewriterProcessor;
 import dareka.processor.impl.ThumbProcessor2;
-import dareka.processor.impl.ThumbProcessor;
 import dareka.processor.impl.WorkaroundProcessor;
 
 interface AddrPolicy {
@@ -336,11 +335,7 @@ public class Server {
         registerProcessor(new CacheDirProcessor(), worker, true);
 
         if (Boolean.getBoolean("cacheThumbnail")) {
-            if (!System.getProperty("thcacheMode").equals("folder")) {
-                registerProcessor(new ThumbProcessor(), worker);
-            } else {
-                registerProcessor(new ThumbProcessor2(), worker);
-            }
+            registerProcessor(new ThumbProcessor2(), worker);
         }
         if (Boolean.getBoolean("cacheGetThumbInfo")) {
             registerProcessor(new GetThumbInfoProcessor(), worker);
