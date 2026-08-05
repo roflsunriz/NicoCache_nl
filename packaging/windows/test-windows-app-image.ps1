@@ -364,7 +364,9 @@ try {
         ''
     ) | Set-Content -LiteralPath $configPath -Encoding utf8
 
-    $helpOutput = @(& $launcherPath '--help' 2>&1)
+    # jpackageのGUIサブシステムEXEは標準出力を呼出元へ返さないため、
+    # 同梱ランタイムと同じランチャーJARでCLI契約を確認する。
+    $helpOutput = @(& $coreJavaPath '-jar' $launcherJarPath '--help' 2>&1)
     if ($LASTEXITCODE -ne 0 -or
             -not (($helpOutput -join "`n").Contains('--tray')) -or
             -not (($helpOutput -join "`n").Contains('--minimized'))) {
