@@ -510,6 +510,9 @@ public class URLResource extends Resource {
                 HttpHeader.CONTENT_ENCODING);
         if (contentEncoding != null) {
             in = HttpUtil.getDecodedInputStream(responseBody, contentEncoding);
+            if (!HttpHeaderUtil.isSupportedEncoding(contentEncoding)) {
+                in = null;
+            }
         }
         if (in != null) {
             bout.reset();

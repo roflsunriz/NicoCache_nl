@@ -31,6 +31,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 
 import dareka.common.Logger;
+import dareka.processor.HttpUtil;
 
 /**
  * Real Swing event-dispatch tests for the primary log GUI.
@@ -87,6 +88,8 @@ public final class GuiEndToEndTestMain {
                     this::testMenusAndTabs);
             run("GUI log retention, dedupe, and progress",
                     this::testLogBehaviour);
+            run("unknown content encoding GUI warning",
+                    this::testUnknownContentEncodingWarning);
             run("GUI tab-specific live log search and history",
                     this::testLogSearch);
             run("GUI WebSocket burst delivery",
@@ -120,7 +123,7 @@ public final class GuiEndToEndTestMain {
             }
             throw new AssertionError("GUI end-to-end tests failed");
         }
-        System.out.println("GUI end-to-end tests passed: 9");
+        System.out.println("GUI end-to-end tests passed: 10");
     }
 
     private void prepare() throws IOException {
@@ -511,6 +514,20 @@ public final class GuiEndToEndTestMain {
             assertFalse(pane.isBackLog(),
                     "main tab activation must leave backlog mode");
         });
+    }
+
+    private void testUnknownContentEncodingWarning() throws Exception {
+        onEdt(() -> {
+            GUILauncher.LogPane pane = GUILauncher.logWindow.mainPane;
+            pane.maxLines = 20;
+            pane.setDedupe(false);
+            pane.clearLog();
+            pane.refreshDisplay();
+        });
+
+        HttpUtil.getDecodedInputStream(new byte[] { 1, 2, 3 }, "futurezip");
+        waitForGuiText("未対応のContent-Encoding「futurezip」", 5_000L);
+        waitForGuiText("NicoCache_nl側で対応を追加してください", 5_000L);
     }
 
     private void testLogSearch() throws Exception {

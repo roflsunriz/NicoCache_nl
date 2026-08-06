@@ -22,6 +22,7 @@ import dareka.common.Pair;
 import dareka.common.Logger;
 import dareka.extensions.Rewriter;
 import dareka.processor.HttpHeader;
+import dareka.processor.HttpHeaderUtil;
 import dareka.processor.HttpRequestHeader;
 import dareka.processor.HttpResponseHeader;
 import dareka.processor.HttpUtil;
@@ -130,12 +131,8 @@ public class RewriterProcessor implements Processor {
         // 置換対象があれば一旦ダウンロード後にRewriterで処理する
         requestHeader.removeHopByHopHeaders();
 // 置換する場合は解凍できないEncodingは削除
-        String acceptEncoding = requestHeader.getMessageHeader(HttpHeader.ACCEPT_ENCODING);
-        if (rwSize > 0 && acceptEncoding != null) {
-            acceptEncoding = acceptEncoding.toLowerCase().replaceAll(
-                "(?: *, *)?(?:bzip2|sdch|br|compress|zstd|dcb|dcz)(?:;[^,]*)?", "");
-            acceptEncoding = acceptEncoding.replaceFirst("^ *, *", "");
-            requestHeader.setMessageHeader(HttpHeader.ACCEPT_ENCODING, acceptEncoding);
+        if (rwSize > 0) {
+            HttpHeaderUtil.adjustAcceptEncoding(requestHeader);
         }
 
         // ヘッダを受信して、Bodyも受信するか判断
@@ -507,7 +504,11 @@ public class RewriterProcessor implements Processor {
             ArrayList<EasyRewriter.UserFilter> userFilters) {
         if (rewriters != null && bcontent != null) {
             try {
-                return doRewriter(url, decode(bcontent, responseHeader),
+                byte[] decoded = decode(bcontent, responseHeader);
+                if (decoded == null) {
+                    return bcontent;
+                }
+                return doRewriter(url, decoded,
                         requestHeader, responseHeader, rewriters, userFilters);
             } catch (IOException e) {
                 Logger.error(e);
@@ -521,8 +522,12 @@ public class RewriterProcessor implements Processor {
         if (responseHeader != null) {
             String enc = responseHeader.getMessageHeader(HttpHeader.CONTENT_ENCODING);
             if (enc != null) {
+                InputStream in = HttpUtil.getDecodedInputStream(bcontent, enc);
+                if (!HttpHeaderUtil.isSupportedEncoding(enc)) {
+                    return null;
+                }
                 ByteArrayOutputStream bout = new ByteArrayOutputStream();
-                FileUtil.copy(HttpUtil.getDecodedInputStream(bcontent, enc), bout);
+                FileUtil.copy(in, bout);
                 bcontent = bout.toByteArray();
                 responseHeader.removeMessageHeader(HttpHeader.CONTENT_ENCODING);
             }

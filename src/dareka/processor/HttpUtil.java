@@ -88,17 +88,18 @@ public class HttpUtil {
      * [nl] エンコーディングに従ってデコードした入力ストリームを返す
      * @param in 入力ストリーム
      * @param contentEncoding エンコーディング
-     * @return デコードされた入力ストリーム
+     * @return デコードされた入力ストリーム。未対応Encodingの場合は元のストリーム
      * @throws IOException 入出力エラーが発生した場合
      * @since NicoCache_nl+111111mod
      */
     public static InputStream getDecodedInputStream(InputStream in,
             String contentEncoding) throws IOException {
-        if (HttpHeader.CONTENT_ENCODING_GZIP.equalsIgnoreCase(contentEncoding)) {
+        String normalized = contentEncoding == null ? null : contentEncoding.trim();
+        if (HttpHeader.CONTENT_ENCODING_GZIP.equalsIgnoreCase(normalized)) {
             return new GZIPInputStream(in);
-        } else if (HttpHeader.CONTENT_ENCODING_DEFLATE.equalsIgnoreCase(contentEncoding)) {
+        } else if (HttpHeader.CONTENT_ENCODING_DEFLATE.equalsIgnoreCase(normalized)) {
             return getInflaterInputStream(in);
-        } else if (HttpHeader.IDENTITY.equalsIgnoreCase(contentEncoding)) {
+        } else if (HttpHeader.IDENTITY.equalsIgnoreCase(normalized)) {
             // [nl] 本来Content-Encodingにidentityは使用すべきではないが
             // それでも使用される場合は単に無視する
             // see RFC 2616 3.5 Content Codings
@@ -106,7 +107,9 @@ public class HttpUtil {
         }
 
         if (contentEncoding != null) {
-            Logger.warning("unknown Content-Encoding: " + contentEncoding);
+            Logger.warning("未対応のContent-Encoding「" + contentEncoding
+                    + "」を検出しました。本文は変換せずそのまま転送します。"
+                    + "NicoCache_nl側で対応を追加してください。");
         }
 
         return in;

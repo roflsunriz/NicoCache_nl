@@ -26,15 +26,7 @@ public class FetchUtil {
         requestHeader.removeHopByHopHeaders();
 
         // 解凍できないEncodingを削除.
-        String acceptEncoding = requestHeader.getMessageHeader(HttpHeader.ACCEPT_ENCODING);
-        if (acceptEncoding != null) {
-            // Logger.info("--acceptEncoding ori: " + acceptEncoding);
-            acceptEncoding = acceptEncoding.toLowerCase().replaceAll(
-                "(?: *, *)?(?:bzip2|sdch|br|compress|zstd|dcb|dcz)(?:;[^,]*)?", "");
-            acceptEncoding = acceptEncoding.replaceFirst("^ *, *", "");
-            // Logger.info("--acceptEncoding rep: " + acceptEncoding);
-            requestHeader.setMessageHeader(HttpHeader.ACCEPT_ENCODING, acceptEncoding);
-        };
+        HttpHeaderUtil.adjustAcceptEncoding(requestHeader);
 
         // ヘッダを受信してからBodyを受信するか判断.
         URLResource r = new URLResource(uri);

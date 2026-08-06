@@ -112,6 +112,8 @@ public final class FunctionalTestMain {
                 run("LRU map minimum capacity and eviction",
                         this::testLruMapCapacity);
                 run("GUI log filtering primitives", LogSearchUnitTest::run);
+                run("HTTP content encoding negotiation and decoding",
+                        HttpEncodingUnitTest::run);
                 run("forward proxy GET/POST/HEAD and upstream status", this::testForwardProxy);
                 run("forward proxy byte range", this::testForwardProxyRange);
                 run("HTTPS CONNECT and TLS loopback", this::testHttpsMitmLocalFile);
@@ -352,6 +354,9 @@ public final class FunctionalTestMain {
                 } else if (path.endsWith("/stale-age")) {
                     exchange.getResponseHeaders().set("Cache-Control", "max-age=60");
                     exchange.getResponseHeaders().set("Age", "120");
+                } else if (path.endsWith("/unknown-encoding")) {
+                    exchange.getResponseHeaders().set(
+                            "Content-Encoding", "futurezip");
                 }
                 byte[] body = (path + "-" + requestNumber)
                         .getBytes(StandardCharsets.UTF_8);
@@ -727,6 +732,14 @@ public final class FunctionalTestMain {
                     "response without Cache-Control cached response");
             assertEquals(1, upstreamRequestCount("/resource-cache/no-directives"),
                     "response without Cache-Control upstream request count");
+
+            URLResource unknownEncoding = cache.cacheAndGet(
+                    "unknown-encoding", base + "unknown-encoding");
+            assertContains(resourceBody(unknownEncoding), "unknown-encoding-1",
+                    "unknown Content-Encoding body must remain unchanged");
+            assertEquals("futurezip", unknownEncoding.getResponseHeader(null, null)
+                            .getMessageHeader("Content-Encoding"),
+                    "unknown Content-Encoding header must remain unchanged");
 
             URLResource noStoreFirst = cache.cacheAndGet("no-store", base + "no-store");
             assertContains(resourceBody(noStoreFirst), "no-store-1",

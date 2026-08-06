@@ -1,8 +1,8 @@
 package dareka.processor;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,7 +34,7 @@ public class HttpHeaderUtil {
      * "identity"も含まれることに注意.
      * 小文字のみ.
      */
-    static private String[] supportedEncodings = new String[] {
+    private static final String[] SUPPORTED_ENCODINGS = new String[] {
         "identity", "gzip", "deflate"
     };
 
@@ -47,8 +47,9 @@ public class HttpHeaderUtil {
         if (encoding == null) {
             return false;
         };
-        for (String code : supportedEncodings) {
-            if (code.equals(encoding)) {
+        String normalized = encoding.trim();
+        for (String code : SUPPORTED_ENCODINGS) {
+            if (code.equalsIgnoreCase(normalized)) {
                 return true;
             };
         };
@@ -60,8 +61,8 @@ public class HttpHeaderUtil {
      * Encodingを削除します.
      *
      * nullを渡した場合はnullが返ります.
-     * ゼロウェイト指定はそのまま残ります.
-     * 上記以外の"*"は対応Encodingに置き換えられます.
+     * 対応Encodingのゼロウェイト指定はそのまま残ります.
+     * 非ゼロウェイトの"*"は対応Encodingに置き換えられます.
      * 上記以外の未対応Encodingと空Encodingは削除されます.
      * 上記処理後にEncodingが空になった場合は"identity"が返ります.
      */
@@ -96,33 +97,32 @@ public class HttpHeaderUtil {
             };
 
             // encodingはcase-insensitive.
-            String code = removeSpaceTab(codeOWS).toLowerCase();
+            String code = removeSpaceTab(codeOWS).toLowerCase(Locale.ROOT);
             // weightはcase-sensitive.
             String weight = removeSpaceTab(weightOWS);
 
-            if (weight.equals(";q=0")
+            boolean zeroWeight = weight.equals(";q=0")
                 || weight.equals(";q=0.0")
                 || weight.equals(";q=0.00")
                 || weight.equals(";q=0.000")
                 // これは不正だが一応チェック.
-                || weight.equals(";q=0.")) {
+                || weight.equals(";q=0.");
 
-                dest.add(codeWeightPack);
+            if (isSupportedEncoding(code)) {
+                dest.add(codeOWS + weightOWS + afterOWS);
                 continue;
             };
 
             if (code.equals("*")) {
+                if (zeroWeight) {
+                    continue;
+                }
                 // 非0ウェイトの * はNicocacheが対応している encoding に展開する.
-                for (String scode : supportedEncodings) {
+                for (String scode : SUPPORTED_ENCODINGS) {
                     if (!scode.equals("identity")) {
                         dest.add(scode + weightOWS + afterOWS);
                     }
                 };
-                continue;
-            };
-
-            if (isSupportedEncoding(code)) {
-                dest.add(codeOWS + weightOWS + afterOWS);
                 continue;
             };
 
