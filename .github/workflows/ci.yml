@@ -51,6 +51,10 @@ jobs:
         shell: pwsh
         run: .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\ci-dependencies -Clean
 
+      - name: Run local browser script tests
+        shell: pwsh
+        run: node --test .\tests\local\nllib-watch.test.js
+
       - name: Run functional and Extension ABI tests
         shell: pwsh
         run: .\test-functional.ps1

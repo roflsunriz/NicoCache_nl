@@ -198,9 +198,9 @@
   window.addEventListener("popstate", scheduleLocationCheck);
 
   if (window.fetch) {
-    const originalFetch = window.fetch;
+    const originalFetch = window.fetch.bind(window);
     window.fetch = function(input, init) {
-      const responsePromise = originalFetch.apply(this, arguments);
+      const responsePromise = originalFetch(input, init);
       let requestUrl;
       try {
         const value = typeof input === "string" || input instanceof URL ? input : input.url;
