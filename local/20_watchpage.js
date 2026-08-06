@@ -1,5 +1,6 @@
 // - 2026-08-06.
 // - 現行watchページの関連動画へ、キャッシュ品質を示すアイコンを追加する.
+// - サムネイル幅に応じてフル/省略キャッシュアイコンを切り替える.
 // - 旧PlaylistItemList/WatchRecommendation系DOMは廃止されたため扱わない.
 
 (function() {
@@ -14,7 +15,39 @@
   const itemIds = new WeakMap();
   const infoCache = new Map();
   const pendingItems = new Map();
+  const cacheIconThumbnails = new WeakMap();
+  const thumbnailCacheIcons = new WeakMap();
+  const fullCacheIconMinThumbnailWidth = 120;
   let flushTimer = null;
+
+  const getThumbnailWidth = function(thumbnail) {
+    if (!thumbnail) return 0;
+    if (typeof thumbnail.getBoundingClientRect === "function") {
+      const width = thumbnail.getBoundingClientRect().width;
+      if (Number.isFinite(width) && width > 0) return width;
+    };
+    return Number.isFinite(thumbnail.clientWidth) ? thumbnail.clientWidth : 0;
+  };
+
+  const getCacheIconClass = function(cacheClass, thumbnail) {
+    return cacheClass + (getThumbnailWidth(thumbnail) >= fullCacheIconMinThumbnailWidth
+      ? "IconImg" : "IconImgMin");
+  };
+
+  const cacheIconResizeObserver = typeof ResizeObserver === "function"
+    ? new ResizeObserver(function(entries) {
+        entries.forEach(function(entry) {
+          const icon = thumbnailCacheIcons.get(entry.target);
+          if (!icon || !icon.isConnected) {
+            cacheIconResizeObserver.unobserve(entry.target);
+            return;
+          };
+          const cacheClass = icon.getAttribute("data-ncnl-watch-cache-class");
+          if (!cacheClass) return;
+          icon.className = "cacheIcon " + getCacheIconClass(cacheClass, entry.target);
+        });
+      })
+    : null;
 
   const getPreferredCacheData = function(videoInfo) {
     if (!videoInfo || !videoInfo.caches) return null;
@@ -36,6 +69,11 @@
 
   const removeCacheIcons = function(item) {
     item.querySelectorAll(":scope .cacheIcon").forEach(function(icon) {
+      const thumbnail = cacheIconThumbnails.get(icon);
+      if (thumbnail) {
+        thumbnailCacheIcons.delete(thumbnail);
+        if (cacheIconResizeObserver) cacheIconResizeObserver.unobserve(thumbnail);
+      };
       icon.remove();
     });
   };
@@ -47,8 +85,12 @@
     if (!thumbnail) return;
 
     const cacheIcon = document.createElement("div");
-    cacheIcon.className = "cacheIcon " + cacheClass + "IconImgMin";
+    cacheIcon.className = "cacheIcon " + getCacheIconClass(cacheClass, thumbnail);
+    cacheIcon.setAttribute("data-ncnl-watch-cache-class", cacheClass);
     thumbnail.insertAdjacentElement("afterend", cacheIcon);
+    cacheIconThumbnails.set(cacheIcon, thumbnail);
+    thumbnailCacheIcons.set(thumbnail, cacheIcon);
+    if (cacheIconResizeObserver) cacheIconResizeObserver.observe(thumbnail);
   };
 
   const applyInfo = function(smid, item, videoInfo) {

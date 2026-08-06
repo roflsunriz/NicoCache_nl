@@ -11,6 +11,10 @@ const indicatorSource = fs.readFileSync(
   path.join(repositoryRoot, "local", "15_cached_link_color.js"),
   "utf8",
 );
+const watchIndicatorSource = fs.readFileSync(
+  path.join(repositoryRoot, "local", "20_watchpage.js"),
+  "utf8",
+);
 
 class FakeClassList {
   constructor(element) {
@@ -45,6 +49,7 @@ class FakeElement {
     this.attributes = new Map(Object.entries(attributes));
     this.isConnected = true;
     this.innerHTML = "";
+    this.clientWidth = 0;
   }
 
   get id() {
@@ -62,6 +67,14 @@ class FakeElement {
 
   get className() {
     return this.classList.toString();
+  }
+
+  set className(value) {
+    this.classList.values = new Set(String(value).split(/\s+/).filter(Boolean));
+  }
+
+  getBoundingClientRect() {
+    return {width: this.clientWidth};
   }
 
   appendChild(child) {
@@ -125,20 +138,24 @@ class FakeElement {
   }
 }
 
-function createVideoAnchor(id) {
+function createVideoAnchor(id, thumbnailWidth = 160) {
   const anchor = new FakeElement("a", {href: `/watch/${id}`});
   const thumbnailHost = new FakeElement("div", {"data-group": "true"});
+  thumbnailHost.clientWidth = thumbnailWidth;
   thumbnailHost.appendChild(new FakeElement("img"));
   anchor.appendChild(thumbnailHost);
   return {anchor, thumbnailHost};
 }
 
-function createPage(cacheInfo) {
+function createPage(cacheInfo, thumbnailWidths = {}) {
   const body = new FakeElement("body");
   const head = new FakeElement("head");
-  const cards = ["sm1", "sm2", "sm3", "sm4"].map((id) => createVideoAnchor(id));
+  const cards = ["sm1", "sm2", "sm3", "sm4"].map(
+    (id) => createVideoAnchor(id, thumbnailWidths[id] || 160),
+  );
   cards.forEach(({anchor}) => body.appendChild(anchor));
   const observers = [];
+  const resizeObservers = [];
   const requests = [];
 
   class FakeMutationObserver {
@@ -150,6 +167,22 @@ function createPage(cacheInfo) {
     observe(target, options) {
       this.target = target;
       this.options = options;
+    }
+  }
+
+  class FakeResizeObserver {
+    constructor(callback) {
+      this.callback = callback;
+      this.targets = new Set();
+      resizeObservers.push(this);
+    }
+
+    observe(target) {
+      this.targets.add(target);
+    }
+
+    unobserve(target) {
+      this.targets.delete(target);
     }
   }
 
@@ -182,6 +215,7 @@ function createPage(cacheInfo) {
       };
     },
     MutationObserver: FakeMutationObserver,
+    ResizeObserver: FakeResizeObserver,
     Node: {ELEMENT_NODE: 1, DOCUMENT_NODE: 9},
     setTimeout,
     window,
@@ -189,7 +223,7 @@ function createPage(cacheInfo) {
   vm.runInContext(indicatorSource, context, {
     filename: "local/15_cached_link_color.js",
   });
-  return {cards, observers, requests};
+  return {cards, observers, resizeObservers, requests};
 }
 
 function videoInfo({dmc, economy}) {
@@ -213,10 +247,10 @@ test("4種類のキャッシュ状態をリンク色classとサムネイルア�
 
   assert.deepEqual(page.requests, ["/cache/info/v2?sm1,sm2,sm3,sm4"]);
   const expected = [
-    ["nl-cached-smile-economy", "economyIconImgMin"],
-    ["nl-cached-dmc-economy", "dmcEconomyIconImgMin"],
-    ["nl-cached-smile-normal", "cacheIconImgMin"],
-    ["nl-cached-dmc-normal", "dmcCacheIconImgMin"],
+    ["nl-cached-smile-economy", "economyIconImg"],
+    ["nl-cached-dmc-economy", "dmcEconomyIconImg"],
+    ["nl-cached-smile-normal", "cacheIconImg"],
+    ["nl-cached-dmc-normal", "dmcCacheIconImg"],
   ];
   page.cards.forEach(({anchor, thumbnailHost}, index) => {
     assert.equal(anchor.classList.contains(expected[index][0]), true);
@@ -248,7 +282,7 @@ test("SPAで既存リンクのhrefが変わるとclassとアイコンを更新�
 
   assert.equal(anchor.classList.contains("nl-cached-dmc-normal"), true);
   assert.equal(
-    thumbnailHost.querySelector("[data-ncnl-cache-icon]").classList.contains("dmcCacheIconImgMin"),
+    thumbnailHost.querySelector("[data-ncnl-cache-icon]").classList.contains("dmcCacheIconImg"),
     true,
   );
 
@@ -276,6 +310,26 @@ test("従来のnlFilterが追加したアイコンとは重複しない", async 
   assert.equal(legacyIcon.hasAttribute("data-ncnl-cache-icon"), false);
 });
 
+test("サムネイル幅が120px未満ならCアイコンへ切り替え、リサイズにも追従する", async () => {
+  const page = createPage({
+    sm1: videoInfo({dmc: false, economy: false}),
+    sm2: null,
+    sm3: null,
+    sm4: null,
+  }, {sm1: 94});
+  await flushAsyncWork();
+
+  const {thumbnailHost} = page.cards[0];
+  const icon = thumbnailHost.querySelector("[data-ncnl-cache-icon]");
+  assert.equal(icon.classList.contains("cacheIconImgMin"), true);
+  assert.equal(icon.classList.contains("cacheIconImg"), false);
+
+  thumbnailHost.clientWidth = 120;
+  page.resizeObservers[0].callback([{target: thumbnailHost}]);
+  assert.equal(icon.classList.contains("cacheIconImg"), true);
+  assert.equal(icon.classList.contains("cacheIconImgMin"), false);
+});
+
 test("キャッシュ情報取得後に遅延描画されたサムネイルへアイコンを追加する", async () => {
   const page = createPage({
     sm1: videoInfo({dmc: true, economy: false}),
@@ -299,6 +353,118 @@ test("キャッシュ情報取得後に遅延描画されたサムネイルへ�
 
   const icon = thumbnailHost.querySelector("[data-ncnl-cache-icon]");
   assert.ok(icon);
-  assert.equal(icon.classList.contains("dmcCacheIconImgMin"), true);
+  assert.equal(icon.classList.contains("dmcCacheIconImg"), true);
   assert.equal(page.requests.length, 1);
+});
+
+function createWatchPage(thumbnailWidth) {
+  const itemSelector =
+    '[data-anchor-page="watch"][data-anchor-href*="/watch/"][data-decoration-video-id]';
+  const thumbnailSelector = 'a[href*="/watch/"] img[src*="/thumbnails/"]';
+  const item = new FakeElement("article", {
+    "data-anchor-page": "watch",
+    "data-anchor-href": "/watch/sm1",
+    "data-decoration-video-id": "sm1",
+  });
+  const thumbnail = new FakeElement("img", {src: "/thumbnails/sm1/1.M"});
+  thumbnail.clientWidth = thumbnailWidth;
+  item.appendChild(thumbnail);
+
+  item.matches = (selector) => selector === itemSelector;
+  item.querySelector = (selector) => {
+    if (selector === thumbnailSelector) return thumbnail;
+    if (selector === ":scope .cacheIcon") {
+      return item.children.find((child) => child.classList.contains("cacheIcon")) || null;
+    }
+    return null;
+  };
+  item.querySelectorAll = (selector) => selector === ":scope .cacheIcon"
+    ? item.children.filter((child) => child.classList.contains("cacheIcon"))
+    : [];
+  thumbnail.insertAdjacentElement = (position, icon) => {
+    assert.equal(position, "afterend");
+    item.appendChild(icon);
+  };
+
+  const requests = [];
+  const resizeObservers = [];
+  class FakeMutationObserver {
+    constructor(callback) {
+      this.callback = callback;
+    }
+
+    observe(target, options) {
+      this.target = target;
+      this.options = options;
+    }
+  }
+  class FakeResizeObserver {
+    constructor(callback) {
+      this.callback = callback;
+      resizeObservers.push(this);
+    }
+
+    observe(target) {
+      this.target = target;
+    }
+
+    unobserve(target) {
+      if (this.target === target) this.target = null;
+    }
+  }
+
+  const body = new FakeElement("body");
+  const document = {
+    nodeType: 9,
+    body,
+    addEventListener() {},
+    createElement(tagName) {
+      return new FakeElement(tagName);
+    },
+    querySelectorAll(selector) {
+      return selector === itemSelector ? [item] : [];
+    },
+  };
+  const NicoCache_nl = {
+    get(url, callback) {
+      requests.push(url);
+      callback({
+        status: 200,
+        responseText: JSON.stringify({
+          sm1: videoInfo({dmc: true, economy: false}),
+        }),
+      });
+    },
+  };
+  const window = {NicoCache_nl};
+  window.window = window;
+  const context = vm.createContext({
+    console,
+    document,
+    MutationObserver: FakeMutationObserver,
+    NicoCache_nl,
+    Node: {ELEMENT_NODE: 1, DOCUMENT_NODE: 9},
+    ResizeObserver: FakeResizeObserver,
+    setTimeout,
+    window,
+  });
+  vm.runInContext(watchIndicatorSource, context, {
+    filename: "local/20_watchpage.js",
+  });
+  return {item, requests, resizeObservers, thumbnail};
+}
+
+test("視聴ページの関連動画もサムネイル幅に応じてアイコンを切り替える", async () => {
+  const page = createWatchPage(160);
+  await flushAsyncWork();
+
+  assert.deepEqual(page.requests, ["/cache/info/v2?sm1"]);
+  const icon = page.item.querySelector(":scope .cacheIcon");
+  assert.equal(icon.classList.contains("dmcCacheIconImg"), true);
+  assert.equal(icon.classList.contains("dmcCacheIconImgMin"), false);
+
+  page.thumbnail.clientWidth = 94;
+  page.resizeObservers[0].callback([{target: page.thumbnail}]);
+  assert.equal(icon.classList.contains("dmcCacheIconImgMin"), true);
+  assert.equal(icon.classList.contains("dmcCacheIconImg"), false);
 });

@@ -6,6 +6,7 @@
 
 // - version 2026-08-06
 // - このファイルのライセンスはNicoCache Licenseです.
+// - 2026-08-06: サムネイル幅に応じたフル/省略キャッシュアイコンの切替を復元.
 // - 2026-08-06: 現行Reactカードのサムネイルへキャッシュアイコンを追加.
 // - キャッシュ状況に応じた品質classでリンクの見た目を変更.
 // - HTMLと属性を監視し、SPA遷移や遅延描画後にも表示を更新する.
@@ -134,9 +135,13 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     "nl-cached-dmc-normal", "nl-cached-dmc-economy",
   ];
   const cacheIconClassNames = [
+    "cacheIconImg", "economyIconImg",
+    "dmcCacheIconImg", "dmcEconomyIconImg",
     "cacheIconImgMin", "economyIconImgMin",
     "dmcCacheIconImgMin", "dmcEconomyIconImgMin",
   ];
+  // 既存表示では94px級だけをCアイコン、120px以上をフルアイコンにしている.
+  const fullCacheIconMinThumbnailWidth = 120;
   const checkedAnchorIds = new WeakMap();
   const infoCache = new Map();
   const pendingAnchors = new Map();
@@ -185,13 +190,49 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     applyCacheIcon(anchor, cachePoint);
   };
 
-  const getCacheIconClass = function(cachePoint) {
-    if (1 === cachePoint) return "economyIconImgMin";
-    if (2 === cachePoint) return "dmcEconomyIconImgMin";
-    if (3 === cachePoint) return "cacheIconImgMin";
-    if (4 === cachePoint) return "dmcCacheIconImgMin";
+  const getThumbnailWidth = function(thumbnail) {
+    if (!thumbnail) return 0;
+    if (typeof thumbnail.getBoundingClientRect === "function") {
+      const width = thumbnail.getBoundingClientRect().width;
+      if (Number.isFinite(width) && width > 0) return width;
+    };
+    return Number.isFinite(thumbnail.clientWidth) ? thumbnail.clientWidth : 0;
+  };
+
+  const getCacheIconClass = function(cachePoint, thumbnail) {
+    const suffix = getThumbnailWidth(thumbnail) >= fullCacheIconMinThumbnailWidth
+      ? "IconImg" : "IconImgMin";
+    if (1 === cachePoint) return "economy" + suffix;
+    if (2 === cachePoint) return "dmcEconomy" + suffix;
+    if (3 === cachePoint) return "cache" + suffix;
+    if (4 === cachePoint) return "dmcCache" + suffix;
     return null;
   };
+
+  const updateCacheIconClass = function(icon, cachePoint, thumbnailHost) {
+    const iconClass = getCacheIconClass(cachePoint, thumbnailHost);
+    cacheIconClassNames.forEach(function(className) {
+      icon.classList.remove(className);
+    });
+    if (iconClass) icon.classList.add(iconClass);
+  };
+
+  const cacheIconResizeObserver = typeof ResizeObserver === "function"
+    ? new ResizeObserver(function(entries) {
+        entries.forEach(function(entry) {
+          const icon = entry.target.querySelector("[data-ncnl-cache-icon]");
+          if (!icon) {
+            cacheIconResizeObserver.unobserve(entry.target);
+            return;
+          };
+          updateCacheIconClass(
+            icon,
+            Number(icon.getAttribute("data-ncnl-cache-point")),
+            entry.target,
+          );
+        });
+      })
+    : null;
 
   const findThumbnailHost = function(anchor) {
     const modernHost = anchor.querySelector("[data-group]");
@@ -216,10 +257,14 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
   };
 
   function applyCacheIcon(anchor, cachePoint) {
-    const iconClass = getCacheIconClass(cachePoint);
     const ownIcon = anchor.querySelector("[data-ncnl-cache-icon]");
-    if (!iconClass) {
-      if (ownIcon) ownIcon.remove();
+    if (!getCacheIconClass(cachePoint, null)) {
+      if (ownIcon) {
+        if (cacheIconResizeObserver && ownIcon.parentElement) {
+          cacheIconResizeObserver.unobserve(ownIcon.parentElement);
+        };
+        ownIcon.remove();
+      };
       return;
     };
 
@@ -233,18 +278,23 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     const thumbnailHost = findThumbnailHost(anchor);
     if (!thumbnailHost) return;
 
-    if (ownIcon && ownIcon.parentElement !== thumbnailHost) ownIcon.remove();
+    if (ownIcon && ownIcon.parentElement !== thumbnailHost) {
+      if (cacheIconResizeObserver && ownIcon.parentElement) {
+        cacheIconResizeObserver.unobserve(ownIcon.parentElement);
+      };
+      ownIcon.remove();
+    };
     const existingIcon = thumbnailHost.querySelector("[data-ncnl-cache-icon]");
 
     const icon = existingIcon || document.createElement("span");
-    cacheIconClassNames.forEach(function(className) {
-      icon.classList.remove(className);
-    });
-    icon.classList.add("cacheIcon", "ncnl-cache-icon", iconClass);
+    updateCacheIconClass(icon, cachePoint, thumbnailHost);
+    icon.classList.add("cacheIcon", "ncnl-cache-icon");
     icon.setAttribute("data-ncnl-cache-icon", "");
+    icon.setAttribute("data-ncnl-cache-point", String(cachePoint));
     icon.setAttribute("aria-hidden", "true");
     thumbnailHost.classList.add("ncnl-cache-thumbnail-host");
     if (!existingIcon) thumbnailHost.appendChild(icon);
+    if (cacheIconResizeObserver) cacheIconResizeObserver.observe(thumbnailHost);
   };
 
   const requestCacheInfo = async function(ids) {

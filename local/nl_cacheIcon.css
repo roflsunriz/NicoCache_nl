@@ -15,9 +15,15 @@
  bottom:4px;
  left:4px;
  right:auto;
- width:20px;
+ width:59px;
  height:15px;
  pointer-events:none;
+}
+.cacheIcon.ncnl-cache-icon.cacheIconImgMin,
+.cacheIcon.ncnl-cache-icon.economyIconImgMin,
+.cacheIcon.ncnl-cache-icon.dmcCacheIconImgMin,
+.cacheIcon.ncnl-cache-icon.dmcEconomyIconImgMin {
+ width:20px;
 }
 div.Thumbnail-image ~ .cacheIcon {
  position:absolute;
