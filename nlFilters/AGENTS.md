@@ -13,10 +13,10 @@
   - `01_globalFilter.txt`: 共通の head 挿入位置と `NicoCache_nl` グローバルを用意する。
   - `05_topBarFilter.txt`: 空き容量警告とキャッシュ削除ボタンを追加する。
   - `08_MutationObserverHooks.txt`: 動的に追加される動画要素を検出する共通フックを提供する。
-  - `10_thumbInfoFilter(ポップアップリンク用).txt`: 従来ページ向けのサムネイルポップアップを提供する。
-  - `11_thumbInfoFilter(ポップアップリンク・検索ページ用).txt`: React/SPA の検索・タグページを補完する。
-  - `15_thumbInfoFilter(基本).txt`: キャッシュ状態に応じたアイコンとリンク色を追加する。
-  - `15_02_thumbInfoFilter(Nアニメfreeのみ).txt`: Nアニメ/FREE を補完する。
+  - `09_thumbInfoFilterBase.txt`: サムネイルポップアップの共通スクリプトを読み込む。
+  - `10_thumbInfoFilterLegacyLinks.txt`: 従来HTML/XML向けのリンク置換を提供する。
+  - `11_thumbInfoFilterVideoLinks.txt`: 現行SPAを含む動的動画リンクを補完する。
+  - `15_thumbInfoFilterCache.txt`: キャッシュ状態に応じたアイコンとリンク色を追加する。
   - `20_watchFilter.txt`: 視聴ページ向けの置換、スタイル、スクリプトを提供する。
 - `.vscode/`、`evac/`、`dmcキャッシュのアイコンと色を変えないやつ/` は Git 管理外のローカル領域である。ユーザーが明示した場合を除き、調査対象や変更対象に含めない。
 
@@ -24,7 +24,7 @@
 
 - 最初に`C:\NicoCache_nl`で`git status --short --branch`を実行し、
   本体を含むユーザーの未コミット変更を把握する。
-- 対象ファイル内の説明、変更履歴、依存するフィルターを先に読む。名前が近い `10` と `11`、`15` と `15_02` は役割を分担しているため、片方だけを見て重複実装しない。
+- 対象ファイル内の説明、変更履歴、依存するフィルターを先に読む。`09` の共通資産、`10` の旧HTML互換、`11` の現行動的リンク、`15` のキャッシュ表示は役割を分担しているため、片方だけを見て重複実装しない。
 - 公式同梱フィルターの背景と運用は `C:\NicoCache_nl\documents\Readme_nl+mod.txt`、現在の実装は `C:\NicoCache_nl\src\dareka\processor\impl\EasyRewriter.java` を参照する。本体ソースも同じリポジトリにあるが、必要性を確認せずフィルター変更へ混在させない。
 - JavaScript や CSS が参照する `/local/*` の実体、`window.NicoCache_nl`、`/cache/*` API を変更・利用するときは、`C:\NicoCache_nl\local`、本体実装、呼び出し元を検索して契約を確認する。
 - 追跡中の nlFilter を編集する前に `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 source-check` と `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check` を本体リポジトリ直下から実行し、本体パーサーソースとの基準一致と既存構文の正常性を確認する。

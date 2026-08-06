@@ -1,0 +1,135 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 26/08/06
+
+#----------------------------------------------------------------------------------------
+# 現行ページの動画・生放送リンクへサムネイルポップアップを追加する。
+#
+# [変更履歴]
+#   2026-08-06: 検索・タグ限定から、ランキング、トップ、視聴、シリーズ、
+#               ユーザー、Nアニメを含む現行動的ページの共通処理へ変更。
+#   2026-08-02: 新検索・タグページのReact SSR/SPAへ対応。
+#
+# [実測した現行構造]
+#   動画: <a href="/watch/smXXX"> または絶対URL
+#   生放送: <a href="https://live.nicovideo.jp/watch/lvXXX">
+#   遅延描画とSPA更新でリンク自体またはhref属性が後から追加される。
+#
+# [対応方針]
+#   data-ncnl-popで対象を可視化し、MutationObserverで初期DOMと更新を追跡する。
+#   mouseover/mouseoutはdocumentへの委譲イベントを1組だけ登録し、カード内部の
+#   子要素間移動や旧inline handlerとの二重呼び出しを避ける。
+[Script]
+Name = ポップアップ追加(現行動的動画リンク)
+FullURL = https?://(?!ads|.*api)[^/]+\.nicovideo\.jp/(?!api/|thumb[_/]|embed/)
+ContentType = text/html
+Append<
+(function() {
+  "use strict";
+
+  if (window.__ncnlThumbInfoVideoLinksInitialized) return;
+  window.__ncnlThumbInfoVideoLinksInitialized = true;
+
+  var anchorSelector = "a[href], a[data-anchor-href]";
+
+  function getPopupPath(anchor) {
+    var href = anchor.getAttribute("href") || anchor.getAttribute("data-anchor-href");
+    if (!href) return null;
+
+    var match = href.match(/^\/(?:watch|shorts)\/([a-z]{2}\d+)(?:[/?#]|$)/i);
+    if (match) return match[1];
+
+    var url;
+    try {
+      url = new URL(href, location.href);
+    } catch (error) {
+      return null;
+    }
+
+    if (url.hostname === "live.nicovideo.jp") {
+      match = url.pathname.match(/^\/watch\/(lv\d+)(?:\/|$)/i);
+    } else if (url.hostname === "www.nicovideo.jp") {
+      match = url.pathname.match(/^\/(?:watch|shorts)\/([a-z]{2}\d+)(?:\/|$)/i);
+    }
+    return match ? match[1] : null;
+  }
+
+  function hasInlinePopup(anchor) {
+    return /(?:^|\W)popThumb2\s*\(/.test(
+      (anchor.getAttribute("onmouseenter") || "") + " " +
+      (anchor.getAttribute("onmouseover") || "")
+    );
+  }
+
+  function updateAnchor(anchor) {
+    if (getPopupPath(anchor)) {
+      anchor.setAttribute("data-ncnl-pop", "");
+    } else {
+      anchor.removeAttribute("data-ncnl-pop");
+    }
+  }
+
+  function scan(root) {
+    if (!root || (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_NODE)) return;
+    if (root.matches && root.matches(anchorSelector)) updateAnchor(root);
+    if (root.closest) {
+      var parentAnchor = root.closest(anchorSelector);
+      if (parentAnchor) updateAnchor(parentAnchor);
+    }
+    var anchors = root.querySelectorAll ? root.querySelectorAll(anchorSelector) : [];
+    for (var i = 0; i < anchors.length; i++) updateAnchor(anchors[i]);
+  }
+
+  function getEventAnchor(event) {
+    return event.target && event.target.closest ? event.target.closest(anchorSelector) : null;
+  }
+
+  function movedInside(anchor, relatedTarget) {
+    return relatedTarget && relatedTarget.nodeType === Node.ELEMENT_NODE && anchor.contains(relatedTarget);
+  }
+
+  function hidePopup() {
+    if (typeof window.nd === "function") window.nd();
+  }
+
+  function start() {
+    scan(document);
+
+    document.addEventListener("mouseover", function(event) {
+      var anchor = getEventAnchor(event);
+      if (!anchor || movedInside(anchor, event.relatedTarget) || hasInlinePopup(anchor)) return;
+      var path = getPopupPath(anchor);
+      if (path && typeof window.popThumb2 === "function") window.popThumb2(path, 0);
+    });
+
+    document.addEventListener("mouseout", function(event) {
+      var anchor = getEventAnchor(event);
+      if (!anchor || movedInside(anchor, event.relatedTarget) || hasInlinePopup(anchor)) return;
+      if (getPopupPath(anchor)) hidePopup();
+    });
+
+    document.addEventListener("click", function(event) {
+      var anchor = getEventAnchor(event);
+      if (anchor && getPopupPath(anchor)) hidePopup();
+    }, true);
+
+    new MutationObserver(function(mutations) {
+      for (var i = 0; i < mutations.length; i++) {
+        var mutation = mutations[i];
+        if (mutation.type === "attributes") {
+          updateAnchor(mutation.target);
+        } else {
+          for (var j = 0; j < mutation.addedNodes.length; j++) scan(mutation.addedNodes[j]);
+        }
+      }
+    }).observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["href", "data-anchor-href"]
+    });
+  }
+
+  if (document.body) start();
+  else document.addEventListener("DOMContentLoaded", start, {once: true});
+})();
+>

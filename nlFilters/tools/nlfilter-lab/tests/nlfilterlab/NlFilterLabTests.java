@@ -62,7 +62,7 @@ public final class NlFilterLabTests {
         for (Path file : files) all.merge(parser.parse(file));
         assertEquals(8, files.size(), "追跡フィルター数");
         assertTrue(!all.hasErrors(), "既存フィルターにエラーがない");
-        assertEquals(40, all.rules.size(), "既存ルール数");
+        assertEquals(38, all.rules.size(), "既存ルール数");
     }
 
     private static void unclosedBlock(Path temporary) throws Exception {
@@ -327,7 +327,7 @@ public final class NlFilterLabTests {
             ParserConformance.Report conformance = ParserConformance.compare(repository, file, lab);
             assertEquals("matched", conformance.status(), file.getFileName() + ": " + conformance.differences());
         }
-        assertEquals(40, productionRules, "production parser rule count");
+        assertEquals(38, productionRules, "production parser rule count");
     }
 
     private static void parserOptionCorpus(Path repository, Path temporary) throws Exception {

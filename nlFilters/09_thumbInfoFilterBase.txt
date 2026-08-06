@@ -1,0 +1,17 @@
+# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
+# 26/08/06
+
+#----------------------------------------------------------------------------------------
+# サムネイルポップアップの全ページ共通資産。
+# 10以降のリンク処理より先に読み込み、静的HTMLと現行SPAの双方から利用する。
+[Replace]
+Name = ポップアップ用スクリプト埋め込み
+FullURL = (https?)://(?!ads|.*api)[^/]+\.nicovideo\.jp/(?!api/|thumb[_/]|embed/)
+ContentType = text/html
+Match<
+(?=</head>)
+>
+Replace<
+<script type="text/javascript" src="$URL1://www.nicovideo.jp/local/overlib_mini.js"></script>
+<script type="text/javascript" src="$URL1://www.nicovideo.jp/$TS(local/popThumb.js)"></script><CRLF>
+>

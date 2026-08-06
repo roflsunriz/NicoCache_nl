@@ -1,20 +1,7 @@
 # nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
-# 22/04/17
-
-#----------------------------------------------------------------------------------------
-# ポップアップ用スクリプト埋め込み
-[Replace]
-Name = ポップアップ用スクリプト埋め込み
-#URL = (?:www|ch|com)\.nicovideo\.jp/(?:$|category_recent.php|\?g|tag/|search/|thumb/|newarrival|recent|api/getthumbinfo/|ranking|hotlist|channel/|search_video/|watch/|video/|top/)
-FullURL = (https?)://(?!ads|.*api)[^/]+\.nicovideo\.jp/(?!api/|thumb[_/]|embed/)
-ContentType = text/html
-Match<
-(?=</head>)
->
-Replace<
-<script type="text/javascript" src="$URL1://www.nicovideo.jp/local/overlib_mini.js"></script>
-<script type="text/javascript" src="$URL1://www.nicovideo.jp/$TS(local/popThumb.js)"></script><CRLF>
->
+# 26/08/06
+# 共通資産は09_thumbInfoFilterBase、現行の動的動画リンクは
+# 11_thumbInfoFilterVideoLinksで処理する。このファイルは旧HTML/XML互換を担当する。
 
 #----------------------------------------------------------------------------------------
 # 上から順に、
@@ -40,9 +27,9 @@ Match<
 (?<![a-z])im\d{1,8}+(?!["\\'?.]|&quot;|</[vw]|[^<]*>|(?:(?!<a\s).)*</a>|[^>]*(?:</(?:a|title)>|class="search"|style="width:200px;"></td>|unescapeHTML|">[\r\n])|.+\}\);|.+,cc:\d+.*\}|.*'\);)
 >
 Replace<
-<a class="watch" target="_top" href="/watch/$0" onMouseOver="return popThumb2('$0', 0)" onMouseOut="return nd()">$0</a>
-<a class="watch" target="_top" href="/$0" onMouseOver="return popThumb2('$0', 0)" onMouseOut="return nd()">$0</a>
-<a class="watch" target="_top" href="http://seiga.nicovideo.jp/seiga/$0" onMouseOver="return popThumb2('$0', 0)" onMouseOut="return nd()">$0</a>
+<a class="watch" target="_top" href="/watch/$0" onMouseEnter="return popThumb2('$0', 0)" onMouseLeave="return nd()">$0</a>
+<a class="watch" target="_top" href="/$0" onMouseEnter="return popThumb2('$0', 0)" onMouseLeave="return nd()">$0</a>
+<a class="watch" target="_top" href="http://seiga.nicovideo.jp/seiga/$0" onMouseEnter="return popThumb2('$0', 0)" onMouseLeave="return nd()">$0</a>
 >
 
 #----------------------------------------------------------------------------------------
@@ -69,7 +56,7 @@ Replace<
 >
 
 #----------------------------------------------------------------------------------------
-# 2026-08-02: 新検索・タグページは11_thumbInfoFilterのDOMContentLoaded+
+# 2026-08-06: 現行ページは11_thumbInfoFilterVideoLinksの委譲イベント+
 # MutationObserverで処理する。ここで旧inline handlerも付けると、11側のイベント
 # リスナーと二重に呼び出されるため、対象URLから除外する。
 [Replace]
@@ -86,7 +73,7 @@ https?://rd\.nicovideo\.jp/cc/[^/]+/|/ch[^/]+/video/)
 (?!<img|<span class="time"|(?:一般|プレミアム)回線で視聴)
 >
 Replace<
-$1 onMouseOver="return popThumb2('$2', 0)" onMouseOut="return nd()"$3
+$1 onMouseEnter="return popThumb2('$2', 0)" onMouseLeave="return nd()"$3
 >
 
 #----------------------------------------------------------------------------------------
@@ -104,7 +91,7 @@ https?://rd\.nicovideo\.jp/cc/nicotop_[^/]+/|/ch[^/]+/video/)
 (?:(?!popThumb|timeshift_watch|title=)[^>])*(?: title="[^"]+"[^>]*)?)(>\s*)(?!<img)
 >
 Replace<
-$1 onMouseOver="return popThumb2('$2', 0)" onMouseOut="return nd()"$3
+$1 onMouseEnter="return popThumb2('$2', 0)" onMouseLeave="return nd()"$3
 >
 
 #----------------------------------------------------------------------------------------
@@ -117,32 +104,7 @@ Match<
 <a [^>]*href="(?:https?://seiga\.nicovideo.jp/|/|)(?:bbs|watch|seiga)/((?:sg|im|mg)\d+)[^"]*"
 >
 Replace<
-$0 onMouseOver="return popThumb2('$1', 0)" onMouseOut="return nd()"
->
-
-#----------------------------------------------------------------------------------------
-# 2026-08-02: Append内の\\\\w/\\\\dはRegExp文字列で二重に解釈され、
-# 現行TimelineItemの/watch/リンクにマッチしないため、正規表現リテラルへ変更。
-[Script]
-Name = ポップアップ追加(マイページ・ユーザーページ)
-URL = www\.nicovideo\.jp/(?:my|user/\d+)(?:/|\?|$)
-ContentType = text/html
-Append<
-NicoCache_nl.moHooks.addLazy(function(item) {
-  "use strict";
-  var anchors = item.querySelectorAll("a");
-  for (var i = 0; i < anchors.length; i++) {
-    var anchor = anchors[i];
-    if (!anchor.href) continue;
-    var m = anchor.href.match(/\/((?:watch\/|mylist\/|user\/|channel\/|community\/|seiga\/)?(?:(?!nw|pk|ap|gm)\w{2}\d+))/);
-    if (!m) continue;
-    var id = m[1];
-    (function(id) {
-      anchor.addEventListener("mouseover", function() { return popThumb2(id, 0) });
-      anchor.addEventListener("mouseout", function() { return nd() });
-    })(id);
-  }
-}, {all: true});
+$0 onMouseEnter="return popThumb2('$1', 0)" onMouseLeave="return nd()"
 >
 
 #----------------------------------------------------------------------------------------

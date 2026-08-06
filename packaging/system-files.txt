@@ -21,8 +21,8 @@ local/popThumb.js
 nlFilters/01_globalFilter.txt
 nlFilters/05_topBarFilter.txt
 nlFilters/08_MutationObserverHooks.txt
-nlFilters/10_thumbInfoFilter(ポップアップリンク用).txt
-nlFilters/11_thumbInfoFilter(ポップアップリンク・検索ページ用).txt
-nlFilters/15_02_thumbInfoFilter(Nアニメfreeのみ).txt
-nlFilters/15_thumbInfoFilter(基本).txt
+nlFilters/09_thumbInfoFilterBase.txt
+nlFilters/10_thumbInfoFilterLegacyLinks.txt
+nlFilters/11_thumbInfoFilterVideoLinks.txt
+nlFilters/15_thumbInfoFilterCache.txt
 nlFilters/20_watchFilter.txt

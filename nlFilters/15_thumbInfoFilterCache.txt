@@ -327,7 +327,7 @@ Append<
 #----------------------------------------------------------------------------------------
 [Replace]
 Name = キャッシュ済動画のリンク色変更(with js,visitedあり)
-URL = (?:www|ext|live|ch|com|uad|news|ex|dic)\.nicovideo\.jp/(?!thumb_|openlist/)
+URL = (?:www|ext|live|ch|com|uad|news|ex|dic|anime)\.nicovideo\.jp/(?!thumb_|openlist/)
 ContentType = text/html
 Match<
 (?=<!--nicocachenl-head-->)
