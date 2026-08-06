@@ -84,3 +84,7 @@ COMMON-AGENTS.md
 # Independent CMAF/Domand MP4 converter build output
 /tools/cmaf-to-mp4/build/
 /tools/cmaf-to-mp4/dist/
+
+# jre and jdk directories
+/jre/
+/jdk/
