@@ -2,6 +2,7 @@ package functional;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.util.List;
 
 /**
  * GUIを起動せずログ検索の変換と原本保持を検証する。
@@ -88,6 +89,14 @@ public final class LogSearchUnitTest {
                 "oldest line retention");
         assertTrue(bufferText(buffer).contains("four"),
                 "newest line retention");
+
+        clear(buffer);
+        appendAll(buffer, List.of("batch-one", "batch-two", "batch-three"),
+                false, 2);
+        assertFalse(bufferText(buffer).contains("batch-one"),
+                "batched oldest line retention");
+        assertTrue(bufferText(buffer).contains("batch-three"),
+                "batched newest line retention");
     }
 
     private static Object applyFilter(String source, String query,
@@ -131,6 +140,14 @@ public final class LogSearchUnitTest {
 
     private static void clear(Object buffer) throws Exception {
         invoke(buffer, "clear");
+    }
+
+    private static void appendAll(Object buffer, List<String> messages,
+            boolean dedupe, int maximumLineCount) throws Exception {
+        Method method = buffer.getClass().getDeclaredMethod(
+                "appendAll", List.class, boolean.class, int.class);
+        method.setAccessible(true);
+        method.invoke(buffer, messages, dedupe, maximumLineCount);
     }
 
     private static String bufferText(Object buffer) throws Exception {

@@ -34,9 +34,13 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
@@ -386,8 +390,7 @@ public class NLMain {
                 if (extPane != null) {
                     // GUIではデバッグログもMainへ出力する
                     GUILauncher.append(debugMes);
-                    SwingUtilities.invokeLater(() ->
-                            extPane.append("DEBUG: " + message));
+                    GUILauncher.append(extPane, "DEBUG: " + message);
                 }
             }
         }
@@ -396,14 +399,14 @@ public class NLMain {
         public void info(String message) {
             if (!guiOnly) super.info(prefix + message);
             if (extPane != null)
-                SwingUtilities.invokeLater(() -> extPane.append(message));
+                GUILauncher.append(extPane, message);
         }
 
         @Override
         public void warning(String message) {
             if (!guiOnly) super.warning(prefix + message);
             if (extPane != null)
-                SwingUtilities.invokeLater(() -> extPane.append(message));
+                GUILauncher.append(extPane, message);
         }
 
         @Override
@@ -472,6 +475,10 @@ public class NLMain {
     static LauncherTray tray;
     static LogWindow logWindow;
     static Rectangle logWindowRect;
+    static GuiLogWebSocketTransport logTransport;
+    static final GuiLogDisplayQueue displayQueue = new GuiLogDisplayQueue();
+    static final AtomicBoolean displayDrainScheduled = new AtomicBoolean();
+    static final int DISPLAY_BATCH_SIZE = 1024;
 
     public GUILauncher() {
         boolean debugMode = config.getBoolean("DebugMode");
@@ -498,8 +505,16 @@ public class NLMain {
                 logWindow = new LogWindow(debugModeLocal);
                 logWindowRect = logWindow.frame.getBounds();
             });
+            displayQueue.clear();
+            displayDrainScheduled.set(false);
+            logTransport = GuiLogWebSocketTransport.start(
+                    GUILauncher::receiveLogBatch);
         } catch (InterruptedException | InvocationTargetException e) {
             Logger.error(e);
+        } catch (IOException | RuntimeException e) {
+            System.err.println(
+                    "GUIログWebSocketを開始できないため直接表示へ切り替えます: "
+                    + e);
         }
     }
 
@@ -569,6 +584,11 @@ public class NLMain {
 
     void close() {
         Runnable closeGui = () -> {
+                GuiLogWebSocketTransport transport = logTransport;
+                logTransport = null;
+                if (transport != null) {
+                    transport.close();
+                }
                 if (tray != null) {
                     try {
                         tray.close();
@@ -632,13 +652,67 @@ public class NLMain {
     }
 
     static void append(String log) {
+        append("main", log);
+    }
+
+    static void append(LogPane pane, String log) {
+        if (pane != null) {
+            append(pane.channel, log);
+        }
+    }
+
+    private static void append(String channel, String log) {
+        GuiLogWebSocketTransport transport = logTransport;
+        if (transport != null) {
+            transport.publish(channel, log);
+            return;
+        }
         LogWindow window = logWindow;
         if (window != null && window.mainPane != null) {
-            SwingUtilities.invokeLater(() -> {
-                if (logWindow == window && window.mainPane != null) {
-                    window.mainPane.append(log);
+            receiveLogBatch(List.of(new GuiLogEvent(channel, log)));
+        }
+    }
+
+    private static void receiveLogBatch(List<GuiLogEvent> events) {
+        if (logWindow == null || events.isEmpty()) {
+            return;
+        }
+        displayQueue.offerAll(events);
+        scheduleDisplayDrain();
+    }
+
+    private static void scheduleDisplayDrain() {
+        if (displayDrainScheduled.compareAndSet(false, true)) {
+            SwingUtilities.invokeLater(GUILauncher::drainDisplayQueue);
+        }
+    }
+
+    private static void drainDisplayQueue() {
+        LogWindow window = logWindow;
+        List<GuiLogEvent> events = displayQueue.drain(DISPLAY_BATCH_SIZE);
+        if (window != null && window.mainPane != null) {
+            Map<LogPane, List<String>> messagesByPane = new LinkedHashMap<>();
+            for (GuiLogEvent event : events) {
+                LogPane pane = window.channels.get(event.getChannel());
+                if (pane == null) {
+                    pane = window.mainPane;
                 }
-            });
+                messagesByPane.computeIfAbsent(
+                        pane, ignored -> new ArrayList<>())
+                        .add(event.getMessage());
+            }
+            for (Map.Entry<LogPane, List<String>> entry
+                    : messagesByPane.entrySet()) {
+                entry.getKey().appendBatch(entry.getValue());
+            }
+        }
+        if (displayQueue.isEmpty()) {
+            displayDrainScheduled.set(false);
+            if (!displayQueue.isEmpty()) {
+                scheduleDisplayDrain();
+            }
+        } else {
+            SwingUtilities.invokeLater(GUILauncher::drainDisplayQueue);
         }
     }
 
@@ -846,6 +920,7 @@ public class NLMain {
         JFrame frame = new JFrame();
         JTabbedPane tabbedPane = new JTabbedPane();
         LinkedHashMap<Integer, LogPane> tabs = new LinkedHashMap<>();
+        LinkedHashMap<String, LogPane> channels = new LinkedHashMap<>();
         LinkedHashMap<String, Integer> extensionTitleOccurrences =
                 new LinkedHashMap<>();
         LogSearchHistory searchHistory = new LogSearchHistory(config);
@@ -1008,6 +1083,7 @@ public class NLMain {
                 }
             }
             tabs.put(tabbedPane.getTabCount(), pane);
+            channels.put(historyKey, pane);
             tabbedPane.addTab(title, null, pane.searchPanel.getComponent(), tip);
 
             return pane;
@@ -1071,6 +1147,7 @@ public class NLMain {
         int maxLinesInBacklog;
         boolean dedupe;
         LogWindow logWindow;
+        final String channel;
 
         LogPane(String title, String tip,
                 int maxLines, boolean dedupe, LogWindow logWindow,
@@ -1096,6 +1173,7 @@ public class NLMain {
                     config.getPositiveInteger("MaxLinesHard"));
             this.dedupe = dedupe;
             this.logWindow = logWindow;
+            this.channel = historyKey;
             this.maxLinesInBacklog =
                     config.getPositiveInteger("MaxLinesHard");
             setupTextArea();
@@ -1234,6 +1312,15 @@ public class NLMain {
             }
             int threashold = isBackLog() ? maxLinesInBacklog : maxLines;
             buffer.append(log, dedupe, threashold);
+            searchPanel.requestRefresh();
+        }
+
+        void appendBatch(List<String> logs) {
+            if (textArea == null || logs.isEmpty()) {
+                return;
+            }
+            int threshold = isBackLog() ? maxLinesInBacklog : maxLines;
+            buffer.appendAll(logs, dedupe, threshold);
             searchPanel.requestRefresh();
         }
 

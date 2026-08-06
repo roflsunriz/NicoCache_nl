@@ -1,5 +1,7 @@
 package dareka;
 
+import java.util.List;
+
 /**
  * GUIログの原本を保持し、重複抑制と進捗行の更新を適用する。
  */
@@ -9,14 +11,25 @@ final class LogBuffer {
     private boolean needNewline;
 
     void append(String message, boolean dedupe, int maximumLineCount) {
+        appendWithoutTrim(message, dedupe);
+        trim(maximumLineCount);
+    }
+
+    void appendAll(List<String> messages, boolean dedupe,
+            int maximumLineCount) {
+        for (String message : messages) {
+            appendWithoutTrim(message, dedupe);
+        }
+        trim(maximumLineCount);
+    }
+
+    private void appendWithoutTrim(String message, boolean dedupe) {
         if (replaceCachingProgress(message)) {
-            trim(maximumLineCount);
             return;
         }
         if (dedupeMessage(message, dedupe)) {
             text.append(String.valueOf(message)).append('\n');
         }
-        trim(maximumLineCount);
     }
 
     String getText() {

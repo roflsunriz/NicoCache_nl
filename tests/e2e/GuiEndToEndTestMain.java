@@ -89,6 +89,8 @@ public final class GuiEndToEndTestMain {
                     this::testLogBehaviour);
             run("GUI tab-specific live log search and history",
                     this::testLogSearch);
+            run("GUI WebSocket burst delivery",
+                    this::testWebSocketBurstDelivery);
             run("GUI persistence and resource cleanup",
                     this::testPersistenceAndCleanup);
         } finally {
@@ -118,7 +120,7 @@ public final class GuiEndToEndTestMain {
             }
             throw new AssertionError("GUI end-to-end tests failed");
         }
-        System.out.println("GUI end-to-end tests passed: 8");
+        System.out.println("GUI end-to-end tests passed: 9");
     }
 
     private void prepare() throws IOException {
@@ -129,6 +131,7 @@ public final class GuiEndToEndTestMain {
         Files.createDirectories(preview);
         System.setProperty("nicocache.applicationRoot", application.toString());
         System.setProperty("nicocache.userDataRoot", data.toString());
+        System.setProperty("guiLogQueueCapacity", "512");
         System.setProperty("dareka.debug", "true");
         System.setProperty("shutdownTimeout", "1000");
         Files.writeString(
@@ -274,6 +277,7 @@ public final class GuiEndToEndTestMain {
                 "enabled debug logging must append to debug.log");
         assertFalse(enabled.contains("DISABLED_DEBUG_MARKER"),
                 "disabled debug messages must not appear after reopening");
+        waitForGuiText("ENABLED_DEBUG_MARKER", 5000L);
         onEdt(() -> {
             GUILauncher.logWindow.mainPane.refreshDisplay();
             assertContains(GUILauncher.logWindow.mainPane.textArea.getText(),
@@ -298,6 +302,57 @@ public final class GuiEndToEndTestMain {
         }
         assertTrue(Files.size(rolloverLog) <= 256,
                 "closed rollover log must remain within the byte limit");
+    }
+
+    private void testWebSocketBurstDelivery() throws Exception {
+        assertTrue(GUILauncher.logTransport != null,
+                "GUI log WebSocket transport must start");
+        List<GuiLogEvent> decoded = GuiLogBatchCodec.decode(
+                java.nio.ByteBuffer.wrap(GuiLogBatchCodec.encode(List.of(
+                        new GuiLogEvent("codec", "日本語🙂\nsecond line")))));
+        assertEquals(1, decoded.size(), "WebSocket batch codec event count");
+        assertEquals("codec", decoded.get(0).getChannel(),
+                "WebSocket batch codec channel");
+        assertEquals("日本語🙂\nsecond line", decoded.get(0).getMessage(),
+                "WebSocket batch codec Unicode and newline preservation");
+        onEdt(() -> {
+            GUILauncher.LogPane pane = GUILauncher.logWindow.mainPane;
+            pane.maxLines = 2000;
+            pane.setDedupe(false);
+            pane.clearLog();
+        });
+
+        int eventCount = 20000;
+        long started = System.nanoTime();
+        for (int index = 0; index < eventCount; index++) {
+            GUILauncher.append("WS_BURST_" + index);
+        }
+        long publishMillis = java.util.concurrent.TimeUnit.NANOSECONDS
+                .toMillis(System.nanoTime() - started);
+        assertTrue(publishMillis < 2000L,
+                "20,000 log publications must not block producers: "
+                + publishMillis + " ms");
+        assertTrue(GUILauncher.logTransport.pendingEventCount() <= 512,
+                "GUI log queue must remain bounded");
+        assertTrue(GUILauncher.displayQueue.size() <= 512,
+                "GUI display queue must remain bounded");
+
+        waitForGuiText("WS_BURST_19999", 10000L);
+        onEdt(() -> {
+            GUILauncher.logWindow.mainPane.refreshDisplay();
+            String displayed =
+                    GUILauncher.logWindow.mainPane.textArea.getText();
+            assertContains(displayed, "WS_BURST_19999",
+                    "WebSocket delivery must retain the newest burst event");
+            assertTrue(GUILauncher.logWindow.mainPane.textArea.getLineCount()
+                            <= 2001,
+                    "WebSocket burst display must honor the line limit");
+        });
+
+        GUILauncher.LogPane extension = launcher.addExtPane(
+                "ws-test", "WebSocket extension delivery");
+        GUILauncher.append(extension, "WS_EXTENSION_MARKER");
+        waitForGuiText(extension, "WS_EXTENSION_MARKER", 5000L);
     }
 
     private void testShutdownAfterFailedInitialization() throws Exception {
@@ -747,6 +802,32 @@ public final class GuiEndToEndTestMain {
             }
             throw new RuntimeException(error);
         }
+    }
+
+    private static void waitForGuiText(String expected, long timeoutMillis)
+            throws Exception {
+        waitForGuiText(
+                GUILauncher.logWindow.mainPane, expected, timeoutMillis);
+    }
+
+    private static void waitForGuiText(GUILauncher.LogPane pane,
+            String expected, long timeoutMillis) throws Exception {
+        long deadline = System.nanoTime()
+                + java.util.concurrent.TimeUnit.MILLISECONDS
+                        .toNanos(timeoutMillis);
+        while (System.nanoTime() < deadline) {
+            AtomicReference<Boolean> found = new AtomicReference<>(false);
+            onEdt(() -> {
+                pane.refreshDisplay();
+                found.set(pane.textArea.getText().contains(expected));
+            });
+            if (found.get()) {
+                return;
+            }
+            Thread.sleep(25L);
+        }
+        throw new AssertionError(
+                "timed out waiting for GUI log text: " + expected);
     }
 
     private static void run(String name, CheckedRunnable test) {
