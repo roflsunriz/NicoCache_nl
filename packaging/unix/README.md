@@ -1,6 +1,6 @@
 # Linux/macOS パッケージ
 
-LinuxとmacOSの配布物は、対象OS上のJDK 25 `jpackage`で生成します。`jpackage`の
+LinuxとmacOSの配布物は、対象OS上のTemurin JDK 25 `jpackage`で生成します。`jpackage`の
 ネイティブパッケージ生成はクロスプラットフォームではないため、Linux成果物はLinux
 ランナー、macOS成果物はmacOSランナーでビルドします。Solarisは現在の配布対象に
 含めません。

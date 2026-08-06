@@ -34,6 +34,7 @@ if ($PackageType -ne 'All' -and $allowedTypes -notcontains $PackageType) {
 }
 
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
+. (Join-Path $root 'java-tool-selection.ps1')
 $launcherPng = Join-Path $root 'packaging/windows/assets/nicocache-launcher.png'
 if (-not (Test-Path -LiteralPath $launcherPng -PathType Leaf)) {
     throw "本体ランチャー用アイコンが見つかりません: $launcherPng"
@@ -151,18 +152,6 @@ function Invoke-NativeCommand {
     if ($LASTEXITCODE -ne 0) { throw "$FailureMessage (ExitCode: $LASTEXITCODE)" }
 }
 
-function Get-JavaMajorVersion {
-    param([Parameter(Mandatory)][string]$JavaPath)
-    $properties = @(& $JavaPath -XshowSettings:properties -version 2>&1 |
-        ForEach-Object { [string]$_ })
-    if ($LASTEXITCODE -ne 0) { throw 'Javaのバージョン情報を取得できませんでした' }
-    $line = $properties | Where-Object { $_ -match '^\s*java\.specification\.version\s*=' } |
-        Select-Object -First 1
-    $match = [regex]::Match([string]$line, 'java\.specification\.version\s*=\s*(?<major>\d+)')
-    if (-not $match.Success) { throw 'Javaのメジャーバージョンを判定できませんでした' }
-    return [int]$match.Groups['major'].Value
-}
-
 function Copy-DistributionFile {
     param([Parameter(Mandatory)][string]$RelativePath)
     $source = Join-Path $root $RelativePath
@@ -250,8 +239,9 @@ $java = Get-RequiredCommand -Name 'java'
 $jpackage = Get-RequiredCommand -Name 'jpackage'
 $jlink = Get-RequiredCommand -Name 'jlink'
 $zip = Get-RequiredCommand -Name 'zip'
-$javaMajor = Get-JavaMajorVersion -JavaPath $java
-if ($javaMajor -ne 25) { throw 'Linux/macOSパッケージのビルドにはJDK 25が必要です' }
+$javaMajor = (
+    Assert-TemurinJavaRuntime -JavaPath $java -JavaVersion 25
+).Major
 $runtimeModules = Get-RuntimeModules -JavaPath $java
 $javaHome = Split-Path -Parent (Split-Path -Parent $java)
 $runtimeImage = Join-Path $buildRoot 'runtime-image'

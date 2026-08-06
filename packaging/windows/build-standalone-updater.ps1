@@ -11,6 +11,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+. (Join-Path $root 'java-tool-selection.ps1')
 $workRoot = Join-Path $root '.test-work\standalone-updater'
 $classesRoot = Join-Path $workRoot 'classes'
 $inputRoot = Join-Path $workRoot 'input'
@@ -31,6 +32,7 @@ $java = (Get-Command java -ErrorAction Stop).Source
 $javac = (Get-Command javac -ErrorAction Stop).Source
 $jar = (Get-Command jar -ErrorAction Stop).Source
 $jpackage = (Get-Command jpackage -ErrorAction Stop).Source
+Assert-TemurinJavaRuntime -JavaPath $java -JavaVersion 25 | Out-Null
 
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'updater\src') -Filter '*.java' -Recurse -File |
     ForEach-Object FullName)
@@ -86,24 +88,6 @@ function Invoke-JPackage {
     )
     & $jpackage @Arguments 2>&1 | Tee-Object -FilePath $buildLog -Append
     if ($LASTEXITCODE -ne 0) { throw $FailureMessage }
-}
-
-$versionProperties = @(
-    & $java -XshowSettings:properties -version 2>&1 |
-        ForEach-Object { [string]$_ }
-)
-if ($LASTEXITCODE -ne 0) {
-    throw 'Javaのバージョン情報を取得できませんでした'
-}
-$versionLine = $versionProperties |
-    Where-Object { $_ -match '^\s*java\.specification\.version\s*=' } |
-    Select-Object -First 1
-$versionMatch = [regex]::Match(
-    [string]$versionLine,
-    'java\.specification\.version\s*=\s*(?<major>\d+)'
-)
-if (-not $versionMatch.Success -or [int]$versionMatch.Groups['major'].Value -ne 25) {
-    throw '独立アップデーターのビルドにはJDK 25が必要です'
 }
 
 if ($PackageType -in @('AppImage', 'All')) {

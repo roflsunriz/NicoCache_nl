@@ -1,6 +1,6 @@
 param(
     [ValidateSet(17, 21, 25)]
-    [int]$JavaVersion,
+    [int]$JavaVersion = 25,
     [string]$LibraryDirectory,
     [switch]$Clean
 )
@@ -9,14 +9,14 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path -LiteralPath $PSScriptRoot).Path
 . (Join-Path $root "java-tool-selection.ps1")
 
-$selectionParameters = @{ Candidates = @(Get-JavaToolCandidates "javac") }
-if ($PSBoundParameters.ContainsKey("JavaVersion")) {
-    $selectionParameters.JavaVersion = $JavaVersion
+$selectionParameters = @{
+    Candidates = @(Get-JavaToolCandidates "javac")
+    JavaVersion = $JavaVersion
 }
 $selectedJavac = Select-JavaToolCandidate @selectionParameters
-$javaSelection = @{ Candidates = @(Get-JavaToolCandidates "java") }
-if ($PSBoundParameters.ContainsKey("JavaVersion")) {
-    $javaSelection.JavaVersion = $JavaVersion
+$javaSelection = @{
+    Candidates = @(Get-JavaToolCandidates "java")
+    JavaVersion = $JavaVersion
 }
 $selectedJava = Select-JavaToolCandidate @javaSelection
 $javaBin = Split-Path -Parent $selectedJavac.Path
@@ -58,7 +58,7 @@ if ($needsBootstrap) {
     }
 }
 
-Write-Host "Java $($selectedJava.Major) のNicoCacheBuildを使用します: $buildJar"
+Write-Host "Eclipse Temurin JDK $($selectedJava.Major) のNicoCacheBuildを使用します: $buildJar"
 $builderArguments = @("-jar", $buildJar, "--root=$root")
 if ($PSBoundParameters.ContainsKey("LibraryDirectory")) {
     $libraryPath = (Resolve-Path -LiteralPath $LibraryDirectory).Path

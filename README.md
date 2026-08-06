@@ -31,6 +31,9 @@ Windows・Linux・macOSパッケージ版の初回セットアップでは、キ
 ## 独立アプリと起動管理
 
 ビルド、証明書生成、本体起動管理はそれぞれ独立したJavaアプリです。正規ビルドは
+`.java-version`で指定するEclipse Temurin JDK 25を既定とします。Java 17/21は
+互換性検証で明示指定する場合だけ使用し、通常のビルドや同梱ランタイムには使用しません。
+配布JARの互換ターゲットは引き続きJava 11です。
 次のコマンドで実行し、`NicoCache_nl.jar`、`NicoCacheCA.jar`、
 `NicoCacheLauncher.jar`、`NicoCacheBuild.jar`を生成します。
 

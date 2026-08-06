@@ -33,6 +33,7 @@ if ($PackageType -ne 'All' -and $allowedTypes -notcontains $PackageType) {
 }
 
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../..')).Path
+. (Join-Path $root 'java-tool-selection.ps1')
 $workRoot = Join-Path $root (Join-Path '.test-work' ('standalone-updater-' + $Platform.ToLowerInvariant()))
 $classesRoot = Join-Path $workRoot 'classes'
 $inputRoot = Join-Path $workRoot 'input'
@@ -97,18 +98,6 @@ function Invoke-NativeCommand {
     if ($LASTEXITCODE -ne 0) { throw "$FailureMessage (ExitCode: $LASTEXITCODE)" }
 }
 
-function Get-JavaMajorVersion {
-    param([Parameter(Mandatory)][string]$JavaPath)
-    $properties = @(& $JavaPath -XshowSettings:properties -version 2>&1 |
-        ForEach-Object { [string]$_ })
-    if ($LASTEXITCODE -ne 0) { throw 'Javaのバージョン情報を取得できませんでした' }
-    $line = $properties | Where-Object { $_ -match '^\s*java\.specification\.version\s*=' } |
-        Select-Object -First 1
-    $match = [regex]::Match([string]$line, 'java\.specification\.version\s*=\s*(?<major>\d+)')
-    if (-not $match.Success) { throw 'Javaのメジャーバージョンを判定できませんでした' }
-    return [int]$match.Groups['major'].Value
-}
-
 function Rename-NativeArtifact {
     param([Parameter(Mandatory)][string]$Extension)
     $candidate = Get-ChildItem -LiteralPath $outputRoot -Filter ("*" + $Extension) -File |
@@ -154,9 +143,7 @@ $javac = Get-RequiredCommand -Name 'javac'
 $jar = Get-RequiredCommand -Name 'jar'
 $jpackage = Get-RequiredCommand -Name 'jpackage'
 $zip = Get-RequiredCommand -Name 'zip'
-if ((Get-JavaMajorVersion -JavaPath $java) -ne 25) {
-    throw '独立アップデーターのLinux/macOSパッケージにはJDK 25が必要です'
-}
+Assert-TemurinJavaRuntime -JavaPath $java -JavaVersion 25 | Out-Null
 if ($Platform -eq 'Linux' -and $PackageType -in @('Rpm', 'All')) {
     Get-RequiredCommand -Name 'rpmbuild' | Out-Null
 }

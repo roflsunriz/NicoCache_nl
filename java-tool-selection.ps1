@@ -1,3 +1,41 @@
+function Get-JavaRuntimeMetadata {
+    param(
+        [Parameter(Mandatory)]
+        [string]$JavaPath
+    )
+
+    $versionLines = @(
+        & $JavaPath --version 2>&1 | ForEach-Object { [string]$_ }
+    )
+    if ($LASTEXITCODE -ne 0 -or $versionLines.Count -eq 0) {
+        throw "Javaランタイムのバージョンを取得できません: $JavaPath"
+    }
+    $firstLine = [string]($versionLines | Select-Object -First 1)
+    if ($firstLine -notmatch '(?:java|openjdk)\s+(?:version\s+)?(\d+)(?:\.\d+)?') {
+        throw "Javaランタイムのメジャーバージョンを判定できません: $JavaPath"
+    }
+    $major = [int]$Matches[1]
+    [pscustomobject]@{
+        Major = $major
+        IsTemurin = ($versionLines -join "`n") -match '(?i)\bTemurin\b'
+        Path = (Resolve-Path -LiteralPath $JavaPath).Path
+    }
+}
+
+function Assert-TemurinJavaRuntime {
+    param(
+        [Parameter(Mandatory)]
+        [string]$JavaPath,
+        [int]$JavaVersion = 25
+    )
+
+    $metadata = Get-JavaRuntimeMetadata -JavaPath $JavaPath
+    if (-not $metadata.IsTemurin -or $metadata.Major -ne $JavaVersion) {
+        throw "Eclipse Temurin JDK ${JavaVersion}が必要です: $JavaPath"
+    }
+    $metadata
+}
+
 function Get-JavaToolCandidates {
     param(
         [Parameter(Mandatory)]
@@ -23,11 +61,28 @@ function Get-JavaToolCandidates {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
 
         try {
-            $versionOutput = (& $path --version 2>&1 | Select-Object -First 1).ToString()
+            $versionLines = @(& $path --version 2>&1 | ForEach-Object { [string]$_ })
+            $versionOutput = [string]($versionLines | Select-Object -First 1)
             if ($versionOutput -match '(?:javac|java|openjdk)\s+(?:version\s+)?(\d+)(?:\.\d+)?') {
+                $major = [int]$Matches[1]
+                $javaName = if ([System.IO.Path]::GetExtension($path) -eq '.exe') {
+                    'java.exe'
+                } else {
+                    'java'
+                }
+                $runtimePath = if ($CommandName -eq 'java') {
+                    $path
+                } else {
+                    Join-Path (Split-Path -Parent $path) $javaName
+                }
+                if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
+                    continue
+                }
+                $runtimeMetadata = Get-JavaRuntimeMetadata -JavaPath $runtimePath
                 [pscustomobject]@{
-                    Major = [int]$Matches[1]
+                    Major = $major
                     Path = (Resolve-Path -LiteralPath $path).Path
+                    IsTemurin = $runtimeMetadata.IsTemurin
                 }
             }
         } catch {
@@ -44,20 +99,21 @@ function Select-JavaToolCandidate {
     )
 
     $supportedCandidates = @($Candidates |
-        Where-Object { $_.Major -in @(17, 21, 25) } |
-        Sort-Object Major -Descending -Unique)
+        Where-Object { $_.Major -in @(17, 21, 25) -and $_.IsTemurin } |
+        Sort-Object Major -Descending)
     if (-not $supportedCandidates) {
-        throw "対応する Java (17、21、25) が見つかりません"
+        throw "対応する Eclipse Temurin JDK (17、21、25) が見つかりません"
     }
 
-    $selected = if ($PSBoundParameters.ContainsKey("JavaVersion")) {
-        $supportedCandidates | Where-Object Major -eq $JavaVersion | Select-Object -First 1
-    } else {
-        $supportedCandidates | Select-Object -First 1
-    }
+    $requestedVersion = if ($PSBoundParameters.ContainsKey("JavaVersion")) {
+        $JavaVersion
+    } else { 25 }
+    $selected = $supportedCandidates |
+        Where-Object Major -eq $requestedVersion |
+        Select-Object -First 1
     if (-not $selected) {
         $available = ($supportedCandidates | ForEach-Object Major) -join ", "
-        throw "Java $JavaVersion が見つかりません。利用可能: $available"
+        throw "Eclipse Temurin JDK $requestedVersion が見つかりません。利用可能: $available"
     }
     $selected
 }

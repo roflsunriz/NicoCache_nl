@@ -2,7 +2,8 @@
 
 ## 前提
 
-- JDK 17、21、25 のいずれか（`build-javac.ps1` が検出して選択）
+- Eclipse Temurin JDK 25（`.java-version`と`build-javac.ps1`の既定値）
+- Java 17/21互換性を個別に確認する場合は、対応するEclipse Temurin JDK
 - PowerShell（Windowsまたは`build-javac.ps1`を使う場合）、またはPOSIX互換シェル
 
 初回のクリーンチェックアウトでは、Javaビルドに使うBouncy Castleをロックファイルから
@@ -118,8 +119,9 @@ GUIログのタブ、検索、メニュー、履歴保存など画面操作を�
 .\test-e2e.ps1 -KeepWorkDir
 ```
 
-複数の対応 JDK がある場合は、既定で検出された最新版を使用する。特定の JDK を
-使う場合は、次のように指定する。
+通常のビルドはEclipse Temurin JDK 25だけを既定として使用する。Temurin 25が
+見つからない場合は古いJDKへ暗黙にフォールバックせず失敗する。最小対応版などの
+互換性を個別に確認する場合だけ、次のように明示する。
 
 ```powershell
 .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\build-dependencies
@@ -211,11 +213,12 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 GitHub Releaseの状態を確認して管理者が明示的に判断する。
 
 `main` への push、`main` 向け Pull Request、手動実行では、GitHub Actions が
-最小サポート版のJDK 17で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
+既定のTemurin 25で本体をビルドし、機能テストと Extension ABI 互換テストを実行する。
 加えてTemurin 25でWindows、Linux、macOSのビルド、機能、TLS、
-Extension ABI、初回セットアップを検証し、WindowsインストーラーはJDK 25で生成、
+Extension ABI、初回セットアップを検証し、WindowsインストーラーはTemurin JDK 25で生成、
 隔離起動、修復、更新、アンインストールを確認する。Unixパッケージワークフローでは
 Linux/macOSのアプリイメージ、ネイティブパッケージ、独立アップデーターCLIを確認する。
+Temurin 17は最小対応版の明示的な互換性ジョブだけでビルドと主要テストに使用する。
 さらにリリースワークフローの契約テストで、全プラットフォームの配布物と各ハッシュが
 公開対象へ渡り、独立アップデーターの全プラットフォーム資産が追加されることを確認する。
 
@@ -234,7 +237,7 @@ majorとminorは0〜255、buildは0〜65535にする。本体とアップデー�
 版管理するため、本体だけを変更したときにアップデーター版を合わせて上げない。
 
 テストに合格すると、GitHub ReleaseにはWindowsの配布用ZIP、MSI、各SHA-256に加え、
-タグのソースからJDK 25で生成・検証したLinuxの
+タグのソースからTemurin JDK 25で生成・検証したLinuxの
 `NicoCache_nl-<版番号>-linux-<arch>`、macOSの
 `NicoCache_nl-<版番号>-macos-<arch>`のZIPとネイティブパッケージ、および
 `updater/VERSION`で生成した各OSの独立アップデーター資産とSHA-256が添付される。
@@ -273,7 +276,7 @@ Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Cen
 
 ## Linux/macOS パッケージ
 
-LinuxとmacOSのネイティブパッケージは対象OS上のJDK 25 `jpackage`で生成する。
+LinuxとmacOSのネイティブパッケージは対象OS上のTemurin JDK 25 `jpackage`で生成する。
 クロスプラットフォーム生成は行わない。Solarisは配布・CIの対象外とする。
 
 ```powershell
@@ -296,7 +299,7 @@ XDG autostartを使い、macOSでは`security`、`networksetup`、`LaunchAgents`
 
 ## Windows インストーラー
 
-リリースとWindowsインストーラーCIではJDK 25の `jpackage` を使い、Java 25の
+リリースとWindowsインストーラーCIではTemurin JDK 25の `jpackage` を使い、Java 25の
 ランタイムと単一の製品ランチャーを含むアプリイメージを生成する。日本語設定の
 読込みに必要な `jdk.charsets` を含む最小ランタイムで起動を検証する。
 隔離テストでは同じ製品ランチャーへ内部用の `--headless` を指定する。

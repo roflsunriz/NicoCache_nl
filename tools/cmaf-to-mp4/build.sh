@@ -10,9 +10,37 @@ DIST_ROOT="$ROOT/dist"
 JAR_PATH="$DIST_ROOT/nico-cmaf-to-mp4.jar"
 JAVAC_BIN=${JAVAC:-javac}
 JAR_BIN=${JAR_TOOL:-jar}
+JAVA_BIN=${JAVA:-java}
+JAVA_VERSION=${NICOCACHE_JAVA_VERSION:-25}
 
 command -v "$JAVAC_BIN" >/dev/null 2>&1 || { echo "javacが見つかりません" >&2; exit 1; }
 command -v "$JAR_BIN" >/dev/null 2>&1 || { echo "jarが見つかりません" >&2; exit 1; }
+command -v "$JAVA_BIN" >/dev/null 2>&1 || { echo "javaが見つかりません" >&2; exit 1; }
+
+case "$JAVA_VERSION" in
+  17|21|25) ;;
+  *) echo "対応外のTemurin JDKです: $JAVA_VERSION" >&2; exit 1 ;;
+esac
+JAVA_VERSION_OUTPUT=$("$JAVA_BIN" --version 2>&1) || {
+  echo "Javaランタイムのバージョンを取得できません: $JAVA_BIN" >&2
+  exit 1
+}
+case "$JAVA_VERSION_OUTPUT" in
+  *Temurin*) ;;
+  *) echo "Eclipse Temurin JDK $JAVA_VERSIONが必要です: $JAVA_BIN" >&2; exit 1 ;;
+esac
+JAVA_MAJOR=$(printf '%s\n' "$JAVA_VERSION_OUTPUT" |
+  sed -n '1s/^[^0-9]*\([0-9][0-9]*\).*/\1/p')
+JAVAC_MAJOR=$("$JAVAC_BIN" --version 2>&1 |
+  sed -n '1s/^[^0-9]*\([0-9][0-9]*\).*/\1/p')
+JAR_MAJOR=$("$JAR_BIN" --version 2>&1 |
+  sed -n '1s/^[^0-9]*\([0-9][0-9]*\).*/\1/p')
+if [ "$JAVA_MAJOR" != "$JAVA_VERSION" ] ||
+  [ "$JAVAC_MAJOR" != "$JAVA_VERSION" ] ||
+  [ "$JAR_MAJOR" != "$JAVA_VERSION" ]; then
+  echo "java、javac、jarはすべてEclipse Temurin JDK $JAVA_VERSIONを使用してください" >&2
+  exit 1
+fi
 
 rm -rf "$CLASSES_ROOT"
 mkdir -p "$CLASSES_ROOT" "$DIST_ROOT"

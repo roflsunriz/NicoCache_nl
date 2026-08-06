@@ -1,5 +1,5 @@
 #Fri Oct 07 05:38:30 JST 2011
-# - 変更2024-03: source levelを1.5から11へ. いつ推奨の17まで上げるか？
+# Temurin 25を既定JDKにし、配布JARの互換ターゲットはJava 11に維持する。
 eclipse.preferences.version=1
 org.eclipse.jdt.core.compiler.codegen.inlineJsrBytecode=enabled
 org.eclipse.jdt.core.compiler.codegen.targetPlatform=11

@@ -147,7 +147,7 @@ MSI更新時はアプリ側の`config.properties`と利用者データを保持�
 
 ## ローカルでの安全な検証
 
-JDK 25 でアプリイメージとZIPを生成する。MSIも同じJDK 25の専用ランタイムを
+Temurin JDK 25でアプリイメージとZIPを生成する。MSIも同じTemurin JDK 25の専用ランタイムを
 同梱する。成果物と依存ファイルは Git 管理外の
 `.test-work/windows-package/` に限定される。
 

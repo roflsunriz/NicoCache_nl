@@ -3,6 +3,8 @@ param()
 
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path -LiteralPath $PSScriptRoot).Path
+$repoRoot = (Resolve-Path -LiteralPath (Join-Path $root '..\..')).Path
+. (Join-Path $repoRoot 'java-tool-selection.ps1')
 $sourceRoot = Join-Path $root "src\main\java"
 $resourceRoot = Join-Path $root "src\main\resources"
 $buildRoot = Join-Path $root "build"
@@ -10,8 +12,17 @@ $classesRoot = Join-Path $buildRoot "classes"
 $distRoot = Join-Path $root "dist"
 $jarPath = Join-Path $distRoot "nico-cmaf-to-mp4.jar"
 
-$javac = (Get-Command javac -ErrorAction Stop).Source
-$jar = (Get-Command jar -ErrorAction Stop).Source
+$selectedJavac = Select-JavaToolCandidate `
+    -Candidates @(Get-JavaToolCandidates 'javac')
+$javac = $selectedJavac.Path
+$javaBin = Split-Path -Parent $javac
+$jarName = if ([System.IO.Path]::GetExtension($javac) -eq '.exe') {
+    'jar.exe'
+} else { 'jar' }
+$jar = Join-Path $javaBin $jarName
+if (-not (Test-Path -LiteralPath $jar -PathType Leaf)) {
+    throw "Temurin JDK 25のjarコマンドが見つかりません: $javaBin"
+}
 $sources = @(Get-ChildItem -LiteralPath $sourceRoot -Recurse -File -Filter "*.java" |
     ForEach-Object { $_.FullName })
 if ($sources.Count -eq 0) {

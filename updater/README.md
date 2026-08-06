@@ -66,7 +66,7 @@ if ($actual -ne $expected) { throw 'アップデーター配布物のSHA-256が�
 
 ## ビルド
 
-独立アップデーターのビルドと `jpackage` にはJDK 25を使用します。ソースの
+独立アップデーターのビルドと `jpackage` にはTemurin JDK 25を使用します。ソースの
 互換性ターゲットは引き続きJava 11（`--release 11`）です。
 
 ```powershell

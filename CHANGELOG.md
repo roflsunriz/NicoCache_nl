@@ -20,6 +20,9 @@
 
 ### Changed
 
+- 通常の開発、CI、リリース、依存更新、ネイティブパッケージのJDK/JREが混在しないよう、
+  既定をEclipse Temurin 25へ統一した。Java 17/21は明示的な互換性検証だけに残し、
+  配布JARのJava 11互換ターゲットは維持する。
 - サムネイル情報フィルターを`09_thumbInfoFilterBase.txt`、
   `10_thumbInfoFilterLegacyLinks.txt`、`11_thumbInfoFilterVideoLinks.txt`、
   `15_thumbInfoFilterCache.txt`へ責務別に整理した。Nアニメ専用キャッシュ処理は

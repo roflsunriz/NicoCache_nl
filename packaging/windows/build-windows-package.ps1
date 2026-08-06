@@ -13,6 +13,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+. (Join-Path $root 'java-tool-selection.ps1')
 $launcherIcon = Join-Path $root 'packaging\windows\assets\nicocache-launcher.ico'
 $launcherDescription = 'NicoCache_nl local HTTP/HTTPS proxy and cache server'
 if (-not (Test-Path -LiteralPath $launcherIcon -PathType Leaf)) {
@@ -72,29 +73,6 @@ function Get-RequiredCommand {
         throw "必要なコマンドが見つかりません: $Name"
     }
     return $command.Source
-}
-
-function Get-JavaMajorVersion {
-    param([Parameter(Mandatory)][string]$JavaPath)
-
-    $versionProperties = @(
-        & $JavaPath -XshowSettings:properties -version 2>&1 |
-            ForEach-Object { [string]$_ }
-    )
-    if ($LASTEXITCODE -ne 0) {
-        throw 'Javaのバージョン情報を取得できませんでした'
-    }
-    $versionLine = $versionProperties |
-        Where-Object { $_ -match '^\s*java\.specification\.version\s*=' } |
-        Select-Object -First 1
-    $versionMatch = [regex]::Match(
-        [string]$versionLine,
-        'java\.specification\.version\s*=\s*(?<major>\d+)'
-    )
-    if (-not $versionMatch.Success) {
-        throw 'Javaのメジャーバージョンを判定できませんでした'
-    }
-    return [int]$versionMatch.Groups['major'].Value
 }
 
 function Copy-JPackageMsiResources {
@@ -328,7 +306,9 @@ New-Item -ItemType Directory -Path $buildRoot, $dependencyRoot, $inputRoot,
 $java = Get-RequiredCommand -Name 'java'
 $jpackage = Get-RequiredCommand -Name 'jpackage'
 $jlink = Get-RequiredCommand -Name 'jlink'
-$javaMajorVersion = Get-JavaMajorVersion -JavaPath $java
+$javaMajorVersion = (
+    Assert-TemurinJavaRuntime -JavaPath $java -JavaVersion 25
+).Major
 if ($PackageType -in @('Msi', 'All')) {
     Get-RequiredCommand -Name 'candle' | Out-Null
     Get-RequiredCommand -Name 'light' | Out-Null

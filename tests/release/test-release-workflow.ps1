@@ -83,35 +83,61 @@ foreach ($step in @(
     Get-StepBlock -Name $step | Out-Null
 }
 
-$compatibilityBuilds = @(
+$defaultJavaVersion = (Get-Content -Raw -LiteralPath (
+        Join-Path $root '.java-version'
+    )).Trim()
+if ($defaultJavaVersion -ne '25') {
+    throw "Default Java version must be 25: $defaultJavaVersion"
+}
+
+$defaultBuilds = @(
     @{
         Path = $workflowPath
         BuildStep = 'Build NicoCache Java applications'
-        BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\release-dependencies -Clean'
+        BuildLine = 'run: .\build-javac.ps1 -LibraryDirectory .\.test-work\release-dependencies -Clean'
     }
     @{
         Path = Join-Path $root '.github\workflows\ci.yml'
         BuildStep = 'Build NicoCache Java applications'
-        BuildLine = 'run: .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\ci-dependencies -Clean'
+        BuildLine = 'run: .\build-javac.ps1 -LibraryDirectory .\.test-work\ci-dependencies -Clean'
     }
     @{
         Path = Join-Path $root '.github\workflows\update-repository-dependencies.yml'
         BuildStep = 'Run Java build and functional tests'
-        BuildLine = '.\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\dependency-build -Clean'
+        BuildLine = '.\build-javac.ps1 -LibraryDirectory .\.test-work\dependency-build -Clean'
     }
 )
-foreach ($compatibilityBuild in $compatibilityBuilds) {
-    $compatibilityLines = @(Get-Content -LiteralPath $compatibilityBuild.Path)
+foreach ($defaultBuild in $defaultBuilds) {
+    $defaultBuildLines = @(Get-Content -LiteralPath $defaultBuild.Path)
     $setup = Get-StepBlock `
-        -Name 'Set up JDK 17 for compatibility build' `
-        -WorkflowLines $compatibilityLines
-    Assert-ContainsLine $setup "java-version: '17'" 'Compatibility JDK setup'
+        -Name 'Set up default Temurin 25' `
+        -WorkflowLines $defaultBuildLines
+    Assert-ContainsLine $setup 'distribution: temurin' 'Default Java distribution'
+    Assert-ContainsLine $setup "java-version-file: '.java-version'" `
+        'Default Java version file'
     $build = Get-StepBlock `
-        -Name $compatibilityBuild.BuildStep `
-        -WorkflowLines $compatibilityLines
-    Assert-ContainsLine $build $compatibilityBuild.BuildLine `
-        "Compatibility Java build in $($compatibilityBuild.Path)"
+        -Name $defaultBuild.BuildStep `
+        -WorkflowLines $defaultBuildLines
+    Assert-ContainsLine $build $defaultBuild.BuildLine `
+        "Default Java build in $($defaultBuild.Path)"
 }
+
+$ciLines = @(Get-Content -LiteralPath (
+        Join-Path $root '.github\workflows\ci.yml'
+    ))
+$java17Setup = Get-StepBlock `
+    -Name 'Set up explicit Temurin 17 compatibility JDK' `
+    -WorkflowLines $ciLines
+Assert-ContainsLine $java17Setup 'distribution: temurin' `
+    'Explicit Java 17 compatibility distribution'
+Assert-ContainsLine $java17Setup "java-version: '17'" `
+    'Explicit Java 17 compatibility version'
+$java17Build = Get-StepBlock `
+    -Name 'Build and test with explicit Temurin 17' `
+    -WorkflowLines $ciLines
+Assert-ContainsLine $java17Build `
+    '.\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\java-17-dependencies -Clean' `
+    'Explicit Java 17 compatibility build'
 
 $buildApplication = Get-StepBlock -Name 'Build release app image and MSI'
 if ($buildApplication -match 'NlFiltersSource') {
@@ -143,6 +169,8 @@ if (($installerWorkflow.Split(
 $packageInputPaths = @(
     'build-javac.ps1'
     'build-javac.sh'
+    'java-tool-selection.ps1'
+    '.java-version'
     'tools/nicocache-build/**'
     'tools/nicocache-launcher/**'
     'packaging/windows/prepare-dependencies.ps1'
