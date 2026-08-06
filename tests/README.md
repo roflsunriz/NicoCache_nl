@@ -2,11 +2,11 @@
 
 ## ローカル配信ブラウザスクリプト
 
-Node.js 20以降の組み込みテストランナーで、`local/`から視聴ページへ配信する
-JavaScriptのブラウザーAPI呼出規約と動画切替処理を検証する。
+Node.js 20以降の組み込みテストランナーで、`local/`から配信するJavaScriptの
+ブラウザーAPI呼出規約、動画切替処理、キャッシュ品質のリンク色・アイコン表示を検証する。
 
 ```powershell
-node --test .\tests\local\nllib-watch.test.js
+node --test .\tests\local\*.test.js
 ```
 
 ## 実利用経路のE2Eテスト

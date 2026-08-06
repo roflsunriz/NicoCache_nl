@@ -1,14 +1,14 @@
 // ==UserScript==
-// @name         Nicocache_nl: キャッシュ済み動画へのリンクに品質classを追加
+// @name         Nicocache_nl: 動画リンクへキャッシュ状態を表示
 // @match        http://www.nicovideo.jp/*
 // @match        https://www.nicovideo.jp/*
 // ==/UserScript==
 
 // - version 2026-08-06
 // - このファイルのライセンスはNicoCache Licenseです.
-// - リンク色をキャッシュ状況に応じてキャッシュ品質classを追加。
-// - 品質classによってリンクの見た目を変更.
-// - HTMLを監視して、変化をキャッチして順次に品質classを追加する.
+// - 2026-08-06: 現行Reactカードのサムネイルへキャッシュアイコンを追加.
+// - キャッシュ状況に応じた品質classでリンクの見た目を変更.
+// - HTMLと属性を監視し、SPA遷移や遅延描画後にも表示を更新する.
 
 'use strict';
 
@@ -133,6 +133,10 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     "nl-cached-smile-normal", "nl-cached-smile-economy",
     "nl-cached-dmc-normal", "nl-cached-dmc-economy",
   ];
+  const cacheIconClassNames = [
+    "cacheIconImgMin", "economyIconImgMin",
+    "dmcCacheIconImgMin", "dmcEconomyIconImgMin",
+  ];
   const checkedAnchorIds = new WeakMap();
   const infoCache = new Map();
   const pendingAnchors = new Map();
@@ -177,6 +181,70 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     } else if (4 === cachePoint) {
       anchor.classList.add("nl-cached-common", "cached-dmc-normal", "nl-cached-dmc-normal");
     };
+
+    applyCacheIcon(anchor, cachePoint);
+  };
+
+  const getCacheIconClass = function(cachePoint) {
+    if (1 === cachePoint) return "economyIconImgMin";
+    if (2 === cachePoint) return "dmcEconomyIconImgMin";
+    if (3 === cachePoint) return "cacheIconImgMin";
+    if (4 === cachePoint) return "dmcCacheIconImgMin";
+    return null;
+  };
+
+  const findThumbnailHost = function(anchor) {
+    const modernHost = anchor.querySelector("[data-group]");
+    if (modernHost) return modernHost;
+
+    const thumbnail = anchor.querySelector([
+      ".Thumbnail-image",
+      ".NC-Thumbnail-image",
+      "[data-background-image]",
+      "[style*='background-image']",
+      "img[src*='/thumbnails/']",
+      "img[src*='smile']",
+      "picture img",
+      "img",
+    ].join(","));
+    if (!thumbnail) return null;
+    if (!thumbnail.matches("img")) return thumbnail;
+
+    return thumbnail.parentElement && thumbnail.parentElement !== anchor
+      ? thumbnail.parentElement
+      : anchor;
+  };
+
+  function applyCacheIcon(anchor, cachePoint) {
+    const iconClass = getCacheIconClass(cachePoint);
+    const ownIcon = anchor.querySelector("[data-ncnl-cache-icon]");
+    if (!iconClass) {
+      if (ownIcon) ownIcon.remove();
+      return;
+    };
+
+    // 応答HTMLを書き換える従来のnlFilterが追加したアイコンを優先する.
+    const legacyIcon = anchor.querySelector(".cacheIcon")
+      || (anchor.nextElementSibling
+          && anchor.nextElementSibling.classList.contains("cacheIcon")
+          ? anchor.nextElementSibling : null);
+    if (legacyIcon && !legacyIcon.hasAttribute("data-ncnl-cache-icon")) return;
+
+    const thumbnailHost = findThumbnailHost(anchor);
+    if (!thumbnailHost) return;
+
+    if (ownIcon && ownIcon.parentElement !== thumbnailHost) ownIcon.remove();
+    const existingIcon = thumbnailHost.querySelector("[data-ncnl-cache-icon]");
+
+    const icon = existingIcon || document.createElement("span");
+    cacheIconClassNames.forEach(function(className) {
+      icon.classList.remove(className);
+    });
+    icon.classList.add("cacheIcon", "ncnl-cache-icon", iconClass);
+    icon.setAttribute("data-ncnl-cache-icon", "");
+    icon.setAttribute("aria-hidden", "true");
+    thumbnailHost.classList.add("ncnl-cache-thumbnail-host");
+    if (!existingIcon) thumbnailHost.appendChild(icon);
   };
 
   const requestCacheInfo = async function(ids) {
@@ -218,17 +286,22 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     if (anchor.getAttribute("data-nicoad-point") !== null) return;
     const id = getDougaIDByAnchor(anchor);
     if (id === null || !/^[a-z]{2}\d+$/i.test(id)) return;
-    if (checkedAnchorIds.get(anchor) === id) return;
+    const cached = infoCache.get(id);
+    if (checkedAnchorIds.get(anchor) === id
+        && cached && cached.expiresAt > Date.now()) {
+      // 遅延画像の追加後にもサムネイルホストを再探索する.
+      applyCachePoint(anchor, getCachePoint(cached.videoInfo));
+      return;
+    };
 
     checkedAnchorIds.set(anchor, id);
-    const cached = infoCache.get(id);
     if (cached && cached.expiresAt > Date.now()) {
       applyCachePoint(anchor, getCachePoint(cached.videoInfo));
       return;
     };
 
-    if (!pendingAnchors.has(id)) pendingAnchors.set(id, []);
-    pendingAnchors.get(id).push(anchor);
+    if (!pendingAnchors.has(id)) pendingAnchors.set(id, new Set());
+    pendingAnchors.get(id).add(anchor);
     if (flushTimer === null) flushTimer = setTimeout(flushPendingAnchors, 0);
   };
 
@@ -243,6 +316,10 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
   const processAddedNode = function(node) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
     if (node.matches("a")) invokeHooks(node);
+    else if (node.closest) {
+      const ownerAnchor = node.closest("a");
+      if (ownerAnchor) invokeHooks(ownerAnchor);
+    };
     node.querySelectorAll("a").forEach(invokeHooks);
   };
 
@@ -251,10 +328,16 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     document.querySelectorAll("a").forEach(invokeHooks);
     const observer = new MutationObserver(function(mutationRecords) {
       mutationRecords.forEach(function(record) {
+        if (record.type === "attributes") processAddedNode(record.target);
         record.addedNodes.forEach(processAddedNode);
       });
     });
-    observer.observe(document.body, {childList: true, subtree: true});
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["href", "data-anchor-href", "data-content-id", "src"],
+    });
   };
 
   if (document.body) {

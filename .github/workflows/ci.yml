@@ -53,7 +53,7 @@ jobs:
 
       - name: Run local browser script tests
         shell: pwsh
-        run: node --test .\tests\local\nllib-watch.test.js
+        run: node --test .\tests\local\*.test.js
 
       - name: Run functional and Extension ABI tests
         shell: pwsh

@@ -6,6 +6,19 @@
  left:0;
  right:0;
 }
+.ncnl-cache-thumbnail-host {
+ position:relative;
+}
+.cacheIcon.ncnl-cache-icon {
+ position:absolute;
+ z-index:2;
+ bottom:4px;
+ left:4px;
+ right:auto;
+ width:20px;
+ height:15px;
+ pointer-events:none;
+}
 div.Thumbnail-image ~ .cacheIcon {
  position:absolute;
  right:initial;
