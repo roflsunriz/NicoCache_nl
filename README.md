@@ -47,8 +47,11 @@ Linux/macOSでは同じJavaビルドアプリをPOSIXラッパーから実行で
 ./build-javac.sh
 ```
 
-Windowsのアプリイメージ・MSI・ZIP、Linuxのアプリイメージ・ZIP・DEB/RPM、macOSの
-アプリバンドル・ZIP・PKG/DMGには、上記4本の独立アプリJARを同じ構成で収録します。
+Windowsのアプリケーションルート・MSI・ZIP、Linuxのアプリケーションルート・ZIP・DEB/RPM、
+macOSのアプリケーションルート・ZIP・PKG/DMGは、`git clone`直後と同じ追跡ファイル配置を
+保ち、その直下へ上記4本のプリコンパイル済みJARと専用`jre/`を重ねた共通構成です。
+キャッシュや個人設定は、この読み取り専用にできるアプリケーションルートとは別の
+ユーザーデータルートへ保存します。
 
 `NicoCacheLauncher.jar`は引数なしなら管理GUIだけを起動し、NicoCache_nl本体は自動で
 起動しません。タスクトレイ常駐、ログオン時に一回だけ実行する自動起動タスクの
@@ -98,7 +101,7 @@ java -Dnicocache.applicationRoot="C:\NicoCache_nl" `
 `NicoCacheCA.jar`は`config.properties`の`userDataRoot`も読み取ります。生成後は
 Firefoxへユーザーデータ側の`certs/ca.cer`をインポートし、本体を再起動してください。
 JAR自体にはOSのファイルアイコンを持たせられないため、GUIのウィンドウ・タスクトレイと
-`jpackage`のネイティブランチャーには専用アイコンを割り当てます。
+Windowsインストーラーのショートカットには専用アイコンを割り当てます。
 
 本体はランダムトークンで保護したループバック限定の管理APIを提供し、起動管理アプリが
 グレイスフル停止・強制停止・状態確認を呼び出します。ポートは設定の

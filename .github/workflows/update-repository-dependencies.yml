@@ -55,7 +55,7 @@ jobs:
           .\test-first-run-setup.ps1
           .\packaging\windows\test-windows-setup-script.ps1
 
-      - name: Set up default Temurin 25 for jpackage
+      - name: Set up default Temurin 25 for packaging
         if: steps.update.outputs.updated == 'true'
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
         with:
@@ -68,7 +68,7 @@ jobs:
         run: |
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
-            -AppVersion 1.0.0 `
+            -AppVersion 1.0.0
           .\packaging\windows\test-windows-app-image.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
           $msi = Get-ChildItem `
@@ -98,8 +98,8 @@ jobs:
             '- 公式Maven Centralから取得した実体のSHA-256'
             '- POMのライセンス名と公式ライセンスURL'
             '- 既定のTemurin 25によるコンパイルと機能テスト'
-            '- Windows AppImage・MSI生成'
-            '- AppImageスモークテストとMSI構造テスト'
+            '- Windowsアプリケーションルート・ZIP・MSI生成'
+            '- アプリケーションルートのスモークテストとMSI構造テスト'
             ''
             '自動マージは行いません。レビュー後に取り込んでください。'
           )

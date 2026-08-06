@@ -111,14 +111,15 @@ jobs:
         shell: pwsh
         run: |
           java --version
+          jlink --version
           jpackage --version
-          Get-Command candle, light | Select-Object Name, Source
+          Get-Command candle, light, heat | Select-Object Name, Source
 
       - name: Test Windows setup script
         shell: pwsh
         run: .\packaging\windows\test-windows-setup-script.ps1
 
-      - name: Build release app image and MSI
+      - name: Build release application root and packages
         shell: pwsh
         env:
           APP_VERSION: ${{ steps.release-tag.outputs.app_version }}
@@ -139,7 +140,7 @@ jobs:
           $destination = Join-Path $env:GITHUB_WORKSPACE `
             "NicoCache_nl-$env:RELEASE_TAG.zip"
           if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            throw "共通アプリイメージから作成したZIPがありません: $source"
+            throw "共通アプリケーションルートから作成したZIPがありません: $source"
           }
           Copy-Item -LiteralPath $source -Destination $destination -Force
 
@@ -168,13 +169,13 @@ jobs:
               ".\.test-work\windows-package\output\NicoCache_nl-$env:APP_VERSION.msi"
             )
 
-      - name: Test release app image
+      - name: Test release application root
         shell: pwsh
         run: |
           .\packaging\windows\test-windows-app-image.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
 
-      - name: Test ZIP and app image parity
+      - name: Test ZIP and application-root parity
         shell: pwsh
         env:
           RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}

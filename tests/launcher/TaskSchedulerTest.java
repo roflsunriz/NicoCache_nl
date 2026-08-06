@@ -80,12 +80,10 @@ public final class TaskSchedulerTest {
                 "task command must preserve the application root");
         assertContains(taskXml, "--data-root=" + fixture.paths.getDataRoot(),
                 "task command must preserve the data root");
-        String java = Path.of(System.getProperty("java.home"), "bin",
-                "javaw.exe").toString();
-        if (java.contains(" ")) {
-            assertContains(taskXml, "<Command>" + java + "</Command>",
-                    "task command must quote a Java path containing spaces");
-        }
+        String java = fixture.paths.getApplicationRoot()
+                .resolve("jre/bin/javaw.exe").toString();
+        assertContains(taskXml, "<Command>" + java + "</Command>",
+                "task command must use the bundled graphical Java runtime");
         assertFalse(taskXml.contains("StartInterval"),
                 "task XML must not contain an interval");
 
@@ -93,7 +91,7 @@ public final class TaskSchedulerTest {
         assertEquals(nativeName, argumentAfter(query.arguments, "/TN"),
                 "registration must verify the exact native task");
         Properties store = loadStore(fixture.paths.getTaskStore());
-        assertEquals("3", store.getProperty("version"),
+        assertEquals("4", store.getProperty("version"),
                 "task store schema version");
         assertEquals("on-logon", store.getProperty("task.0.schedule"),
                 "task store trigger");
@@ -121,6 +119,9 @@ public final class TaskSchedulerTest {
                 "macOS task must explicitly start the core");
         assertFalse(content.contains("--headless"),
                 "macOS task must keep the interactive launcher available");
+        assertContains(content, fixture.paths.getApplicationRoot()
+                        .resolve("jre/bin/java").toString(),
+                "macOS task must use the bundled Java runtime");
         assertTrue(fixture.commands.hasCommand("launchctl", "bootstrap"),
                 "macOS task must be bootstrapped into the user session");
     }
@@ -144,6 +145,10 @@ public final class TaskSchedulerTest {
                 "Linux task must explicitly start the core");
         assertFalse(content.contains("--headless"),
                 "Linux task must keep the interactive launcher available");
+        assertContains(content, fixture.paths.getApplicationRoot()
+                        .resolve("jre/bin/java").toString()
+                        .replace("\\", "\\\\"),
+                "Linux task must use the bundled Java runtime");
     }
 
     private static void testFailedNativeRegistrationDoesNotPersist(Path root)
@@ -200,7 +205,7 @@ public final class TaskSchedulerTest {
                 LauncherPaths.Platform.WINDOWS, fixture.commands).list();
         assertEquals(1, tasks.size(), "migrated task count");
         Properties migrated = loadStore(fixture.paths.getTaskStore());
-        assertEquals("3", migrated.getProperty("version"),
+        assertEquals("4", migrated.getProperty("version"),
                 "migrated task store schema version");
         assertEquals("on-logon", migrated.getProperty("task.0.schedule"),
                 "legacy interval must become logon trigger");
@@ -247,6 +252,11 @@ public final class TaskSchedulerTest {
         Files.write(applicationRoot.resolve("NicoCache_nl.jar"), new byte[] { 0 });
         Files.write(applicationRoot.resolve("NicoCacheLauncher.jar"),
                 new byte[] { 0 });
+        Path jreBin = applicationRoot.resolve("jre/bin");
+        Files.createDirectories(jreBin);
+        Files.write(jreBin.resolve("java"), new byte[] { 0 });
+        Files.write(jreBin.resolve("java.exe"), new byte[] { 0 });
+        Files.write(jreBin.resolve("javaw.exe"), new byte[] { 0 });
         return new Fixture(LauncherPaths.resolve(applicationRoot, dataRoot),
                 new FakeCommandRunner(), fixtureRoot.resolve("home"),
                 fixtureRoot.resolve("xdg-config"));

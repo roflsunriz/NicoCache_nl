@@ -24,7 +24,9 @@ if (-not $appImage.StartsWith(
 $appDirectory = $appImage
 $dataRoot = Join-Path $testRoot 'windows-first-run-user-data'
 $setupScript = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
-$launcher = Join-Path $appImage 'NicoCache_nl.exe'
+$launcher = Join-Path $appImage 'jre\bin\java.exe'
+$autoStartJava = Join-Path $appImage 'jre\bin\javaw.exe'
+$launcherJar = Join-Path $appImage 'NicoCacheLauncher.jar'
 $configPath = Join-Path $appDirectory 'config.properties'
 $guiPropertiesPath = Join-Path $dataRoot 'NicoCacheGUI.property'
 $completionStatePath =
@@ -45,6 +47,8 @@ $runValueName = 'NicoCache_nl'
 foreach ($requiredPath in @(
         $setupScript,
         $launcher,
+        $autoStartJava,
+        $launcherJar,
         $certificateTargetsPath
     )) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
@@ -104,6 +108,8 @@ try {
     }
     $setupProcess = Start-Process -FilePath $launcher `
         -ArgumentList @(
+            '-jar',
+            $launcherJar,
             '--setup',
             '--headless',
             "--user-data-root=$dataRoot",
@@ -186,8 +192,12 @@ try {
     }
     $runValue = (Get-ItemProperty -LiteralPath $runRegistryPath `
             -Name $runValueName).$runValueName
-    if ($runValue -notmatch [regex]::Escape($launcher)) {
-        throw 'ログオン時起動へ製品ランチャーが登録されていません'
+    if (($runValue -notmatch [regex]::Escape($autoStartJava)) -or
+            ($runValue -notmatch [regex]::Escape($launcherJar)) -or
+            ($runValue -notmatch '(?i)-jar') -or
+            ($runValue -notmatch '(?i)--tray') -or
+            ($runValue -notmatch '(?i)--start')) {
+        throw 'ログオン時起動が同梱JREとランチャーJARを参照していません'
     }
     if (Test-Path -LiteralPath (
             "Cert:\CurrentUser\Root\$($certificate.Thumbprint)"

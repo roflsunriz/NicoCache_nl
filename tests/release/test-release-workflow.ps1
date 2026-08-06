@@ -71,8 +71,8 @@ function Assert-ExactSet {
 foreach ($step in @(
         'Run functional and Extension ABI tests',
         'Test release MSI structure',
-        'Test release app image',
-        'Test ZIP and app image parity',
+        'Test release application root',
+        'Test ZIP and application-root parity',
         'Test release Windows integration and rollback',
         'Create Windows distribution archive checksum',
         'Create MSI checksum',
@@ -139,16 +139,24 @@ Assert-ContainsLine $java17Build `
     '.\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\java-17-dependencies -Clean' `
     'Explicit Java 17 compatibility build'
 
-$buildApplication = Get-StepBlock -Name 'Build release app image and MSI'
+$buildApplication = Get-StepBlock -Name 'Build release application root and packages'
 if ($buildApplication -match 'NlFiltersSource') {
-    throw 'Release workflow must use the shared system-files manifest'
+    throw 'Release workflow must not use an external nlFilters source'
 }
-$packageScript = Get-Content -LiteralPath (
+$packageScript = Get-Content -Raw -LiteralPath (
     Join-Path $root 'packaging\windows\build-windows-package.ps1'
 )
-Assert-ContainsLine $packageScript `
-    '$systemFilesManifest = Join-Path $root ''packaging\system-files.txt''' `
-    'Shared system-files manifest'
+if ($packageScript -notmatch 'build-flat-package\.ps1') {
+    throw 'Windows package entrypoint must delegate to the flat package builder'
+}
+$applicationRootScript = Get-Content -Raw -LiteralPath (
+    Join-Path $root 'packaging\prepare-application-root.ps1'
+)
+if ($applicationRootScript -notmatch 'ls-files --cached' -or
+        $applicationRootScript -notmatch 'NicoCacheLauncher\.jar' -or
+        $applicationRootScript -notmatch 'Join-Path \$destination ''jre''') {
+    throw 'Shared package builder must preserve tracked paths and overlay launcher JAR and JRE'
+}
 
 $installerWorkflow = Get-Content -Raw -LiteralPath (
     Join-Path $root '.github\workflows\windows-installer.yml'

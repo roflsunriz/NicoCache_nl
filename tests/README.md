@@ -132,11 +132,11 @@ Windowsの実タスクスケジューラー連携は、次のCI専用試験で�
 
 ## Windows パッケージの隔離スモークテスト
 
-`packaging/windows/test-windows-app-image.ps1` は自己完結アプリイメージの
-唯一のアプリランチャー `NicoCache_nl.exe` でヘッドレス初回セットアップを
-実行した後、同じEXEを `--headless` 指定で専用の空きループバックポートへ
-起動し、ルートのHTTP応答とバージョン文字列を確認する。アプリイメージ直下の
-EXEがこの1本だけであることも検証する。テスト設定、
+`packaging/windows/test-windows-app-image.ps1` は自己完結アプリケーションルートの
+`jre/bin/java.exe -jar NicoCacheLauncher.jar` でヘッドレス初回セットアップを
+実行した後、同じ入口を `--headless` 指定で専用の空きループバックポートへ
+起動し、ルートのHTTP応答とバージョン文字列を確認する。ネイティブ製品ランチャーを
+含まず、JARと同梱JREから起動することも検証する。テスト設定、
 ログ、キャッシュは
 `.test-work/windows-package/` 内に限定し、TLS MitM、証明書登録、Windows
 プロキシー設定、タスク登録は行わない。終了時は起動した実行ファイルのパスと
@@ -146,10 +146,10 @@ PIDを照合し、そのPIDだけを終了する。ヘッドレス初回セッ�
 証明書ストアとWindowsプロキシー設定はテスト前後のスナップショットが一致する
 ことも検証する。
 
-`packaging/windows/test-package-parity.ps1` は、共通アプリイメージから作成したZIPを
-展開し、アプリイメージ内の全ファイルとSHA-256が一致することを検証する。MSIは
-この同じアプリイメージを入力として生成するため、ZIP、MSIの製品ペイロード、
-アプリイメージの内容を同一経路で確認できる。
+`packaging/windows/test-package-parity.ps1` は、共通アプリケーションルートから作成したZIPを
+展開し、全ファイルとSHA-256が一致すること、およびGit追跡ファイルを同じ相対位置に
+含むことを検証する。MSIも同じルートを入力として生成するため、ZIP、MSIの製品ペイロード、
+アプリケーションルートの内容を同一経路で確認できる。
 
 MSIはGitHub Actionsの一時Windowsランナーへ旧版を `msiexec /qn` で
 インストールする。配布ファイルの修復、ユーザー状態を保った新版への更新、
@@ -161,13 +161,13 @@ Actionsランナー以外での実行を拒否する。
 
 ## Linux/macOS パッケージの隔離スモークテスト
 
-`packaging/unix/test-package.ps1` はLinuxのアプリイメージZIP・DEB・RPMまたは
-macOSのZIP・PKG・DMGを確認し、アプリイメージ内のランチャー、専用ランタイム、
-標準資材を検証する。OSの証明書ストア、プロキシー、自動起動設定は変更せず、
-OS連携を無効にしたヘッドレス初回セットアップを実行する。
+`packaging/unix/test-package.ps1` はLinuxのZIP・DEB・RPMまたはmacOSのZIP・PKG・DMGを
+確認し、clone相当のアプリケーションルート、直下JAR、専用`jre/`、起動スクリプトを
+検証する。OSの証明書ストア、プロキシー、自動起動設定は変更せず、同梱JREから
+起動管理JARのCLIを実行する。
 
 `packaging/unix/test-standalone-updater.ps1` は同じOSの独立アップデーターから
-対象ルート検証と依存関係自己診断を実行し、ZIPとネイティブパッケージの構造を
+平坦な対象ルートの検証と依存関係自己診断を実行し、ZIPとネイティブパッケージの構造を
 確認する。実際の`trust`、`gsettings`、`security`、`networksetup`への変更は
 実行しない。これらのOS連携を選択した実適用は、対象OSの隔離ランナーでのみ行う。
 
@@ -194,7 +194,8 @@ OS連携を無効にしたヘッドレス初回セットアップを実行する
 `-KeepWorkDir` を指定すると、標準幅と最小幅の画面プレビューを
 `.test-work/first-run-setup/preview/` に保持する。WindowsのOS連携の実処理は
 `packaging/windows/test-windows-first-run.ps1` が一時GitHub Actionsランナーで
-同じEXEの `--setup --headless` 経由でCA登録、Windows自動プロキシー、
+同梱`jre/bin/java.exe -jar NicoCacheLauncher.jar --setup --headless`経由で
+CA登録、Windows自動プロキシー、
 ログオン時起動を適用し、保存した変更前状態へ完全に復元できることを確認する。
 現行環境の汚染を防ぐため、この実連携試験はGitHub Actions以外での実行を
 拒否する。

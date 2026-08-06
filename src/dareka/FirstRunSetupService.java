@@ -444,10 +444,15 @@ final class FirstRunSetupService {
             if (!Files.isRegularFile(script)) {
                 throw new IOException("Windows設定スクリプトがありません: " + script);
             }
-            String appPath = System.getProperty("jpackage.app-path");
-            Path launcher = appPath == null || appPath.isBlank()
-                    ? appDirectory.resolve("NicoCache_nl.exe")
-                    : Path.of(appPath);
+            Path launcher = appDirectory.resolve("jre/bin/javaw.exe");
+            Path launcherJar = appDirectory.resolve("NicoCacheLauncher.jar");
+            if (!Files.isRegularFile(launcher)) {
+                launcher = Path.of(System.getProperty("java.home"), "bin",
+                        "javaw.exe").toAbsolutePath().normalize();
+            }
+            if (!Files.isRegularFile(launcher) || !Files.isRegularFile(launcherJar)) {
+                throw new IOException("Java実行ファイルまたはランチャーJARがありません");
+            }
             List<String> command = new ArrayList<>();
             command.add("powershell.exe");
             command.add("-WindowStyle");
@@ -470,6 +475,8 @@ final class FirstRunSetupService {
             command.add("http://localhost:8080/proxy.pac");
             command.add("-LauncherPath");
             command.add(launcher.toAbsolutePath().normalize().toString());
+            command.add("-LauncherJarPath");
+            command.add(launcherJar.toAbsolutePath().normalize().toString());
             if (options.isCertificateTrusted()) {
                 command.add("-EnableCertificate");
             }

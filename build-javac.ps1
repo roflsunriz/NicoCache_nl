@@ -2,6 +2,7 @@ param(
     [ValidateSet(17, 21, 25)]
     [int]$JavaVersion = 25,
     [string]$LibraryDirectory,
+    [string]$OutputDirectory,
     [switch]$Clean
 )
 
@@ -63,6 +64,10 @@ $builderArguments = @("-jar", $buildJar, "--root=$root")
 if ($PSBoundParameters.ContainsKey("LibraryDirectory")) {
     $libraryPath = (Resolve-Path -LiteralPath $LibraryDirectory).Path
     $builderArguments += "--library-dir=$libraryPath"
+}
+if ($PSBoundParameters.ContainsKey("OutputDirectory")) {
+    $outputPath = [System.IO.Path]::GetFullPath($OutputDirectory)
+    $builderArguments += "--output-dir=$outputPath"
 }
 if ($Clean) {
     $builderArguments += "--clean"

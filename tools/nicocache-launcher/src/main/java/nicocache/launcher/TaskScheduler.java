@@ -61,7 +61,7 @@ final class TaskScheduler {
         try (var input = Files.newInputStream(store)) {
             properties.load(input);
         }
-        boolean migrate = !"3".equals(properties.getProperty("version"));
+        boolean migrate = !"4".equals(properties.getProperty("version"));
         int count;
         try {
             count = Integer.parseInt(properties.getProperty("count", "0"));
@@ -144,7 +144,7 @@ final class TaskScheduler {
             Files.createDirectories(parent);
         }
         Properties properties = new Properties();
-        properties.setProperty("version", "3");
+        properties.setProperty("version", "4");
         properties.setProperty("count", Integer.toString(tasks.size()));
         for (int index = 0; index < tasks.size(); index++) {
             tasks.get(index).writeProperties(properties, "task." + index + ".");
@@ -252,7 +252,7 @@ final class TaskScheduler {
                 .append("<key>Label</key><string>")
                 .append(xml(task.getId())).append("</string>\n")
                 .append("<key>ProgramArguments</key><array>\n");
-        for (String argument : paths.getTaskCommand()) {
+        for (String argument : paths.getTaskCommand(platform)) {
             xml.append("<string>").append(xml(argument)).append("</string>\n");
         }
         xml.append("</array>\n");
@@ -286,7 +286,7 @@ final class TaskScheduler {
     }
 
     private String renderWindowsTaskXml() {
-        List<String> command = paths.getTaskCommand();
+        List<String> command = paths.getTaskCommand(platform);
         if (command.isEmpty()) {
             throw new IllegalStateException("タスク登録用の起動コマンドが空です");
         }
@@ -346,7 +346,7 @@ final class TaskScheduler {
     }
 
     private String renderDesktopCommand() {
-        return paths.getTaskCommand().stream()
+        return paths.getTaskCommand(platform).stream()
                 .map(TaskScheduler::desktopQuote)
                 .collect(Collectors.joining(" "));
     }

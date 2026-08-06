@@ -33,13 +33,27 @@ Expand-Archive -LiteralPath $zip -DestinationPath $extractRoot -Force
 foreach ($artifactName in @(
         'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
         'NicoCacheBuild.jar')) {
-    $appArtifact = Join-Path $appImage "app\$artifactName"
-    $zipArtifact = Join-Path $extractRoot "app\$artifactName"
+    $appArtifact = Join-Path $appImage $artifactName
+    $zipArtifact = Join-Path $extractRoot $artifactName
     if (-not (Test-Path -LiteralPath $appArtifact -PathType Leaf)) {
-        throw "アプリイメージに独立アプリJARがありません: $artifactName"
+        throw "アプリケーションルートに独立アプリJARがありません: $artifactName"
     }
     if (-not (Test-Path -LiteralPath $zipArtifact -PathType Leaf)) {
         throw "ZIPに独立アプリJARがありません: $artifactName"
+    }
+}
+
+$deletedPaths = @(& git -C $root -c core.quotePath=false ls-files --deleted)
+foreach ($relativePath in @(& git -C $root -c core.quotePath=false ls-files --cached)) {
+    if ($relativePath -in $deletedPaths) { continue }
+    $applicationFile = Join-Path $appImage ($relativePath -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $applicationFile -PathType Leaf)) {
+        throw "clone相当のアプリケーションルートにGit管理対象ファイルがありません: $relativePath"
+    }
+    $sourceFile = Join-Path $root ($relativePath -replace '/', '\')
+    if ((Get-FileHash -LiteralPath $applicationFile -Algorithm SHA256).Hash -ne
+            (Get-FileHash -LiteralPath $sourceFile -Algorithm SHA256).Hash) {
+        throw "アプリケーションルートのGit管理対象ファイルが作業ツリーと一致しません: $relativePath"
     }
 }
 
@@ -70,11 +84,11 @@ $different = @($appByPath.Keys | Where-Object {
 })
 if ($missing.Count -gt 0 -or $unexpected.Count -gt 0 -or $different.Count -gt 0) {
     throw (
-        "ZIPとアプリイメージの内容が一致しません。" +
+        "ZIPとアプリケーションルートの内容が一致しません。" +
         " missing=$($missing.Count), unexpected=$($unexpected.Count)," +
         " different=$($different.Count)"
     )
 }
 
 Remove-Item -LiteralPath $extractRoot -Recurse -Force
-Write-Output "PASS ZIPとMSI共通アプリイメージの内容一致 ($($appFiles.Count) files)"
+Write-Output "PASS ZIPとMSI共通アプリケーションルートの内容一致 ($($appFiles.Count) files)"

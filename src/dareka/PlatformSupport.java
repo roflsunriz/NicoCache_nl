@@ -1,7 +1,6 @@
 package dareka;
 
 import java.awt.GraphicsEnvironment;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 /** Small, shared platform policy used by the launcher and first-run setup. */
@@ -49,36 +48,17 @@ final class PlatformSupport {
         if (parent == null) {
             return normalized;
         }
-        if (kind == Kind.MACOS
-                && "MacOS".equalsIgnoreCase(fileName(parent))
-                && parent.getParent() != null
-                && "Contents".equalsIgnoreCase(fileName(parent.getParent()))) {
-            Path contents = parent.getParent();
-            Path resources = contents.resolve("Resources");
-            return Files.isDirectory(resources) ? resources : contents;
-        }
-        if (kind == Kind.LINUX
-                && "bin".equalsIgnoreCase(fileName(parent))
-                && parent.getParent() != null) {
-            return parent.getParent();
-        }
         return parent;
     }
 
     static Path launcherPath(Path applicationRoot, Kind kind) {
         switch (kind) {
         case WINDOWS:
-            return applicationRoot.resolve("NicoCache_nl.exe");
+            return applicationRoot.resolve("NicoCache_nl.cmd");
         case MACOS:
-            Path contents = applicationRoot;
-            if ("Resources".equalsIgnoreCase(fileName(applicationRoot))
-                    && applicationRoot.getParent() != null
-                    && "Contents".equalsIgnoreCase(fileName(applicationRoot.getParent()))) {
-                contents = applicationRoot.getParent();
-            }
-            return contents.resolve("MacOS").resolve("NicoCache_nl");
+            return applicationRoot.resolve("NicoCache_nl");
         case LINUX:
-            return applicationRoot.resolve("bin").resolve("NicoCache_nl");
+            return applicationRoot.resolve("NicoCache_nl");
         case OTHER:
         default:
             return applicationRoot.resolve("NicoCache_nl");
@@ -133,8 +113,4 @@ final class PlatformSupport {
                 : Path.of(value).toAbsolutePath().normalize();
     }
 
-    private static String fileName(Path path) {
-        Path fileName = path.getFileName();
-        return fileName == null ? "" : fileName.toString();
-    }
 }

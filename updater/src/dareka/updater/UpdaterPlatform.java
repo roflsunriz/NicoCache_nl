@@ -89,21 +89,34 @@ final class UpdaterPlatform {
     }
 
     static Path launcherPath(Path applicationRoot, Kind kind) {
+        Path flatLauncher = applicationRoot.resolve(
+                kind == Kind.WINDOWS ? "NicoCache_nl.cmd" : "NicoCache_nl");
+        if (Files.isRegularFile(flatLauncher)) {
+            return flatLauncher;
+        }
+        Path legacyLauncher;
         switch (kind) {
         case WINDOWS:
-            return applicationRoot.resolve("NicoCache_nl.exe");
+            legacyLauncher = applicationRoot.resolve("NicoCache_nl.exe");
+            break;
         case MACOS:
-            return applicationRoot.resolve("MacOS/NicoCache_nl");
+            legacyLauncher = applicationRoot.resolve("MacOS/NicoCache_nl");
+            break;
         case LINUX:
-            return applicationRoot.resolve("bin/NicoCache_nl");
+            legacyLauncher = applicationRoot.resolve("bin/NicoCache_nl");
+            break;
         case OTHER:
         default:
             return applicationRoot.resolve("NicoCache_nl");
         }
+        return Files.isRegularFile(legacyLauncher) ? legacyLauncher : flatLauncher;
     }
 
     static Path applicationDirectory(Path applicationRoot) {
         Path normalized = applicationRoot.toAbsolutePath().normalize();
+        if (Files.isRegularFile(normalized.resolve("NicoCache_nl.jar"))) {
+            return normalized;
+        }
         Path linuxDirectory = normalized.resolve("lib/app");
         return Files.isDirectory(linuxDirectory) ? linuxDirectory : normalized.resolve("app");
     }
@@ -116,6 +129,8 @@ final class UpdaterPlatform {
 
     static Path runtimeDirectory(Path applicationRoot) {
         Path normalized = applicationRoot.toAbsolutePath().normalize();
+        Path flatDirectory = normalized.resolve("jre");
+        if (Files.isDirectory(flatDirectory)) return flatDirectory;
         Path macDirectory = normalized.resolve("runtime/Contents/Home");
         if (Files.isDirectory(macDirectory)) return macDirectory;
         Path linuxDirectory = normalized.resolve("lib/runtime");
@@ -132,6 +147,8 @@ final class UpdaterPlatform {
                     "NicoCache_nl").toAbsolutePath().normalize();
         case MACOS:
             Path[] macCandidates = new Path[] {
+                Path.of("/Applications/NicoCache_nl"),
+                home.resolve("Applications/NicoCache_nl"),
                 Path.of("/Applications/NicoCache_nl.app/Contents"),
                 home.resolve("Applications/NicoCache_nl.app/Contents")
             };

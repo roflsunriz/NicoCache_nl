@@ -61,7 +61,7 @@ final class CoreProcess {
 
     List<String> buildStartCommand(boolean headless) {
         List<String> command = new ArrayList<>();
-        command.add(javaExecutable().toString());
+        command.add(paths.getJavaExecutable(false).toString());
         command.add("-Xmx128m");
         command.add("-Dnicocache.applicationRoot="
                 + paths.getApplicationRoot());
@@ -115,7 +115,7 @@ final class CoreProcess {
     int runSetup(List<String> setupArguments, boolean inheritIo)
             throws IOException {
         List<String> command = new ArrayList<>();
-        command.add(javaExecutable().toString());
+        command.add(paths.getJavaExecutable(false).toString());
         command.add("-Dnicocache.applicationRoot="
                 + paths.getApplicationRoot());
         command.add("-jar");
@@ -207,9 +207,4 @@ final class CoreProcess {
         }
     }
 
-    private Path javaExecutable() {
-        String executable = paths.getPlatform() == LauncherPaths.Platform.WINDOWS
-                ? "java.exe" : "java";
-        return Path.of(System.getProperty("java.home"), "bin", executable);
-    }
 }

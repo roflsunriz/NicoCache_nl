@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/unix-packages.yml'
       - 'packaging/unix/**'
+      - 'packaging/prepare-application-root.ps1'
       - 'packaging/windows/assets/nicocache-launcher.png'
       - 'packaging/windows/dependency-lock.psd1'
       - 'packaging/windows/prepare-dependencies.ps1'
@@ -45,6 +46,7 @@ on:
     paths:
       - '.github/workflows/unix-packages.yml'
       - 'packaging/unix/**'
+      - 'packaging/prepare-application-root.ps1'
       - 'packaging/windows/assets/nicocache-launcher.png'
       - 'packaging/windows/dependency-lock.psd1'
       - 'packaging/windows/prepare-dependencies.ps1'
@@ -115,6 +117,7 @@ jobs:
         shell: pwsh
         run: |
           java --version
+          jlink --version
           jpackage --version
           pwsh --version
           rpm --version
@@ -166,6 +169,7 @@ jobs:
         shell: pwsh
         run: |
           java --version
+          jlink --version
           jpackage --version
           pwsh --version
           sw_vers

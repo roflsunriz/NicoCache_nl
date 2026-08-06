@@ -12,15 +12,22 @@ if ($env:GITHUB_ACTIONS -ne 'true') {
 }
 
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
+$testRoot = Join-Path $root '.test-work\windows-task-scheduler'
 if ([string]::IsNullOrWhiteSpace($LauncherJarPath)) {
     $LauncherJarPath = Join-Path $root 'NicoCacheLauncher.jar'
 }
 if ([string]::IsNullOrWhiteSpace($ApplicationRoot)) {
-    $ApplicationRoot = $root
+    $ApplicationRoot = Join-Path $testRoot 'application'
+    $jreBin = Join-Path $ApplicationRoot 'jre\bin'
+    New-Item -ItemType Directory -Path $jreBin -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root 'NicoCache_nl.jar') `
+        -Destination $ApplicationRoot -Force
+    Copy-Item -LiteralPath $LauncherJarPath -Destination $ApplicationRoot -Force
+    Copy-Item -LiteralPath (Join-Path $env:JAVA_HOME 'bin\javaw.exe') `
+        -Destination $jreBin -Force
 }
 $launcherJar = (Resolve-Path -LiteralPath $LauncherJarPath).Path
 $applicationRootPath = (Resolve-Path -LiteralPath $ApplicationRoot).Path
-$testRoot = Join-Path $root '.test-work\windows-task-scheduler'
 $dataRoot = Join-Path $testRoot 'user-data'
 $taskLabel = 'NicoCache-CI-' + [Guid]::NewGuid().ToString('N')
 $taskLabelPattern = [regex]::Escape($taskLabel)
@@ -203,7 +210,8 @@ try {
     }
     $arguments = [string]$exec.Arguments
     if (($arguments -notmatch '(?i)(?:^|\s)-jar(?:\s|$)') -or
-            ($arguments -notmatch [regex]::Escape($launcherJar)) -or
+            ($arguments -notmatch [regex]::Escape(
+                (Join-Path $applicationRootPath 'NicoCacheLauncher.jar'))) -or
             ($arguments -notmatch [regex]::Escape(
                 '--app-root=' + $applicationRootPath)) -or
             ($arguments -notmatch [regex]::Escape(

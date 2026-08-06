@@ -88,26 +88,10 @@ Assert-True (-not @(Get-ChildItem -LiteralPath $bundle -Recurse -File -Filter '*
 
 $target = Join-Path $workRoot 'target'
 if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
-if ($Platform -eq 'MacOS') {
-    New-Item -ItemType Directory -Path (Join-Path $target 'MacOS'),
-        (Join-Path $target 'app'), (Join-Path $target 'Resources') | Out-Null
-    Set-Content -LiteralPath (Join-Path $target 'MacOS/NicoCache_nl') -Value 'launcher' -Encoding utf8
-} else {
-    New-Item -ItemType Directory -Path (Join-Path $target 'lib/app'), (Join-Path $target 'bin') | Out-Null
-    Set-Content -LiteralPath (Join-Path $target 'bin/NicoCache_nl') -Value 'launcher' -Encoding utf8
-}
-$targetApplicationDirectory = if ($Platform -eq 'Linux') {
-    Join-Path $target 'lib/app'
-} else {
-    Join-Path $target 'app'
-}
-Set-Content -LiteralPath (Join-Path $targetApplicationDirectory 'NicoCache_nl.cfg') -Encoding utf8 -Value @'
-[Application]
-app.mainmodule=NicoCache_nl.jar
-
-[JavaOptions]
-java-options=-Djpackage.app-version=1.0.1
-'@
+New-Item -ItemType Directory -Path (Join-Path $target 'jre/bin') | Out-Null
+Set-Content -LiteralPath (Join-Path $target 'NicoCache_nl') -Value 'launcher' -Encoding utf8
+Set-Content -LiteralPath (Join-Path $target 'NicoCache_nl.jar') -Value 'jar' -Encoding utf8
+Set-Content -LiteralPath (Join-Path $target 'NicoCache_nl.version') -Value '1.0.1' -Encoding ascii
 $validation = Invoke-Updater $launcher @('--validate-target-root', '--app-root', $target)
 Assert-True ($validation.Trim() -eq (Resolve-Path -LiteralPath $target).Path) `
     '更新対象の検証結果が不正です'

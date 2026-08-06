@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'packaging/windows/**'
+      - 'packaging/prepare-application-root.ps1'
       - 'packaging/windows/prepare-dependencies.ps1'
       - 'packaging/system-files.txt'
       - 'build-javac.ps1'
@@ -45,6 +46,7 @@ on:
     paths:
       - '.github/workflows/windows-installer.yml'
       - 'packaging/windows/**'
+      - 'packaging/prepare-application-root.ps1'
       - 'packaging/windows/prepare-dependencies.ps1'
       - 'packaging/system-files.txt'
       - 'build-javac.ps1'
@@ -118,8 +120,9 @@ jobs:
         shell: pwsh
         run: |
           java --version
+          jlink --version
           jpackage --version
-          Get-Command candle, light | Select-Object Name, Source
+          Get-Command candle, light, heat | Select-Object Name, Source
 
       - name: Test Windows setup failure diagnostics
         shell: pwsh
@@ -150,7 +153,7 @@ jobs:
               )
             )
 
-      - name: Build current app image and MSI
+      - name: Build current application root and packages
         shell: pwsh
         run: |
           .\packaging\windows\build-windows-package.ps1 `
@@ -171,20 +174,20 @@ jobs:
           .\packaging\windows\test-windows-msi-structure.ps1 `
             -MsiPath $msi.FullName
 
-      - name: Test isolated app image
+      - name: Test isolated application root
         shell: pwsh
         run: |
           .\packaging\windows\test-windows-app-image.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl
 
-      - name: Test ZIP and app image parity
+      - name: Test ZIP and application-root parity
         shell: pwsh
         run: |
           $zip = Get-ChildItem `
             -LiteralPath .\.test-work\windows-package\output `
             -File -Filter '*.zip' | Select-Object -First 1
           if (-not $zip) {
-            throw '共通アプリイメージ由来のZIPがありません'
+            throw '共通アプリケーションルート由来のZIPがありません'
           }
           .\packaging\windows\test-package-parity.ps1 `
             -AppImagePath .\.test-work\windows-package\output\NicoCache_nl `

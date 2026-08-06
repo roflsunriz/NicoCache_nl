@@ -197,7 +197,8 @@ final class ArchiveApplicationInstaller {
             return false;
         }
         if (platform == UpdaterPlatform.Kind.MACOS) {
-            return Files.isRegularFile(candidate.resolve("MacOS/NicoCache_nl"));
+            return Files.isRegularFile(candidate.resolve("NicoCache_nl"))
+                    || Files.isRegularFile(candidate.resolve("MacOS/NicoCache_nl"));
         }
         return Files.isRegularFile(candidate.resolve("bin/NicoCache_nl"))
                 || Files.isRegularFile(candidate.resolve("NicoCache_nl"));
@@ -212,10 +213,13 @@ final class ArchiveApplicationInstaller {
 
     private static void restoreUnixExecutableBits(Path root, UpdaterPlatform.Kind platform)
             throws IOException {
-        Path launcher = platform == UpdaterPlatform.Kind.MACOS
-                ? root.resolve("MacOS/NicoCache_nl")
-                : root.resolve("bin/NicoCache_nl");
-        if (platform == UpdaterPlatform.Kind.LINUX && !Files.isRegularFile(launcher)) {
+        Path launcher = root.resolve("NicoCache_nl");
+        if (!Files.isRegularFile(launcher) && platform == UpdaterPlatform.Kind.MACOS) {
+            launcher = root.resolve("MacOS/NicoCache_nl");
+        } else if (!Files.isRegularFile(launcher)) {
+            launcher = root.resolve("bin/NicoCache_nl");
+        }
+        if (!Files.isRegularFile(launcher)) {
             launcher = root.resolve("NicoCache_nl");
         }
         setExecutable(launcher);

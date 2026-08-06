@@ -22,9 +22,9 @@ if (-not $appImage.StartsWith(
     throw "実環境の誤操作を防ぐため.test-work外のイメージは検証できません: $appImage"
 }
 $appDirectory = $appImage
-$internalAppDirectory = Join-Path $appImage 'app'
-$launcherPath = Join-Path $appImage 'NicoCache_nl.exe'
-$coreJavaPath = Join-Path $appImage 'runtime\bin\java.exe'
+$launcherJarPath = Join-Path $appImage 'NicoCacheLauncher.jar'
+$launcherPath = Join-Path $appImage 'jre\bin\java.exe'
+$coreJavaPath = $launcherPath
 $separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
 $dataRoot = Join-Path $testRoot 'app-image-user-data'
 $configPath = Join-Path $appDirectory 'config.properties'
@@ -43,16 +43,17 @@ $foreignWorkingDirectory = Join-Path $logRoot 'foreign-working-directory'
 
 foreach ($requiredPath in @(
         $launcherPath,
-        (Join-Path $appDirectory 'runtime\bin\java.exe'),
-        (Join-Path $appDirectory 'runtime\bin\javaw.exe'),
-        (Join-Path $internalAppDirectory 'NicoCache_nl.jar'),
-        (Join-Path $internalAppDirectory 'NicoCacheCA.jar'),
-        (Join-Path $internalAppDirectory 'NicoCacheLauncher.jar'),
-        (Join-Path $internalAppDirectory 'NicoCacheBuild.jar'),
+        (Join-Path $appDirectory 'jre\bin\java.exe'),
+        (Join-Path $appDirectory 'jre\bin\javaw.exe'),
+        (Join-Path $appDirectory 'NicoCache_nl.cmd'),
+        (Join-Path $appDirectory 'NicoCache_nl.jar'),
+        (Join-Path $appDirectory 'NicoCacheCA.jar'),
+        (Join-Path $appDirectory 'NicoCacheLauncher.jar'),
+        (Join-Path $appDirectory 'NicoCacheBuild.jar'),
         $certificateTargetsPath,
-        (Join-Path $internalAppDirectory 'lib\bcprov.jar'),
-        (Join-Path $internalAppDirectory 'lib\bcpkix.jar'),
-        (Join-Path $internalAppDirectory 'lib\bcutil.jar'),
+        (Join-Path $appDirectory 'lib\bcprov.jar'),
+        (Join-Path $appDirectory 'lib\bcpkix.jar'),
+        (Join-Path $appDirectory 'lib\bcutil.jar'),
         (Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'),
         (Join-Path $appDirectory 'defaults\application.properties'),
         (Join-Path $appDirectory 'defaults\network.properties'),
@@ -75,37 +76,14 @@ foreach ($requiredPath in @(
         (Join-Path $appDirectory 'nlFilters\tools\nlfilter-lab\README.md'),
         (Join-Path $appDirectory 'tools\cmaf-to-mp4\nico-cmaf-to-mp4.jar'),
         (Join-Path $appDirectory 'tools\cmaf-to-mp4\README.md'),
-        (Join-Path $internalAppDirectory 'development\build-javac.ps1'),
-        (Join-Path $internalAppDirectory 'development\src\dareka\NLMain.java'),
-        (Join-Path $internalAppDirectory 'development\tests\functional\FunctionalTestMain.java'),
-        (Join-Path $internalAppDirectory 'development\how-to-dump-stack-trace.txt'),
-        (Join-Path $internalAppDirectory 'development\nlFilters\how-to-update.md'),
-        (Join-Path $internalAppDirectory 'development\nlFilters\tools\nlfilter-lab\README.md')
+        (Join-Path $appDirectory 'build-javac.ps1'),
+        (Join-Path $appDirectory 'src\dareka\NLMain.java'),
+        (Join-Path $appDirectory 'tests\functional\FunctionalTestMain.java'),
+        (Join-Path $appDirectory 'how-to-dump-stack-trace.txt')
     )) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "アプリイメージに必要なファイルがありません: $requiredPath"
     }
-}
-Add-Type -AssemblyName System.Drawing
-$launcherIcon = [System.Drawing.Icon]::ExtractAssociatedIcon($launcherPath)
-try {
-    if ($null -eq $launcherIcon -or $launcherIcon.Width -lt 16) {
-        throw "本体ランチャーに独自アイコンがありません: $launcherPath"
-    }
-} finally {
-    if ($launcherIcon) { $launcherIcon.Dispose() }
-}
-$launcherVersionInfo = (Get-Item -LiteralPath $launcherPath).VersionInfo
-if ($launcherVersionInfo.ProductName -ne 'NicoCache_nl' -or
-        $launcherVersionInfo.OriginalFilename -ne 'NicoCache_nl.exe' -or
-        $launcherVersionInfo.FileDescription -ne
-            'NicoCache_nl local HTTP/HTTPS proxy and cache server') {
-    throw (
-        '本体ランチャーのWindows説明情報が不正です: ' +
-        "ProductName=$($launcherVersionInfo.ProductName), " +
-        "OriginalFilename=$($launcherVersionInfo.OriginalFilename), " +
-        "FileDescription=$($launcherVersionInfo.FileDescription)"
-    )
 }
 $systemFilesManifest = Join-Path $root 'packaging\system-files.txt'
 $systemFiles = @(
@@ -119,14 +97,21 @@ foreach ($relativePath in $systemFiles) {
         throw "システム資材がアプリイメージにありません: $relativePath"
     }
 }
-foreach ($userOnlyDirectory in @('cache', 'certs', 'cvcache', 'thcache')) {
+foreach ($userOnlyDirectory in @('cache', 'cvcache', 'thcache')) {
     if (Test-Path -LiteralPath (
             Join-Path $appDirectory $userOnlyDirectory
         )) {
         throw "ユーザー専用ディレクトリがアプリ側にあります: $userOnlyDirectory"
     }
 }
-$jarPath = Join-Path $internalAppDirectory 'NicoCache_nl.jar'
+$applicationCertificateFiles = @(Get-ChildItem -LiteralPath (
+        Join-Path $appDirectory 'certs'
+    ) -File -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+if ($applicationCertificateFiles.Count -ne 1 -or
+        $applicationCertificateFiles[0] -ne 'readme.txt') {
+    throw "アプリ側certsにはclone由来のreadme.txtだけを配置できます: $applicationCertificateFiles"
+}
+$jarPath = Join-Path $appDirectory 'NicoCache_nl.jar'
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [System.IO.Compression.ZipFile]::OpenRead($jarPath)
 try {
@@ -147,7 +132,6 @@ try {
 } finally {
     $archive.Dispose()
 }
-$launcherJarPath = Join-Path $internalAppDirectory 'NicoCacheLauncher.jar'
 $launcherArchive = [System.IO.Compression.ZipFile]::OpenRead($launcherJarPath)
 try {
     $launcherEntries = @($launcherArchive.Entries |
@@ -164,7 +148,7 @@ try {
 } finally {
     $launcherArchive.Dispose()
 }
-$buildJarPath = Join-Path $internalAppDirectory 'NicoCacheBuild.jar'
+$buildJarPath = Join-Path $appDirectory 'NicoCacheBuild.jar'
 $buildArchive = [System.IO.Compression.ZipFile]::OpenRead($buildJarPath)
 try {
     $buildEntries = @($buildArchive.Entries | Select-Object -ExpandProperty FullName)
@@ -200,12 +184,11 @@ if ($LASTEXITCODE -ne 0) {
 if (Test-Path -LiteralPath $separateHeadlessLauncherPath) {
     throw "GUI用とヘッドレス用の製品ランチャーが分離されています: $separateHeadlessLauncherPath"
 }
-$rootLaunchers = @(
-    Get-ChildItem -LiteralPath $appImage -File -Filter '*.exe' |
-        Select-Object -ExpandProperty Name
-)
-if ($rootLaunchers.Count -ne 1 -or $rootLaunchers[0] -ne 'NicoCache_nl.exe') {
-    throw "アプリのランチャーが1本ではありません: $($rootLaunchers -join ', ')"
+$rootLaunchers = @(Get-ChildItem -LiteralPath $appImage -File -Filter 'NicoCache_nl.*' |
+    Where-Object { $_.Extension -in @('.cmd', '.exe') } |
+    Select-Object -ExpandProperty Name)
+if ($rootLaunchers.Count -ne 1 -or $rootLaunchers[0] -ne 'NicoCache_nl.cmd') {
+    throw "アプリの起動入口が1本ではありません: $($rootLaunchers -join ', ')"
 }
 if (Test-Path -LiteralPath $configPath) {
     throw "既存設定を上書きしないためテストを中止します: $configPath"
@@ -291,6 +274,8 @@ $testSucceeded = $false
 try {
     $setupProcess = Start-Process -FilePath $launcherPath `
         -ArgumentList @(
+            '-jar',
+            $launcherJarPath,
             '--setup',
             '--headless',
             "--user-data-root=$dataRoot",
@@ -333,7 +318,10 @@ try {
             throw "隔離証明書生成物がありません: $generatedPath"
         }
     }
-    $diagnosticOutput = & $launcherPath '--headless' '--check-data-root' 2>&1
+    Copy-Item -LiteralPath (Join-Path $appDirectory 'proxy_sample.pac') `
+        -Destination (Join-Path $dataRoot 'proxy.pac') -Force
+    $diagnosticOutput = & $launcherPath '-jar' $launcherJarPath `
+        '--headless' '--check-data-root' 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "ユーザーデータルート診断が完全になりません: $diagnosticOutput"
     }
@@ -355,7 +343,7 @@ try {
     if (Test-Path -LiteralPath $systemStatePath) {
         throw 'OS連携を全項目無効にしたのにシステム状態が作成されました'
     }
-    Write-Output 'PASS 単一EXEによるOSへ登録しないヘッドレス初回セットアップ'
+    Write-Output 'PASS 同梱JREとランチャーJARによるOSへ登録しないヘッドレス初回セットアップ'
     Write-Output 'PASS 本番対象を使った隔離証明書生成'
 
     @(
@@ -370,8 +358,6 @@ try {
         ''
     ) | Set-Content -LiteralPath $configPath -Encoding utf8
 
-    # jpackageのGUIサブシステムEXEは標準出力を呼出元へ返さないため、
-    # 同梱ランタイムと同じランチャーJARでCLI契約を確認する。
     $helpOutput = @(& $coreJavaPath '-jar' $launcherJarPath '--help' 2>&1)
     if ($LASTEXITCODE -ne 0 -or
             -not (($helpOutput -join "`n").Contains('--tray')) -or
@@ -380,6 +366,7 @@ try {
     }
 
     $guiProcess = Start-Process -FilePath $launcherPath `
+        -ArgumentList @('-jar', $launcherJarPath) `
         -WorkingDirectory $appImage `
         -PassThru
     Start-Sleep -Seconds 3
@@ -390,10 +377,8 @@ try {
         Get-ProductProcesses |
             Where-Object {
                 try {
-                    [string]::Equals(
-                        $_.Path, $coreJavaPath,
-                        [System.StringComparison]::OrdinalIgnoreCase
-                    )
+                    $native = Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)"
+                    $native.CommandLine -match '(?i)NicoCache_nl\.jar'
                 } catch {
                     $false
                 }
@@ -407,7 +392,7 @@ try {
     Write-Output 'PASS 引数なしのGUI起動では本体を暗黙起動しない'
 
     $process = Start-Process -FilePath $launcherPath `
-        -ArgumentList '--headless' `
+        -ArgumentList @('-jar', $launcherJarPath, '--headless') `
         -WorkingDirectory $foreignWorkingDirectory `
         -RedirectStandardOutput $stdoutPath `
         -RedirectStandardError $stderrPath `

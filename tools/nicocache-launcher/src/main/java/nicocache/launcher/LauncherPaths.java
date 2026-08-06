@@ -23,15 +23,13 @@ final class LauncherPaths {
     private final Path dataRoot;
     private final Path coreJar;
     private final Path launcherJar;
-    private final Path launcherExecutable;
 
     private LauncherPaths(Path applicationRoot, Path dataRoot, Path coreJar,
-            Path launcherJar, Path launcherExecutable) {
+            Path launcherJar) {
         this.applicationRoot = applicationRoot;
         this.dataRoot = dataRoot;
         this.coreJar = coreJar;
         this.launcherJar = launcherJar;
-        this.launcherExecutable = launcherExecutable;
     }
 
     static LauncherPaths resolve(Path explicitApplicationRoot,
@@ -42,15 +40,8 @@ final class LauncherPaths {
         Path dataRoot = explicitDataRoot == null
                 ? discoverDataRoot(applicationRoot)
                 : explicitDataRoot.toAbsolutePath().normalize();
-        Path macApplicationDirectory = currentPlatform() == Platform.MACOS
-                ? applicationRoot.resolve("../app").normalize()
-                : null;
         Path coreJar = firstRegularFile(
-                applicationRoot.resolve("NicoCache_nl.jar"),
-                applicationRoot.resolve("app/NicoCache_nl.jar"),
-                applicationRoot.resolve("lib/app/NicoCache_nl.jar"),
-                macApplicationDirectory == null ? null
-                        : macApplicationDirectory.resolve("NicoCache_nl.jar"));
+                applicationRoot.resolve("NicoCache_nl.jar"));
         if (coreJar == null) {
             throw new IllegalStateException(
                     "NicoCache_nl.jar が見つかりません: " + applicationRoot);
@@ -59,48 +50,19 @@ final class LauncherPaths {
         Path launcherJar = firstRegularFile(
                 codeSource == null ? null : codeSource.resolve("NicoCacheLauncher.jar"),
                 codeSource == null ? null : codeSource.resolve("nicocache-launcher.jar"),
-                applicationRoot.resolve("NicoCacheLauncher.jar"),
-                applicationRoot.resolve("app/NicoCacheLauncher.jar"),
-                applicationRoot.resolve("lib/app/NicoCacheLauncher.jar"),
-                macApplicationDirectory == null ? null
-                        : macApplicationDirectory.resolve("NicoCacheLauncher.jar"));
+                applicationRoot.resolve("NicoCacheLauncher.jar"));
         if (launcherJar == null && codeSource != null
                 && Files.isRegularFile(codeSource.resolve("LauncherMain.class"))) {
             launcherJar = codeSource;
         }
-        Path executable = jpackageExecutable();
         return new LauncherPaths(applicationRoot, dataRoot, coreJar,
-                launcherJar, executable);
+                launcherJar);
     }
 
     private static Path discoverApplicationRoot() {
         String configured = System.getProperty("nicocache.launcher.root");
         if (configured != null && !configured.isBlank()) {
             return Path.of(configured).toAbsolutePath().normalize();
-        }
-        String jpackagePath = System.getProperty("jpackage.app-path");
-        if (jpackagePath != null && !jpackagePath.isBlank()) {
-            Path launcher = Path.of(jpackagePath).toAbsolutePath().normalize();
-            Path parent = launcher.getParent();
-            if (parent != null) {
-                Platform platform = currentPlatform();
-                if (platform == Platform.MACOS
-                        && "MacOS".equalsIgnoreCase(fileName(parent))
-                        && parent.getParent() != null) {
-                    Path contents = parent.getParent();
-                    Path resources = contents.resolve("Resources");
-                    if (Files.isDirectory(resources)) {
-                        return resources;
-                    }
-                    return contents;
-                }
-                if (platform == Platform.LINUX
-                        && "bin".equalsIgnoreCase(fileName(parent))
-                        && parent.getParent() != null) {
-                    return parent.getParent();
-                }
-                return parent;
-            }
         }
         Path codeSource = codeSourceDirectory();
         if (codeSource != null) {
@@ -211,15 +173,6 @@ final class LauncherPaths {
         }
     }
 
-    private static Path jpackageExecutable() {
-        String value = System.getProperty("jpackage.app-path");
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        Path path = Path.of(value).toAbsolutePath().normalize();
-        return Files.isRegularFile(path) ? path : null;
-    }
-
     private static Path firstRegularFile(Path... candidates) {
         for (Path candidate : candidates) {
             if (candidate != null && Files.isRegularFile(candidate)) {
@@ -244,11 +197,6 @@ final class LauncherPaths {
         return Platform.OTHER;
     }
 
-    private static String fileName(Path path) {
-        Path fileName = path.getFileName();
-        return fileName == null ? "" : fileName.toString();
-    }
-
     Path getApplicationRoot() {
         return applicationRoot;
     }
@@ -265,10 +213,6 @@ final class LauncherPaths {
         return launcherJar;
     }
 
-    Path getLauncherExecutable() {
-        return launcherExecutable;
-    }
-
     Path getControlStatusFile() {
         return dataRoot.resolve("data/nicocache-control.properties");
     }
@@ -281,17 +225,9 @@ final class LauncherPaths {
         return currentPlatform();
     }
 
-    List<String> getTaskCommand() {
+    List<String> getTaskCommand(Platform taskPlatform) {
         List<String> command = new ArrayList<>();
-        if (launcherExecutable != null) {
-            command.add(launcherExecutable.toString());
-            command.add("--tray");
-            command.add("--start");
-            return command;
-        }
-        Path java = Path.of(System.getProperty("java.home"), "bin",
-                getPlatform() == Platform.WINDOWS ? "javaw.exe" : "java");
-        command.add(java.toString());
+        command.add(getBundledJavaExecutable(true, taskPlatform).toString());
         command.add("-jar");
         if (launcherJar == null) {
             throw new IllegalStateException(
@@ -303,6 +239,40 @@ final class LauncherPaths {
         command.add("--tray");
         command.add("--start");
         return command;
+    }
+
+    Path getJavaExecutable(boolean graphical) {
+        Path bundled = bundledJavaExecutable(graphical, getPlatform());
+        if (Files.isRegularFile(bundled)) {
+            return bundled;
+        }
+        String executable = getPlatform() == Platform.WINDOWS
+                ? (graphical ? "javaw.exe" : "java.exe")
+                : "java";
+        Path current = Path.of(System.getProperty("java.home"), "bin", executable)
+                .toAbsolutePath().normalize();
+        if (Files.isRegularFile(current)) {
+            return current;
+        }
+        throw new IllegalStateException(
+                "Java実行ファイルが見つかりません: " + bundled);
+    }
+
+    private Path getBundledJavaExecutable(boolean graphical, Platform platform) {
+        Path java = bundledJavaExecutable(graphical, platform);
+        if (!Files.isRegularFile(java)) {
+            throw new IllegalStateException(
+                    "同梱JREのJava実行ファイルが見つかりません: " + java);
+        }
+        return java;
+    }
+
+    private Path bundledJavaExecutable(boolean graphical, Platform platform) {
+        String executable = platform == Platform.WINDOWS
+                ? (graphical ? "javaw.exe" : "java.exe")
+                : "java";
+        return applicationRoot.resolve("jre/bin").resolve(executable)
+                .toAbsolutePath().normalize();
     }
 
     String describe() {

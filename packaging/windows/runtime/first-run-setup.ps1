@@ -10,6 +10,7 @@ param(
     [string]$CaCertificatePath,
     [string]$AutoConfigUrl = 'http://localhost:8080/proxy.pac',
     [string]$LauncherPath,
+    [string]$LauncherJarPath,
 
     [switch]$EnableCertificate,
     [switch]$EnableProxy,
@@ -468,6 +469,7 @@ try {
         $script:CurrentStage = 'ログオン時自動起動の実行ファイルを確認'
         Write-SetupStageMarker
         $resolvedLauncher = (Resolve-Path -LiteralPath $LauncherPath).Path
+        $resolvedLauncherJar = (Resolve-Path -LiteralPath $LauncherJarPath).Path
         $script:CurrentStage = 'ログオン時自動起動を登録'
         Write-SetupStageMarker
         $state.Changes.AutoStart = $true
@@ -478,7 +480,7 @@ try {
             -Path $runRegistryPath `
             -Name $runValueName `
             -PropertyType String `
-            -Value "`"$resolvedLauncher`"" `
+            -Value "`"$resolvedLauncher`" -jar `"$resolvedLauncherJar`" --tray --start" `
             -Force | Out-Null
     }
 

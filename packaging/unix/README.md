@@ -1,64 +1,53 @@
 # Linux/macOS パッケージ
 
-LinuxとmacOSの配布物は、対象OS上のTemurin JDK 25 `jpackage`で生成します。`jpackage`の
-ネイティブパッケージ生成はクロスプラットフォームではないため、Linux成果物はLinux
-ランナー、macOS成果物はmacOSランナーでビルドします。Solarisは現在の配布対象に
-含めません。
+LinuxとmacOSの本体配布物は、対象OS上のTemurin JDK 25で生成する。`jlink`のJREと
+プリコンパイル済みJARを、Git追跡ファイルがclone時と同じ相対位置にある
+アプリケーションルートへ重ねる。Solarisは配布対象外である。
 
-## 本体
+## 共通構成
 
-アプリイメージの単一ランチャーは起動管理アプリである。引数なしではGUIとタスクトレイを
-表示するが、本体は起動ボタンを押すまで起動しない。`--tray`はタスクトレイ格納、
-`--minimized`は最小化で起動する表示モードで、本体も起動する場合だけ`--start`を併用する。
-ヘッドレスでは同じランチャーが本体の起動、状態確認、グレイスフル停止、強制停止、
-初回セットアップを処理する。ログオン時に一回だけの自動起動は`--tray --start`を付けて
-macOS LaunchAgents、Linux XDG autostartへ登録する。
+アプリケーションルート直下には次を置く。
+
+- Git追跡ファイル一式（`.git`、未追跡データ、シンボリックリンクを除く）
+- `NicoCache_nl.jar`、`NicoCacheCA.jar`、`NicoCacheLauncher.jar`、`NicoCacheBuild.jar`
+- 依存JARを置く`lib/`と、専用Javaランタイム`jre/`
+- `jre/bin/java -jar NicoCacheLauncher.jar`を実行する`NicoCache_nl`
+- `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`と第三者ライセンス情報
+
+別の`app/`、`lib/app/`、`Contents/Resources/`へアプリ資材を詰め替えない。
+キャッシュ、証明書、個人設定、利用者が追加した`local/`、`nlFilters/`、Extensionは
+別のユーザーデータルートへ保存する。
+
+起動管理JARは引数なしではGUIだけを表示する。本体も起動する場合は`--start`、
+タスクトレイへ格納する場合は`--tray`、最小化する場合は`--minimized`を使う。
+ログオン時自動起動は`jre/bin/java -jar NicoCacheLauncher.jar --tray --start`として、
+macOS LaunchAgentsまたはLinux XDG autostartへ登録する。
+
+## ビルドと成果物
 
 ```powershell
 ./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.3
 ./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.3
 ```
 
-LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメージZIP、PKG、DMGを
-生成します。成果物名は次の形式です。
+LinuxではZIP、DEB、RPM、macOSではZIP、PKG、DMGを生成する。
 
 ```text
 NicoCache_nl-<version>-linux-<arch>.<zip|deb|rpm>
 NicoCache_nl-<version>-macos-<arch>.<zip|pkg|dmg>
 ```
 
-アプリイメージのランチャーとJavaランタイムを含むため、配布物はビルドしたOSと
-アーキテクチャに対応します。Linuxアプリイメージのランチャーは
-`NicoCache_nl/bin/NicoCache_nl`、macOSアプリバンドルのランチャーは
-`NicoCache_nl.app/Contents/MacOS/NicoCache_nl`です。Linuxの初回セットアップは`trust`、GNOMEの
-`gsettings`、ユーザー自動起動デスクトップエントリーを使用し、macOSでは
-`security`、`networksetup`、`LaunchAgents`を使用します。利用できないOSサービス
-や権限が必要な変更は、ウィザードで失敗として表示し、同じ試行で行った変更を
-ロールバックします。
+ZIPはアプリケーションルートの内容を直に展開する。LinuxのDEB/RPMは同じルートを
+`/opt/nicocache-nl`へ、macOSのPKGは`/Applications/NicoCache_nl`へ配置する。
+DMGも同じ平坦な`NicoCache_nl`フォルダーを収録する。専用JREを含むため、成果物は
+ビルドしたOSとアーキテクチャに対応する。
 
-macOSの`jpackage`は0をメジャー版にできないため、0.xの公開版を指定した場合も
-配布ファイル名と`NicoCache_nl.version`には公開版を保持し、バンドル内部の版だけを
-macOSが受け付ける値へ変換します。
+Linuxの初回セットアップは`trust`、GNOMEの`gsettings`、XDG autostartを使い、
+macOSでは`security`、`networksetup`、LaunchAgentsを使う。利用できないサービスや
+権限が必要な変更は失敗として表示し、その試行で行った変更をロールバックする。
 
-保存済みCMAF/Domand変換器のJARと説明書は、LinuxのアプリイメージとアプリイメージZIPでは
-`tools/cmaf-to-mp4/`、DEB/RPMのインストール先では`lib/tools/cmaf-to-mp4/`、macOSの
-アプリバンドルとアプリイメージZIP、PKG/DMGでは`Contents/Resources/tools/cmaf-to-mp4/`
-に含まれます。FFmpeg本体は同梱しません。
-
-Linuxのjpackageアプリイメージでは、JARと設定を`lib/app/`、Javaランタイムを
-`lib/runtime/`に配置します。アプリケーション側の設定・データ資材はアプリイメージの
-ルートへ移します。macOSでは同じ資材を`Contents/Resources/`へ配置し、macOSの
-コード署名が認識できる標準アプリバンドル構造を保ちます。
-
-Linuxのアプリイメージ、アプリイメージZIP、DEB/RPM、およびmacOSのアプリバンドル、
-アプリイメージZIP、PKG/DMGには、`NicoCache_nl.jar`、`NicoCacheCA.jar`、
-`NicoCacheLauncher.jar`、`NicoCacheBuild.jar`の独立アプリ4本を同じ構成で含めます。
-Linuxでは`lib/app/`、macOSでは`Contents/app/`がJARの配置先です。
-
-既存ユーザーが旧ルートから新しいユーザーデータルートへ移行する場合は、起動管理GUIの
-「データルート診断」で不足項目と起動阻害要因を確認できます。初回セットアップを完了した
-パッケージの新規インストールでは、完了記録が作成されるため通常この診断は不要です。
-詳細は[ユーザーデータルートの診断と移行](../../documents/user-data-root.md)を参照してください。
+データルートの確認と移行は[ユーザーデータルートの診断と移行](../../documents/user-data-root.md)
+を参照する。
 
 ## 独立アップデーター
 
@@ -67,19 +56,17 @@ Linuxでは`lib/app/`、macOSでは`Contents/app/`がJARの配置先です。
 ./packaging/unix/test-standalone-updater.ps1 -Platform MacOS -AppVersion 0.2.1
 ```
 
-本体更新では、GitHub Releaseのプラットフォーム・アーキテクチャ別アプリイメージ
-ZIPをSHA-256検証して展開し、`config.properties`、`portable.flag`、キャッシュ、
-証明書、利用者データ、ローカル拡張を保持します。Windowsは従来どおりMSIを
-Windows Installerへ渡し、Linux/macOSは安全なバックアップ・置換・ロールバックを
-Java内で行います。
+独立アップデーターは本体とは別の自己完結アプリで、引き続き対象OSの`jpackage`を
+使用する。本体更新ではGitHub ReleaseのOS・アーキテクチャ別ZIPをSHA-256検証して
+展開し、`config.properties`、`portable.flag`、キャッシュ、証明書、利用者データ、
+ローカル拡張を保持する。
 
-Unixの外部依存関係タブは、Java、FFmpeg、Apache Ant、7-Zip、GPAC/MP4Boxを確認します。
-各行の更新チェックとインストールから、macOSではHomebrew、Linuxでは検出したAPT/DNF/
-pacmanを明示操作で実行します。root権限が必要な場合はOSの認証または`sudo`が必要です。
-Bouncy CastleはNicoCache_nl専用ライブラリとしてアップデーターがSHA-256検証付きで管理します。
+外部依存関係はJava、FFmpeg、Apache Ant、7-Zip、GPAC/MP4Boxを確認し、macOSでは
+Homebrew、LinuxではAPT/DNF/pacmanを明示操作で使う。Bouncy CastleはNicoCache_nl
+専用ライブラリとしてSHA-256検証付きで管理する。
 
 ## CI
 
-`.github/workflows/unix-packages.yml`がUbuntuとmacOSで本体・アップデーターの
-アプリイメージとネイティブパッケージを生成し、隔離した初回セットアップ、ZIP、
-DEB/RPMまたはPKG/DMG、アップデーターCLIの自己診断を実行します。
+`.github/workflows/unix-packages.yml`がUbuntuとmacOSで本体と独立アップデーターを
+生成する。本体についてはclone相当のファイル配置、JARとJRE、隔離起動、ZIP、
+DEB/RPMまたはPKG/DMGの内容を検証する。

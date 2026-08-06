@@ -163,35 +163,26 @@ public final class FirstRunSetupTest {
                     NicoCachePaths.dataRoot(),
                     "portable mode must use application root");
 
-            Path linuxLauncher = app.resolve("bin/NicoCache_nl");
+            Path linuxLauncher = app.resolve("NicoCache_nl");
             assertEquals(
                     app,
                     PlatformSupport.applicationRootFromLauncher(
                             linuxLauncher, PlatformSupport.Kind.LINUX),
-                    "Linux jpackage launcher must resolve its app-image root");
+                    "Linux launcher must resolve the flat application root");
             assertEquals(
                     linuxLauncher,
                     PlatformSupport.launcherPath(app, PlatformSupport.Kind.LINUX),
-                    "Linux jpackage launcher path");
-            Path macContents = app.resolve("NicoCache_nl.app/Contents");
-            Path macLauncher = macContents.resolve("MacOS/NicoCache_nl");
+                    "Linux flat launcher path");
+            Path macLauncher = app.resolve("NicoCache_nl");
             assertEquals(
-                    macContents,
+                    app,
                     PlatformSupport.applicationRootFromLauncher(
                             macLauncher, PlatformSupport.Kind.MACOS),
-                    "macOS app bundle Contents root");
-            Path macResources = macContents.resolve("Resources");
-            Files.createDirectories(macResources);
-            assertEquals(
-                    macResources,
-                    PlatformSupport.applicationRootFromLauncher(
-                            macLauncher, PlatformSupport.Kind.MACOS),
-                    "macOS app bundle Resources root");
+                    "macOS launcher must resolve the flat application root");
             assertEquals(
                     macLauncher,
-                    PlatformSupport.launcherPath(
-                            macResources, PlatformSupport.Kind.MACOS),
-                    "macOS app bundle launcher from Resources root");
+                    PlatformSupport.launcherPath(app, PlatformSupport.Kind.MACOS),
+                    "macOS flat launcher path");
         } finally {
             restoreProperty(
                     NicoCachePaths.APPLICATION_ROOT_PROPERTY,

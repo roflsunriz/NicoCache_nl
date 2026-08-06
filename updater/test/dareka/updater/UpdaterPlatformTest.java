@@ -24,26 +24,26 @@ public final class UpdaterPlatformTest {
         assertEquals("macos", UpdaterPlatform.platformId(UpdaterPlatform.Kind.MACOS),
                 "macOS package ID");
 
-        Path macLauncher = Path.of("Applications/NicoCache_nl.app/Contents/MacOS/NicoCache_nl");
+        Path macLauncher = Path.of("Applications/NicoCache_nl/NicoCache_nl");
         Path macRoot = UpdaterPlatform.applicationRootFromLauncher(
                 macLauncher, UpdaterPlatform.Kind.MACOS);
-        assertEquals(Path.of("Applications/NicoCache_nl.app/Contents").toAbsolutePath().normalize(), macRoot,
+        assertEquals(Path.of("Applications/NicoCache_nl").toAbsolutePath().normalize(), macRoot,
                 "macOS launcher root");
-        Path linuxLauncher = Path.of("opt/NicoCache_nl/bin/NicoCache_nl");
+        Path linuxLauncher = Path.of("opt/nicocache-nl/NicoCache_nl");
         Path linuxRoot = UpdaterPlatform.applicationRootFromLauncher(
                 linuxLauncher, UpdaterPlatform.Kind.LINUX);
-        assertEquals(Path.of("opt/NicoCache_nl").toAbsolutePath().normalize(), linuxRoot,
+        assertEquals(Path.of("opt/nicocache-nl").toAbsolutePath().normalize(), linuxRoot,
                 "Linux launcher root");
-        assertEquals(Path.of("opt/NicoCache_nl/bin/NicoCache_nl").toAbsolutePath().normalize(),
+        assertEquals(Path.of("opt/nicocache-nl/NicoCache_nl").toAbsolutePath().normalize(),
                 UpdaterPlatform.launcherPath(linuxRoot, UpdaterPlatform.Kind.LINUX),
                 "Linux launcher path");
         try {
             Path macContents = Files.createTempDirectory("updater-platform-test-");
             try {
-                Files.createDirectories(macContents.resolve("runtime/Contents/Home/lib"));
-                assertEquals(macContents.resolve("runtime/Contents/Home"),
+                Files.createDirectories(macContents.resolve("jre/lib"));
+                assertEquals(macContents.resolve("jre"),
                         UpdaterPlatform.runtimeDirectory(macContents),
-                        "macOS nested runtime directory");
+                        "flat bundled runtime directory");
             } finally {
                 try (Stream<Path> paths = Files.walk(macContents)) {
                     paths.sorted(java.util.Comparator.reverseOrder())

@@ -52,14 +52,10 @@ function Assert-ExecutableMetadata([string]$Executable) {
 }
 function Invoke-PackagedE2E([string]$Executable, [string]$UpdaterRoot, [string]$TargetRoot) {
     Remove-Item $TargetRoot -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory -Path (Join-Path $TargetRoot 'app') -Force | Out-Null
-    Set-Content -LiteralPath (Join-Path $TargetRoot 'app\NicoCache_nl.cfg') -Encoding utf8 -Value @'
-[Application]
-app.mainmodule=NicoCache_nl.jar
-
-[JavaOptions]
-java-options=-Djpackage.app-version=1.0.1
-'@
+    New-Item -ItemType Directory -Path (Join-Path $TargetRoot 'jre\bin') -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $TargetRoot 'NicoCache_nl.jar') -Encoding utf8 -Value 'jar'
+    Set-Content -LiteralPath (Join-Path $TargetRoot 'NicoCache_nl.cmd') -Encoding ascii -Value '@echo off'
+    Set-Content -LiteralPath (Join-Path $TargetRoot 'NicoCache_nl.version') -Encoding ascii -Value '1.0.1'
 
     $version = Invoke-UpdaterCli $Executable @('--installed-version', '--app-root', $TargetRoot)
     Assert-True ($version.Output.Trim() -eq '1.0.1') "Installed launcher version was not detected: $($version.Output)"

@@ -20,10 +20,17 @@ public final class CoreProcessTest {
             Files.createDirectories(application);
             Files.createDirectories(data);
             Files.createFile(application.resolve("NicoCache_nl.jar"));
+            Path jreBin = application.resolve("jre/bin");
+            Files.createDirectories(jreBin);
+            Files.createFile(jreBin.resolve(
+                    System.getProperty("os.name", "").toLowerCase()
+                            .contains("win") ? "java.exe" : "java"));
 
             LauncherPaths paths = LauncherPaths.resolve(application, data);
             CoreProcess core = new CoreProcess(paths);
             List<String> guiCommand = core.buildStartCommand(false);
+            assertTrue(guiCommand.get(0).startsWith(jreBin.toString()),
+                    "core must use the bundled JRE");
             assertFalse(guiCommand.contains("--headless"),
                     "GUI launch must not disable the core GUI");
 
@@ -35,6 +42,14 @@ public final class CoreProcessTest {
             assertEquals(paths.getCoreJar().toString(),
                     headlessCommand.get(headlessCommand.indexOf("-jar") + 1),
                     "core JAR must be launched in both modes");
+
+            Files.delete(jreBin.resolve(
+                    System.getProperty("os.name", "").toLowerCase()
+                            .contains("win") ? "java.exe" : "java"));
+            assertTrue(core.buildStartCommand(false).get(0).startsWith(
+                            Path.of(System.getProperty("java.home"), "bin")
+                                    .toString()),
+                    "development checkout must fall back to the current JRE");
             System.out.println("Core process mode tests passed");
         } finally {
             deleteTree(root);

@@ -9,27 +9,26 @@ Linux/macOSのアプリイメージ、ZIP、DEB/RPM、PKG/DMGは
 
 ## 生成物
 
-- `NicoCache_nl.exe`: 起動管理GUI、タスクトレイ、ヘッドレス、初回セットアップを担う唯一のアプリ
-  ランチャー
-- アプリ専用 Java ランタイム
-- NicoCache_nl 本体、内部ライブラリとしての証明書生成ツール、Bouncy Castle、
-  既定設定、ローカル配信用ファイル
+- `NicoCache_nl/`: Git追跡ファイルをclone時と同じ相対位置に置いたアプリケーションルート
+- ルート直下の`NicoCache_nl.jar`、`NicoCacheCA.jar`、`NicoCacheLauncher.jar`、
+  `NicoCacheBuild.jar`と、専用Javaランタイム`jre/`
+- `NicoCache_nl.cmd`: 同梱`jre/bin/javaw.exe`から`NicoCacheLauncher.jar`を起動する補助入口
 - 保存済みCMAF/Domandを単一MP4へ変換する
   `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`と説明書
 - `NicoCache_nl-<version>.msi`: 対話・無人インストール兼用パッケージ
 - `NicoCache_nl-<version>.zip`: MSIと同じアプリイメージを展開した開発・検証用ZIP
 
-本体インストーラーと本体ランチャーには、3本の接続を管理する専用意匠の
+本体インストーラーのショートカットとGUIには、3本の接続を管理する専用意匠の
 `assets/nicocache-launcher.ico` を使う。独立アップデーターには、更新対象を
 2本の軌道が循環する別意匠の `assets/nicocache-updater.ico` を使う。
 どちらも16～256ピクセルの表示サイズを収録し、従来の `niconico-0.ico` や
 旧インストーラー意匠とは
 役割とシルエットを分けている。
 
-ZIPとMSIは同じアプリイメージを共通の入力として生成する。ZIPにはMSIと同じ実行環境、
-既定設定、ローカル配信用ファイルに加え、`development/` 以下へソース、テスト、
-ビルド・検証スクリプト、開発資料を収録する。`.git`、CI管理ファイル、キャッシュ、
-証明書、利用者データは収録しない。
+ZIPとMSIは同じアプリケーションルートを共通の入力として生成する。別の`development/`
+階層へ詰め替えず、`.github/`を含むGit追跡ファイルをclone時の位置に保つ。`.git`と
+未追跡のキャッシュ、証明書、利用者データは収録しない。配布時にプリコンパイル済みJAR、
+依存JAR、`jre/`、版情報、OS用起動補助を重ねる。
 変換器のJARはアプリイメージのルートにある`tools/cmaf-to-mp4/`へ配置するため、
 MSIのインストール先とZIP展開先のどちらからも利用できる。FFmpeg本体は同梱しない。
 標準フィルターは本体と同じコミットの`nlFilters/`から取り込み、外部管理の
@@ -88,13 +87,13 @@ OS設定の変更前値は利用者データフォルダーの
 失ったまま製品だけが削除されることはない。
 
 製品GUIを使わないセットアップでも別の実行ファイルは使わず、同じ
-`NicoCache_nl.exe` に全選択を明示して初回セットアップを実行する。
+`NicoCacheLauncher.jar` に全選択を明示して初回セットアップを実行する。
 
 通常GUIでは本体の状態確認、グレイスフル停止・強制停止、タスクトレイ常駐、
 Windowsタスクスケジューラーのログオン時一回起動タスクの登録・編集・更新・削除を
-起動管理アプリが行う。アプリイメージ、MSI、ZIPのすべてに、本体JAR、証明書生成JAR、
-起動管理JAR、ビルド管理JARの独立アプリ4本を内部アプリ資材として含める。
-利用者が直接起動する入口はこのEXEだけである。
+起動管理アプリが行う。アプリケーションルート、MSI、ZIPのすべてに、本体JAR、証明書生成JAR、
+起動管理JAR、ビルド管理JARの独立アプリ4本をルート直下へ含める。ショートカットと
+タスクスケジューラーはいずれも同梱`jre/bin/javaw.exe -jar NicoCacheLauncher.jar`を使う。
 
 引数なしの起動では管理GUIだけを表示し、本体は起動ボタンを押すまで起動しない。
 `--tray`はタスクトレイ格納、`--minimized`は最小化で起動する表示モードであり、
@@ -102,7 +101,7 @@ Windowsタスクスケジューラーのログオン時一回起動タスクの�
 `--tray --start`で、ランチャーを前面へ出さず本体を明示起動する。
 
 ```powershell
-.\NicoCache_nl.exe --setup --headless `
+.\jre\bin\java.exe -jar .\NicoCacheLauncher.jar --setup --headless `
   --user-data-root="C:\Users\利用者名\Documents\NicoCache_nl" `
   --https=true `
   --trust-certificate=true `
@@ -113,7 +112,7 @@ Windowsタスクスケジューラーのログオン時一回起動タスクの�
 保存先の絶対パスと4項目すべての `true` または `false` の明示が必要である。HTTPSを無効にする
 場合、証明書登録とWindows自動プロキシーも無効にする。処理が成功または失敗
 するとサーバーを起動せず終了し、終了コードを返す。通常のヘッドレスサーバー
-起動は従来どおり `NicoCache_nl.exe --headless` を使う。
+起動は`jre/bin/java.exe -jar NicoCacheLauncher.jar --headless --start`を使う。
 `--trust-certificate=true` はヘッドレス指定でもWindowsの許可画面を表示するため、
 利用者が操作できるデスクトップが必要になる。完全に画面のない自動実行では
 `--trust-certificate=false` とし、必要なら生成後の `certs/ca.cer` を別途
@@ -147,7 +146,7 @@ MSI更新時はアプリ側の`config.properties`と利用者データを保持�
 
 ## ローカルでの安全な検証
 
-Temurin JDK 25でアプリイメージとZIPを生成する。MSIも同じTemurin JDK 25の専用ランタイムを
+Temurin JDK 25でアプリケーションルートとZIPを生成する。MSIも同じTemurin JDK 25の専用ランタイムを
 同梱する。成果物と依存ファイルは Git 管理外の
 `.test-work/windows-package/` に限定される。
 
@@ -162,13 +161,13 @@ Temurin JDK 25でアプリイメージとZIPを生成する。MSIも同じTemuri
 - 空いているループバックポートを一時利用する
 - `.test-work` 内の専用利用者データ領域だけにテスト設定とキャッシュを作る
 - TLS MitMを無効にし、証明書ストアを変更しない
-- 同じEXEのヘッドレス初回セットアップでテスト用CAをイメージ内だけに生成し、
+- 同梱JREと起動管理JARのヘッドレス初回セットアップでテスト用CAをテスト領域だけに生成し、
   生成物を検証後に削除する
 - 証明書ストアとWindowsプロキシー設定がテスト前後で一致することを確認する
 - Windowsのプロキシー設定、環境変数、タスクスケジューラーを変更しない
-- 初回セットアップとサーバーを同じ `NicoCache_nl.exe` で起動する
+- 初回セットアップとサーバーを同じ`jre/bin/java.exe -jar NicoCacheLauncher.jar`で起動する
 - ログオン時起動相当の別作業ディレクトリから起動し、`userDataRoot` の設定で応答を継続する
-- 起動した単一ランチャーの実行ファイルとPIDを照合して、そのPIDだけを終了する
+- 起動した同梱Javaの実行ファイルとPIDを照合して、そのPIDだけを終了する
 - 外部サイトへ接続せず、`http://127.0.0.1:<一時ポート>/` の応答だけを確認する
 
 成功時のログは削除する。失敗調査でログを保持する場合は `-KeepLogs` を指定する。
@@ -219,7 +218,7 @@ SHA-256とPOMのライセンスを検証して、更新がある場合だけレ�
 
 ## インストーラーの範囲
 
-インストーラー基盤は自己完結配布、対話・無人導入、単一製品ランチャー、
+インストーラー基盤はclone相当の自己完結配布、対話・無人導入、単一起動管理JAR、
 旧版からの更新、修復、起動導線、削除までを対象とする。証明書の生成・登録、
 Windowsプロキシー設定、自動起動、変更前設定の保存と復元は、初回起動
 ウィザードで明示的な同意とロールバック情報を管理する。

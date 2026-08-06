@@ -263,12 +263,11 @@ function Assert-NoInstalledProcess {
 function Assert-AppVersion {
     param([Parameter(Mandatory)][string]$ExpectedVersion)
 
-    $launcherConfig = Join-Path $installRoot 'app\NicoCache_nl.cfg'
-    if (-not (Test-Path -LiteralPath $launcherConfig -PathType Leaf)) {
-        throw "ランチャー設定がありません: $launcherConfig"
+    $versionFile = Join-Path $installRoot 'NicoCache_nl.version'
+    if (-not (Test-Path -LiteralPath $versionFile -PathType Leaf)) {
+        throw "配布版番号ファイルがありません: $versionFile"
     }
-    if ((Get-Content -Raw -LiteralPath $launcherConfig) -notmatch
-            [regex]::Escape("-Djpackage.app-version=$ExpectedVersion")) {
+    if ((Get-Content -Raw -LiteralPath $versionFile).Trim() -ne $ExpectedVersion) {
         throw "インストール済みバージョンが $ExpectedVersion ではありません"
     }
 }
@@ -289,7 +288,7 @@ try {
         "`"$resolvedPreviousMsi`"",
         '/qn',
         '/norestart',
-        "INSTALLDIR=`"$installRoot`""
+        "INSTALLFOLDER=`"$installRoot`""
     ) `
         -FailureMessage '旧版MSIの無人インストールに失敗しました' `
         -LogPath (Join-Path $testRoot 'msi-install-previous.log')
@@ -333,7 +332,7 @@ try {
         '/norestart',
         'REINSTALL=ALL',
         'REINSTALLMODE=amus',
-        "INSTALLDIR=`"$installRoot`""
+        "INSTALLFOLDER=`"$installRoot`""
     ) `
         -FailureMessage 'MSI修復に失敗しました' `
         -LogPath $repairLogPath
@@ -368,7 +367,7 @@ try {
         "`"$resolvedMsi`"",
         '/qn',
         '/norestart',
-        "INSTALLDIR=`"$installRoot`""
+        "INSTALLFOLDER=`"$installRoot`""
     ) `
         -FailureMessage '新版MSIへの無人更新に失敗しました' `
         -LogPath (Join-Path $testRoot 'msi-upgrade.log')
@@ -395,10 +394,14 @@ try {
     Write-Output 'PASS 更新後MSIの隔離起動'
 
     $certificateDirectory = Join-Path $userDataRoot 'certs'
-    $launcher = Join-Path $installRoot 'NicoCache_nl.exe'
+    $launcher = Join-Path $installRoot 'jre\bin\java.exe'
+    $autoStartJava = Join-Path $installRoot 'jre\bin\javaw.exe'
+    $launcherJar = Join-Path $installRoot 'NicoCacheLauncher.jar'
     $setupProcess = Start-Process `
         -FilePath $launcher `
         -ArgumentList @(
+            '-jar',
+            $launcherJar,
             '--setup',
             '--headless',
             "--user-data-root=$userDataRoot",
@@ -434,8 +437,10 @@ try {
     }
     $runValue = (Get-ItemProperty -LiteralPath $runRegistryPath `
             -Name $runValueName).$runValueName
-    if ($runValue -notmatch [regex]::Escape($launcher)) {
-        throw 'MSI上の初回セットアップで自動起動が設定されませんでした'
+    if (($runValue -notmatch [regex]::Escape($autoStartJava)) -or
+            ($runValue -notmatch [regex]::Escape($launcherJar)) -or
+            ($runValue -notmatch '(?i)-jar')) {
+        throw 'MSI上の自動起動が同梱JREとランチャーJARを参照していません'
     }
     $certificate = [System.Security.Cryptography.X509Certificates.X509Certificate2]::new(
         (Join-Path $certificateDirectory 'ca.cer')

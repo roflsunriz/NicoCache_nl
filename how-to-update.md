@@ -127,8 +127,8 @@ GUIログのタブ、検索、メニュー、履歴保存など画面操作を�
 .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\build-dependencies
 ```
 
-起動時は生成した`NicoCacheLauncher.jar`を直接実行する。GUIは`javaw`または
-パッケージのネイティブランチャー、ヘッドレスは`java`を使用する。
+起動時は生成した`NicoCacheLauncher.jar`を直接実行する。開発時は手元の`java`、
+パッケージ版はアプリケーションルートの`jre/bin/javaw`または`jre/bin/java`を使用する。
 
 ```powershell
 java -jar .\NicoCacheLauncher.jar
@@ -276,7 +276,8 @@ Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Cen
 
 ## Linux/macOS パッケージ
 
-LinuxとmacOSのネイティブパッケージは対象OS上のTemurin JDK 25 `jpackage`で生成する。
+LinuxとmacOSのパッケージは対象OS上のTemurin JDK 25 `jlink`で専用JREを生成し、
+Linuxでは`dpkg-deb`/`rpmbuild`、macOSでは`pkgbuild`/`hdiutil`で包む。
 クロスプラットフォーム生成は行わない。Solarisは配布・CIの対象外とする。
 
 ```powershell
@@ -292,17 +293,18 @@ LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメー�
 資材を保持する。Linuxの証明書・プロキシー・自動起動は`trust`、GNOMEの`gsettings`、
 XDG autostartを使い、macOSでは`security`、`networksetup`、`LaunchAgents`を使う。
 権限や対応サービスが不足する場合は、ウィザードが今回の変更をロールバックする。
-本体パッケージの作成時にはCMAF/Domand変換器JARも再ビルドされ、Linuxでは
-`tools/cmaf-to-mp4/`、macOSでは`Contents/Resources/tools/cmaf-to-mp4/`へ配置される。
+本体パッケージの作成時にはCMAF/Domand変換器JARも再ビルドされ、全OSで
+アプリケーションルート直下の`tools/cmaf-to-mp4/`へ配置される。
 `test-package.ps1`はアプリイメージ、ZIP、LinuxのDEB/RPM、macOSのPKGにそのJARが
 含まれることも検証する。
 
 ## Windows インストーラー
 
-リリースとWindowsインストーラーCIではTemurin JDK 25の `jpackage` を使い、Java 25の
-ランタイムと単一の製品ランチャーを含むアプリイメージを生成する。日本語設定の
-読込みに必要な `jdk.charsets` を含む最小ランタイムで起動を検証する。
-隔離テストでは同じ製品ランチャーへ内部用の `--headless` を指定する。
+リリースとWindowsインストーラーCIではTemurin JDK 25の`jlink`で専用JREを作り、
+WiX Toolsetで同じアプリケーションルートをMSIにする。ルートはGit追跡ファイルを
+clone時と同じ相対位置へ置き、プリコンパイル済みJARと`jre/`を直下へ重ねる。
+日本語設定の読込みに必要な`jdk.charsets`を含むランタイムで、
+`jre/bin/java -jar NicoCacheLauncher.jar --headless`を隔離検証する。
 
 Windowsパッケージ版では、アプリケーションフォルダーの
 `config.properties` にある `userDataRoot` で利用者データの保存先を指定する。
@@ -365,13 +367,10 @@ MSIを生成した場合は、インストールせずに内部テーブルを�
 ディレクトリから単一ランチャーを起動し、作業ディレクトリに依存せず
 `config.properties` の `userDataRoot` を使ってHTTP応答を継続することを確認する。
 
-MSIの `packaging/windows/resources/main.wxs` と `main-jdk25.wxs` は、それぞれ
-JDK 17とJDK 25の `jpackage` が内蔵するWiXテンプレートへ、アンインストール前の
-Windows設定復元を追加したものである。パッケージ生成時は実行中のJDKに合う
-テンプレートを自動選択する。JDKを更新する場合は、そのJDKの
-`jdk.jpackage.jmod` に含まれる `jdk/jpackage/internal/resources/main.wxs` と
-対応テンプレートを比較し、上流テンプレートの変更を取り込んでからMSI構造試験を
-実行する。
+MSIのWiX定義は`packaging/windows/build-flat-package.ps1`が、共通アプリケーション
+ルートの収集結果、ショートカット、固定Upgrade UUID、アンインストール前の
+Windows設定復元を組み立てる。JDKまたはWiXを更新した場合はMSI構造試験と
+インストール・修復・更新・アンインストールのライフサイクル試験を実行する。
 
 ローカルではOSへインストールせず、`.test-work/windows-package/` 内の
 アプリイメージだけを検証する。MSIの生成と `msiexec /qn` による無人
