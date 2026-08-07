@@ -1,6 +1,7 @@
 // - 2026-08-08.
 // - 現行watchページの関連動画へ、CMAF/Domand品質を示すキャッシュバッジを追加する.
 // - サムネイル幅に応じて品質ラベル付き/記号だけの表示を切り替える.
+// - バッジ自身のDOM更新を監視対象から除外し、同一バッチの項目を重複処理しない.
 // - 旧PlaylistItemList/WatchRecommendation系DOMは廃止されたため扱わない.
 
 (function() {
@@ -19,6 +20,7 @@
   const cacheIconThumbnails = new WeakMap();
   const thumbnailCacheIcons = new WeakMap();
   const cacheIconDescriptions = new WeakMap();
+  const observedThumbnails = new WeakSet();
   const fullCacheIconMinThumbnailWidth = 120;
   let flushTimer = null;
 
@@ -37,6 +39,7 @@
           const icon = thumbnailCacheIcons.get(entry.target);
           if (!icon || !icon.isConnected) {
             cacheIconResizeObserver.unobserve(entry.target);
+            observedThumbnails.delete(entry.target);
             return;
           };
           const description = cacheIconDescriptions.get(icon);
@@ -56,6 +59,7 @@
       if (thumbnail) {
         thumbnailCacheIcons.delete(thumbnail);
         if (cacheIconResizeObserver) cacheIconResizeObserver.unobserve(thumbnail);
+        observedThumbnails.delete(thumbnail);
       };
       icon.remove();
     });
@@ -78,7 +82,10 @@
     if (!existing) thumbnail.insertAdjacentElement("afterend", cacheIcon);
     cacheIconThumbnails.set(cacheIcon, thumbnail);
     thumbnailCacheIcons.set(thumbnail, cacheIcon);
-    if (cacheIconResizeObserver) cacheIconResizeObserver.observe(thumbnail);
+    if (cacheIconResizeObserver && !observedThumbnails.has(thumbnail)) {
+      cacheIconResizeObserver.observe(thumbnail);
+      observedThumbnails.add(thumbnail);
+    };
   };
 
   const applyInfo = function(smid, item, videoInfo) {
@@ -138,24 +145,35 @@
     if (flushTimer === null) flushTimer = setTimeout(flushPendingItems, 0);
   };
 
-  const scan = function(root) {
+  const collectItems = function(root, items) {
     if (!root || (root.nodeType !== Node.ELEMENT_NODE
         && root.nodeType !== Node.DOCUMENT_NODE)) return;
-    if (root.matches && root.matches(itemSelector)) enqueueItem(root);
+    if (root.closest && root.closest("[data-ncnl-cache-icon]")) return;
+    if (root.matches && root.matches(itemSelector)) items.add(root);
     if (root.closest) {
       const item = root.closest(itemSelector);
-      if (item) enqueueItem(item);
+      if (item) items.add(item);
     };
-    if (root.querySelectorAll) root.querySelectorAll(itemSelector).forEach(enqueueItem);
+    if (root.querySelectorAll) {
+      root.querySelectorAll(itemSelector).forEach(function(item) { items.add(item); });
+    };
+  };
+
+  const scan = function(root) {
+    const items = new Set();
+    collectItems(root, items);
+    items.forEach(enqueueItem);
   };
 
   const start = function() {
     scan(document);
     const observer = new MutationObserver(function(mutations) {
+      const items = new Set();
       mutations.forEach(function(mutation) {
-        if (mutation.type === "attributes") scan(mutation.target);
-        mutation.addedNodes.forEach(scan);
+        if (mutation.type === "attributes") collectItems(mutation.target, items);
+        mutation.addedNodes.forEach(function(node) { collectItems(node, items); });
       });
+      items.forEach(enqueueItem);
     });
     observer.observe(document.body, {
       childList: true,

@@ -33,6 +33,7 @@ public final class NlFilterLabTests {
         run("MatchLocalを本体のlocal URL判定で適用", () -> matchLocal(repository, temporary));
         run("品質表示スイッチとidGroupの互換5状態を切り替え", () -> cacheVariants(repository, temporary));
         run("キャッシュAPIモックがCMAF/Domand品質を返す", NlFilterLabTests::cacheApiQuality);
+        run("キャッシュバッジの再描画・Mutation再入を抑止", () -> cacheDisplayPerformance(repository));
         run("idGroup第2値から動画IDを補完", () -> idGroupFallback(repository, temporary));
         run("単独キャッシュ分岐とnoCache null groupを本体互換で処理", () -> legacyCacheBranches(repository, temporary));
         run("LST・AddList・RequireHeader参照を疑似実行", () -> stateAndHeaderMacros(repository, temporary));
@@ -211,6 +212,17 @@ public final class NlFilterLabTests {
         String low = LabServer.cacheEntry("sm9", FilterRule.CacheState.DMC_ECONOMY);
         assertContains(low, "\"videoMode\":\"360p-lowest\"", "低品質映像モード");
         assertContains(low, "\"audioBitrate\":64", "低品質音声kbps");
+    }
+
+    private static void cacheDisplayPerformance(Path repository) throws Exception {
+        Path test = repository.resolve("tools/nlfilter-lab/tests/cache-display-performance.test.js");
+        Path projectRoot = repository.getParent();
+        Process process = new ProcessBuilder("node", test.toString(), projectRoot.toString())
+                .redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        int exitCode = process.waitFor();
+        assertEquals(0, exitCode, "JavaScript回帰テスト: " + output.strip());
     }
 
     private static void idGroupFallback(Path repository, Path temporary) throws Exception {

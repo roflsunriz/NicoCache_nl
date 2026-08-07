@@ -9,6 +9,7 @@
 // - 2026-08-06: サムネイル幅に応じた詳細/記号キャッシュ表示の切替を復元.
 // - 2026-08-06: 現行Reactカードのサムネイルへキャッシュアイコンを追加.
 // - 2026-08-08: CMAF/Domandの映像モード・音声kbpsを新しいキャッシュバッジへ表示.
+// - 2026-08-08: バッジ自身のDOM更新によるMutationObserver再入を抑止.
 // - キャッシュ状況に応じたclassでリンクの見た目を変更.
 // - HTMLと属性を監視し、SPA遷移や遅延描画後にも表示を更新する.
 
@@ -147,6 +148,7 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
   const fullCacheIconMinThumbnailWidth = 120;
   const checkedAnchorIds = new WeakMap();
   const iconDescriptions = new WeakMap();
+  const observedThumbnailHosts = new WeakSet();
   const infoCache = new Map();
   const pendingAnchors = new Map();
   const cacheInfoTTL = 5000;
@@ -188,6 +190,7 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
           const icon = entry.target.querySelector("[data-ncnl-cache-icon]");
           if (!icon) {
             cacheIconResizeObserver.unobserve(entry.target);
+            observedThumbnailHosts.delete(entry.target);
             return;
           };
           const description = iconDescriptions.get(icon);
@@ -228,6 +231,7 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
       if (ownIcon) {
         if (cacheIconResizeObserver && ownIcon.parentElement) {
           cacheIconResizeObserver.unobserve(ownIcon.parentElement);
+          observedThumbnailHosts.delete(ownIcon.parentElement);
         };
         ownIcon.remove();
       };
@@ -244,6 +248,7 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     if (ownIcon && ownIcon.parentElement !== thumbnailHost) {
       if (cacheIconResizeObserver && ownIcon.parentElement) {
         cacheIconResizeObserver.unobserve(ownIcon.parentElement);
+        observedThumbnailHosts.delete(ownIcon.parentElement);
       };
       ownIcon.remove();
     };
@@ -253,7 +258,10 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     updateCacheIcon(icon, description, thumbnailHost);
     thumbnailHost.classList.add("ncnl-cache-thumbnail-host");
     if (!existingIcon) thumbnailHost.appendChild(icon);
-    if (cacheIconResizeObserver) cacheIconResizeObserver.observe(thumbnailHost);
+    if (cacheIconResizeObserver && !observedThumbnailHosts.has(thumbnailHost)) {
+      cacheIconResizeObserver.observe(thumbnailHost);
+      observedThumbnailHosts.add(thumbnailHost);
+    };
   };
 
   const requestCacheInfo = async function(ids) {
@@ -322,24 +330,28 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     });
   };
 
-  const processAddedNode = function(node) {
+  const collectAnchors = function(node, anchors) {
     if (!node || node.nodeType !== Node.ELEMENT_NODE) return;
-    if (node.matches("a")) invokeHooks(node);
+    // 自分で生成したバッジの子要素を再処理すると、DOM再構築が監視へ戻る。
+    if (node.closest && node.closest("[data-ncnl-cache-icon]")) return;
+    if (node.matches("a")) anchors.add(node);
     else if (node.closest) {
       const ownerAnchor = node.closest("a");
-      if (ownerAnchor) invokeHooks(ownerAnchor);
+      if (ownerAnchor) anchors.add(ownerAnchor);
     };
-    node.querySelectorAll("a").forEach(invokeHooks);
+    node.querySelectorAll("a").forEach(function(anchor) { anchors.add(anchor); });
   };
 
   const start = function() {
     window.NicocacheNLVideoAnchorHooks.push(mightAddColorClassToAnchor);
     document.querySelectorAll("a").forEach(invokeHooks);
     const observer = new MutationObserver(function(mutationRecords) {
+      const anchors = new Set();
       mutationRecords.forEach(function(record) {
-        if (record.type === "attributes") processAddedNode(record.target);
-        record.addedNodes.forEach(processAddedNode);
+        if (record.type === "attributes") collectAnchors(record.target, anchors);
+        record.addedNodes.forEach(function(node) { collectAnchors(node, anchors); });
       });
+      anchors.forEach(invokeHooks);
     });
     observer.observe(document.body, {
       childList: true,

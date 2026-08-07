@@ -152,9 +152,21 @@
 
   const updateIcon = function(icon, description, compact) {
     if (!icon || !description) return null;
+    const compactMode = Boolean(compact || NicoCache_nl.showCacheQuality === false);
+    const renderKey = [
+      description.cacheId,
+      description.quality,
+      description.economy ? "1" : "0",
+      description.videoMode,
+      description.videoBitrate,
+      description.audioBitrate,
+      compactMode ? "1" : "0",
+    ].join("|");
+    if (icon.getAttribute("data-ncnl-cache-render-key") === renderKey) return icon;
+
     iconClassNames.forEach(function(className) { icon.classList.remove(className); });
     icon.classList.add("cacheIcon", "ncnl-cache-icon", "ncnl-cache-quality-" + description.quality);
-    if (compact || NicoCache_nl.showCacheQuality === false) {
+    if (compactMode) {
       icon.classList.add("ncnl-cache-icon--compact");
     }
     icon.setAttribute("data-ncnl-cache-icon", "");
@@ -162,6 +174,7 @@
     icon.setAttribute("title", description.title);
     icon.setAttribute("aria-label", description.title);
     replaceLabel(icon, description);
+    icon.setAttribute("data-ncnl-cache-render-key", renderKey);
     return icon;
   };
 
