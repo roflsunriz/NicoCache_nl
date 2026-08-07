@@ -9,4 +9,4 @@
 # 設定に # が付いているものを使う場合は # を消してから変更してください。
 
 # 最低限、利用開始に必要な設定キーは userDataRoot の設定だけです。通常は NicoCache_nl のインストール後、初回ウィザードで自動設定します。
-# 例：userDataRoot=C:\Users\UserName\Documents\NicoCache_nl
+# 例：userDataRoot=C:\/Users\/UserName\/Documents\/NicoCache_nl
