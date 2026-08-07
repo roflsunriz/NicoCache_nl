@@ -48,6 +48,6 @@ function makeCacheList() {
     "beforeend",
     `<a href="http://www.nicovideo.jp/">トップに戻る</a>。 `
       + `${globalThis.ncversion} powered by `
-      + `<a href="http://nicolist.net/">nicolist.net</a><ul>${sections.join("")}</ul>`,
+      + `<a href="https://github.com/roflsunriz/NicoCache_nl/releases">NicoCache_nl Latest Releases</a><ul>${sections.join("")}</ul>`,
   );
 }
