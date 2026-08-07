@@ -22,7 +22,11 @@ if ([string]::IsNullOrWhiteSpace($ApplicationRoot)) {
     New-Item -ItemType Directory -Path $jreBin -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $root 'NicoCache_nl.jar') `
         -Destination $ApplicationRoot -Force
-    Copy-Item -LiteralPath $LauncherJarPath -Destination $ApplicationRoot -Force
+    $packagedLauncherJar = Join-Path $ApplicationRoot `
+        (Split-Path -Leaf $LauncherJarPath)
+    Copy-Item -LiteralPath $LauncherJarPath `
+        -Destination $packagedLauncherJar -Force
+    $LauncherJarPath = $packagedLauncherJar
     Copy-Item -LiteralPath (Join-Path $env:JAVA_HOME 'bin\javaw.exe') `
         -Destination $jreBin -Force
 }
