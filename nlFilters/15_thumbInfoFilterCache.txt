@@ -22,6 +22,36 @@
 # dmc/エコノミーを同時に判定して切り替えたい場合は次の記法が利用できる。
 #   <非dmc通常$$非dmcエコノミー$$dmc通常$$dmcエコノミー>
 #   非dmc通常<$>非dmcエコノミー<$>dmc通常<$>dmcエコノミー
+#
+# dmcキャッシュを非dmcキャッシュと異なるアイコン・色で表示するか。
+#   false: 区別しない（dmc通常は通常、dmcエコノミーはエコノミーと同じ表示）
+#   true : 区別する（dmcを緑系の色とdmc専用アイコンで表示）
+# 切り替える場合は、次の行の false / true だけを書き換える。
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = dmcキャッシュ表示設定
+URL = .*
+Match<
+$SET(ncnlDistinguishDmcCache=false)([\s\S]?)
+>
+Replace<
+$1
+>
+
+#----------------------------------------------------------------------------------------
+[Replace]
+Name = dmcキャッシュ表示設定をブラウザーへ渡す
+URL = (?:www|ext|live|ch|com|uad|news|ex|dic|anime)\.nicovideo\.jp/(?!thumb_|openlist/)
+ContentType = text/html
+Match<
+(?=<!--nicocachenl-head-->)
+>
+Replace<
+<script type="text/javascript"><!--
+NicoCache_nl.distinguishDmcCache = <nlVar:ncnlDistinguishDmcCache>;
+//--></script><CRLF>
+>
+
 #----------------------------------------------------------------------------------------
 [Replace]
 Name = キャッシュアイコン追加(img)
@@ -38,7 +68,16 @@ href="(?:
 >
 Replace<
 $0
-<div class="cacheIcon <cache$$economy$$dmcCache$$dmcEconomy>IconImg"></div>
+<div class="cacheIcon cacheIconImg"></div>
+<$>
+$0
+<div class="cacheIcon economyIconImg"></div>
+<$>
+$0
+<div class="cacheIcon <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcCache<when else>cache</nlcase>IconImg"></div>
+<$>
+$0
+<div class="cacheIcon <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcEconomy<when else>economy</nlcase>IconImg"></div>
 >
 
 #----------------------------------------------------------------------------------------
@@ -60,7 +99,19 @@ href="(?:
 >
 Replace<
 $1
-<div class="cacheIcon <cache$$economy$$dmcCache$$dmcEconomy>IconImg"></div>
+<div class="cacheIcon cacheIconImg"></div>
+$4
+<$>
+$1
+<div class="cacheIcon economyIconImg"></div>
+$4
+<$>
+$1
+<div class="cacheIcon <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcCache<when else>cache</nlcase>IconImg"></div>
+$4
+<$>
+$1
+<div class="cacheIcon <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcEconomy<when else>economy</nlcase>IconImg"></div>
 $4
 >
 
@@ -75,7 +126,13 @@ Match<
 (href="(?:(?:|/|https?://www\.nicovideo\.jp/)watch/|[^"]+video_id=)((?:[a-z]{2})?\d++)(?:\?(?!playlist_type)[^"]++)?"(?:(?!title|playlist)[^>])*?(?: title="[^"]+"[^>]*)?)(>\s*+)(?!<img)
 >
 Replace<
-$1 style="color:#<C00000$$C08000$$008000$$808000>;"$3
+$1 style="color:#C00000;"$3
+<$>
+$1 style="color:#C08000;"$3
+<$>
+$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">008000<when else>C00000</nlcase>;"$3
+<$>
+$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">808000<when else>C08000</nlcase>;"$3
 >
 
 #----------------------------------------------------------------------------------------
@@ -102,7 +159,13 @@ Match<
 [^>]*>\s*+<p class="itemTitle">\s*+<span(?:(?!title)[^>])*? title="[^"]+")
 >
 Replace<
-$1 style="color:#<C00000$$C08000$$008000$$808000>;"
+$1 style="color:#C00000;"
+<$>
+$1 style="color:#C08000;"
+<$>
+$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">008000<when else>C00000</nlcase>;"
+<$>
+$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">808000<when else>C08000</nlcase>;"
 >
 
 #----------------------------------------------------------------------------------------
@@ -193,7 +256,13 @@ Match<
 (href="https?://www\.nicovideo\.jp/watch/((?:[a-z]{2})?\d++)"(?:(?!title=)[^>])*(?: title="[^"]+"[^>]*)?)(>\s*+)(?!<img)
 >
 Replace<
-$1 style="color:#<C00000$$C08000$$008000$$808000>;"$3
+$1 style="color:#C00000;"$3
+<$>
+$1 style="color:#C08000;"$3
+<$>
+$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">008000<when else>C00000</nlcase>;"$3
+<$>
+$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">808000<when else>C08000</nlcase>;"$3
 >
 
 #----------------------------------------------------------------------------------------
@@ -205,7 +274,13 @@ Match<
 <video_id>([a-z]{2}\d+)</video_id>(\s*)
 >
 Replace<
-$0<cache><cache$$economy$$dmcCache$$dmcEconomy></cache>$2
+$0<cache>cache</cache>$2
+<$>
+$0<cache>economy</cache>$2
+<$>
+$0<cache><nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcCache<when else>cache</nlcase></cache>$2
+<$>
+$0<cache><nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcEconomy<when else>economy</nlcase></cache>$2
 >
 
 #----------------------------------------------------------------------------------------
@@ -240,10 +315,11 @@ NicoCache_nl.moHooks.addLazy(function(item, info) {
   var cacheData = info.caches[preferred];
   if (cacheData == null) return;
 
-  var cache = !cacheData.dmc ?
+  var distinguishDmcCache = NicoCache_nl.distinguishDmcCache !== false;
+  var cache = !distinguishDmcCache || !cacheData.dmc ?
     !cacheData.economy ? 'cache' : 'economy':
     !cacheData.economy ? 'dmcCache' : 'dmcEconomy';
-  var auxClass = !cacheData.dmc ?
+  var auxClass = !distinguishDmcCache || !cacheData.dmc ?
     !cacheData.economy ? 'nl-cached-smile-normal' : 'nl-cached-smile-economy':
     !cacheData.economy ? 'nl-cached-dmc-normal' : 'nl-cached-dmc-economy';
 
@@ -302,7 +378,13 @@ Match<
 (class="[^"]*?NC-Link[^"]*)("[^>]*href="https://www\.nicovideo\.jp/watch/((?:[a-z]{2})?\d++)"[^>]*?>)
 >
 Replace<
-$1 <nl-cached-smile-normal$$nl-cached-smile-economy$$nl-cached-dmc-normal$$nl-cached-dmc-economy>$2
+$1 nl-cached-smile-normal$2
+<$>
+$1 nl-cached-smile-economy$2
+<$>
+$1 <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">nl-cached-dmc-normal<when else>nl-cached-smile-normal</nlcase>$2
+<$>
+$1 <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">nl-cached-dmc-economy<when else>nl-cached-smile-economy</nlcase>$2
 >
 
 #----------------------------------------------------------------------------------------

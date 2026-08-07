@@ -34,6 +34,8 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
 
   // 自分でCSS書きたい場合は true を false へ.
   const enablePresetCSS = true;
+  const distinguishDmcCache = !window.NicoCache_nl
+    || window.NicoCache_nl.distinguishDmcCache !== false;
 
   // css {{{
   (() => {
@@ -172,22 +174,26 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
   };
 
   const applyCachePoint = function(anchor, cachePoint) {
+    const displayCachePoint = distinguishDmcCache ? cachePoint
+      : cachePoint === 2 ? 1
+      : cachePoint === 4 ? 3
+      : cachePoint;
     cacheClassNames.forEach(function(className) {
       anchor.classList.remove(className);
     });
 
     // "nl-"なしのclassは既存の利用者向け互換性のため残す.
-    if (1 === cachePoint) {
+    if (1 === displayCachePoint) {
       anchor.classList.add("nl-cached-common", "cached-v1-economy", "nl-cached-smile-economy");
-    } else if (2 === cachePoint) {
+    } else if (2 === displayCachePoint) {
       anchor.classList.add("nl-cached-common", "cached-dmc-economy", "nl-cached-dmc-economy");
-    } else if (3 === cachePoint) {
+    } else if (3 === displayCachePoint) {
       anchor.classList.add("nl-cached-common", "cached-v1-normal", "nl-cached-smile-normal");
-    } else if (4 === cachePoint) {
+    } else if (4 === displayCachePoint) {
       anchor.classList.add("nl-cached-common", "cached-dmc-normal", "nl-cached-dmc-normal");
     };
 
-    applyCacheIcon(anchor, cachePoint);
+    applyCacheIcon(anchor, displayCachePoint);
   };
 
   const getThumbnailWidth = function(thumbnail) {

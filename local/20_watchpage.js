@@ -18,6 +18,7 @@
   const cacheIconThumbnails = new WeakMap();
   const thumbnailCacheIcons = new WeakMap();
   const fullCacheIconMinThumbnailWidth = 120;
+  const distinguishDmcCache = window.NicoCache_nl.distinguishDmcCache !== false;
   let flushTimer = null;
 
   const getThumbnailWidth = function(thumbnail) {
@@ -63,7 +64,9 @@
 
   const getCacheClass = function(cacheData) {
     if (!cacheData || !cacheData.complete) return null;
-    if (cacheData.dmc) return cacheData.economy ? "dmcEconomy" : "dmcCache";
+    if (distinguishDmcCache && cacheData.dmc) {
+      return cacheData.economy ? "dmcEconomy" : "dmcCache";
+    };
     return cacheData.economy ? "economy" : "cache";
   };
 
