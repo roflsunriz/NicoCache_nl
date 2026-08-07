@@ -61,6 +61,7 @@ Uninstall.exe
 !/local/05_cache_remove_button.js
 !/local/15_cached_link_color.js
 !/local/20_watchpage.js
+!/local/ncnl_cache_display.js
 !/local/list.js.default
 !/local/mime.types.default
 !/local/nl_cacheIcon.css

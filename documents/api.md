@@ -52,6 +52,14 @@ Content-Length: 17
 sm900001,sm900002
 ```
 
+`/cache/info/v2`では、現行Domand/CMAFキャッシュを`preferredDmcHls`が指す。
+対応する`caches[cacheId]`は`complete: true`、`movieType: "hls"`、互換名の
+`dmc: true`を持ち、`dmcMovieType`に`videoMode`、`videoBitrate`、`audioBitrate`を
+含む。現行Domand/CMAFでは映像品質を`videoMode`（例:`1080p`、`360p-lowest`）、
+音質を`audioBitrate`（kbps）で表し、`videoBitrate`は0である。`dmc`はDMCと
+Domand/CMAFの両方で真になる保存形式互換フィールドなので、配信世代の判定には使わない。
+完成済みかどうかは`completes`または各エントリーの`complete`で確認する。
+
 ## キャッシュ削除API
 
 | エンドポイント | メソッド | 対象 | AJAX応答 |

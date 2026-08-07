@@ -4,11 +4,12 @@
 // @match        https://www.nicovideo.jp/*
 // ==/UserScript==
 
-// - version 2026-08-06
+// - version 2026-08-08
 // - このファイルのライセンスはNicoCache Licenseです.
-// - 2026-08-06: サムネイル幅に応じたフル/省略キャッシュアイコンの切替を復元.
+// - 2026-08-06: サムネイル幅に応じた詳細/記号キャッシュ表示の切替を復元.
 // - 2026-08-06: 現行Reactカードのサムネイルへキャッシュアイコンを追加.
-// - キャッシュ状況に応じた品質classでリンクの見た目を変更.
+// - 2026-08-08: CMAF/Domandの映像モード・音声kbpsを新しいキャッシュバッジへ表示.
+// - キャッシュ状況に応じたclassでリンクの見た目を変更.
 // - HTMLと属性を監視し、SPA遷移や遅延描画後にも表示を更新する.
 
 'use strict';
@@ -34,8 +35,8 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
 
   // 自分でCSS書きたい場合は true を false へ.
   const enablePresetCSS = true;
-  const distinguishDmcCache = !window.NicoCache_nl
-    || window.NicoCache_nl.distinguishDmcCache !== false;
+  const cacheDisplay = window.NicoCache_nl && window.NicoCache_nl.cacheDisplay;
+  if (!cacheDisplay) return;
 
   // css {{{
   (() => {
@@ -75,25 +76,25 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
 .nl-cached-dmc-normal:link>.MediaObject>.MediaObjectTitle,
 .nl-cached-dmc-normal:link>.NC-CardTitle,
 .nl-cached-dmc-normal:link>.NC-MediaObject-body>.NC-MediaObject-bodyTitle>.NC-MediaObjectTitle
-{ color: #008000; font-weight:bold;}
+  { color: #C00000; font-weight:bold;}
 
 :not(.VideoMediaObject-item)>.nl-cached-dmc-normal:visited,
 .nl-cached-dmc-normal:visited>.MediaObject>.MediaObjectTitle,
 .nl-cached-dmc-normal:visited>.NC-CardTitle,
 .nl-cached-dmc-normal:visited>.NC-MediaObject-body>.NC-MediaObject-bodyTitle>.NC-MediaObjectTitle
-{ color: #006000}
+  { color: #600000}
 
 :not(.VideoMediaObject-item)>.nl-cached-dmc-economy:link,
 .nl-cached-dmc-economy:link>.MediaObject>.MediaObjectTitle,
 .nl-cached-dmc-economy:link>.NC-CardTitle,
 .nl-cached-dmc-economy:link>.NC-MediaObject-body>.NC-MediaObject-bodyTitle>.NC-MediaObjectTitle
-{ color: #808000; font-weight:bold;}
+  { color: #C08000; font-weight:bold;}
 
 :not(.VideoMediaObject-item)>.nl-cached-dmc-economy:visited,
 .nl-cached-dmc-economy:visited>.MediaObject>.MediaObjectTitle,
 .nl-cached-dmc-economy:visited>.NC-CardTitle,
 .nl-cached-dmc-economy:visited>.NC-MediaObject-body>.NC-MediaObject-bodyTitle>.NC-MediaObjectTitle
-{ color: #606000}
+  { color: #603000}
 `;
     const appendStyle = function() {
       if (document.head && !document.getElementById("nl-cached-link-color-style")) {
@@ -142,58 +143,22 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     "cacheIconImgMin", "economyIconImgMin",
     "dmcCacheIconImgMin", "dmcEconomyIconImgMin",
   ];
-  // 既存表示では94px級だけをCアイコン、120px以上をフルアイコンにしている.
+  // 94px級では記号だけ、120px以上では品質ラベルも表示する.
   const fullCacheIconMinThumbnailWidth = 120;
   const checkedAnchorIds = new WeakMap();
+  const iconDescriptions = new WeakMap();
   const infoCache = new Map();
   const pendingAnchors = new Map();
   const cacheInfoTTL = 5000;
   const maxIdsPerRequest = 100;
   let flushTimer = null;
 
-  const getCachePoint = function(videoInfo) {
-    if (!videoInfo || !videoInfo.caches) return 0;
-    let cachePoint = 0; // 0:cacheなし, 1:旧エコ, 2:dmcエコ, 3:旧普通, 4:dmc普通
-    for (const cacheName in videoInfo.caches) {
-      const cacheInfo = videoInfo.caches[cacheName];
-      if (cacheInfo.complete) {
-        let point = 0;
-        if (cacheInfo.dmc && cacheInfo.economy) {
-          point = 2;
-        } else if (cacheInfo.dmc && !cacheInfo.economy) {
-          point = 4;
-        } else if (!cacheInfo.dmc && cacheInfo.economy) {
-          point = 1;
-        } else if (!cacheInfo.dmc && !cacheInfo.economy) {
-          point = 3;
-        };
-        cachePoint = Math.max(point, cachePoint);
-      };
-    };
-    return cachePoint;
-  };
-
-  const applyCachePoint = function(anchor, cachePoint) {
-    const displayCachePoint = distinguishDmcCache ? cachePoint
-      : cachePoint === 2 ? 1
-      : cachePoint === 4 ? 3
-      : cachePoint;
+  const applyCacheDescription = function(anchor, description) {
     cacheClassNames.forEach(function(className) {
       anchor.classList.remove(className);
     });
-
-    // "nl-"なしのclassは既存の利用者向け互換性のため残す.
-    if (1 === displayCachePoint) {
-      anchor.classList.add("nl-cached-common", "cached-v1-economy", "nl-cached-smile-economy");
-    } else if (2 === displayCachePoint) {
-      anchor.classList.add("nl-cached-common", "cached-dmc-economy", "nl-cached-dmc-economy");
-    } else if (3 === displayCachePoint) {
-      anchor.classList.add("nl-cached-common", "cached-v1-normal", "nl-cached-smile-normal");
-    } else if (4 === displayCachePoint) {
-      anchor.classList.add("nl-cached-common", "cached-dmc-normal", "nl-cached-dmc-normal");
-    };
-
-    applyCacheIcon(anchor, displayCachePoint);
+    if (description) cacheDisplay.applyLinkClasses(anchor, description);
+    applyCacheIcon(anchor, description);
   };
 
   const getThumbnailWidth = function(thumbnail) {
@@ -205,22 +170,16 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     return Number.isFinite(thumbnail.clientWidth) ? thumbnail.clientWidth : 0;
   };
 
-  const getCacheIconClass = function(cachePoint, thumbnail) {
-    const suffix = getThumbnailWidth(thumbnail) >= fullCacheIconMinThumbnailWidth
-      ? "IconImg" : "IconImgMin";
-    if (1 === cachePoint) return "economy" + suffix;
-    if (2 === cachePoint) return "dmcEconomy" + suffix;
-    if (3 === cachePoint) return "cache" + suffix;
-    if (4 === cachePoint) return "dmcCache" + suffix;
-    return null;
-  };
-
-  const updateCacheIconClass = function(icon, cachePoint, thumbnailHost) {
-    const iconClass = getCacheIconClass(cachePoint, thumbnailHost);
+  const updateCacheIcon = function(icon, description, thumbnailHost) {
     cacheIconClassNames.forEach(function(className) {
       icon.classList.remove(className);
     });
-    if (iconClass) icon.classList.add(iconClass);
+    cacheDisplay.updateIcon(
+      icon,
+      description,
+      getThumbnailWidth(thumbnailHost) < fullCacheIconMinThumbnailWidth,
+    );
+    iconDescriptions.set(icon, description);
   };
 
   const cacheIconResizeObserver = typeof ResizeObserver === "function"
@@ -231,11 +190,8 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
             cacheIconResizeObserver.unobserve(entry.target);
             return;
           };
-          updateCacheIconClass(
-            icon,
-            Number(icon.getAttribute("data-ncnl-cache-point")),
-            entry.target,
-          );
+          const description = iconDescriptions.get(icon);
+          if (description) updateCacheIcon(icon, description, entry.target);
         });
       })
     : null;
@@ -262,24 +218,25 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
       : anchor;
   };
 
-  function applyCacheIcon(anchor, cachePoint) {
+  function applyCacheIcon(anchor, description) {
     const ownIcon = anchor.querySelector("[data-ncnl-cache-icon]");
-    if (!getCacheIconClass(cachePoint, null)) {
+    const legacyIcon = anchor.querySelector(".cacheIcon")
+      || (anchor.nextElementSibling
+          && anchor.nextElementSibling.classList.contains("cacheIcon")
+          ? anchor.nextElementSibling : null);
+    if (!description) {
       if (ownIcon) {
         if (cacheIconResizeObserver && ownIcon.parentElement) {
           cacheIconResizeObserver.unobserve(ownIcon.parentElement);
         };
         ownIcon.remove();
       };
+      if (legacyIcon && !legacyIcon.hasAttribute("data-ncnl-cache-icon")) legacyIcon.remove();
       return;
     };
 
-    // 応答HTMLを書き換える従来のnlFilterが追加したアイコンを優先する.
-    const legacyIcon = anchor.querySelector(".cacheIcon")
-      || (anchor.nextElementSibling
-          && anchor.nextElementSibling.classList.contains("cacheIcon")
-          ? anchor.nextElementSibling : null);
-    if (legacyIcon && !legacyIcon.hasAttribute("data-ncnl-cache-icon")) return;
+    // 品質情報を持たない応答書き換え時のフォールバックを品質バッジへ更新する.
+    if (legacyIcon && !legacyIcon.hasAttribute("data-ncnl-cache-icon")) legacyIcon.remove();
 
     const thumbnailHost = findThumbnailHost(anchor);
     if (!thumbnailHost) return;
@@ -293,11 +250,7 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     const existingIcon = thumbnailHost.querySelector("[data-ncnl-cache-icon]");
 
     const icon = existingIcon || document.createElement("span");
-    updateCacheIconClass(icon, cachePoint, thumbnailHost);
-    icon.classList.add("cacheIcon", "ncnl-cache-icon");
-    icon.setAttribute("data-ncnl-cache-icon", "");
-    icon.setAttribute("data-ncnl-cache-point", String(cachePoint));
-    icon.setAttribute("aria-hidden", "true");
+    updateCacheIcon(icon, description, thumbnailHost);
     thumbnailHost.classList.add("ncnl-cache-thumbnail-host");
     if (!existingIcon) thumbnailHost.appendChild(icon);
     if (cacheIconResizeObserver) cacheIconResizeObserver.observe(thumbnailHost);
@@ -325,10 +278,10 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
         chunk.forEach(function(id) {
           const videoInfo = Object.prototype.hasOwnProperty.call(json, id) ? json[id] : null;
           infoCache.set(id, {videoInfo: videoInfo, expiresAt: expiresAt});
-          const cachePoint = getCachePoint(videoInfo);
+          const description = cacheDisplay.describe(videoInfo);
           (batch.get(id) || []).forEach(function(anchor) {
             if (anchor.isConnected && checkedAnchorIds.get(anchor) === id) {
-              applyCachePoint(anchor, cachePoint);
+              applyCacheDescription(anchor, description);
             };
           });
         });
@@ -346,13 +299,13 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
     if (checkedAnchorIds.get(anchor) === id
         && cached && cached.expiresAt > Date.now()) {
       // 遅延画像の追加後にもサムネイルホストを再探索する.
-      applyCachePoint(anchor, getCachePoint(cached.videoInfo));
+      applyCacheDescription(anchor, cacheDisplay.describe(cached.videoInfo));
       return;
     };
 
     checkedAnchorIds.set(anchor, id);
     if (cached && cached.expiresAt > Date.now()) {
-      applyCachePoint(anchor, getCachePoint(cached.videoInfo));
+      applyCacheDescription(anchor, cacheDisplay.describe(cached.videoInfo));
       return;
     };
 

@@ -1,12 +1,13 @@
-// - 2026-08-06.
-// - 現行watchページの関連動画へ、キャッシュ品質を示すアイコンを追加する.
-// - サムネイル幅に応じてフル/省略キャッシュアイコンを切り替える.
+// - 2026-08-08.
+// - 現行watchページの関連動画へ、CMAF/Domand品質を示すキャッシュバッジを追加する.
+// - サムネイル幅に応じて品質ラベル付き/記号だけの表示を切り替える.
 // - 旧PlaylistItemList/WatchRecommendation系DOMは廃止されたため扱わない.
 
 (function() {
   "use strict";
 
   if (!window.NicoCache_nl || typeof NicoCache_nl.get !== "function") return;
+  if (!NicoCache_nl.cacheDisplay) return;
   if (window.__ncnlWatchCacheIconsInitialized) return;
   window.__ncnlWatchCacheIconsInitialized = true;
 
@@ -17,8 +18,8 @@
   const pendingItems = new Map();
   const cacheIconThumbnails = new WeakMap();
   const thumbnailCacheIcons = new WeakMap();
+  const cacheIconDescriptions = new WeakMap();
   const fullCacheIconMinThumbnailWidth = 120;
-  const distinguishDmcCache = window.NicoCache_nl.distinguishDmcCache !== false;
   let flushTimer = null;
 
   const getThumbnailWidth = function(thumbnail) {
@@ -30,11 +31,6 @@
     return Number.isFinite(thumbnail.clientWidth) ? thumbnail.clientWidth : 0;
   };
 
-  const getCacheIconClass = function(cacheClass, thumbnail) {
-    return cacheClass + (getThumbnailWidth(thumbnail) >= fullCacheIconMinThumbnailWidth
-      ? "IconImg" : "IconImgMin");
-  };
-
   const cacheIconResizeObserver = typeof ResizeObserver === "function"
     ? new ResizeObserver(function(entries) {
         entries.forEach(function(entry) {
@@ -43,32 +39,16 @@
             cacheIconResizeObserver.unobserve(entry.target);
             return;
           };
-          const cacheClass = icon.getAttribute("data-ncnl-watch-cache-class");
-          if (!cacheClass) return;
-          icon.className = "cacheIcon " + getCacheIconClass(cacheClass, entry.target);
+          const description = cacheIconDescriptions.get(icon);
+          if (!description) return;
+          NicoCache_nl.cacheDisplay.updateIcon(
+            icon,
+            description,
+            getThumbnailWidth(entry.target) < fullCacheIconMinThumbnailWidth,
+          );
         });
       })
     : null;
-
-  const getPreferredCacheData = function(videoInfo) {
-    if (!videoInfo || !videoInfo.caches) return null;
-    const preferred = videoInfo.preferredHTML5 || videoInfo.preferred;
-    if (preferred && videoInfo.caches[preferred]) return videoInfo.caches[preferred];
-    for (const id in videoInfo.caches) {
-      if (videoInfo.caches[id] && videoInfo.caches[id].complete) {
-        return videoInfo.caches[id];
-      };
-    };
-    return null;
-  };
-
-  const getCacheClass = function(cacheData) {
-    if (!cacheData || !cacheData.complete) return null;
-    if (distinguishDmcCache && cacheData.dmc) {
-      return cacheData.economy ? "dmcEconomy" : "dmcCache";
-    };
-    return cacheData.economy ? "economy" : "cache";
-  };
 
   const removeCacheIcons = function(item) {
     item.querySelectorAll(":scope .cacheIcon").forEach(function(icon) {
@@ -81,16 +61,21 @@
     });
   };
 
-  const insertCacheIcon = function(item, cacheData) {
-    const cacheClass = getCacheClass(cacheData);
-    if (!cacheClass || !item.isConnected || item.querySelector(":scope .cacheIcon")) return;
+  const insertCacheIcon = function(item, videoInfo) {
+    const description = NicoCache_nl.cacheDisplay.describe(videoInfo);
+    if (!description || !item.isConnected) return;
     const thumbnail = item.querySelector('a[href*="/watch/"] img[src*="/thumbnails/"]');
     if (!thumbnail) return;
 
-    const cacheIcon = document.createElement("div");
-    cacheIcon.className = "cacheIcon " + getCacheIconClass(cacheClass, thumbnail);
-    cacheIcon.setAttribute("data-ncnl-watch-cache-class", cacheClass);
-    thumbnail.insertAdjacentElement("afterend", cacheIcon);
+    const existing = item.querySelector(":scope [data-ncnl-cache-icon]");
+    const cacheIcon = existing || document.createElement("span");
+    NicoCache_nl.cacheDisplay.updateIcon(
+      cacheIcon,
+      description,
+      getThumbnailWidth(thumbnail) < fullCacheIconMinThumbnailWidth,
+    );
+    cacheIconDescriptions.set(cacheIcon, description);
+    if (!existing) thumbnail.insertAdjacentElement("afterend", cacheIcon);
     cacheIconThumbnails.set(cacheIcon, thumbnail);
     thumbnailCacheIcons.set(thumbnail, cacheIcon);
     if (cacheIconResizeObserver) cacheIconResizeObserver.observe(thumbnail);
@@ -98,7 +83,7 @@
 
   const applyInfo = function(smid, item, videoInfo) {
     if (!item.isConnected || itemIds.get(item) !== smid) return;
-    insertCacheIcon(item, getPreferredCacheData(videoInfo));
+    insertCacheIcon(item, videoInfo);
   };
 
   const flushPendingItems = function() {

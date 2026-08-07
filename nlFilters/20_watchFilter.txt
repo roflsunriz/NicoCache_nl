@@ -15,9 +15,9 @@ $1 style="color:#C00000;"$3
 <$>
 $1 style="color:#C08000;"$3
 <$>
-$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">008000<when else>C00000</nlcase>;"$3
+$1 style="color:#C00000;"$3
 <$>
-$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">808000<when else>C08000</nlcase>;"$3
+$1 style="color:#C08000;"$3
 >
 
 #-----------------------------------------------------------------------------------------

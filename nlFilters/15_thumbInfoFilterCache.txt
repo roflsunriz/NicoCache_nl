@@ -22,17 +22,19 @@
 # dmc/エコノミーを同時に判定して切り替えたい場合は次の記法が利用できる。
 #   <非dmc通常$$非dmcエコノミー$$dmc通常$$dmcエコノミー>
 #   非dmc通常<$>非dmcエコノミー<$>dmc通常<$>dmcエコノミー
+# これは保存互換の静的分岐であり、現行CMAF/Domandの品質は下記JavaScriptが
+# /cache/info/v2のvideoMode/audioBitrateから表示する。
 #
-# dmcキャッシュを非dmcキャッシュと異なるアイコン・色で表示するか。
-#   false: 区別しない（dmc通常は通常、dmcエコノミーはエコノミーと同じ表示）
-#   true : 区別する（dmcを緑系の色とdmc専用アイコンで表示）
+# CMAF/Domandキャッシュの画質・音質をキャッシュバッジへ表示するか。
+#   true : 1080p・192kなど、映像モードと音声kbpsを表示する
+#   false: 新しいキャッシュ記号だけを表示する（詳細はツールチップで確認できる）
 # 切り替える場合は、次の行の false / true だけを書き換える。
 #----------------------------------------------------------------------------------------
 [Replace]
-Name = dmcキャッシュ表示設定
+Name = キャッシュ品質表示設定
 URL = .*
 Match<
-$SET(ncnlDistinguishDmcCache=false)([\s\S]?)
+$SET(ncnlShowCacheQuality=true)([\s\S]?)
 >
 Replace<
 $1
@@ -40,15 +42,16 @@ $1
 
 #----------------------------------------------------------------------------------------
 [Replace]
-Name = dmcキャッシュ表示設定をブラウザーへ渡す
+Name = キャッシュ品質表示設定と共通表示ロジックをブラウザーへ渡す
 URL = (?:www|ext|live|ch|com|uad|news|ex|dic|anime)\.nicovideo\.jp/(?!thumb_|openlist/)
 ContentType = text/html
 Match<
 (?=<!--nicocachenl-head-->)
 >
 Replace<
+<script type="text/javascript" src="/$TS(local/ncnl_cache_display.js)"></script><CRLF>
 <script type="text/javascript"><!--
-NicoCache_nl.distinguishDmcCache = <nlVar:ncnlDistinguishDmcCache>;
+NicoCache_nl.showCacheQuality = <nlVar:ncnlShowCacheQuality>;
 //--></script><CRLF>
 >
 
@@ -68,16 +71,16 @@ href="(?:
 >
 Replace<
 $0
-<div class="cacheIcon cacheIconImg"></div>
+<div class="cacheIcon ncnl-cache-static"></div>
 <$>
 $0
-<div class="cacheIcon economyIconImg"></div>
+<div class="cacheIcon ncnl-cache-static ncnl-cache-static--economy"></div>
 <$>
 $0
-<div class="cacheIcon <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcCache<when else>cache</nlcase>IconImg"></div>
+<div class="cacheIcon ncnl-cache-static"></div>
 <$>
 $0
-<div class="cacheIcon <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcEconomy<when else>economy</nlcase>IconImg"></div>
+<div class="cacheIcon ncnl-cache-static ncnl-cache-static--economy"></div>
 >
 
 #----------------------------------------------------------------------------------------
@@ -99,19 +102,19 @@ href="(?:
 >
 Replace<
 $1
-<div class="cacheIcon cacheIconImg"></div>
+<div class="cacheIcon ncnl-cache-static"></div>
 $4
 <$>
 $1
-<div class="cacheIcon economyIconImg"></div>
+<div class="cacheIcon ncnl-cache-static ncnl-cache-static--economy"></div>
 $4
 <$>
 $1
-<div class="cacheIcon <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcCache<when else>cache</nlcase>IconImg"></div>
+<div class="cacheIcon ncnl-cache-static"></div>
 $4
 <$>
 $1
-<div class="cacheIcon <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcEconomy<when else>economy</nlcase>IconImg"></div>
+<div class="cacheIcon ncnl-cache-static ncnl-cache-static--economy"></div>
 $4
 >
 
@@ -130,9 +133,9 @@ $1 style="color:#C00000;"$3
 <$>
 $1 style="color:#C08000;"$3
 <$>
-$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">008000<when else>C00000</nlcase>;"$3
+$1 style="color:#C00000;"$3
 <$>
-$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">808000<when else>C08000</nlcase>;"$3
+$1 style="color:#C08000;"$3
 >
 
 #----------------------------------------------------------------------------------------
@@ -163,9 +166,9 @@ $1 style="color:#C00000;"
 <$>
 $1 style="color:#C08000;"
 <$>
-$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">008000<when else>C00000</nlcase>;"
+$1 style="color:#C00000;"
 <$>
-$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">808000<when else>C08000</nlcase>;"
+$1 style="color:#C08000;"
 >
 
 #----------------------------------------------------------------------------------------
@@ -260,9 +263,9 @@ $1 style="color:#C00000;"$3
 <$>
 $1 style="color:#C08000;"$3
 <$>
-$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">008000<when else>C00000</nlcase>;"$3
+$1 style="color:#C00000;"$3
 <$>
-$1 style="color:#<nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">808000<when else>C08000</nlcase>;"$3
+$1 style="color:#C08000;"$3
 >
 
 #----------------------------------------------------------------------------------------
@@ -278,9 +281,9 @@ $0<cache>cache</cache>$2
 <$>
 $0<cache>economy</cache>$2
 <$>
-$0<cache><nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcCache<when else>cache</nlcase></cache>$2
+$0<cache>cache</cache>$2
 <$>
-$0<cache><nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">dmcEconomy<when else>economy</nlcase></cache>$2
+$0<cache>economy</cache>$2
 >
 
 #----------------------------------------------------------------------------------------
@@ -310,26 +313,21 @@ NicoCache_nl.moHooks.addLazy(function(item, info) {
   } else {
     return;
   }
-  var preferred = info && (info.preferred || info.preferredHTML5);
-  if (preferred == null || info.caches == null) return;
-  var cacheData = info.caches[preferred];
-  if (cacheData == null) return;
-
-  var distinguishDmcCache = NicoCache_nl.distinguishDmcCache !== false;
-  var cache = !distinguishDmcCache || !cacheData.dmc ?
-    !cacheData.economy ? 'cache' : 'economy':
-    !cacheData.economy ? 'dmcCache' : 'dmcEconomy';
-  var auxClass = !distinguishDmcCache || !cacheData.dmc ?
-    !cacheData.economy ? 'nl-cached-smile-normal' : 'nl-cached-smile-economy':
-    !cacheData.economy ? 'nl-cached-dmc-normal' : 'nl-cached-dmc-economy';
-
-  item.classList.add(auxClass);
+  if (!NicoCache_nl.cacheDisplay) return;
+  var description = NicoCache_nl.cacheDisplay.describe(info);
+  if (description == null) return;
+  NicoCache_nl.cacheDisplay.applyLinkClasses(item, description);
 
   var thumb = item.querySelector(thumbQuery);
   var title = item.querySelector(titleQuery);
   if (thumb != null) {
-    thumb.insertAdjacentHTML("afterEnd",
-      '<div class="cacheIcon ' + cache + (minIcon ? 'IconImgMin' : 'IconImg') + '"></div>');
+    var icon = item.querySelector("[data-ncnl-cache-icon]");
+    if (icon != null) {
+      NicoCache_nl.cacheDisplay.updateIcon(icon, description, minIcon);
+    } else {
+      icon = NicoCache_nl.cacheDisplay.createIcon(info, minIcon);
+      if (icon != null) thumb.insertAdjacentElement("afterEnd", icon);
+    }
   }
   if (title != null) {
     title.classList.add('nl-cached-title');
@@ -356,16 +354,16 @@ Append<
 .nl-cached-smile-economy a.nl-cached-title:visited:not(:hover) { color: #C08000; }
 
 .nl-cached-dmc-normal    a:link:not(:hover)    .nl-cached-title,
-.nl-cached-dmc-normal    a.nl-cached-title:link:not(:hover)    { color: #008000; }
+.nl-cached-dmc-normal    a.nl-cached-title:link:not(:hover)    { color: #C00000; }
 .nl-cached-dmc-normal    a:visited:not(:hover) .nl-cached-title,
 .nl-cached-dmc-normal    .NC-MediaObject-contents.NC-Link:visited:not(:hover) .nl-cached-title,
-.nl-cached-dmc-normal    a.nl-cached-title:visited:not(:hover) { color: #008000; }
+.nl-cached-dmc-normal    a.nl-cached-title:visited:not(:hover) { color: #C00000; }
 
 .nl-cached-dmc-economy   a:link:not(:hover)    .nl-cached-title,
-.nl-cached-dmc-economy   a.nl-cached-title:link:not(:hover)    { color: #808000; }
+.nl-cached-dmc-economy   a.nl-cached-title:link:not(:hover)    { color: #C08000; }
 .nl-cached-dmc-economy   a:visited:not(:hover) .nl-cached-title,
 .nl-cached-dmc-economy   .NC-MediaObject-contents.NC-Link:visited:not(:hover) .nl-cached-title,
-.nl-cached-dmc-economy   a.nl-cached-title:visited:not(:hover) { color: #808000; }
+.nl-cached-dmc-economy   a.nl-cached-title:visited:not(:hover) { color: #C08000; }
 >
 
 #----------------------------------------------------------------------------------------
@@ -382,9 +380,9 @@ $1 nl-cached-smile-normal$2
 <$>
 $1 nl-cached-smile-economy$2
 <$>
-$1 <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">nl-cached-dmc-normal<when else>nl-cached-smile-normal</nlcase>$2
+$1 nl-cached-smile-normal$2
 <$>
-$1 <nlcase "<nlVar:ncnlDistinguishDmcCache>"><when "true">nl-cached-dmc-economy<when else>nl-cached-smile-economy</nlcase>$2
+$1 nl-cached-smile-economy$2
 >
 
 #----------------------------------------------------------------------------------------
@@ -400,10 +398,10 @@ Append<
 .nl-cached-smile-economy.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #C08000; }
 
 .nl-cached-dmc-normal.NC-MediaObject-contents.NC-Link:link:not(:hover) .NC-MediaObjectTitle,
-.nl-cached-dmc-normal.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #008000; }
+.nl-cached-dmc-normal.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #C00000; }
 
 .nl-cached-dmc-economy.NC-MediaObject-contents.NC-Link:link:not(:hover) .NC-MediaObjectTitle,
-.nl-cached-dmc-economy.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #808000; }
+.nl-cached-dmc-economy.NC-MediaObject-contents.NC-Link:visited:not(:hover) .NC-MediaObjectTitle { color: #C08000; }
 >
 
 #----------------------------------------------------------------------------------------

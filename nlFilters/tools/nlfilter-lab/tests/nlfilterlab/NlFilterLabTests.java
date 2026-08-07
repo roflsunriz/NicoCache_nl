@@ -31,7 +31,8 @@ public final class NlFilterLabTests {
         run("EachLineを行ごとに適用", () -> eachLine(repository, temporary));
         run("URLとContent-Typeの非対象を除外", () -> contextSelection(repository, temporary));
         run("MatchLocalを本体のlocal URL判定で適用", () -> matchLocal(repository, temporary));
-        run("dmc表示スイッチとidGroupの5状態を切り替え", () -> cacheVariants(repository, temporary));
+        run("品質表示スイッチとidGroupの互換5状態を切り替え", () -> cacheVariants(repository, temporary));
+        run("キャッシュAPIモックがCMAF/Domand品質を返す", NlFilterLabTests::cacheApiQuality);
         run("idGroup第2値から動画IDを補完", () -> idGroupFallback(repository, temporary));
         run("単独キャッシュ分岐とnoCache null groupを本体互換で処理", () -> legacyCacheBranches(repository, temporary));
         run("LST・AddList・RequireHeader参照を疑似実行", () -> stateAndHeaderMacros(repository, temporary));
@@ -136,73 +137,80 @@ public final class NlFilterLabTests {
     private static void cacheVariants(Path repository, Path temporary) throws Exception {
         FilterParser parser = new FilterParser();
         Path cacheFilter = repository.resolve("15_thumbInfoFilterCache.txt");
-        ParseResult collapsed = parser.parse(cacheFilter);
+        ParseResult qualityOn = parser.parse(cacheFilter);
         ParseResult watch = parser.parse(repository.resolve("20_watchFilter.txt"));
-        FilterRule collapsedSetting = collapsed.rules.stream()
-                .filter(rule -> "dmcキャッシュ表示設定".equals(rule.name))
+        FilterRule qualityOnSetting = qualityOn.rules.stream()
+                .filter(rule -> "キャッシュ品質表示設定".equals(rule.name))
                 .findFirst().orElseThrow();
-        FilterRule browserSetting = collapsed.rules.stream()
-                .filter(rule -> "dmcキャッシュ表示設定をブラウザーへ渡す".equals(rule.name))
+        FilterRule browserSetting = qualityOn.rules.stream()
+                .filter(rule -> "キャッシュ品質表示設定と共通表示ロジックをブラウザーへ渡す".equals(rule.name))
                 .findFirst().orElseThrow();
-        FilterRule thumbInfoRule = collapsed.rules.stream()
+        FilterRule thumbInfoRule = qualityOn.rules.stream()
                 .filter(rule -> "キャッシュ情報を付加(getthumbinfo)".equals(rule.name))
                 .findFirst().orElseThrow();
         FilterRule colorRule = watch.rules.stream()
                 .filter(rule -> "キャッシュ済動画のリンク色変更(watch)".equals(rule.name))
                 .findFirst().orElseThrow();
 
-        String collapsedSource = Files.readString(cacheFilter, StandardCharsets.UTF_8);
-        String distinctSource = collapsedSource.replace(
-                "$SET(ncnlDistinguishDmcCache=false)",
-                "$SET(ncnlDistinguishDmcCache=true)");
-        assertTrue(!collapsedSource.equals(distinctSource), "dmc表示スイッチのfalseをtrueへ変更できる");
-        Path distinctFile = write(temporary, "15-distinct-dmc.txt", distinctSource);
-        ParseResult distinct = parser.parse(distinctFile);
-        FilterRule distinctSetting = distinct.rules.stream()
-                .filter(rule -> "dmcキャッシュ表示設定".equals(rule.name))
+        String qualityOnSource = Files.readString(cacheFilter, StandardCharsets.UTF_8);
+        String qualityOffSource = qualityOnSource.replace(
+                "$SET(ncnlShowCacheQuality=true)",
+                "$SET(ncnlShowCacheQuality=false)");
+        assertTrue(!qualityOnSource.equals(qualityOffSource), "品質表示スイッチのtrueをfalseへ変更できる");
+        Path qualityOffFile = write(temporary, "15-quality-off.txt", qualityOffSource);
+        ParseResult qualityOff = parser.parse(qualityOffFile);
+        FilterRule qualityOffSetting = qualityOff.rules.stream()
+                .filter(rule -> "キャッシュ品質表示設定".equals(rule.name))
                 .findFirst().orElseThrow();
-        FilterRule distinctBrowserSetting = distinct.rules.stream()
-                .filter(rule -> "dmcキャッシュ表示設定をブラウザーへ渡す".equals(rule.name))
+        FilterRule qualityOffBrowserSetting = qualityOff.rules.stream()
+                .filter(rule -> "キャッシュ品質表示設定と共通表示ロジックをブラウザーへ渡す".equals(rule.name))
                 .findFirst().orElseThrow();
 
         String html = "<a href=\"/watch/sm9\">title</a>";
-        assertContains(simulate(repository, List.of(collapsedSetting, colorRule), html,
+        assertContains(simulate(repository, List.of(qualityOnSetting, colorRule), html,
                 "https://www.nicovideo.jp/watch/sm9", "text/html",
                 FilterRule.CacheState.NORMAL).rendered, "#C00000", "通常色");
-        assertContains(simulate(repository, List.of(collapsedSetting, colorRule), html,
+        assertContains(simulate(repository, List.of(qualityOnSetting, colorRule), html,
                 "https://www.nicovideo.jp/watch/sm9", "text/html",
                 FilterRule.CacheState.ECONOMY).rendered, "#C08000", "エコノミー色");
-        assertContains(simulate(repository, List.of(collapsedSetting, colorRule), html,
+        assertContains(simulate(repository, List.of(qualityOnSetting, colorRule), html,
                 "https://www.nicovideo.jp/watch/sm9", "text/html",
-                FilterRule.CacheState.DMC).rendered, "#C00000", "区別しないDMC色");
-        assertContains(simulate(repository, List.of(collapsedSetting, colorRule), html,
+                FilterRule.CacheState.DMC).rendered, "#C00000", "CMAF/Domandも通常色");
+        assertContains(simulate(repository, List.of(qualityOnSetting, colorRule), html,
                 "https://www.nicovideo.jp/watch/sm9", "text/html",
-                FilterRule.CacheState.DMC_ECONOMY).rendered, "#C08000", "区別しないDMCエコノミー色");
-        assertContains(simulate(repository, List.of(distinctSetting, colorRule), html,
-                "https://www.nicovideo.jp/watch/sm9", "text/html",
-                FilterRule.CacheState.DMC).rendered, "#008000", "区別するDMC色");
-        assertContains(simulate(repository, List.of(distinctSetting, colorRule), html,
-                "https://www.nicovideo.jp/watch/sm9", "text/html",
-                FilterRule.CacheState.DMC_ECONOMY).rendered, "#808000", "区別するDMCエコノミー色");
-        assertEquals(html, simulate(repository, List.of(collapsedSetting, colorRule), html,
+                FilterRule.CacheState.DMC_ECONOMY).rendered, "#C08000", "低品質CMAF/Domand色");
+        assertEquals(html, simulate(repository, List.of(qualityOnSetting, colorRule), html,
                 "https://www.nicovideo.jp/watch/sm9", "text/html",
                 FilterRule.CacheState.NONE).rendered, "キャッシュなし");
 
         String thumbInfo = "<video_id>sm9</video_id>\n";
-        assertContains(simulate(repository, List.of(collapsedSetting, thumbInfoRule), thumbInfo,
+        assertContains(simulate(repository, List.of(qualityOnSetting, thumbInfoRule), thumbInfo,
                 "https://ext.nicovideo.jp/api/getthumbinfo/sm9", "text/xml",
-                FilterRule.CacheState.DMC).rendered, "<cache>cache</cache>", "区別しないgetthumbinfo");
-        assertContains(simulate(repository, List.of(distinctSetting, thumbInfoRule), thumbInfo,
-                "https://ext.nicovideo.jp/api/getthumbinfo/sm9", "text/xml",
-                FilterRule.CacheState.DMC).rendered, "<cache>dmcCache</cache>", "区別するgetthumbinfo");
+                FilterRule.CacheState.DMC).rendered, "<cache>cache</cache>", "getthumbinfo互換値");
 
         String marker = "<!--nicocachenl-head-->";
-        assertContains(simulate(repository, List.of(collapsedSetting, browserSetting), marker,
+        assertContains(simulate(repository, List.of(qualityOnSetting, browserSetting), marker,
                 "https://www.nicovideo.jp/watch/sm9", "text/html",
-                FilterRule.CacheState.NONE).rendered, "distinguishDmcCache = false", "ブラウザー設定false");
-        assertContains(simulate(repository, List.of(distinctSetting, distinctBrowserSetting), marker,
+                FilterRule.CacheState.NONE).rendered, "showCacheQuality = true", "ブラウザー設定true");
+        assertContains(simulate(repository, List.of(qualityOffSetting, qualityOffBrowserSetting), marker,
                 "https://www.nicovideo.jp/watch/sm9", "text/html",
-                FilterRule.CacheState.NONE).rendered, "distinguishDmcCache = true", "ブラウザー設定true");
+                FilterRule.CacheState.NONE).rendered, "showCacheQuality = false", "ブラウザー設定false");
+        assertContains(simulate(repository, List.of(qualityOnSetting, browserSetting), marker,
+                "https://www.nicovideo.jp/watch/sm9", "text/html",
+                FilterRule.CacheState.NONE).rendered, "ncnl_cache_display.js", "共通表示ロジック");
+    }
+
+    private static void cacheApiQuality() {
+        String high = LabServer.cacheEntry("sm9", FilterRule.CacheState.DMC);
+        assertContains(high, "\"preferredDmcHls\":\"sm9[1080p,192].hls\"", "CMAF優先ID");
+        assertContains(high, "\"movieType\":\"hls\"", "CMAF movieType");
+        assertContains(high, "\"videoMode\":\"1080p\"", "CMAF映像モード");
+        assertContains(high, "\"videoBitrate\":0", "Domand映像bitrate");
+        assertContains(high, "\"audioBitrate\":192", "Domand音声kbps");
+
+        String low = LabServer.cacheEntry("sm9", FilterRule.CacheState.DMC_ECONOMY);
+        assertContains(low, "\"videoMode\":\"360p-lowest\"", "低品質映像モード");
+        assertContains(low, "\"audioBitrate\":64", "低品質音声kbps");
     }
 
     private static void idGroupFallback(Path repository, Path temporary) throws Exception {

@@ -371,17 +371,26 @@ final class LabServer {
         sendJson(exchange, 200, json.toString());
     }
 
-    private static String cacheEntry(String id, FilterRule.CacheState state) {
+    static String cacheEntry(String id, FilterRule.CacheState state) {
         if (state == FilterRule.CacheState.NONE) {
-            return "{\"caches\":{},\"cachings\":[],\"completes\":[],\"preferredHTML5\":null}";
+            return "{\"caches\":{},\"cachings\":[],\"completes\":[],\"preferred\":null," +
+                    "\"preferredHTML5\":null,\"preferredDmcHls\":null}";
         }
         boolean dmc = state == FilterRule.CacheState.DMC || state == FilterRule.CacheState.DMC_ECONOMY;
         boolean economy = state == FilterRule.CacheState.ECONOMY || state == FilterRule.CacheState.DMC_ECONOMY;
-        String cacheId = id + "[lab].mp4";
+        String cacheId = dmc
+                ? id + (economy ? "low[360p-lowest,64].hls" : "[1080p,192].hls")
+                : id + (economy ? "low" : "") + ".mp4";
+        String quality = state == FilterRule.CacheState.DMC_ECONOMY
+                ? "{\"videoMode\":\"360p-lowest\",\"videoBitrate\":0,\"audioBitrate\":64}"
+                : "{\"videoMode\":\"1080p\",\"videoBitrate\":0,\"audioBitrate\":192}";
         return "{\"caches\":{" + Json.quote(cacheId) + ":{\"complete\":true,\"dmc\":" + dmc +
-                ",\"economy\":" + economy + ",\"size\":1048576,\"position\":1048576}}," +
+                ",\"economy\":" + economy + ",\"movieType\":\"" + (dmc ? "hls" : "mp4") + "\"" +
+                (dmc ? ",\"dmcMovieType\":" + quality : "") +
+                ",\"size\":1048576,\"position\":1048576}}," +
                 "\"cachings\":[],\"completes\":[" + Json.quote(cacheId) + "],\"preferredHTML5\":" +
-                Json.quote(cacheId) + "}";
+                Json.quote(cacheId) + ",\"preferred\":" + Json.quote(cacheId) +
+                ",\"preferredDmcHls\":" + (dmc ? Json.quote(cacheId) : "null") + "}";
     }
 
     private void blockedCacheMutation(HttpExchange exchange) throws IOException {

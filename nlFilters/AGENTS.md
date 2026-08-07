@@ -1,7 +1,8 @@
 # AGENTS.md
 
 共通ルールは `COMMON-AGENTS.md` を必ず確認し、上位方針として扱う。
-このファイルでは、`C:\NicoCache_nl\nlFilters` で管理する nlFilter 固有の補足だけを記載する。
+このファイルでは、リポジトリ直下の `nlFilters/` で管理する nlFilter 固有の補足だけを記載する。
+配置先は固定パスと仮定せず、以下の相対パスはすべて NicoCache_nl リポジトリ直下を基準にする。
 
 ## このディレクトリの役割
 
@@ -16,25 +17,53 @@
   - `09_thumbInfoFilterBase.txt`: サムネイルポップアップの共通スクリプトを読み込む。
   - `10_thumbInfoFilterLegacyLinks.txt`: 従来HTML/XML向けのリンク置換を提供する。
   - `11_thumbInfoFilterVideoLinks.txt`: 現行SPAを含む動的動画リンクを補完する。
-  - `15_thumbInfoFilterCache.txt`: キャッシュ状態に応じたアイコンとリンク色を追加する。
+  - `15_thumbInfoFilterCache.txt`: キャッシュ状態に応じたリンク色と、CMAF/Domand品質バッジを追加する。
   - `20_watchFilter.txt`: 視聴ページ向けの置換、スタイル、スクリプトを提供する。
 - `.vscode/`、`evac/` は Git 管理外のローカル領域である。ユーザーが明示した場合を除き、調査対象や変更対象に含めない。
 
+## 現行 NicoCache_nl のキャッシュ契約
+
+- 現行の動画配信・保存経路は Domand の CMAF セグメントである。保存先がディレクトリで拡張子相当が
+  `.hls` のキャッシュを、`Cache`、`VideoDescriptor`、`/cache/info/v2` を通して扱う。
+- `VideoDescriptor.isDmc()` と `/cache/info/v2` の `dmc` は公開ABI・保存済みキャッシュとの
+  互換名であり、「現在もDMC配信を使っている」という意味ではない。Domand/CMAFもこの値が
+  `true` になるため、UI文言、アイコン、色の世代判定へそのまま使わない。
+- `/cache/info/v2` の動画ごとの値には `preferred`、`preferredHTML5`、`preferredDmcHls`、
+  `cacheIds`、`cachings`、`completes`、`caches` がある。現行CMAF/Domandの表示対象はまず
+  `preferredDmcHls` を使い、該当する `caches[cacheId]` の `complete` を確認する。
+- 各 `caches[cacheId]` の `movieType` が `hls` で、`dmcMovieType` に `videoMode`、
+  `videoBitrate`、`audioBitrate` が入る。現行Domand/CMAFでは `videoMode` が `1080p`、
+  `720p-mid`、`360p-lowest` などの映像品質、`audioBitrate` が音声kbpsを表し、
+  `videoBitrate` は0である。`videoBitrate`の非0値は旧DMCキャッシュの補足値としてだけ扱う。
+  フィールド欠落や0から架空の品質を推測しない。
+- `economy` / `VideoDescriptor.isLow()` はDMC以降では「取得時に選択可能だった最高品質より低い」
+  ことを示す互換フラグであり、旧SmileVideoのエコノミーモードと同一ではない。
+  `videoMode`内の `_low` / `-lowest` とも別概念なので、品質表示は個別フィールドを優先する。
+- `idGroup` の `<通常$$エコノミー$$dmc通常$$dmcエコノミー>` は本体DSLが維持する旧互換分岐で、
+  CMAF/Domandの解像度・音声品質を表現できない。静的置換は汎用フォールバックに留め、現行DOMの
+  品質表示は `/cache/info/v2` と `local/ncnl_cache_display.js` を使う。
+- キャッシュ表示の共通契約は `local/ncnl_cache_display.js`、外観は `local/nl_cacheIcon.css` に置く。
+  一覧用 `local/15_cached_link_color.js` と視聴ページ用 `local/20_watchpage.js` へ品質選択や
+  アイコンDOM生成を重複実装しない。
+- `/cache/*` の本体API契約は `documents/api.md`、実装は
+  `src/dareka/processor/impl/CacheDirProcessor.java`、キャッシュの識別・優先順位は
+  `VideoDescriptor.java` と `Cache.java` / `CacheManager.java` を正とする。
+
 ## 作業前に確認するもの
 
-- 最初に`C:\NicoCache_nl`で`git status --short --branch`を実行し、
+- 最初にリポジトリ直下で`git status --short --branch`を実行し、
   本体を含むユーザーの未コミット変更を把握する。
 - 対象ファイル内の説明、変更履歴、依存するフィルターを先に読む。`09` の共通資産、`10` の旧HTML互換、`11` の現行動的リンク、`15` のキャッシュ表示は役割を分担しているため、片方だけを見て重複実装しない。
-- 公式同梱フィルターの背景と運用は `C:\NicoCache_nl\documents\Readme_nl+mod.txt`、現在の実装は `C:\NicoCache_nl\src\dareka\processor\impl\EasyRewriter.java` を参照する。本体ソースも同じリポジトリにあるが、必要性を確認せずフィルター変更へ混在させない。
-- JavaScript や CSS が参照する `/local/*` の実体、`window.NicoCache_nl`、`/cache/*` API を変更・利用するときは、`C:\NicoCache_nl\local`、本体実装、呼び出し元を検索して契約を確認する。
+- 公式同梱フィルターの背景と運用は `documents/Readme_nl+mod.txt`、現在の実装は `src/dareka/processor/impl/EasyRewriter.java` を参照する。本体ソースも同じリポジトリにあるが、必要性を確認せずフィルター変更へ混在させない。
+- JavaScript や CSS が参照する `/local/*` の実体、`window.NicoCache_nl`、`/cache/*` API を変更・利用するときは、`local/`、`documents/api.md`、本体実装、呼び出し元を検索して契約を確認する。
 - 追跡中の nlFilter を編集する前に `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 source-check` と `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check` を本体リポジトリ直下から実行し、本体パーサーソースとの基準一致と既存構文の正常性を確認する。
 
 ## nlFilter Lab の使用
 
 - 追跡中の `.txt` を変更した作業では、最低限 `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check <対象ファイル>` と `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 test` を実行する。コーディングエージェントから結果を扱う場合は `check --json` を使ってよい。
-- HTML、JavaScript、CSS、SPA挙動へ影響する変更では `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 headless` を使う。対象に応じて `watch`、`search`、`anime` のfixture、5種類のキャッシュ状態、`--spa-add` を選び、`result.json`、`final.html`、`console.json`、`screenshot.png` を確認する。生成物は `nlFilters/.cache/nlfilter-lab/` 配下に置き、Gitへ追加しない。
+- HTML、JavaScript、CSS、SPA挙動へ影響する変更では `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 headless` を使う。対象に応じて `watch`、`search`、`anime` のfixture、5種類の互換キャッシュ状態、`--spa-add` を選び、`result.json`、`final.html`、`console.json`、`screenshot.png` を確認する。Labの`DMC` / `DMC_ECONOMY`モックは現行CMAF/Domandの品質メタデータを返す。生成物は `nlFilters/.cache/nlfilter-lab/` 配下に置き、Gitへ追加しない。
 - 対話的な調査が必要なら `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 serve` を使う。Labは疑似実装なので、最終的な実環境確認が必要な変更では NicoCache_nl 経由の検証も省略しない。
-- NicoCache_nl の nlFilter パーサーは滅多に変わらないが、変更される可能性はある。`source-check` または `check` がソース差異を報告した場合や、新しい構文・マクロを扱う場合は、`C:\NicoCache_nl\src\dareka\processor\impl\EasyRewriter.java`、`C:\NicoCache_nl\src\dareka\common\regex\JavaPattern.java`、`JavaMatcher.java`、`NestPattern.java`、`NestMatcher.java` を確認し、必要に応じて構文チェッカー、ローカルテスター、互換テストを修正する。
+- NicoCache_nl の nlFilter パーサーは滅多に変わらないが、変更される可能性はある。`source-check` または `check` がソース差異を報告した場合や、新しい構文・マクロを扱う場合は、`src/dareka/processor/impl/EasyRewriter.java`、`src/dareka/common/regex/JavaPattern.java`、`JavaMatcher.java`、`NestPattern.java`、`NestMatcher.java` を確認し、必要に応じて構文チェッカー、ローカルテスター、互換テストを修正する。
 - `nlFilters\tools\nlfilter-lab\parser-baseline.properties` のハッシュだけを更新して差異を解消してはいけない。本体の変更内容を監査し、Lab側の修正とテストが完了した後に基準値を更新する。
 - Lab自体または本体パーサーとの互換処理を変更した場合は `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 compatibility --json` も実行し、`source.status` と `productionOracle.status` がともに `matched` であること、残る差が `externalBoundaries` に限定されることを確認する。
 
@@ -52,7 +81,7 @@
 - 変更前に `git ls-files` で Git 管理対象か確認する。現在の `100_features.txt`、`101_disable_official_function.txt`、`105_premium_hide.txt` は `.gitignore` 対象であり、`C:\filter-matome\nlFilters` を参照するシンボリックリンクである。
 - リンクは見かけ上このディレクトリにあっても、編集は参照先を直接変更する。`100` 番台を依頼された場合は `Get-Item -Force <path> | Format-List FullName,LinkType,Target` で毎回リンク先を確認し、`C:\filter-matome` 側の `AGENTS.md` と `nlFilters\nlFilters_編集ガイド.md` に従う。
 - リンクを通常ファイルへ置換したり、参照先の内容をNicoCache_nlリポジトリへコピーしたりしない。作成、削除、張り替えが必要なら、ユーザーの依頼範囲と参照先を確認してから行う。
-- `01`、`05`、`10`、`15`、`20` には NicoCache_nl の標準フィルターを基にしたものが含まれる。上流版との差分を意図せず消さない。大きな独自機能を加える場合は、既存ファイルへ詰め込む前に、適用順が分かる別番号ファイルに分離できるか検討する。
+- `01`、`05`、`08`、`09`、`10`、`11`、`15`、`20` は NicoCache_nl の標準フィルター群である。上流版との差分を意図せず消さない。大きな独自機能を加える場合は、既存ファイルへ詰め込む前に、適用順が分かる別番号ファイルに分離できるか検討する。
 
 ## 読み込み順とファイル名
 
@@ -74,7 +103,7 @@
 - `Multi` は省略時、最初の1件だけを置換する。全件置換が本当に必要な場合だけ `Multi = TRUE` にする。`EachLine = TRUE` では `Match` と `Replace` の各行が同じ順番で1組になるため、行数と対応を確認する。
 - `MatchLocal = TRUE` は通常のURL条件を `/local/` 配下にも適用する。`URL` 自体に `/local/` を明示した場合の挙動とは分けて考え、ローカル配信物へ意図せず全フィルターを適用しない。
 - `AddList` は置換結果をLSTへ追加し、`AddVariable` はURL固有変数へ保存する。単なる本文置換ではないため、保存先、重複、更新後の利用元、秘密情報の混入を確認する。
-- `$0`、`$1`、`$TS(...)`、`<nlVar:...>`、`<CRLF>`、`<$>`、`<通常$$エコノミー$$dmc通常$$dmcエコノミー>` などは NicoCache_nl が解釈する記法である。通常の正規表現置換やテンプレート文字列だと思って書き換えない。
+- `$0`、`$1`、`$TS(...)`、`<nlVar:...>`、`<CRLF>`、`<$>`、`<通常$$エコノミー$$dmc通常$$dmcエコノミー>` などは NicoCache_nl が解釈する記法である。最後の4分岐名は現行配信方式の名称ではなく保存互換の内部状態である。通常の正規表現置換やテンプレート文字列だと思って書き換えない。
 - `idGroup` はキャッシュ存在時だけ置換するためのキャプチャ番号である。グループを追加・削除すると番号がずれるため、`$1` などの置換参照と一緒に見直す。`<$>` または文字列内のキャッシュ種別分岐は、同じ `Replace` 内で複数使用できないという制約も確認する。
 - `$NEST` はネストしたタグ向けの単独コマンドである。開始・終了タグにキャプチャグループを入れず、通常の正規表現と同じ行へ混在させない。
 - `$LST("file")` はファイルを行単位の選択肢として読み込み、キャプチャグループを1つ増やす。`!` 付きは内容をエスケープせず正規表現として扱う。リストが空の場合に置換がスキップされること、動的更新されること、参照番号がずれることを考慮する。
@@ -111,7 +140,7 @@
 - 既存機能の修正は、可能な限り対象セクションだけを小さく変更する。古いページ向け処理を、現行ページで再現できないという理由だけで削除しない。
 - サイト仕様変更への対応では、確認日、旧構造、新構造、対応方針を対象ファイルのコメントへ簡潔に残す。長い調査ログやエージェント向け検証手順はソースへ埋め込まない。
 - nlFilter自体には外部依存やビルド工程を追加しない。小規模なフィルター変更のたびに形式だけの `package.json` や独立文書を新設せず、利用者影響は本体ルートの`CHANGELOG.md`、対象ファイルの変更履歴コメント、日本語Conventional Commitへ記録する。
-- `C:\NicoCache_nl\src`、`config.properties`、`local`、`nlFilter_sys.txt` も同じGit管理下だが責務は異なる。フィルター修正のついでに変更せず、本体変更が必要なら根拠と検証範囲を明確にして別コミットにする。
+- `src/`、`config.properties`、`local/`、`nlFilter_sys.txt` も同じGit管理下だが責務は異なる。フィルター修正のついでに変更せず、本体変更が必要なら根拠と検証範囲を明確にして別コミットにする。ただしフィルターが明示的に読み込む`local/`資産は同じ表示機能として一緒に検証する。
 
 ## 検証
 
@@ -125,14 +154,14 @@
   - NicoCache_nl ログの `Loading User Filters` と対象ファイル名、および `parse error`、`pattern error`、例外の有無。
   - 変換後DOM、対象要素、重複挿入、コンソールエラー、ネットワークリクエスト数。
   - 初期表示、SPA内遷移、戻る/進む、再描画後の挙動。
-  - キャッシュあり/なし、通常/エコノミー、dmc/非dmcなど変更に関係する状態。
+  - キャッシュあり/なし、完成/取得中、旧形式/CMAF(Domand)、複数の`videoMode`・音声kbps、旧DMCの映像bitrate、品質フィールド欠落など変更に関係する状態。
 - ページ内容は外部サイトの現在状態に依存する。再現できない場合は、確認できた静的事項、未実行の実環境確認、その理由と残るリスクを最終報告へ分けて記載する。
 - 実環境検証が必要でも、キャッシュ削除、ログイン状態変更、設定変更など副作用のある操作を勝手に行わない。
 
 ## NicoCache_nl の起動・終了が必要な場合
 
 - フィルターの通常再読込で足りないことを確認してから再起動する。
-- 終了前に `C:\NicoCache_nl\stop-nicocache.ps1 -ListOnly` で対象PIDと `NicoCache_nl.jar` の指紋を確認する。Javaプロセスを名前だけで一括終了しない。
-- 通常終了は `C:\NicoCache_nl\stop-nicocache.ps1`、起動は存在確認後に `C:\NicoCache_nl\RunNicoCache.ps1` を使う。
+- 終了前に、リポジトリ直下の `NicoCacheLauncher.jar --headless --stop` が対象にできる本体とPIDを確認する。Javaプロセスを名前だけで一括終了しない。
+- 通常終了は `NicoCacheLauncher.jar --headless --stop`、起動は配布物に同梱されたランチャーを使う。JARと同梱JREの存在を先に確認し、開発用ビルドスクリプトを起動手段として流用しない。
 - 強制終了はユーザーが現在の依頼で明示的に許可した場合だけ行う。終了確認が取れない状態で新しいプロセスを重ねて起動しない。
 - 起動後は新しいPID、フィルター読込ログ、対象ページでの動作まで確認し、起動コマンドが成功しただけで完了としない。
