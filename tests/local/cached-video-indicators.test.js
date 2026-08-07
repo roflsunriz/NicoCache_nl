@@ -7,6 +7,10 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const repositoryRoot = path.resolve(__dirname, "..", "..");
+const cacheDisplaySource = fs.readFileSync(
+  path.join(repositoryRoot, "local", "ncnl_cache_display.js"),
+  "utf8",
+);
 const indicatorSource = fs.readFileSync(
   path.join(repositoryRoot, "local", "15_cached_link_color.js"),
   "utf8",
@@ -81,6 +85,15 @@ class FakeElement {
     child.parentElement = this;
     this.children.push(child);
     return child;
+  }
+
+  replaceChildren(...children) {
+    this.children.forEach((child) => {
+      child.parentElement = null;
+      child.isConnected = false;
+    });
+    this.children = [];
+    children.forEach((child) => this.appendChild(child));
   }
 
   getAttribute(name) {
@@ -200,7 +213,8 @@ function createPage(cacheInfo, thumbnailWidths = {}) {
       return body.querySelectorAll(selector);
     },
   };
-  const window = {};
+  const NicoCache_nl = {};
+  const window = {NicoCache_nl};
   window.window = window;
   const context = vm.createContext({
     URL,
@@ -215,10 +229,15 @@ function createPage(cacheInfo, thumbnailWidths = {}) {
       };
     },
     MutationObserver: FakeMutationObserver,
+    NicoCache_nl,
     ResizeObserver: FakeResizeObserver,
     Node: {ELEMENT_NODE: 1, DOCUMENT_NODE: 9},
     setTimeout,
     window,
+  });
+  context.document.createElementNS = (namespace, tagName) => new FakeElement(tagName);
+  vm.runInContext(cacheDisplaySource, context, {
+    filename: "local/ncnl_cache_display.js",
   });
   vm.runInContext(indicatorSource, context, {
     filename: "local/15_cached_link_color.js",
@@ -227,10 +246,20 @@ function createPage(cacheInfo, thumbnailWidths = {}) {
 }
 
 function videoInfo({dmc, economy}) {
+  const cache = {complete: true, dmc, economy};
+  if (dmc) {
+    cache.movieType = "hls";
+    cache.dmcMovieType = {
+      videoMode: economy ? "360p" : "1080p",
+      audioBitrate: economy ? 64 : 192,
+    };
+  }
   return {
     caches: {
-      cache: {complete: true, dmc, economy},
+      cache,
     },
+    preferred: "cache",
+    preferredDmcHls: dmc ? "cache" : undefined,
   };
 }
 
@@ -247,10 +276,10 @@ test("4種類のキャッシュ状態をリンク色classとサムネイルア�
 
   assert.deepEqual(page.requests, ["/cache/info/v2?sm1,sm2,sm3,sm4"]);
   const expected = [
-    ["nl-cached-smile-economy", "economyIconImg"],
-    ["nl-cached-dmc-economy", "dmcEconomyIconImg"],
-    ["nl-cached-smile-normal", "cacheIconImg"],
-    ["nl-cached-dmc-normal", "dmcCacheIconImg"],
+    ["nl-cached-smile-economy", "ncnl-cache-quality-legacy"],
+    ["nl-cached-smile-economy", "ncnl-cache-quality-low"],
+    ["nl-cached-smile-normal", "ncnl-cache-quality-legacy"],
+    ["nl-cached-smile-normal", "ncnl-cache-quality-fhd"],
   ];
   page.cards.forEach(({anchor, thumbnailHost}, index) => {
     assert.equal(anchor.classList.contains(expected[index][0]), true);
@@ -280,9 +309,11 @@ test("SPAで既存リンクのhrefが変わるとclassとアイコンを更新�
   observer.callback([{type: "attributes", target: anchor, addedNodes: []}]);
   await flushAsyncWork();
 
-  assert.equal(anchor.classList.contains("nl-cached-dmc-normal"), true);
+  assert.equal(anchor.classList.contains("nl-cached-smile-normal"), true);
   assert.equal(
-    thumbnailHost.querySelector("[data-ncnl-cache-icon]").classList.contains("dmcCacheIconImg"),
+    thumbnailHost.querySelector("[data-ncnl-cache-icon]").classList.contains(
+      "ncnl-cache-quality-fhd",
+    ),
     true,
   );
 
@@ -321,13 +352,11 @@ test("サムネイル幅が120px未満ならCアイコンへ切り替え、リ�
 
   const {thumbnailHost} = page.cards[0];
   const icon = thumbnailHost.querySelector("[data-ncnl-cache-icon]");
-  assert.equal(icon.classList.contains("cacheIconImgMin"), true);
-  assert.equal(icon.classList.contains("cacheIconImg"), false);
+  assert.equal(icon.classList.contains("ncnl-cache-icon--compact"), true);
 
   thumbnailHost.clientWidth = 120;
   page.resizeObservers[0].callback([{target: thumbnailHost}]);
-  assert.equal(icon.classList.contains("cacheIconImg"), true);
-  assert.equal(icon.classList.contains("cacheIconImgMin"), false);
+  assert.equal(icon.classList.contains("ncnl-cache-icon--compact"), false);
 });
 
 test("キャッシュ情報取得後に遅延描画されたサムネイルへアイコンを追加する", async () => {
@@ -353,7 +382,7 @@ test("キャッシュ情報取得後に遅延描画されたサムネイルへ�
 
   const icon = thumbnailHost.querySelector("[data-ncnl-cache-icon]");
   assert.ok(icon);
-  assert.equal(icon.classList.contains("dmcCacheIconImg"), true);
+  assert.equal(icon.classList.contains("ncnl-cache-quality-fhd"), true);
   assert.equal(page.requests.length, 1);
 });
 
@@ -448,6 +477,10 @@ function createWatchPage(thumbnailWidth) {
     setTimeout,
     window,
   });
+  context.document.createElementNS = (namespace, tagName) => new FakeElement(tagName);
+  vm.runInContext(cacheDisplaySource, context, {
+    filename: "local/ncnl_cache_display.js",
+  });
   vm.runInContext(watchIndicatorSource, context, {
     filename: "local/20_watchpage.js",
   });
@@ -460,11 +493,10 @@ test("視聴ページの関連動画もサムネイル幅に応じてアイコ�
 
   assert.deepEqual(page.requests, ["/cache/info/v2?sm1"]);
   const icon = page.item.querySelector(":scope .cacheIcon");
-  assert.equal(icon.classList.contains("dmcCacheIconImg"), true);
-  assert.equal(icon.classList.contains("dmcCacheIconImgMin"), false);
+  assert.equal(icon.classList.contains("ncnl-cache-quality-fhd"), true);
+  assert.equal(icon.classList.contains("ncnl-cache-icon--compact"), false);
 
   page.thumbnail.clientWidth = 94;
   page.resizeObservers[0].callback([{target: page.thumbnail}]);
-  assert.equal(icon.classList.contains("dmcCacheIconImgMin"), true);
-  assert.equal(icon.classList.contains("dmcCacheIconImg"), false);
+  assert.equal(icon.classList.contains("ncnl-cache-icon--compact"), true);
 });
