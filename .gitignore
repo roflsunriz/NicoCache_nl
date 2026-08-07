@@ -18,6 +18,9 @@ list/
 debug.log
 *.tmp
 
+# Backup files
+config.properties.bak-*
+
 # Local configuration, caches, generated data, and secrets
 /config.properties
 proxy.pac
