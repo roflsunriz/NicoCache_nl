@@ -1,7 +1,8 @@
 # nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
-# 26/08/06
+# 26/08/08
 # 共通資産は09_thumbInfoFilterBase、現行の動的動画リンクは
 # 11_thumbInfoFilterVideoLinksで処理する。このファイルは旧HTML/XML互換を担当する。
+# 2026-08-08: 共通のホバー意図判定とアンカー基準配置を使うようイベント引数を追加。
 
 #----------------------------------------------------------------------------------------
 # 上から順に、
@@ -27,9 +28,9 @@ Match<
 (?<![a-z])im\d{1,8}+(?!["\\'?.]|&quot;|</[vw]|[^<]*>|(?:(?!<a\s).)*</a>|[^>]*(?:</(?:a|title)>|class="search"|style="width:200px;"></td>|unescapeHTML|">[\r\n])|.+\}\);|.+,cc:\d+.*\}|.*'\);)
 >
 Replace<
-<a class="watch" target="_top" href="/watch/$0" onMouseEnter="return popThumb2('$0', 0)" onMouseLeave="return nd()">$0</a>
-<a class="watch" target="_top" href="/$0" onMouseEnter="return popThumb2('$0', 0)" onMouseLeave="return nd()">$0</a>
-<a class="watch" target="_top" href="http://seiga.nicovideo.jp/seiga/$0" onMouseEnter="return popThumb2('$0', 0)" onMouseLeave="return nd()">$0</a>
+<a class="watch" target="_top" href="/watch/$0" onMouseEnter="return popThumb2('$0', 0, undefined, this, event)" onMouseLeave="return nd()">$0</a>
+<a class="watch" target="_top" href="/$0" onMouseEnter="return popThumb2('$0', 0, undefined, this, event)" onMouseLeave="return nd()">$0</a>
+<a class="watch" target="_top" href="http://seiga.nicovideo.jp/seiga/$0" onMouseEnter="return popThumb2('$0', 0, undefined, this, event)" onMouseLeave="return nd()">$0</a>
 >
 
 #----------------------------------------------------------------------------------------
@@ -73,7 +74,7 @@ https?://rd\.nicovideo\.jp/cc/[^/]+/|/ch[^/]+/video/)
 (?!<img|<span class="time"|(?:一般|プレミアム)回線で視聴)
 >
 Replace<
-$1 onMouseEnter="return popThumb2('$2', 0)" onMouseLeave="return nd()"$3
+$1 onMouseEnter="return popThumb2('$2', 0, undefined, this, event)" onMouseLeave="return nd()"$3
 >
 
 #----------------------------------------------------------------------------------------
@@ -91,7 +92,7 @@ https?://rd\.nicovideo\.jp/cc/nicotop_[^/]+/|/ch[^/]+/video/)
 (?:(?!popThumb|timeshift_watch|title=)[^>])*(?: title="[^"]+"[^>]*)?)(>\s*)(?!<img)
 >
 Replace<
-$1 onMouseEnter="return popThumb2('$2', 0)" onMouseLeave="return nd()"$3
+$1 onMouseEnter="return popThumb2('$2', 0, undefined, this, event)" onMouseLeave="return nd()"$3
 >
 
 #----------------------------------------------------------------------------------------
@@ -104,7 +105,7 @@ Match<
 <a [^>]*href="(?:https?://seiga\.nicovideo.jp/|/|)(?:bbs|watch|seiga)/((?:sg|im|mg)\d+)[^"]*"
 >
 Replace<
-$0 onMouseEnter="return popThumb2('$1', 0)" onMouseLeave="return nd()"
+$0 onMouseEnter="return popThumb2('$1', 0, undefined, this, event)" onMouseLeave="return nd()"
 >
 
 #----------------------------------------------------------------------------------------
@@ -132,7 +133,7 @@ document.addEventListener("DOMContentLoaded", function() {
         for (var j = 0; j < spans.length; j++) {
           var id = spans[j].innerText;
           (function(span, id) {
-            span.addEventListener("mouseover", function() { return popThumb2(id, 0) });
+            span.addEventListener("mouseover", function(event) { return popThumb2(id, 0, undefined, span, event) });
             span.addEventListener("mouseout", function() { return nd() });
           })(spans[j], id);
         }

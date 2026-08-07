@@ -1,10 +1,12 @@
 # nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
-# 26/08/06
+# 26/08/08
 
 #----------------------------------------------------------------------------------------
 # 現行ページの動画・生放送リンクへサムネイルポップアップを追加する。
 #
 # [変更履歴]
+#   2026-08-08: イベント委譲だけで動的リンクを処理し、初期DOM全走査と
+#               MutationObserverを廃止。ホバー意図判定と再利用可能ポップアップへ接続。
 #   2026-08-06: 検索・タグ限定から、ランキング、トップ、視聴、シリーズ、
 #               ユーザー、Nアニメを含む現行動的ページの共通処理へ変更。
 #   2026-08-02: 新検索・タグページのReact SSR/SPAへ対応。
@@ -15,9 +17,9 @@
 #   遅延描画とSPA更新でリンク自体またはhref属性が後から追加される。
 #
 # [対応方針]
-#   data-ncnl-popで対象を可視化し、MutationObserverで初期DOMと更新を追跡する。
-#   mouseover/mouseoutはdocumentへの委譲イベントを1組だけ登録し、カード内部の
-#   子要素間移動や旧inline handlerとの二重呼び出しを避ける。
+#   動的リンクはdocumentへの委譲イベントだけで処理できるため、DOM全走査と
+#   MutationObserverを使わない。カード内部の子要素間移動、旧inline handlerとの
+#   二重呼び出し、短時間の通過ホバーによる外部アクセスは共通処理側で避ける。
 [Script]
 Name = ポップアップ追加(現行動的動画リンク)
 FullURL = https?://(?!ads|.*api)[^/]+\.nicovideo\.jp/(?!api/|thumb[_/]|embed/)
@@ -60,25 +62,6 @@ Append<
     );
   }
 
-  function updateAnchor(anchor) {
-    if (getPopupPath(anchor)) {
-      anchor.setAttribute("data-ncnl-pop", "");
-    } else {
-      anchor.removeAttribute("data-ncnl-pop");
-    }
-  }
-
-  function scan(root) {
-    if (!root || (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_NODE)) return;
-    if (root.matches && root.matches(anchorSelector)) updateAnchor(root);
-    if (root.closest) {
-      var parentAnchor = root.closest(anchorSelector);
-      if (parentAnchor) updateAnchor(parentAnchor);
-    }
-    var anchors = root.querySelectorAll ? root.querySelectorAll(anchorSelector) : [];
-    for (var i = 0; i < anchors.length; i++) updateAnchor(anchors[i]);
-  }
-
   function getEventAnchor(event) {
     return event.target && event.target.closest ? event.target.closest(anchorSelector) : null;
   }
@@ -92,13 +75,13 @@ Append<
   }
 
   function start() {
-    scan(document);
-
     document.addEventListener("mouseover", function(event) {
       var anchor = getEventAnchor(event);
       if (!anchor || movedInside(anchor, event.relatedTarget) || hasInlinePopup(anchor)) return;
       var path = getPopupPath(anchor);
-      if (path && typeof window.popThumb2 === "function") window.popThumb2(path, 0);
+      if (path && typeof window.popThumb2 === "function") {
+        window.popThumb2(path, 0, undefined, anchor, event);
+      }
     });
 
     document.addEventListener("mouseout", function(event) {
@@ -112,21 +95,6 @@ Append<
       if (anchor && getPopupPath(anchor)) hidePopup();
     }, true);
 
-    new MutationObserver(function(mutations) {
-      for (var i = 0; i < mutations.length; i++) {
-        var mutation = mutations[i];
-        if (mutation.type === "attributes") {
-          updateAnchor(mutation.target);
-        } else {
-          for (var j = 0; j < mutation.addedNodes.length; j++) scan(mutation.addedNodes[j]);
-        }
-      }
-    }).observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["href", "data-anchor-href"]
-    });
   }
 
   if (document.body) start();

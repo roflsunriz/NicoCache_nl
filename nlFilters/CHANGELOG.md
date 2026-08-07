@@ -6,6 +6,8 @@
 
 ### Added
 
+- 同一動画の再ホバー、別動画、短時間で離脱するホバーをChromeで自動操作し、
+  iframe生成数、DOM再利用、キャンセルを検証する`--popthumb-probe`を追加しました。
 - 稼働中フィルターを変更する前に構文と適用結果を確認できるよう、Java正規表現対応の構文チェッカーと、watch・検索・Nアニメ風fixtureを備えた `nlFilter Lab` を追加しました。
 - キャッシュ5状態、`/cache/info/v2`、SPAによる後続DOM追加、`/local` 資産配信をローカルで検証できる疑似環境を追加しました。
 - コーディングエージェントが最終DOM、スクリーンショット、コンソールログ、JSON結果を受け取れるヘッドレス実行を追加しました。
@@ -16,6 +18,9 @@
 
 ### Changed
 
+- サムネイルポップアップを動画ID単位で再利用し、短い通過ホバーを外部アクセス前に
+  取り消す軽量実装へ変更しました。動的動画リンクはイベント委譲だけで処理し、
+  DOM全走査とMutationObserverを不要にしました。
 - 実視聴ページと同じ`data-anchor-page`、`data-anchor-href`、
   `data-decoration-video-id`構造で初期表示とSPA追加を検証できるよう、watch fixtureを
   旧`WatchRecommendation`構造から更新しました。

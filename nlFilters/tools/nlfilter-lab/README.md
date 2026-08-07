@@ -45,7 +45,7 @@ NicoCache_nl 本体の関連ソースだけを確認する場合は次を使い�
 
 適用したルール、変換前後のHTML、ページ内で発生した JavaScript の警告・エラーも確認できます。`/local/*` は実環境の `C:\NicoCache_nl\local` から読み取り専用で配信します。
 
-プレビューiframeは sandbox と Content Security Policy で外部資産の取得、フォーム送信、ポップアップを遮断し、fixture内リンクの既定遷移も無効化します。既存の `overlib_mini.js` が文字列から関数を生成するため、プレビュー内に限って `unsafe-eval` を許可しています。ローカルAPIは同一オリジンとsandboxの `null` Originだけを受け付けます。
+プレビューiframeは sandbox と Content Security Policy で外部資産の取得、フォーム送信、ポップアップを遮断し、fixture内リンクの既定遷移も無効化します。スクリプトの文字列評価は許可しません。ローカルAPIは同一オリジンとsandboxの `null` Originだけを受け付けます。
 
 ## ヘッドレステスト
 
@@ -61,7 +61,7 @@ Chrome または Edge の headless モードでプレビューを実行し、結
 
 標準出力は `result.json` と同じ1行JSONです。出力先には `final.html`、`screenshot.png`、`console.json`、変換トレースを含む `render.json` も保存します。終了コードは成功 `0`、構文・コンソール・ブラウザー結果の失敗 `1`、引数エラー `2`、ブラウザー未検出など実行基盤の失敗 `3` です。
 
-主なオプションは `--fixture watch|search|anime`、`--cache-state NONE|NORMAL|ECONOMY|DMC|DMC_ECONOMY`、`--reencoded true|false|null`、`--reencoded-bitrate N`、`--spa-add N`、`--viewport 1280x900`、`--file <filter>`、`--no-filters`、`--browser <path>`、`--timeout <seconds>` です。`--output-dir` を省略した場合は `.cache/nlfilter-lab/headless/<fixture>-<cache-state>/` を使います。
+主なオプションは `--fixture watch|search|anime`、`--cache-state NONE|NORMAL|ECONOMY|DMC|DMC_ECONOMY`、`--reencoded true|false|null`、`--reencoded-bitrate N`、`--spa-add N`、`--popthumb-probe`、`--viewport 1280x900`、`--file <filter>`、`--no-filters`、`--browser <path>`、`--timeout <seconds>` です。`--popthumb-probe` は同一動画の再ホバー、別動画、短時間で離脱したホバーを実行し、iframe生成数、DOM再利用、12件のLRU上限を検証します。`--output-dir` を省略した場合は `.cache/nlfilter-lab/headless/<fixture>-<cache-state>/` を使います。
 
 ## 自動テスト
 

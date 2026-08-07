@@ -77,7 +77,8 @@ final class HeadlessRunner {
                 String token = extract(TOKEN, renderJson, "render token");
                 String previewPath = extract(PREVIEW_URL, renderJson, "preview URL");
                 String separator = previewPath.contains("?") ? "&" : "?";
-                String previewUrl = origin + previewPath + separator + "spaAdd=" + options.spaAdd;
+                String previewUrl = origin + previewPath + separator + "spaAdd=" + options.spaAdd +
+                        "&popThumbProbe=" + options.popThumbProbe;
 
                 Path domProfile = output.resolve(".profile-dom");
                 Path screenshotProfile = output.resolve(".profile-screenshot");
@@ -100,8 +101,12 @@ final class HeadlessRunner {
                 if (count(renderJson, "\\\"severity\\\":\\\"ERROR\\\"") > 0) failures.add("フィルター診断エラーを検出しました");
                 if (!isPng(output.resolve("screenshot.png"))) failures.add("有効な screenshot.png を生成できませんでした");
                 Path finalDom = output.resolve("final.html");
-                if (!Files.isRegularFile(finalDom) || !Files.readString(finalDom).contains("data-fixture=\"" + options.fixture + "\"")) {
+                String finalHtml = Files.isRegularFile(finalDom) ? Files.readString(finalDom) : "";
+                if (!finalHtml.contains("data-fixture=\"" + options.fixture + "\"")) {
                     failures.add("final.html に指定したfixtureがありません");
+                }
+                if (options.popThumbProbe && !finalHtml.contains("data-popthumb-probe-status=\"passed\"")) {
+                    failures.add("popThumb性能プローブが成功しませんでした");
                 }
             }
             exitCode = failures.isEmpty() ? 0 : 1;
@@ -198,6 +203,7 @@ final class HeadlessRunner {
                 ",\"reencoded\":" + Json.quote(options.reencoded) +
                 ",\"reencodedBitrate\":" + options.reencodedBitrate +
                 ",\"spaAdd\":" + options.spaAdd +
+                ",\"popThumbProbe\":" + options.popThumbProbe +
                 ",\"viewport\":{\"width\":" + options.width + ",\"height\":" + options.height + "}" +
                 ",\"browser\":" + Json.quote(browser) +
                 ",\"parserCompatibility\":" + ParserCompatibility.toJson(compatibility) +
@@ -285,6 +291,7 @@ final class HeadlessRunner {
         String url;
         String contentType;
         boolean noFilters;
+        boolean popThumbProbe;
         final List<String> files = new ArrayList<>();
 
         static Options parse(Path repositoryRoot, List<String> arguments) {
@@ -305,6 +312,7 @@ final class HeadlessRunner {
                     case "--content-type" -> { value.contentType = required(option, next); i++; }
                     case "--file" -> { value.files.add(required(option, next)); i++; }
                     case "--no-filters" -> value.noFilters = true;
+                    case "--popthumb-probe" -> value.popThumbProbe = true;
                     case "--viewport" -> {
                         String[] size = required(option, next).toLowerCase(Locale.ROOT).split("x", 2);
                         if (size.length != 2) throw new IllegalArgumentException("--viewport は 1280x900 の形式です");

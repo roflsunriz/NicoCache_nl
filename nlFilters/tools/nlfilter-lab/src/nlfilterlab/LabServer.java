@@ -26,7 +26,7 @@ final class LabServer {
     private static final int MAX_RENDER_BODY = 1024 * 1024;
     private static final int MAX_LOG_BODY = 64 * 1024;
     private static final String PREVIEW_CSP = "default-src 'self' data:; " +
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
+            "script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; " +
             "img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; " +
             "form-action 'none'; frame-ancestors 'self'";
 
