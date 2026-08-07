@@ -90,7 +90,7 @@ jobs:
 
       - name: Run functional and Extension ABI tests
         shell: pwsh
-        run: .\test-functional.ps1 -KeepWorkDir
+        run: .\test-functional.ps1 -KeepWorkDir -LibraryDirectory .\.test-work\release-dependencies
 
       - name: Upload functional test diagnostics
         if: ${{ failure() }}

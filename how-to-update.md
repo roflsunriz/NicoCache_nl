@@ -29,13 +29,13 @@ macOSで同じビルドアプリを実行できる。
 最初に機能テストと Extension ABI 互換テストを実行する。
 
 ```powershell
-.\test-functional.ps1
+.\test-functional.ps1 -LibraryDirectory .\.test-work\build-dependencies
 ```
 
 本体APIの仕様や削除処理を変更した場合は、隔離した実ソケットでAPI契約テストも実行する。
 
 ```powershell
-.\test-api.ps1
+.\test-api.ps1 -LibraryDirectory .\.test-work\build-dependencies
 ```
 
 APIの一覧と呼び出し例は[本体APIリファレンス](documents/api.md)にまとめている。
@@ -116,7 +116,7 @@ GUIログのタブ、検索、メニュー、履歴保存など画面操作を�
 確認画像を`.test-work/e2e/gui/preview/`へ残せる。
 
 ```powershell
-.\test-e2e.ps1 -KeepWorkDir
+.\test-e2e.ps1 -KeepWorkDir -LibraryDirectory .\.test-work\build-dependencies
 ```
 
 通常のビルドはEclipse Temurin JDK 25だけを既定として使用する。Temurin 25が
@@ -172,14 +172,14 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 5. 機能テストとExtension ABI互換テストを実行する。
 
    ```powershell
-   .\test-functional.ps1
+   .\test-functional.ps1 -LibraryDirectory .\.test-work\build-dependencies
    .\test-launcher.ps1
    ```
 
 6. 正規ビルドスクリプトで本体をビルドする。
 
    ```powershell
-   .\build-javac.ps1
+   .\build-javac.ps1 -LibraryDirectory .\.test-work\build-dependencies
    ```
 
 7. `git status --short --branch` と `git diff --check` で、生成物や無関係な
@@ -253,6 +253,8 @@ Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Cen
 の公式メタデータから安定版を確認する。更新がある場合だけ
 `automation/update-bouncy-castle` ブランチのPRを作成または更新し、3成果物の
 版、URL、SHA-256、サイズとPOMのライセンス情報を本文へ記録する。
+Brotli decoderとzstd-jniも同じ依存ロックで配布元とSHA-256を固定する。これらを
+更新するときはMaven Centralの公式座標、上流ライセンス、対応OS・CPUを手動で確認する。
 
 手元で更新有無とレポートを確認する場合は次を実行する。
 
@@ -430,7 +432,8 @@ Smile、DMC単一ファイル、DMC-HLSの新規取得経路は廃止した。�
 
 ## 復旧
 
-機能テストが失敗した場合は `.\test-functional.ps1 -KeepWorkDir` を実行し、
+機能テストが失敗した場合は `.\test-functional.ps1 -KeepWorkDir `
+`-LibraryDirectory .\.test-work\build-dependencies` を実行し、
 `.test-work/functional/sandbox/nicocache-functional.log` を確認する。テスト領域は
 実データから独立しているため、不要になった `.test-work/functional/` は削除して
 よい。

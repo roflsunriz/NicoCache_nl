@@ -11,6 +11,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $resolvedLockFile = (Resolve-Path -LiteralPath $LockFile).Path
+$originalLock = Import-PowerShellDataFile -LiteralPath $resolvedLockFile
 $lockHashBefore = (Get-FileHash -LiteralPath $resolvedLockFile -Algorithm SHA256).Hash
 $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
     'nicocache-dependency-update-test-' + [guid]::NewGuid().ToString('N')
@@ -57,6 +58,30 @@ try {
     $lockHashAfter = (Get-FileHash -LiteralPath $resolvedLockFile -Algorithm SHA256).Hash
     if ($lockHashAfter -ne $lockHashBefore) {
         throw 'Checkモードが依存ロックファイルを変更しました'
+    }
+
+    $updateLock = Join-Path $temporaryDirectory 'dependency-lock.psd1'
+    $updateText = (Get-Content -Raw -LiteralPath $resolvedLockFile) -replace
+        "BouncyCastleVersion = '\d+\.\d+'", "BouncyCastleVersion = '1.84'"
+    [IO.File]::WriteAllText($updateLock, $updateText,
+        [Text.UTF8Encoding]::new($false))
+    $updateReport = Join-Path $temporaryDirectory 'dependency-update.md'
+    & $UpdateScript -Mode Update -LockFile $updateLock `
+        -ReportFile $updateReport | Out-Null
+    $updatedLock = Import-PowerShellDataFile -LiteralPath $updateLock
+    foreach ($property in @('BrotliDecoderVersion', 'ZstdJniVersion')) {
+        if ([string]$updatedLock[$property] -ne [string]$originalLock[$property]) {
+            throw "Bouncy Castle更新で依存版が失われました: $property"
+        }
+    }
+    foreach ($name in @('brotli-dec', 'zstd-jni')) {
+        $before = @($originalLock.Artifacts | Where-Object { $_.Name -eq $name })
+        $after = @($updatedLock.Artifacts | Where-Object { $_.Name -eq $name })
+        if ($before.Count -ne 1 -or $after.Count -ne 1 -or
+                [string]$before[0].Url -ne [string]$after[0].Url -or
+                [string]$before[0].Sha256 -ne [string]$after[0].Sha256) {
+            throw "Bouncy Castle更新で依存成果物が失われました: $name"
+        }
     }
 }
 finally {

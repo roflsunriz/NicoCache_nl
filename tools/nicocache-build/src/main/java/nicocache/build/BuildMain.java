@@ -84,20 +84,19 @@ public final class BuildMain {
             deleteTree(launcherClasses);
             deleteTree(buildClasses);
 
+            List<Path> codecLibraries = List.of(
+                    options.libraryRoot.resolve("brotli-dec.jar"),
+                    options.libraryRoot.resolve("zstd-jni.jar"));
+            requireLibraries(codecLibraries, "HTTP圧縮展開ライブラリ");
             compile(javaSources(root.resolve("src/dareka")), mainClasses,
-                    List.of());
+                    codecLibraries);
             copyCoreResources(mainClasses);
 
             List<Path> bcLibraries = List.of(
                     options.libraryRoot.resolve("bcpkix.jar"),
                     options.libraryRoot.resolve("bcprov.jar"),
                     options.libraryRoot.resolve("bcutil.jar"));
-            for (Path library : bcLibraries) {
-                if (!Files.isRegularFile(library)) {
-                    throw new IOException("Bouncy Castleライブラリがありません: "
-                            + library);
-                }
-            }
+            requireLibraries(bcLibraries, "Bouncy Castleライブラリ");
             compile(javaSources(root.resolve("src/nicocacheca")), caClasses,
                     bcLibraries);
             compile(javaSources(root.resolve(
@@ -113,7 +112,8 @@ public final class BuildMain {
             createJar(outputRoot.resolve("NicoCache_nl.jar"), mainClasses,
                     "dareka.UserDataMain",
                     "sqlite-jdbc.jar igo.jar library.jar NicoCacheCA.jar"
-                            + " lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar",
+                            + " lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar"
+                            + " lib/brotli-dec.jar lib/zstd-jni.jar",
                     root.resolve("src/native"));
             createJar(outputRoot.resolve("NicoCacheCA.jar"), caClasses,
                     "nicocacheca.NicoCacheCA",
@@ -166,6 +166,15 @@ public final class BuildMain {
                 if (!Boolean.TRUE.equals(success)) {
                     throw new IOException("Javaのコンパイルに失敗しました: "
                             + destination);
+                }
+            }
+        }
+
+        private static void requireLibraries(List<Path> libraries,
+                String description) throws IOException {
+            for (Path library : libraries) {
+                if (!Files.isRegularFile(library)) {
+                    throw new IOException(description + "がありません: " + library);
                 }
             }
         }

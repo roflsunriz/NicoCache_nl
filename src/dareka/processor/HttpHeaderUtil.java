@@ -35,7 +35,7 @@ public class HttpHeaderUtil {
      * 小文字のみ.
      */
     private static final String[] SUPPORTED_ENCODINGS = new String[] {
-        "identity", "gzip", "deflate"
+        "identity", "gzip", "deflate", "br", "zstd"
     };
 
     /**

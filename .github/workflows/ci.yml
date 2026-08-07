@@ -61,15 +61,15 @@ jobs:
 
       - name: Run functional and Extension ABI tests
         shell: pwsh
-        run: .\test-functional.ps1
+        run: .\test-functional.ps1 -LibraryDirectory .\.test-work\ci-dependencies
 
       - name: Run core API contract tests
         shell: pwsh
-        run: .\test-api.ps1
+        run: .\test-api.ps1 -LibraryDirectory .\.test-work\ci-dependencies
 
       - name: Run first-run setup tests
         shell: pwsh
-        run: .\test-first-run-setup.ps1
+        run: .\test-first-run-setup.ps1 -LibraryDirectory .\.test-work\ci-dependencies
 
       - name: Run CMAF/Domand converter tests
         shell: pwsh
@@ -82,7 +82,7 @@ jobs:
       - name: Run strict end-to-end and GUI tests
         timeout-minutes: 5
         shell: pwsh
-        run: .\test-e2e.ps1
+        run: .\test-e2e.ps1 -LibraryDirectory .\.test-work\ci-dependencies
 
       - name: Run Windows task scheduler integration test
         shell: pwsh
@@ -142,15 +142,15 @@ jobs:
         shell: pwsh
         run: |
           ./build-javac.ps1 -LibraryDirectory ./.test-work/ci-dependencies -Clean
-          ./test-functional.ps1
-          ./test-first-run-setup.ps1
+          ./test-functional.ps1 -LibraryDirectory ./.test-work/ci-dependencies
+          ./test-first-run-setup.ps1 -LibraryDirectory ./.test-work/ci-dependencies
           ./test-launcher.ps1
 
       - name: Run strict end-to-end and GUI tests with Java 25
         if: runner.os == 'Windows'
         timeout-minutes: 5
         shell: pwsh
-        run: ./test-e2e.ps1
+        run: ./test-e2e.ps1 -LibraryDirectory ./.test-work/ci-dependencies
 
       - name: Run Windows task scheduler integration test with Java 25
         if: runner.os == 'Windows'
@@ -179,5 +179,5 @@ jobs:
         shell: pwsh
         run: |
           .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\java-17-dependencies -Clean
-          .\test-functional.ps1
+          .\test-functional.ps1 -LibraryDirectory .\.test-work\java-17-dependencies
           .\test-launcher.ps1

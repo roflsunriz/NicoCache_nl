@@ -54,6 +54,8 @@ foreach ($requiredPath in @(
         (Join-Path $appDirectory 'lib\bcprov.jar'),
         (Join-Path $appDirectory 'lib\bcpkix.jar'),
         (Join-Path $appDirectory 'lib\bcutil.jar'),
+        (Join-Path $appDirectory 'lib\brotli-dec.jar'),
+        (Join-Path $appDirectory 'lib\zstd-jni.jar'),
         (Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'),
         (Join-Path $appDirectory 'defaults\application.properties'),
         (Join-Path $appDirectory 'defaults\network.properties'),

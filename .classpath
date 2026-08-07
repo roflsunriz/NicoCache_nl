@@ -2,5 +2,7 @@
 <classpath>
 	<classpathentry excluding="extensions/completeCacheSample.java" kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-25"/>
+	<classpathentry kind="lib" path="lib/brotli-dec.jar"/>
+	<classpathentry kind="lib" path="lib/zstd-jni.jar"/>
 	<classpathentry kind="output" path="src"/>
 </classpath>

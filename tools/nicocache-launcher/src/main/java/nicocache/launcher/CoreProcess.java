@@ -63,6 +63,7 @@ final class CoreProcess {
         List<String> command = new ArrayList<>();
         command.add(paths.getJavaExecutable(false).toString());
         command.add("-Xmx128m");
+        command.add("--enable-native-access=ALL-UNNAMED");
         command.add("-Dnicocache.applicationRoot="
                 + paths.getApplicationRoot());
         command.add("-Dnicocache.userDataRoot=" + paths.getDataRoot());
@@ -116,6 +117,7 @@ final class CoreProcess {
             throws IOException {
         List<String> command = new ArrayList<>();
         command.add(paths.getJavaExecutable(false).toString());
+        command.add("--enable-native-access=ALL-UNNAMED");
         command.add("-Dnicocache.applicationRoot="
                 + paths.getApplicationRoot());
         command.add("-jar");

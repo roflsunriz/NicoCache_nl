@@ -30,7 +30,8 @@ foreach ($relative in @(
         'NicoCache_nl', 'NicoCache_nl.jar', 'NicoCacheCA.jar',
         'NicoCacheLauncher.jar', 'NicoCacheBuild.jar', 'NicoCache_nl.version',
         'jre/bin/java', 'jre/lib/modules', 'lib/bcprov.jar', 'lib/bcpkix.jar',
-        'lib/bcutil.jar', 'src/dareka/NLMain.java', 'build-javac.ps1',
+        'lib/bcutil.jar', 'lib/brotli-dec.jar', 'lib/zstd-jni.jar',
+        'src/dareka/NLMain.java', 'build-javac.ps1',
         'tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar'
     )) {
     $path = Join-Path $applicationRoot $relative

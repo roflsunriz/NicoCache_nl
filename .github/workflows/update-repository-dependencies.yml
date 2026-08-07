@@ -51,8 +51,8 @@ jobs:
         shell: pwsh
         run: |
           .\build-javac.ps1 -LibraryDirectory .\.test-work\dependency-build -Clean
-          .\test-functional.ps1
-          .\test-first-run-setup.ps1
+          .\test-functional.ps1 -LibraryDirectory .\.test-work\dependency-build
+          .\test-first-run-setup.ps1 -LibraryDirectory .\.test-work\dependency-build
           .\packaging\windows\test-windows-setup-script.ps1
 
       - name: Set up default Temurin 25 for packaging

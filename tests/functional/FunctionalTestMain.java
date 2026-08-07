@@ -59,6 +59,7 @@ public final class FunctionalTestMain {
     private final Path sandbox;
     private final Path application;
     private final Path classes;
+    private final String applicationClasspath;
     private final boolean apiOnly;
     private HttpServer upstream;
     private ExecutorService upstreamExecutor;
@@ -73,6 +74,8 @@ public final class FunctionalTestMain {
         this.sandbox = sandbox;
         this.application = sandbox.resolve("application");
         this.classes = classes;
+        this.applicationClasspath = System.getProperty(
+                "nicocache.test.classpath", classes.toString());
         this.apiOnly = apiOnly;
     }
 
@@ -656,8 +659,9 @@ public final class FunctionalTestMain {
         Path log = sandbox.resolve("nicocache-functional.log");
         ProcessBuilder builder = new ProcessBuilder(
                 javaExecutable(),
+                "--enable-native-access=ALL-UNNAMED",
                 "-Dnicocache.applicationRoot=" + application,
-                "-cp", classes.toString(), "dareka.Main");
+                "-cp", applicationClasspath, "dareka.Main");
         builder.directory(sandbox.toFile());
         builder.redirectErrorStream(true);
         builder.redirectOutput(log.toFile());

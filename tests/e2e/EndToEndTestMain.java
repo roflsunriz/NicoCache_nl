@@ -129,6 +129,13 @@ public final class EndToEndTestMain {
                 data.resolve("data/tlsclient/cacerts2"));
         Files.copy(coreJar, application.resolve("NicoCache_nl.jar"),
                 StandardCopyOption.REPLACE_EXISTING);
+        Path dependencyDirectory = coreJar.getParent().resolve("lib");
+        Files.createDirectories(application.resolve("lib"));
+        try (var dependencies = Files.list(dependencyDirectory)) {
+            dependencies.filter(Files::isRegularFile).forEach(source -> copy(
+                    source, application.resolve("lib")
+                            .resolve(source.getFileName())));
+        }
 
         Files.writeString(data.resolve("local/e2e.txt"),
                 "end-to-end-content", StandardCharsets.UTF_8);

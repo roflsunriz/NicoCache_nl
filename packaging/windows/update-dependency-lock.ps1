@@ -156,15 +156,22 @@ function Get-ArtifactInformation {
 function Write-LockFile {
     param(
         [Parameter(Mandatory)][string]$Version,
-        [Parameter(Mandatory)][array]$Artifacts
+        [Parameter(Mandatory)][array]$Artifacts,
+        [Parameter(Mandatory)][hashtable]$ExistingLock
     )
 
+    $preservedArtifacts = @($ExistingLock.Artifacts | Where-Object {
+        [string]$_.Name -notin @($ArtifactIds.Keys)
+    })
+    $allArtifacts = @($Artifacts) + $preservedArtifacts
     $lines = [Collections.Generic.List[string]]::new()
     $lines.Add('@{')
     $lines.Add("    BouncyCastleVersion = '$Version'")
+    $lines.Add("    BrotliDecoderVersion = '$($ExistingLock.BrotliDecoderVersion)'")
+    $lines.Add("    ZstdJniVersion = '$($ExistingLock.ZstdJniVersion)'")
     $lines.Add('    Artifacts = @(')
-    for ($index = 0; $index -lt $Artifacts.Count; $index++) {
-        $artifact = $Artifacts[$index]
+    for ($index = 0; $index -lt $allArtifacts.Count; $index++) {
+        $artifact = $allArtifacts[$index]
         $lines.Add('        @{')
         $lines.Add("            Name = '$($artifact.Name)'")
         $lines.Add("            FileName = '$($artifact.FileName)'")
@@ -242,7 +249,8 @@ $artifacts = Get-ArtifactInformation -Version $targetVersion
 $hasUpdate = [version]$latestVersion -gt [version]$currentVersion
 
 if ($Mode -eq 'Update' -and $hasUpdate) {
-    Write-LockFile -Version $latestVersion -Artifacts $artifacts
+    Write-LockFile -Version $latestVersion -Artifacts $artifacts `
+        -ExistingLock $lock
 }
 Write-Report `
     -CurrentVersion $currentVersion `

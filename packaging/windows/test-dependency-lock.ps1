@@ -12,8 +12,14 @@ $lock = Import-PowerShellDataFile -LiteralPath $LockFile
 if ([string]$lock.BouncyCastleVersion -notmatch '^\d+\.\d+$') {
     throw 'BouncyCastleVersionの形式が不正です'
 }
+if ([string]$lock.BrotliDecoderVersion -notmatch '^\d+\.\d+\.\d+$') {
+    throw 'BrotliDecoderVersionの形式が不正です'
+}
+if ([string]$lock.ZstdJniVersion -notmatch '^\d+\.\d+\.\d+-\d+$') {
+    throw 'ZstdJniVersionの形式が不正です'
+}
 
-$expectedNames = @('bcprov', 'bcpkix', 'bcutil')
+$expectedNames = @('bcprov', 'bcpkix', 'bcutil', 'brotli-dec', 'zstd-jni')
 $actualNames = @($lock.Artifacts | ForEach-Object { [string]$_.Name })
 $expectedNameSet = (@($expectedNames | Sort-Object) -join ',')
 $actualNameSet = (@($actualNames | Sort-Object) -join ',')
@@ -32,11 +38,21 @@ try {
         if (-not $uri.IsDefaultPort -or $uri.UserInfo -or $uri.Query -or $uri.Fragment) {
             throw "公式Maven Centralの標準URL以外を拒否しました: $uri"
         }
-        $remoteFileName = "$($artifact.Name)-jdk18on-$($lock.BouncyCastleVersion).jar"
-        $expectedPath = (
-            "/maven2/org/bouncycastle/$($artifact.Name)-jdk18on/" +
-            "$($lock.BouncyCastleVersion)/$remoteFileName"
-        )
+        $expectedPath = switch ([string]$artifact.Name) {
+            'brotli-dec' {
+                "/maven2/org/brotli/dec/$($lock.BrotliDecoderVersion)/" +
+                    "dec-$($lock.BrotliDecoderVersion).jar"
+            }
+            'zstd-jni' {
+                "/maven2/com/github/luben/zstd-jni/$($lock.ZstdJniVersion)/" +
+                    "zstd-jni-$($lock.ZstdJniVersion).jar"
+            }
+            default {
+                $remoteFileName = "$($artifact.Name)-jdk18on-$($lock.BouncyCastleVersion).jar"
+                "/maven2/org/bouncycastle/$($artifact.Name)-jdk18on/" +
+                    "$($lock.BouncyCastleVersion)/$remoteFileName"
+            }
+        }
         if (-not $uri.AbsolutePath.Equals($expectedPath, [StringComparison]::Ordinal)) {
             throw "版・座標・URLが整合していません: $uri"
         }
@@ -60,4 +76,6 @@ finally {
     Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-Write-Output "dependency-lock.psd1を検証しました: Bouncy Castle $($lock.BouncyCastleVersion)"
+Write-Output (("dependency-lock.psd1を検証しました: Bouncy Castle {0}, " +
+    "Brotli decoder {1}, zstd-jni {2}") -f $lock.BouncyCastleVersion,
+    $lock.BrotliDecoderVersion, $lock.ZstdJniVersion)

@@ -1,5 +1,6 @@
 param(
-    [switch]$KeepWorkDir
+    [switch]$KeepWorkDir,
+    [string]$LibraryDirectory = (Join-Path $PSScriptRoot 'lib')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -8,6 +9,14 @@ $testRoot = Join-Path (Join-Path $root '.test-work') 'first-run-setup'
 $classes = Join-Path $testRoot 'classes'
 $sandbox = Join-Path $testRoot 'sandbox'
 $preview = Join-Path $testRoot 'preview'
+$codecJars = @('brotli-dec.jar', 'zstd-jni.jar') | ForEach-Object {
+    $path = Join-Path $LibraryDirectory $_
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "HTTP圧縮展開ライブラリがありません: $path"
+    }
+    (Resolve-Path -LiteralPath $path).Path
+}
+$codecClasspath = $codecJars -join [System.IO.Path]::PathSeparator
 
 if (Test-Path -LiteralPath $testRoot) {
     $resolvedTestRoot = (Resolve-Path -LiteralPath $testRoot).Path
@@ -30,7 +39,7 @@ try {
         Select-Object -ExpandProperty FullName
 
     & javac --release 11 -encoding UTF-8 -Xlint:all -Werror `
-        -d $classes `
+        -classpath $codecClasspath -d $classes `
         $productSources `
         $testSources
     if ($LASTEXITCODE -ne 0) {
@@ -39,7 +48,7 @@ try {
 
     $classpath = $classes + [System.IO.Path]::PathSeparator + (
         Join-Path $root 'src'
-    )
+    ) + [System.IO.Path]::PathSeparator + $codecClasspath
     & java `
         '-Djava.awt.headless=true' `
         -cp $classpath `

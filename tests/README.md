@@ -13,9 +13,12 @@ node --test .\tests\local\*.test.js
 
 次のコマンドは、テスト用に生成した製品JARを利用者と同じエントリーポイントから
 別プロセスで起動し、実ソケットと実Swing Event Dispatch Threadを操作する。
+事前にリポジトリ直下で
+`packaging/windows/prepare-dependencies.ps1 -DestinationDirectory .test-work/build-dependencies`
+を実行する。
 
 ```powershell
-.\test-e2e.ps1
+.\test-e2e.ps1 -LibraryDirectory .\.test-work\build-dependencies
 ```
 
 HTTP側は隔離した利用者データ領域とローカル上流サーバーだけを使い、通常の
@@ -38,7 +41,7 @@ GUI側は本体ログウィンドウを実際に作成し、安定したコン�
 リポジトリ直下で次を実行する。
 
 ```powershell
-.\test-functional.ps1
+.\test-functional.ps1 -LibraryDirectory .\.test-work\build-dependencies
 ```
 
 テストは `.test-work/functional/` に本体、設定、キャッシュ、ローカル

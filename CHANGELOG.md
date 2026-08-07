@@ -15,8 +15,8 @@
 
 ### Fixed
 
-- `zstd`やBrotliなど本体が展開できない方式を`Accept-Encoding`から漏れなく除外し、
-  対応済みの`gzip`、`deflate`、`identity`だけを一元的に扱うよう修正した。将来未知の
+- `zstd`とBrotli（`br`）を本体で正式に展開し、`Accept-Encoding`の対応方式として
+  `gzip`、`deflate`、`identity`とともに一元的に扱うよう修正した。将来未知の
   `Content-Encoding`を受信した場合は圧縮本文とヘッダーを壊さずそのまま転送し、
   NicoCacheGUIのログへ本体側の対応追加が必要なことを通知する。
 - 現行のランキング、トップ、視聴、シリーズ、ユーザー、Nアニメなど、検索・タグ以外の

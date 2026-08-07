@@ -1,5 +1,6 @@
 param(
-    [switch]$KeepWorkDir
+    [switch]$KeepWorkDir,
+    [string]$LibraryDirectory = (Join-Path $PSScriptRoot 'lib')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,6 +12,14 @@ $guiSandbox = Join-Path $workRoot 'gui'
 $preview = Join-Path $guiSandbox 'preview'
 $coreJar = Join-Path $workRoot 'NicoCache_nl-e2e-core.jar'
 $testJar = Join-Path $workRoot 'NicoCacheLauncher-e2e.jar'
+$codecJars = @('brotli-dec.jar', 'zstd-jni.jar') | ForEach-Object {
+    $path = Join-Path $LibraryDirectory $_
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "HTTP圧縮展開ライブラリがありません: $path"
+    }
+    (Resolve-Path -LiteralPath $path).Path
+}
+$codecClasspath = $codecJars -join [System.IO.Path]::PathSeparator
 
 if (Test-Path -LiteralPath $workRoot) {
     $resolvedWork = (Resolve-Path -LiteralPath $workRoot).Path
@@ -46,7 +55,7 @@ try {
         Select-Object -ExpandProperty FullName
 
     & javac --release 11 --add-modules jdk.httpserver -encoding UTF-8 `
-        -Xlint:all -Werror -d $classes `
+        -Xlint:all -Werror -classpath $codecClasspath -d $classes `
         $productSources $testSources $launcherTestSources $launcherSources
     if ($LASTEXITCODE -ne 0) {
         throw '本体またはE2Eテストのコンパイルに失敗しました'
@@ -76,44 +85,50 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw 'E2E用本体JARの作成に失敗しました'
     }
+    $workLibrary = Join-Path $workRoot 'lib'
+    New-Item -ItemType Directory -Path $workLibrary -Force | Out-Null
+    foreach ($codecJar in $codecJars) {
+        Copy-Item -LiteralPath $codecJar -Destination $workLibrary -Force
+    }
     & jar cfe $testJar nicocache.launcher.LauncherMain `
         -C $classes nicocache
     if ($LASTEXITCODE -ne 0) {
         throw 'E2E用起動管理JARの作成に失敗しました'
     }
 
-    & java --add-modules jdk.httpserver -cp $classes `
+    $runtimeClasspath = $classes + [System.IO.Path]::PathSeparator + $codecClasspath
+    & java --add-modules jdk.httpserver -cp $runtimeClasspath `
         e2e.EndToEndTestMain $root $httpSandbox $testJar $coreJar
     if ($LASTEXITCODE -ne 0) {
         throw '実JAR E2Eテストに失敗しました'
     }
 
-    & java -cp $classes nicocache.launcher.LauncherTaskTest
+    & java -cp $runtimeClasspath nicocache.launcher.LauncherTaskTest
     if ($LASTEXITCODE -ne 0) {
         throw '起動管理タスクの回帰テストに失敗しました'
     }
 
-    & java -cp $classes nicocache.launcher.LauncherOptionsTest
+    & java -cp $runtimeClasspath nicocache.launcher.LauncherOptionsTest
     if ($LASTEXITCODE -ne 0) {
         throw '起動管理CLIオプションの回帰テストに失敗しました'
     }
 
-    & java -cp $classes nicocache.launcher.CoreProcessTest
+    & java -cp $runtimeClasspath nicocache.launcher.CoreProcessTest
     if ($LASTEXITCODE -ne 0) {
         throw '本体起動モードの回帰テストに失敗しました'
     }
 
-    & java -cp $classes nicocache.launcher.TaskSchedulerTest
+    & java -cp $runtimeClasspath nicocache.launcher.TaskSchedulerTest
     if ($LASTEXITCODE -ne 0) {
         throw 'タスクスケジューラーの単体・結合契約テストに失敗しました'
     }
 
-    & java -cp $classes nicocache.launcher.DataRootInspectorTest
+    & java -cp $runtimeClasspath nicocache.launcher.DataRootInspectorTest
     if ($LASTEXITCODE -ne 0) {
         throw 'ユーザーデータルート診断テストに失敗しました'
     }
 
-    & java '-Djava.awt.headless=false' -cp $classes `
+    & java '-Djava.awt.headless=false' -cp $runtimeClasspath `
         dareka.GuiEndToEndTestMain $guiSandbox $preview
     if ($LASTEXITCODE -ne 0) {
         throw 'GUI E2Eテストに失敗しました'

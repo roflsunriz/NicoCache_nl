@@ -33,6 +33,9 @@ public final class CoreProcessTest {
                     "core must use the bundled JRE");
             assertFalse(guiCommand.contains("--headless"),
                     "GUI launch must not disable the core GUI");
+            assertTrue(guiCommand.contains(
+                            "--enable-native-access=ALL-UNNAMED"),
+                    "zstd-jni native access must be explicitly enabled");
 
             List<String> headlessCommand = core.buildStartCommand(true);
             assertTrue(headlessCommand.contains("--headless"),

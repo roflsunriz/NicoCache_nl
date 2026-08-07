@@ -15,6 +15,10 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 
+import org.brotli.dec.BrotliInputStream;
+
+import com.github.luben.zstd.ZstdInputStream;
+
 import dareka.common.Logger;
 
 public class HttpUtil {
@@ -99,6 +103,10 @@ public class HttpUtil {
             return new GZIPInputStream(in);
         } else if (HttpHeader.CONTENT_ENCODING_DEFLATE.equalsIgnoreCase(normalized)) {
             return getInflaterInputStream(in);
+        } else if ("br".equalsIgnoreCase(normalized)) {
+            return new BrotliInputStream(in);
+        } else if ("zstd".equalsIgnoreCase(normalized)) {
+            return new ZstdInputStream(in);
         } else if (HttpHeader.IDENTITY.equalsIgnoreCase(normalized)) {
             // [nl] 本来Content-Encodingにidentityは使用すべきではないが
             // それでも使用される場合は単に無視する

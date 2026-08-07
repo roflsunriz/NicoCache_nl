@@ -160,12 +160,12 @@ try {
         Step "$command -> $resolved"
         if ([IO.Path]::GetFullPath($resolved).StartsWith($productRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "External dependency leaked into product root: $command -> $resolved" }
     }
-    foreach ($jar in @('bcprov.jar','bcpkix.jar','bcutil.jar')) {
+    foreach ($jar in @('bcprov.jar','bcpkix.jar','bcutil.jar','brotli-dec.jar','zstd-jni.jar')) {
         if (-not (Test-Path (Join-Path $productRoot "app\lib\$jar") -PathType Leaf)) {
-            throw "Bouncy Castle file missing from the application classpath: $jar"
+            throw "Dependency file missing from the application classpath: $jar"
         }
         if (Test-Path (Join-Path $productRoot "lib\$jar") -PathType Leaf) {
-            throw "Bouncy Castle was written outside the application classpath: $jar"
+            throw "Dependency was written outside the application classpath: $jar"
         }
     }
 

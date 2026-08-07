@@ -1,6 +1,7 @@
 param(
     [switch]$KeepWorkDir,
-    [switch]$ApiOnly
+    [switch]$ApiOnly,
+    [string]$LibraryDirectory = (Join-Path $PSScriptRoot 'lib')
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +11,14 @@ $classes = Join-Path $workRoot "classes"
 $sampleClasses = Join-Path $workRoot "sample-classes"
 $sandbox = Join-Path $workRoot "sandbox"
 $testJar = Join-Path $workRoot "NicoCache_nl-test.jar"
+$codecJars = @('brotli-dec.jar', 'zstd-jni.jar') | ForEach-Object {
+    $path = Join-Path $LibraryDirectory $_
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+        throw "HTTP圧縮展開ライブラリがありません: $path"
+    }
+    (Resolve-Path -LiteralPath $path).Path
+}
+$codecClasspath = $codecJars -join [System.IO.Path]::PathSeparator
 
 if (Test-Path -LiteralPath $workRoot) {
     $resolvedWork = (Resolve-Path -LiteralPath $workRoot).Path
@@ -32,7 +41,7 @@ try {
         Select-Object -ExpandProperty FullName
 
     & javac --release 11 --add-modules jdk.httpserver -encoding UTF-8 `
-        -Xlint:all -Werror `
+        -Xlint:all -Werror -classpath $codecClasspath `
         -d $classes $productSources $testSources
     if ($LASTEXITCODE -ne 0) {
         throw "本体または機能テストのコンパイルに失敗しました"
@@ -113,7 +122,10 @@ try {
     if ($ApiOnly) {
         $testArguments += "--api-only"
     }
-    & java --add-modules jdk.httpserver -cp $classes functional.FunctionalTestMain `
+    $runtimeClasspath = $classes + [System.IO.Path]::PathSeparator + $codecClasspath
+    & java --enable-native-access=ALL-UNNAMED --add-modules jdk.httpserver `
+        "-Dnicocache.test.classpath=$runtimeClasspath" `
+        -cp $runtimeClasspath functional.FunctionalTestMain `
         @testArguments
     if ($LASTEXITCODE -ne 0) {
         throw "機能テストに失敗しました"
