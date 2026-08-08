@@ -171,22 +171,6 @@ if ($migrationCreateFolderRows.Count -ne 1 -or
         [string]$migrationCreateFolderRows[0][0] -ne 'INSTALLFOLDER') {
     throw 'config.propertiesの移行先を作成する定義がありません'
 }
-$migrationRemoveFolderRows = @(Invoke-MsiQuery (
-        'SELECT `Component_`, `FileName`, `DirProperty`, `InstallMode` ' +
-        'FROM `RemoveFile` WHERE `FileKey` = ' +
-        "'NicoCacheRemoveEmptyLegacyInstallDir'"
-    ) 4)
-if ($migrationRemoveFolderRows.Count -ne 1 -or
-        [string]$migrationRemoveFolderRows[0][0] -ne
-            'NicoCacheMigrateLegacyProgramsInstall' -or
-        -not [string]::IsNullOrEmpty(
-            [string]$migrationRemoveFolderRows[0][1]
-        ) -or
-        [string]$migrationRemoveFolderRows[0][2] -ne
-            'NICOCACHE_INSTALLDIR' -or
-        [int]$migrationRemoveFolderRows[0][3] -ne 1) {
-    throw '移行後の空の旧誤既定インストール先を削除する定義がありません'
-}
 $rollbackAction = @($customActions | Where-Object {
     [string]$_[0] -eq 'NicoCacheRollbackWindowsSetup'
 })
@@ -197,6 +181,25 @@ if ($rollbackAction.Count -ne 1 -or [int]$rollbackAction[0][1] -ne 34 -or
         [string]$rollbackAction[0][3] -notmatch '-RemoveApplicationConfig' -or
         ([string]$rollbackAction[0][3]).Length -gt 255) {
     throw 'MSIにWindows設定を復元するアンインストール処理がありません'
+}
+$setRemoveEmptyDirectoryDataAction = @($customActions | Where-Object {
+    [string]$_[0] -eq 'NicoCacheSetRemoveEmptyLegacyInstallDirData'
+})
+$removeEmptyDirectoryAction = @($customActions | Where-Object {
+    [string]$_[0] -eq 'NicoCacheRemoveEmptyLegacyInstallDir'
+})
+if ($setRemoveEmptyDirectoryDataAction.Count -ne 1 -or
+        [int]$setRemoveEmptyDirectoryDataAction[0][1] -ne 51 -or
+        [string]$setRemoveEmptyDirectoryDataAction[0][2] -ne
+            'NicoCacheRemoveEmptyLegacyInstallDir' -or
+        [string]$setRemoveEmptyDirectoryDataAction[0][3] -ne
+            '"[NICOCACHE_INSTALLDIR]"' -or
+        $removeEmptyDirectoryAction.Count -ne 1 -or
+        [int]$removeEmptyDirectoryAction[0][1] -ne 1122 -or
+        [string]$removeEmptyDirectoryAction[0][2] -ne 'SystemFolder' -or
+        [string]$removeEmptyDirectoryAction[0][3] -notmatch
+            '^cmd\.exe /d /c rmdir "\[CustomActionData\]"$') {
+    throw '移行後の空の旧誤既定インストール先を安全に削除する定義がありません'
 }
 $sequenceRows = @(Invoke-MsiQuery 'SELECT `Condition`, `Sequence` FROM `InstallExecuteSequence` WHERE `Action` = ''NicoCacheRollbackWindowsSetup''' 2)
 $removeFilesRows = @(Invoke-MsiQuery 'SELECT `Sequence` FROM `InstallExecuteSequence` WHERE `Action` = ''RemoveFiles''' 1)
@@ -213,7 +216,9 @@ $migrationSequenceRows = @(Invoke-MsiQuery (
         "`Action` = 'NicoCacheMarkLegacyDefaultInstallDir' OR " +
         "`Action` = 'NicoCacheRestoreInstallDir' OR " +
         "`Action` = 'InstallInitialize' OR `Action` = 'InstallFiles' OR " +
-        "`Action` = 'MoveFiles' OR `Action` = 'RemoveFolders' OR " +
+        "`Action` = 'MoveFiles' OR " +
+        "`Action` = 'NicoCacheSetRemoveEmptyLegacyInstallDirData' OR " +
+        "`Action` = 'NicoCacheRemoveEmptyLegacyInstallDir' OR " +
         "`Action` = 'RemoveExistingProducts' OR " +
         "`Action` = 'InstallFinalize'"
     ) 3)
@@ -230,6 +235,12 @@ $markSequenceRow = @($migrationSequenceRows | Where-Object {
 $restoreSequenceRow = @($migrationSequenceRows | Where-Object {
     [string]$_[0] -eq 'NicoCacheRestoreInstallDir'
 })
+$setRemoveDataSequenceRow = @($migrationSequenceRows | Where-Object {
+    [string]$_[0] -eq 'NicoCacheSetRemoveEmptyLegacyInstallDirData'
+})
+$removeEmptySequenceRow = @($migrationSequenceRows | Where-Object {
+    [string]$_[0] -eq 'NicoCacheRemoveEmptyLegacyInstallDir'
+})
 if ($setLegacySequenceRow.Count -ne 1 -or
         [string]$setLegacySequenceRow[0][1] -ne 'NICOCACHE_INSTALLDIR' -or
         $markSequenceRow.Count -ne 1 -or
@@ -238,6 +249,12 @@ if ($setLegacySequenceRow.Count -ne 1 -or
         $restoreSequenceRow.Count -ne 1 -or
         [string]$restoreSequenceRow[0][1] -ne
             'NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR' -or
+        $setRemoveDataSequenceRow.Count -ne 1 -or
+        [string]$setRemoveDataSequenceRow[0][1] -ne
+            'NICOCACHE_MIGRATE_LEGACY_INSTALLDIR' -or
+        $removeEmptySequenceRow.Count -ne 1 -or
+        [string]$removeEmptySequenceRow[0][1] -ne
+            'NICOCACHE_MIGRATE_LEGACY_INSTALLDIR' -or
         $migrationSequences.NicoCacheSetLegacyDefaultInstallDir -ge
             $migrationSequences.NicoCacheMarkLegacyDefaultInstallDir -or
         $migrationSequences.NicoCacheMarkLegacyDefaultInstallDir -ge
@@ -246,10 +263,12 @@ if ($setLegacySequenceRow.Count -ne 1 -or
             $migrationSequences.InstallInitialize -or
         $migrationSequences.RemoveExistingProducts -ge
             $migrationSequences.MoveFiles -or
-        $migrationSequences.MoveFiles -ge
-            $migrationSequences.RemoveFolders -or
-        $migrationSequences.RemoveFolders -ge
-            $migrationSequences.InstallFiles) {
+        $migrationSequences.InstallFiles -ge
+            $migrationSequences.NicoCacheSetRemoveEmptyLegacyInstallDirData -or
+        $migrationSequences.NicoCacheSetRemoveEmptyLegacyInstallDirData -ge
+            $migrationSequences.NicoCacheRemoveEmptyLegacyInstallDir -or
+        $migrationSequences.NicoCacheRemoveEmptyLegacyInstallDir -ge
+            $migrationSequences.InstallFinalize) {
     throw '旧誤既定先の判定、任意インストール先保持、製品除去順序が不正です'
 }
 $tables = @(Invoke-MsiQuery 'SELECT `Name` FROM `_Tables`' 1 | ForEach-Object { [string]$_[0] })

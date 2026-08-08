@@ -135,6 +135,7 @@ function New-WindowsMsi {
       $installDirectoryXml
       <Directory Id="ProgramMenuFolder"><Directory Id="ApplicationProgramsFolder" Name="NicoCache_nl" /></Directory>
       <Directory Id="DesktopFolder" />
+      <Directory Id="SystemFolder" />
     </Directory>
     <DirectoryRef Id="INSTALLFOLDER">
       <Component Id="NicoCacheInstallState" Guid="{3DAF0BA2-122D-4E0A-91CC-D2CC80B11C5B}" Win64="yes">
@@ -152,7 +153,6 @@ function New-WindowsMsi {
         <Condition>NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Condition>
         <CreateFolder />
         <CopyFile Id="NicoCacheMoveLegacyApplicationConfig" SourceProperty="NICOCACHE_INSTALLDIR" SourceName="config.properties" DestinationDirectory="INSTALLFOLDER" DestinationName="config.properties" Delete="yes" />
-        <RemoveFolder Id="NicoCacheRemoveEmptyLegacyInstallDir" Property="NICOCACHE_INSTALLDIR" On="install" />
       </Component>
     </DirectoryRef>
     <Feature Id="ProductFeature" Title="NicoCache_nl" Level="1">
@@ -164,6 +164,8 @@ function New-WindowsMsi {
     <CustomAction Id="NicoCacheSetLegacyDefaultInstallDir" Property="NICOCACHE_LEGACY_DEFAULT_INSTALLDIR" Value="[%LOCALAPPDATA]\Programs\NicoCache_nl\" Execute="firstSequence" />
     <CustomAction Id="NicoCacheMarkLegacyDefaultInstallDir" Property="NICOCACHE_MIGRATE_LEGACY_INSTALLDIR" Value="1" Execute="firstSequence" />
     <CustomAction Id="NicoCacheRestoreInstallDir" Property="INSTALLFOLDER" Value="[NICOCACHE_INSTALLDIR]" Execute="firstSequence" />
+    <CustomAction Id="NicoCacheSetRemoveEmptyLegacyInstallDirData" Property="NicoCacheRemoveEmptyLegacyInstallDir" Value="&quot;[NICOCACHE_INSTALLDIR]&quot;" Execute="immediate" />
+    <CustomAction Id="NicoCacheRemoveEmptyLegacyInstallDir" Directory="SystemFolder" ExeCommand="cmd.exe /d /c rmdir &quot;[CustomActionData]&quot;" Execute="deferred" Return="ignore" Impersonate="yes" />
     <CustomAction Id="NicoCacheSetArpInstallLocation" Property="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" />
     <CustomAction Id="NicoCacheRollbackWindowsSetup" Directory="TARGETDIR" ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[NICOCACHE_INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback -RemoveApplicationConfig" Execute="immediate" Return="check" />
     <InstallExecuteSequence>
@@ -172,7 +174,8 @@ function New-WindowsMsi {
       <Custom Action="NicoCacheRestoreInstallDir" After="NicoCacheMarkLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Custom>
       <Custom Action="NicoCacheSetArpInstallLocation" After="CostFinalize">NOT Installed</Custom>
       <Custom Action="NicoCacheRollbackWindowsSetup" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE AND NICOCACHE_INSTALLDIR</Custom>
-      <RemoveFolders Sequence="3900" />
+      <Custom Action="NicoCacheSetRemoveEmptyLegacyInstallDirData" After="InstallFiles">NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Custom>
+      <Custom Action="NicoCacheRemoveEmptyLegacyInstallDir" After="NicoCacheSetRemoveEmptyLegacyInstallDirData">NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Custom>
     </InstallExecuteSequence>
     <UIRef Id="WixUI_InstallDir" />
   </Product>
