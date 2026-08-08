@@ -122,7 +122,7 @@ function New-WindowsMsi {
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="NicoCache_nl" Language="1041" Codepage="932" Version="$msiVersion" Manufacturer="NicoCache_nl" UpgradeCode="$upgradeCode">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" SummaryCodepage="932" Description="ニコニコ動画向けローカルプロキシー兼キャッシュサーバー" />
-    <MajorUpgrade DowngradeErrorMessage="新しいバージョンが既にインストールされています。" Schedule="afterInstallExecute" />
+    <MajorUpgrade DowngradeErrorMessage="新しいバージョンが既にインストールされています。" Schedule="afterInstallInitialize" />
     <MediaTemplate EmbedCab="yes" />
     <Property Id="ARPPRODUCTICON" Value="LauncherIcon" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />

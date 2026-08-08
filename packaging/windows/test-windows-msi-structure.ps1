@@ -196,7 +196,8 @@ $migrationSequenceRows = @(Invoke-MsiQuery (
         "WHERE `Action` = 'NicoCacheSetLegacyDefaultInstallDir' OR " +
         "`Action` = 'NicoCacheMarkLegacyDefaultInstallDir' OR " +
         "`Action` = 'NicoCacheRestoreInstallDir' OR " +
-        "`Action` = 'InstallExecute' OR `Action` = 'RemoveExistingProducts' OR " +
+        "`Action` = 'InstallInitialize' OR `Action` = 'InstallFiles' OR " +
+        "`Action` = 'RemoveExistingProducts' OR " +
         "`Action` = 'InstallFinalize'"
     ) 3)
 $migrationSequences = @{}
@@ -225,9 +226,9 @@ if ($setLegacySequenceRow.Count -ne 1 -or
         $migrationSequences.NicoCacheMarkLegacyDefaultInstallDir -ge
             $migrationSequences.NicoCacheRestoreInstallDir -or
         $migrationSequences.RemoveExistingProducts -le
-            $migrationSequences.InstallExecute -or
+            $migrationSequences.InstallInitialize -or
         $migrationSequences.RemoveExistingProducts -ge
-            $migrationSequences.InstallFinalize) {
+            $migrationSequences.InstallFiles) {
     throw '旧誤既定先の判定、任意インストール先保持、製品除去順序が不正です'
 }
 $tables = @(Invoke-MsiQuery 'SELECT `Name` FROM `_Tables`' 1 | ForEach-Object { [string]$_[0] })

@@ -133,8 +133,8 @@ jobs:
         run: |
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
-            -AppVersion $env:TEST_PREVIOUS_VERSION `
-            -UseLegacyProgramsInstallPath
+            -UseLegacyProgramsInstallPath `
+            -AppVersion $env:TEST_PREVIOUS_VERSION
           $lifecycle = New-Item `
             -ItemType Directory `
             -Path .\.test-work\installer-lifecycle `
