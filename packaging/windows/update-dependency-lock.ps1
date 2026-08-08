@@ -58,7 +58,29 @@ function Invoke-OfficialRequest {
     if ($OutFile) {
         $parameters.OutFile = $OutFile
     }
-    Invoke-WebRequest @parameters
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try {
+            return Invoke-WebRequest @parameters
+        }
+        catch {
+            $failure = $_
+            $response = $failure.Exception.Response
+            $statusCode = if ($response -and $response.StatusCode) {
+                [int]$response.StatusCode
+            } else { $null }
+            $retryable = $null -eq $statusCode -or
+                $statusCode -in @(408, 429, 500, 502, 503, 504)
+            if (-not $retryable -or $attempt -eq 5) { throw }
+            $delaySeconds = [Math]::Min(
+                60, 5 * [Math]::Pow(2, $attempt - 1)
+            )
+            Write-Warning (
+                "Maven Centralへの接続を再試行します " +
+                "($attempt/5, ${delaySeconds}秒後): $Uri"
+            )
+            Start-Sleep -Seconds $delaySeconds
+        }
+    }
 }
 
 function Get-LatestCommonStableVersion {

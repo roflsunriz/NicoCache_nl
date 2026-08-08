@@ -15,6 +15,38 @@ $lock = Import-PowerShellDataFile -LiteralPath $resolvedLockFile
 $destination = [System.IO.Path]::GetFullPath($DestinationDirectory)
 New-Item -ItemType Directory -Path $destination -Force | Out-Null
 
+function Invoke-DependencyDownload {
+    param(
+        [Parameter(Mandatory)][uri]$Uri,
+        [Parameter(Mandatory)][string]$OutFile
+    )
+
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try {
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile `
+                -MaximumRedirection 0 -UseBasicParsing
+            return
+        }
+        catch {
+            $response = $_.Exception.Response
+            $statusCode = if ($response -and $response.StatusCode) {
+                [int]$response.StatusCode
+            } else { $null }
+            $retryable = $null -eq $statusCode -or
+                $statusCode -in @(408, 429, 500, 502, 503, 504)
+            if (-not $retryable -or $attempt -eq 5) { throw }
+            $delaySeconds = [Math]::Min(
+                60, 5 * [Math]::Pow(2, $attempt - 1)
+            )
+            Write-Warning (
+                "依存成果物の取得を再試行します " +
+                "($attempt/5, ${delaySeconds}秒後): $Uri"
+            )
+            Start-Sleep -Seconds $delaySeconds
+        }
+    }
+}
+
 foreach ($artifact in $lock.Artifacts) {
     $uri = [uri]$artifact.Url
     if (($uri.Scheme -ne 'https') -or
@@ -31,8 +63,7 @@ foreach ($artifact in $lock.Artifacts) {
         Remove-Item -LiteralPath $partial -Force
     }
     try {
-        Invoke-WebRequest -Uri $uri -OutFile $partial -MaximumRedirection 0 `
-            -UseBasicParsing
+        Invoke-DependencyDownload -Uri $uri -OutFile $partial
         $actualHash = (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($actualHash -ne [string]$artifact.Sha256) {
             throw "依存ファイルのSHA-256が一致しません: $($artifact.Name)"

@@ -22,6 +22,38 @@ function ConvertTo-MavenMetadataXml {
     )
 }
 
+function Invoke-DependencyDownload {
+    param(
+        [Parameter(Mandatory)][uri]$Uri,
+        [Parameter(Mandatory)][string]$OutFile
+    )
+
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try {
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile `
+                -MaximumRedirection 0 -UseBasicParsing
+            return
+        }
+        catch {
+            $response = $_.Exception.Response
+            $statusCode = if ($response -and $response.StatusCode) {
+                [int]$response.StatusCode
+            } else { $null }
+            $retryable = $null -eq $statusCode -or
+                $statusCode -in @(408, 429, 500, 502, 503, 504)
+            if (-not $retryable -or $attempt -eq 5) { throw }
+            $delaySeconds = [Math]::Min(
+                60, 5 * [Math]::Pow(2, $attempt - 1)
+            )
+            Write-Warning (
+                "依存成果物の取得を再試行します " +
+                "($attempt/5, ${delaySeconds}秒後): $Uri"
+            )
+            Start-Sleep -Seconds $delaySeconds
+        }
+    }
+}
+
 $skewedMetadata = [ordered]@{
     'bcprov-jdk18on' = ConvertTo-MavenMetadataXml @('1.84', '1.85', '1.85.2')
     'bcpkix-jdk18on' = ConvertTo-MavenMetadataXml @('1.84', '1.85')
@@ -109,7 +141,7 @@ try {
         }
 
         $destination = Join-Path $temp ([string]$artifact.FileName)
-        Invoke-WebRequest -Uri $uri -OutFile $destination -MaximumRedirection 0 -UseBasicParsing
+        Invoke-DependencyDownload -Uri $uri -OutFile $destination
         $hash = Get-FileHash -LiteralPath $destination -Algorithm SHA256
         $actualHash = $hash.Hash.ToLowerInvariant()
         if ($actualHash -ne [string]$artifact.Sha256) {

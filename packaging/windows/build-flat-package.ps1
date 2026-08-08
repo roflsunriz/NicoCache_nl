@@ -152,6 +152,7 @@ function New-WindowsMsi {
         <Condition>NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Condition>
         <CreateFolder />
         <CopyFile Id="NicoCacheMoveLegacyApplicationConfig" SourceProperty="NICOCACHE_INSTALLDIR" SourceName="config.properties" DestinationDirectory="INSTALLFOLDER" DestinationName="config.properties" Delete="yes" />
+        <RemoveFolder Id="NicoCacheRemoveEmptyLegacyInstallDir" Property="NICOCACHE_INSTALLDIR" On="install" />
       </Component>
     </DirectoryRef>
     <Feature Id="ProductFeature" Title="NicoCache_nl" Level="1">
@@ -171,6 +172,7 @@ function New-WindowsMsi {
       <Custom Action="NicoCacheRestoreInstallDir" After="NicoCacheMarkLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Custom>
       <Custom Action="NicoCacheSetArpInstallLocation" After="CostFinalize">NOT Installed</Custom>
       <Custom Action="NicoCacheRollbackWindowsSetup" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE AND NICOCACHE_INSTALLDIR</Custom>
+      <RemoveFolders Sequence="3900" />
     </InstallExecuteSequence>
     <UIRef Id="WixUI_InstallDir" />
   </Product>
