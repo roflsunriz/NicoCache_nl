@@ -6,6 +6,8 @@ param(
     [ValidateRange(5, 120)]
     [int]$StartupTimeoutSeconds = 30,
 
+    [switch]$AllowInstalledApplication,
+
     [switch]$KeepLogs
 )
 
@@ -16,9 +18,33 @@ $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $testRoot = [System.IO.Path]::GetFullPath((Join-Path $root '.test-work')).
     TrimEnd([System.IO.Path]::DirectorySeparatorChar)
 $appImage = (Resolve-Path -LiteralPath $AppImagePath).Path
-if (-not $appImage.StartsWith(
+$isTestImage = $appImage.StartsWith(
         $testRoot + [System.IO.Path]::DirectorySeparatorChar,
-        [System.StringComparison]::OrdinalIgnoreCase)) {
+        [System.StringComparison]::OrdinalIgnoreCase)
+$isVerifiedInstalledImage = $false
+if ($AllowInstalledApplication -and $env:GITHUB_ACTIONS -eq 'true' -and
+        -not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) {
+    $expectedInstalledRoot = [IO.Path]::GetFullPath(
+        (Join-Path $env:LOCALAPPDATA 'NicoCache_nl')
+    ).TrimEnd([IO.Path]::DirectorySeparatorChar)
+    $installerState = Get-ItemProperty `
+        -LiteralPath 'HKCU:\Software\NicoCache_nl\Installer' `
+        -ErrorAction SilentlyContinue
+    $registeredInstallRoot = if ($installerState -and
+            $installerState.InstallDir) {
+        [IO.Path]::GetFullPath([string]$installerState.InstallDir).
+            TrimEnd([IO.Path]::DirectorySeparatorChar)
+    } else { '' }
+    $isVerifiedInstalledImage =
+        [string]::Equals(
+            $appImage, $expectedInstalledRoot,
+            [StringComparison]::OrdinalIgnoreCase
+        ) -and [string]::Equals(
+            $appImage, $registeredInstallRoot,
+            [StringComparison]::OrdinalIgnoreCase
+        )
+}
+if (-not $isTestImage -and -not $isVerifiedInstalledImage) {
     throw "実環境の誤操作を防ぐため.test-work外のイメージは検証できません: $appImage"
 }
 $appDirectory = $appImage

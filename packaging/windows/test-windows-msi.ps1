@@ -633,7 +633,8 @@ try {
     Remove-Item -LiteralPath $applicationConfigPath -Force
     & (Join-Path $PSScriptRoot 'test-windows-app-image.ps1') `
         -AppImagePath $installRoot `
-        -StartupTimeoutSeconds $StartupTimeoutSeconds
+        -StartupTimeoutSeconds $StartupTimeoutSeconds `
+        -AllowInstalledApplication
     Write-Output 'PASS 更新後MSIの隔離起動'
 
     $certificateDirectory = Join-Path $userDataRoot 'certs'
