@@ -104,9 +104,11 @@ try {
     $installerState = Get-ItemProperty 'HKCU:\Software\NicoCache_nl\Installer' -ErrorAction Stop
     $productRoot = [IO.Path]::GetFullPath($installerState.InstallDir).TrimEnd('\')
     Step "Installed product root=$productRoot"
-    $cfg = Join-Path $productRoot 'app\NicoCache_nl.cfg'
-    if (-not (Test-Path $cfg -PathType Leaf)) { throw "Installed cfg missing: $cfg" }
-    Copy-Item $cfg (Join-Path $work 'installed-NicoCache_nl.cfg')
+    $versionMarker = Join-Path $productRoot 'NicoCache_nl.version'
+    if (-not (Test-Path $versionMarker -PathType Leaf)) {
+        throw "Installed version marker missing: $versionMarker"
+    }
+    Copy-Item $versionMarker (Join-Path $work 'installed-NicoCache_nl.version')
 
     $detected = (Invoke-Updater $updaterExe @('--installed-version', '--app-root', $productRoot) 'version-detect').Trim()
     Step "Detected installed version=$detected"
@@ -160,21 +162,28 @@ try {
         Step "$command -> $resolved"
         if ([IO.Path]::GetFullPath($resolved).StartsWith($productRoot, [StringComparison]::OrdinalIgnoreCase)) { throw "External dependency leaked into product root: $command -> $resolved" }
     }
+    $applicationDirectory = if (Test-Path (Join-Path $productRoot 'NicoCache_nl.jar') -PathType Leaf) {
+        $productRoot
+    } else {
+        Join-Path $productRoot 'app'
+    }
+    $libraryDirectory = Join-Path $applicationDirectory 'lib'
     foreach ($jar in @('bcprov.jar','bcpkix.jar','bcutil.jar','brotli-dec.jar','zstd-jni.jar')) {
-        if (-not (Test-Path (Join-Path $productRoot "app\lib\$jar") -PathType Leaf)) {
+        if (-not (Test-Path (Join-Path $libraryDirectory $jar) -PathType Leaf)) {
             throw "Dependency file missing from the application classpath: $jar"
         }
-        if (Test-Path (Join-Path $productRoot "lib\$jar") -PathType Leaf) {
+        if ($applicationDirectory -ne $productRoot -and
+                (Test-Path (Join-Path $productRoot "lib\$jar") -PathType Leaf)) {
             throw "Dependency was written outside the application classpath: $jar"
         }
     }
 
-    $disabledCfg = "$cfg.disabled"
-    Move-Item $cfg $disabledCfg
+    $disabledVersionMarker = "$versionMarker.disabled"
+    Move-Item $versionMarker $disabledVersionMarker
     try {
         $negative = (Invoke-Updater $updaterExe @('--installed-version', '--app-root', $productRoot) 'version-negative-control').Trim()
-        if ($negative -eq $productVersion) { throw 'Negative control failed: version remained detectable after cfg removal' }
-    } finally { Move-Item $disabledCfg $cfg }
+        if ($negative -eq $productVersion) { throw 'Negative control failed: version remained detectable after marker removal' }
+    } finally { Move-Item $disabledVersionMarker $versionMarker }
     $restored = (Invoke-Updater $updaterExe @('--installed-version', '--app-root', $productRoot) 'version-restored').Trim()
     if ($restored -ne $productVersion) { throw "Version detection did not recover: $restored" }
     Step 'Strict real-user E2E assertions passed'
