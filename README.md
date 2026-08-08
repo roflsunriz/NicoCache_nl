@@ -24,7 +24,7 @@ Windows・Linux・macOSパッケージ版の初回セットアップでは、キ
 [更新・検証手順](how-to-update.md#旧取得設定からの移行)を参照してください。
 
 パッケージ版の既定ユーザーデータ先は、Windowsではドキュメント内の
-`NicoCache_nl`、macOSでは`~/Library/Application Support/NicoCache_nl`、Linuxでは
+`NicoCache_nl`（$env:USERPROFILE\NicoCache_nl）、macOSでは`~/Library/Application Support/NicoCache_nl`、Linuxでは
 `$XDG_DATA_HOME/NicoCache_nl`（未設定時は`~/.local/share/NicoCache_nl`）です。
 初回ウィザードから別の絶対パスへ変更できます。
 
@@ -92,14 +92,14 @@ Linux/macOSでも同じCLIを利用できます。旧来のGUI起動・証明書
 証明書が未生成の移行先では、本体を起動する前に次を実行してください。
 
 ```powershell
-java -Dnicocache.applicationRoot="C:\NicoCache_nl" `
-  -Dnicocache.userDataRoot="C:\Users\利用者名\Documents\NicoCache_nl" `
+java -Dnicocache.applicationRoot="$env:LOCALAPPDATA\NicoCache_nl" `
+  -Dnicocache.userDataRoot="$env:USERPROFILE\Documents\NicoCache_nl" `
   -jar .\NicoCacheCA.jar --headless `
-  --targets-file="C:\NicoCache_nl\certificate-targets.txt"
+  --targets-file="$env:LOCALAPPDATA\certificate-targets.txt"
 ```
 
-`NicoCacheCA.jar`は`config.properties`の`userDataRoot`も読み取ります。生成後は
-Firefoxへユーザーデータ側の`certs/ca.cer`をインポートし、本体を再起動してください。
+`NicoCacheCA.jar`は`config.properties`の`userDataRoot`も読み取ります。生成後は必要であれば
+Firefoxへユーザーデータ側の`certs/ca.cer`をインポートし、本体を再起動してください。（通常はWindowsに設定した証明書ストアをFirefoxが読み取って利用するため追加の操作は不要）
 JAR自体にはOSのファイルアイコンを持たせられないため、GUIのウィンドウ・タスクトレイと
 Windowsインストーラーのショートカットには専用アイコンを割り当てます。
 
