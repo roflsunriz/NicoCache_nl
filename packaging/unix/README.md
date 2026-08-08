@@ -52,8 +52,8 @@ macOSでは`security`、`networksetup`、LaunchAgentsを使う。利用できな
 ## 独立アップデーター
 
 ```powershell
-./packaging/unix/build-standalone-updater.ps1 -Platform MacOS -PackageType All -AppVersion 0.2.1
-./packaging/unix/test-standalone-updater.ps1 -Platform MacOS -AppVersion 0.2.1
+./packaging/unix/build-standalone-updater.ps1 -Platform MacOS -PackageType All -AppVersion 0.2.2
+./packaging/unix/test-standalone-updater.ps1 -Platform MacOS -AppVersion 0.2.2
 ```
 
 独立アップデーターは本体とは別の自己完結アプリで、引き続き対象OSの`jpackage`を

@@ -285,8 +285,8 @@ Linuxでは`dpkg-deb`/`rpmbuild`、macOSでは`pkgbuild`/`hdiutil`で包む。
 ```powershell
 ./packaging/unix/build-package.ps1 -Platform Linux -PackageType All -AppVersion 1.2.3
 ./packaging/unix/test-package.ps1 -Platform Linux -AppVersion 1.2.3
-./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion 0.2.1
-./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion 0.2.1
+./packaging/unix/build-standalone-updater.ps1 -Platform Linux -PackageType All -AppVersion 0.2.2
+./packaging/unix/test-standalone-updater.ps1 -Platform Linux -AppVersion 0.2.2
 ```
 
 LinuxではアプリイメージZIP、DEB、RPM、macOSではアプリイメージZIP、PKG、DMGを

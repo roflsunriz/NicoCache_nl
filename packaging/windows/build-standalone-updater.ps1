@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern('^\d+(?:\.\d+){0,3}$')]
-    [string]$AppVersion = '0.2.1',
+    [string]$AppVersion = '0.2.2',
 
     [ValidateSet('AppImage', 'Msi', 'All')]
     [string]$PackageType = 'AppImage'
