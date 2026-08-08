@@ -28,8 +28,16 @@ if ($env:GITHUB_ACTIONS -ne 'true') {
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')).Path
 $testRoot = [System.IO.Path]::GetFullPath((Join-Path $root '.test-work')).
     TrimEnd([System.IO.Path]::DirectorySeparatorChar)
+$localAppDataRoot = [System.IO.Path]::GetFullPath($env:LOCALAPPDATA).
+    TrimEnd([System.IO.Path]::DirectorySeparatorChar)
 $installRoot = [System.IO.Path]::GetFullPath(
-    (Join-Path $testRoot 'windows-msi-install')
+    (Join-Path $localAppDataRoot 'NicoCache_nl')
+)
+$legacyInstallRoot = [System.IO.Path]::GetFullPath(
+    (Join-Path $localAppDataRoot 'Programs\NicoCache_nl')
+)
+$customInstallRoot = [System.IO.Path]::GetFullPath(
+    (Join-Path $testRoot 'windows-msi-custom-install')
 )
 $userDataRoot = [System.IO.Path]::GetFullPath(
     (Join-Path $testRoot 'windows-msi-user-data')
@@ -53,13 +61,25 @@ $runValueName = 'NicoCache_nl'
 $stateLocatorRegistryPath = 'HKCU:\Software\NicoCache_nl'
 $stateLocatorValueName = 'SetupStatePath'
 
-if (-not $installRoot.StartsWith(
+foreach ($candidate in @($installRoot, $legacyInstallRoot)) {
+    if (-not $candidate.StartsWith(
+            $localAppDataRoot + [System.IO.Path]::DirectorySeparatorChar,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "安全でないMSIテスト先です: $candidate"
+    }
+}
+if (-not $customInstallRoot.StartsWith(
         $testRoot + [System.IO.Path]::DirectorySeparatorChar,
         [System.StringComparison]::OrdinalIgnoreCase)) {
-    throw "安全でないMSIテスト先です: $installRoot"
+    throw "安全でないMSIカスタム試験先です: $customInstallRoot"
 }
-if (Test-Path -LiteralPath $installRoot) {
-    throw "MSIテスト先が既に存在します: $installRoot"
+if (Test-Path -LiteralPath $customInstallRoot) {
+    throw "MSIカスタム試験先が既に存在します: $customInstallRoot"
+}
+foreach ($candidate in @($installRoot, $legacyInstallRoot)) {
+    if (Test-Path -LiteralPath $candidate) {
+        throw "MSIテスト先が既に存在します: $candidate"
+    }
 }
 if (Test-Path -LiteralPath $userDataRoot) {
     throw "MSI利用者データ試験先が既に存在します: $userDataRoot"
@@ -242,14 +262,27 @@ function Get-OsIntegrationState {
 }
 
 function Assert-NoInstalledProcess {
+    param(
+        [string[]]$ApplicationRoots = @($installRoot, $legacyInstallRoot)
+    )
+
     $installedProcesses = @(
         Get-Process -ErrorAction SilentlyContinue |
             Where-Object {
                 try {
-                    $_.Path -and $_.Path.StartsWith(
-                        $installRoot + [System.IO.Path]::DirectorySeparatorChar,
-                        [System.StringComparison]::OrdinalIgnoreCase
-                    )
+                    $processPath = $_.Path
+                    $matchesApplicationRoot = $false
+                    foreach ($applicationRoot in $ApplicationRoots) {
+                        if ($processPath -and $processPath.StartsWith(
+                                $applicationRoot +
+                                [System.IO.Path]::DirectorySeparatorChar,
+                                [System.StringComparison]::OrdinalIgnoreCase
+                            )) {
+                            $matchesApplicationRoot = $true
+                            break
+                        }
+                    }
+                    $matchesApplicationRoot
                 } catch {
                     $false
                 }
@@ -261,9 +294,12 @@ function Assert-NoInstalledProcess {
 }
 
 function Assert-AppVersion {
-    param([Parameter(Mandatory)][string]$ExpectedVersion)
+    param(
+        [Parameter(Mandatory)][string]$ExpectedVersion,
+        [Parameter(Mandatory)][string]$ApplicationRoot
+    )
 
-    $versionFile = Join-Path $installRoot 'NicoCache_nl.version'
+    $versionFile = Join-Path $ApplicationRoot 'NicoCache_nl.version'
     if (-not (Test-Path -LiteralPath $versionFile -PathType Leaf)) {
         throw "配布版番号ファイルがありません: $versionFile"
     }
@@ -272,13 +308,215 @@ function Assert-AppVersion {
     }
 }
 
+function Assert-ShortcutTargetsApplicationRoot {
+    param([Parameter(Mandatory)][string]$ExpectedRoot)
+
+    $shell = New-Object -ComObject WScript.Shell
+    try {
+        $expectedTarget = Join-Path $ExpectedRoot 'jre\bin\javaw.exe'
+        $expectedLauncherJar = Join-Path $ExpectedRoot 'NicoCacheLauncher.jar'
+        foreach ($shortcutPath in @($startMenuShortcut, $desktopShortcut)) {
+            if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) {
+                throw "MSIショートカットがありません: $shortcutPath"
+            }
+            $shortcut = $shell.CreateShortcut($shortcutPath)
+            try {
+                if (-not [string]::Equals(
+                        [System.IO.Path]::GetFullPath($shortcut.TargetPath),
+                        [System.IO.Path]::GetFullPath($expectedTarget),
+                        [System.StringComparison]::OrdinalIgnoreCase
+                    ) -or
+                        -not [string]::Equals(
+                            [System.IO.Path]::GetFullPath(
+                                $shortcut.WorkingDirectory
+                            ).TrimEnd('\'),
+                            [System.IO.Path]::GetFullPath(
+                                $ExpectedRoot
+                            ).TrimEnd('\'),
+                            [System.StringComparison]::OrdinalIgnoreCase
+                        ) -or
+                        $shortcut.Arguments -notmatch '(?i)-jar' -or
+                        $shortcut.Arguments -notmatch [regex]::Escape(
+                            $expectedLauncherJar
+                        )) {
+                    throw (
+                        "MSIショートカットが移行先を参照していません: " +
+                        "$shortcutPath"
+                    )
+                }
+            } finally {
+                [Runtime.InteropServices.Marshal]::FinalReleaseComObject(
+                    $shortcut
+                ) | Out-Null
+            }
+        }
+    } finally {
+        [Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell) |
+            Out-Null
+    }
+}
+
+function Assert-RegisteredInstallRoot {
+    param([Parameter(Mandatory)][string]$ExpectedRoot)
+
+    $registeredInstallRoot = Get-ItemProperty `
+        -LiteralPath 'HKCU:\Software\NicoCache_nl\Installer' `
+        -Name InstallDir `
+        -ErrorAction Stop |
+        Select-Object -ExpandProperty InstallDir
+    if (-not [string]::Equals(
+            [System.IO.Path]::GetFullPath($registeredInstallRoot).TrimEnd('\'),
+            [System.IO.Path]::GetFullPath($ExpectedRoot).TrimEnd('\'),
+            [System.StringComparison]::OrdinalIgnoreCase
+        )) {
+        throw "MSIのInstallDirが期待先ではありません: $registeredInstallRoot"
+    }
+}
+
+function Assert-InstallRootRemoved {
+    param([Parameter(Mandatory)][string]$ApplicationRoot)
+
+    if (Test-Path -LiteralPath $ApplicationRoot) {
+        $remnants = @(Get-ChildItem -LiteralPath $ApplicationRoot `
+                -Recurse -Force)
+        if ($remnants.Count -gt 0) {
+            throw (
+                "MSI処理後に導入先の残骸があります: $ApplicationRoot`n" +
+                ($remnants.FullName -join "`n")
+            )
+        }
+        throw "MSI処理後に空の導入先が残っています: $ApplicationRoot"
+    }
+}
+
+function Invoke-LocationUpgradeCase {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('LegacyWithoutConfig', 'Custom')]
+        [string]$Case
+    )
+
+    $isCustom = $Case -eq 'Custom'
+    $previousRoot = if ($isCustom) {
+        $customInstallRoot
+    } else {
+        $legacyInstallRoot
+    }
+    $expectedRoot = if ($isCustom) {
+        $customInstallRoot
+    } else {
+        $installRoot
+    }
+    $logSuffix = if ($isCustom) { 'custom' } else { 'legacy-no-config' }
+    $caseInstalled = $false
+    $caseUpgraded = $false
+    $caseFailure = $null
+    try {
+        $previousArguments = @(
+            '/i', "`"$resolvedPreviousMsi`"", '/qn', '/norestart'
+        )
+        if ($isCustom) {
+            $previousArguments += "INSTALLFOLDER=`"$customInstallRoot`""
+        }
+        Invoke-MsiExec -ArgumentList $previousArguments `
+            -FailureMessage "旧版MSIの${Case}試験導入に失敗しました" `
+            -LogPath (Join-Path $testRoot "msi-$logSuffix-install.log")
+        $caseInstalled = $true
+        Assert-AppVersion -ExpectedVersion $ExpectedPreviousVersion `
+            -ApplicationRoot $previousRoot
+        Assert-ShortcutTargetsApplicationRoot -ExpectedRoot $previousRoot
+        Assert-RegisteredInstallRoot -ExpectedRoot $previousRoot
+
+        $caseConfigPath = Join-Path $previousRoot 'config.properties'
+        if ($isCustom) {
+            Set-Content -LiteralPath $caseConfigPath `
+                -Value 'installerLocationMarker=preserve-custom-location' `
+                -Encoding ascii
+        } elseif (Test-Path -LiteralPath $caseConfigPath) {
+            throw '未起動旧版の試験前にconfig.propertiesが存在します'
+        }
+
+        Invoke-MsiExec -ArgumentList @(
+            '/i', "`"$resolvedMsi`"", '/qn', '/norestart'
+        ) `
+            -FailureMessage "新版MSIへの${Case}試験更新に失敗しました" `
+            -LogPath (Join-Path $testRoot "msi-$logSuffix-upgrade.log")
+        $caseUpgraded = $true
+        Assert-AppVersion -ExpectedVersion $ExpectedCurrentVersion `
+            -ApplicationRoot $expectedRoot
+        Assert-NoInstalledProcess -ApplicationRoots @(
+            $previousRoot, $expectedRoot
+        )
+        Assert-ShortcutTargetsApplicationRoot -ExpectedRoot $expectedRoot
+        Assert-RegisteredInstallRoot -ExpectedRoot $expectedRoot
+
+        if ($isCustom) {
+            if ((Get-Content -Raw -LiteralPath (
+                        Join-Path $expectedRoot 'config.properties'
+                    )) -notmatch 'preserve-custom-location') {
+                throw '任意カスタム先のconfig.propertiesが更新で失われました'
+            }
+            Assert-InstallRootRemoved -ApplicationRoot $installRoot
+            Assert-InstallRootRemoved -ApplicationRoot $legacyInstallRoot
+            Write-Output 'PASS 任意カスタムINSTALLFOLDERの更新・設定保全'
+        } else {
+            if (Test-Path -LiteralPath (
+                    Join-Path $expectedRoot 'config.properties'
+                )) {
+                throw '未起動旧版の更新でconfig.propertiesが意図せず作成されました'
+            }
+            Assert-InstallRootRemoved -ApplicationRoot $legacyInstallRoot
+            Write-Output 'PASS config.propertiesなしの旧誤既定先からの更新'
+        }
+    } catch {
+        $caseFailure = $_
+    } finally {
+        if ($caseInstalled) {
+            $caseProductCode = if ($caseUpgraded) {
+                $currentProductCode
+            } else {
+                $previousProductCode
+            }
+            try {
+                Invoke-MsiExec -ArgumentList @(
+                    '/x', $caseProductCode, '/qn', '/norestart'
+                ) `
+                    -FailureMessage "${Case}試験のアンインストールに失敗しました" `
+                    -LogPath (Join-Path $testRoot (
+                            "msi-$logSuffix-uninstall.log"
+                        ))
+            } catch {
+                if ($caseFailure) {
+                    throw (
+                        "${Case}試験の最初の失敗:`n" +
+                        "$($caseFailure.Exception.Message)`n" +
+                        "後始末の失敗:`n$($_.Exception.Message)"
+                    )
+                }
+                throw
+            }
+        }
+    }
+    if ($caseFailure) { throw $caseFailure }
+    Assert-InstallRootRemoved -ApplicationRoot $expectedRoot
+    if (-not $isCustom) {
+        Assert-InstallRootRemoved -ApplicationRoot $previousRoot
+    }
+    if ((Test-Path -LiteralPath $startMenuShortcut) -or
+            (Test-Path -LiteralPath $desktopShortcut)) {
+        throw "${Case}試験のアンインストール後にショートカットが残っています"
+    }
+}
+
 $osStateBefore = Get-OsIntegrationState
 $previousProductCode = Get-MsiProductCode -Path $resolvedPreviousMsi
 $currentProductCode = Get-MsiProductCode -Path $resolvedMsi
+Invoke-LocationUpgradeCase -Case LegacyWithoutConfig
+Invoke-LocationUpgradeCase -Case Custom
 $installed = $false
 $upgraded = $false
 $userStatePath = Join-Path $userDataRoot 'data\installer-lifecycle-user.txt'
-$applicationConfigPath = Join-Path $installRoot 'config.properties'
+$applicationConfigPath = Join-Path $legacyInstallRoot 'config.properties'
 $setupStatePath = Join-Path $userDataRoot 'data\setup-system-state.json'
 $primaryFailure = $null
 
@@ -287,17 +525,17 @@ try {
         '/i',
         "`"$resolvedPreviousMsi`"",
         '/qn',
-        '/norestart',
-        "INSTALLFOLDER=`"$installRoot`""
+        '/norestart'
     ) `
         -FailureMessage '旧版MSIの無人インストールに失敗しました' `
         -LogPath (Join-Path $testRoot 'msi-install-previous.log')
     $installed = $true
 
-    if (-not (Test-Path -LiteralPath $installRoot -PathType Container)) {
-        throw "MSIが指定先へインストールされませんでした: $installRoot"
+    if (-not (Test-Path -LiteralPath $legacyInstallRoot -PathType Container)) {
+        throw "旧版MSIが誤既定先へインストールされませんでした: $legacyInstallRoot"
     }
-    Assert-AppVersion -ExpectedVersion $ExpectedPreviousVersion
+    Assert-AppVersion -ExpectedVersion $ExpectedPreviousVersion `
+        -ApplicationRoot $legacyInstallRoot
     Assert-NoInstalledProcess
     if (-not (Test-Path -LiteralPath $startMenuShortcut -PathType Leaf)) {
         throw "スタートメニューのショートカットがありません: $startMenuShortcut"
@@ -305,7 +543,8 @@ try {
     if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
         throw "デスクトップのショートカットがありません: $desktopShortcut"
     }
-    Write-Output 'PASS 旧版MSIの無人インストール・ショートカット・起動抑止'
+    Assert-ShortcutTargetsApplicationRoot -ExpectedRoot $legacyInstallRoot
+    Write-Output 'PASS 旧版MSIの誤既定先導入・ショートカット・起動抑止'
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $userStatePath) `
         -Force | Out-Null
@@ -319,7 +558,7 @@ try {
         ) `
         -Encoding ascii
 
-    $repairTarget = Join-Path $installRoot 'nlFilter_sys.txt'
+    $repairTarget = Join-Path $legacyInstallRoot 'nlFilter_sys.txt'
     if (-not (Test-Path -LiteralPath $repairTarget -PathType Leaf)) {
         throw "修復対象ファイルがありません: $repairTarget"
     }
@@ -331,8 +570,7 @@ try {
         '/qn',
         '/norestart',
         'REINSTALL=ALL',
-        'REINSTALLMODE=amus',
-        "INSTALLFOLDER=`"$installRoot`""
+        'REINSTALLMODE=amus'
     ) `
         -FailureMessage 'MSI修復に失敗しました' `
         -LogPath $repairLogPath
@@ -360,20 +598,22 @@ try {
             'installerLifecycleMarker=preserve-application-config') {
         throw 'MSI修復でアプリ側config.propertiesが失われました'
     }
+    Assert-ShortcutTargetsApplicationRoot -ExpectedRoot $legacyInstallRoot
     Write-Output 'PASS MSI修復とユーザー状態の保全'
 
     Invoke-MsiExec -ArgumentList @(
         '/i',
         "`"$resolvedMsi`"",
         '/qn',
-        '/norestart',
-        "INSTALLFOLDER=`"$installRoot`""
+        '/norestart'
     ) `
         -FailureMessage '新版MSIへの無人更新に失敗しました' `
         -LogPath (Join-Path $testRoot 'msi-upgrade.log')
     $upgraded = $true
-    Assert-AppVersion -ExpectedVersion $ExpectedCurrentVersion
+    Assert-AppVersion -ExpectedVersion $ExpectedCurrentVersion `
+        -ApplicationRoot $installRoot
     Assert-NoInstalledProcess
+    $applicationConfigPath = Join-Path $installRoot 'config.properties'
     if (-not (Test-Path -LiteralPath $desktopShortcut -PathType Leaf)) {
         throw 'MSI更新後にデスクトップのショートカットがありません'
     }
@@ -385,7 +625,10 @@ try {
             'installerLifecycleMarker=preserve-application-config') {
         throw 'MSI更新でアプリ側config.propertiesが失われました'
     }
-    Write-Output 'PASS 旧版から新版への更新とユーザー状態の保全'
+    Assert-InstallRootRemoved -ApplicationRoot $legacyInstallRoot
+    Assert-RegisteredInstallRoot -ExpectedRoot $installRoot
+    Assert-ShortcutTargetsApplicationRoot -ExpectedRoot $installRoot
+    Write-Output 'PASS 旧誤既定先から新版既定先への移行とユーザー状態の保全'
 
     Remove-Item -LiteralPath $applicationConfigPath -Force
     & (Join-Path $PSScriptRoot 'test-windows-app-image.ps1') `

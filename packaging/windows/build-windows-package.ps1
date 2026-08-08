@@ -7,7 +7,9 @@ param(
     [ValidateSet('AppImage', 'Zip', 'Msi', 'All')]
     [string]$PackageType = 'AppImage',
 
-    [string]$ZipFileName
+    [string]$ZipFileName,
+
+    [switch]$UseLegacyProgramsInstallPath
 )
 
 & (Join-Path $PSScriptRoot 'build-flat-package.ps1') @PSBoundParameters

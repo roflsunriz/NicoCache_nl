@@ -5,7 +5,8 @@ param(
     [string]$AppVersion = '0.1.0',
     [ValidateSet('AppImage', 'Zip', 'Msi', 'All')]
     [string]$PackageType = 'AppImage',
-    [string]$ZipFileName
+    [string]$ZipFileName,
+    [switch]$UseLegacyProgramsInstallPath
 )
 
 Set-StrictMode -Version Latest
@@ -63,7 +64,11 @@ function Get-RuntimeModules {
 }
 
 function New-WindowsMsi {
-    param([string]$SourceRoot, [string]$Destination)
+    param(
+        [string]$SourceRoot,
+        [string]$Destination,
+        [bool]$UseLegacyInstallPath
+    )
     $heat = Get-RequiredCommand 'heat'
     $candle = Get-RequiredCommand 'candle'
     $light = Get-RequiredCommand 'light'
@@ -107,12 +112,17 @@ function New-WindowsMsi {
     $upgradeCode = [Security.SecurityElement]::Escape([string]$packageIdentity.UpgradeUuid)
     $icon = [Security.SecurityElement]::Escape((Resolve-Path -LiteralPath (
         Join-Path $PSScriptRoot 'assets\nicocache-launcher.ico')).Path)
+    $installDirectoryXml = if ($UseLegacyInstallPath) {
+        '<Directory Id="LocalAppDataFolder"><Directory Id="ProgramsFolder" Name="Programs"><Directory Id="INSTALLFOLDER" Name="NicoCache_nl" /></Directory></Directory>'
+    } else {
+        '<Directory Id="LocalAppDataFolder"><Directory Id="INSTALLFOLDER" Name="NicoCache_nl" /></Directory>'
+    }
     $xml = @"
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="NicoCache_nl" Language="1041" Codepage="932" Version="$msiVersion" Manufacturer="NicoCache_nl" UpgradeCode="$upgradeCode">
     <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" SummaryCodepage="932" Description="ニコニコ動画向けローカルプロキシー兼キャッシュサーバー" />
-    <MajorUpgrade DowngradeErrorMessage="新しいバージョンが既にインストールされています。" />
+    <MajorUpgrade DowngradeErrorMessage="新しいバージョンが既にインストールされています。" Schedule="afterInstallExecute" />
     <MediaTemplate EmbedCab="yes" />
     <Property Id="ARPPRODUCTICON" Value="LauncherIcon" />
     <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
@@ -122,7 +132,7 @@ function New-WindowsMsi {
     </Property>
     <Icon Id="LauncherIcon" SourceFile="$icon" />
     <Directory Id="TARGETDIR" Name="SourceDir">
-      <Directory Id="LocalAppDataFolder"><Directory Id="ProgramsFolder" Name="Programs"><Directory Id="INSTALLFOLDER" Name="NicoCache_nl" /></Directory></Directory>
+      $installDirectoryXml
       <Directory Id="ProgramMenuFolder"><Directory Id="ApplicationProgramsFolder" Name="NicoCache_nl" /></Directory>
       <Directory Id="DesktopFolder" />
     </Directory>
@@ -138,17 +148,27 @@ function New-WindowsMsi {
         <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
         <RegistryValue Root="HKCU" Key="Software\NicoCache_nl" Name="installed" Type="integer" Value="1" KeyPath="yes" />
       </Component>
+      <Component Id="NicoCacheMigrateLegacyProgramsInstall" Guid="{5DE3A6D1-CA39-4725-973F-60CAFE3FA291}" Win64="yes" KeyPath="yes">
+        <Condition>NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Condition>
+        <CreateFolder />
+        <CopyFile Id="NicoCacheMoveLegacyApplicationConfig" SourceProperty="NICOCACHE_INSTALLDIR" SourceName="config.properties" DestinationDirectory="INSTALLFOLDER" DestinationName="config.properties" Delete="yes" />
+      </Component>
     </DirectoryRef>
     <Feature Id="ProductFeature" Title="NicoCache_nl" Level="1">
       <ComponentGroupRef Id="ApplicationFiles" />
       <ComponentRef Id="NicoCacheInstallState" />
       <ComponentRef Id="LauncherShortcuts" />
+      <ComponentRef Id="NicoCacheMigrateLegacyProgramsInstall" />
     </Feature>
+    <CustomAction Id="NicoCacheSetLegacyDefaultInstallDir" Property="NICOCACHE_LEGACY_DEFAULT_INSTALLDIR" Value="[%LOCALAPPDATA]\Programs\NicoCache_nl\" Execute="firstSequence" />
+    <CustomAction Id="NicoCacheMarkLegacyDefaultInstallDir" Property="NICOCACHE_MIGRATE_LEGACY_INSTALLDIR" Value="1" Execute="firstSequence" />
     <CustomAction Id="NicoCacheRestoreInstallDir" Property="INSTALLFOLDER" Value="[NICOCACHE_INSTALLDIR]" Execute="firstSequence" />
     <CustomAction Id="NicoCacheSetArpInstallLocation" Property="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" />
     <CustomAction Id="NicoCacheRollbackWindowsSetup" Directory="TARGETDIR" ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[NICOCACHE_INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback -RemoveApplicationConfig" Execute="immediate" Return="check" />
     <InstallExecuteSequence>
-      <Custom Action="NicoCacheRestoreInstallDir" After="AppSearch">NICOCACHE_INSTALLDIR</Custom>
+      <Custom Action="NicoCacheSetLegacyDefaultInstallDir" After="AppSearch">NICOCACHE_INSTALLDIR</Custom>
+      <Custom Action="NicoCacheMarkLegacyDefaultInstallDir" After="NicoCacheSetLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR ~= NICOCACHE_LEGACY_DEFAULT_INSTALLDIR</Custom>
+      <Custom Action="NicoCacheRestoreInstallDir" After="NicoCacheMarkLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Custom>
       <Custom Action="NicoCacheSetArpInstallLocation" After="CostFinalize">NOT Installed</Custom>
       <Custom Action="NicoCacheRollbackWindowsSetup" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE AND NICOCACHE_INSTALLDIR</Custom>
     </InstallExecuteSequence>
@@ -168,7 +188,7 @@ function New-WindowsMsi {
         # 成立させるため、per-user profile向けの一般検査だけを除外する。
         '-sice:ICE38',
         # INSTALLFOLDER配下には上でRemoveFolderを付与済み。共有親の
-        # LocalAppData\Programsだけは削除対象にできないため除外する。
+        # LocalAppDataだけは削除対象にできないため除外する。
         '-sice:ICE64',
         # InstallScope=perUser固定なのでper-machine切替時だけ問題になる
         # ICE91は該当しない。
@@ -207,7 +227,9 @@ Invoke-NativeCommand $jlink @(
 if ($LASTEXITCODE -ne 0) { throw 'Windowsアプリケーションルートの作成に失敗しました' }
 
 if ($PackageType -in @('Msi', 'All')) {
-    New-WindowsMsi $appImagePath (Join-Path $outputRoot "NicoCache_nl-$AppVersion.msi")
+    New-WindowsMsi $appImagePath `
+        (Join-Path $outputRoot "NicoCache_nl-$AppVersion.msi") `
+        -UseLegacyInstallPath:$UseLegacyProgramsInstallPath
 }
 if ($PackageType -in @('Zip', 'All')) {
     $archiveName = if ([string]::IsNullOrWhiteSpace($ZipFileName)) {
