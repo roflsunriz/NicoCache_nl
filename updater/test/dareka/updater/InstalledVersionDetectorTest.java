@@ -41,6 +41,20 @@ public final class InstalledVersionDetectorTest {
                     "<?xml version=\"1.0\"?><jpackage-state><app-version>1.0.2</app-version></jpackage-state>",
                     StandardCharsets.UTF_8);
             assertEquals("1.0.2", InstalledVersionDetector.detect(root), "jpackage xml compatibility fallback");
+
+            Path flatRoot = root.resolve("flat");
+            Files.createDirectories(flatRoot);
+            Files.write(flatRoot.resolve("NicoCache_nl.jar"), new byte[] { 0 });
+            Files.writeString(flatRoot.resolve("NicoCache_nl.cmd"), "@echo off\n",
+                    StandardCharsets.US_ASCII);
+            Files.writeString(flatRoot.resolve("version.txt"), "9.9.9\n",
+                    StandardCharsets.US_ASCII);
+            assertEquals("不明", InstalledVersionDetector.detect(flatRoot),
+                    "flat launcher rejects stale compatibility marker");
+            Files.writeString(flatRoot.resolve("NicoCache_nl.version"), "1.3.0\n",
+                    StandardCharsets.US_ASCII);
+            assertEquals("1.3.0", InstalledVersionDetector.detect(flatRoot),
+                    "flat launcher public version metadata");
             System.out.println("Installed version detection tests passed");
         } finally {
             deleteTree(root);

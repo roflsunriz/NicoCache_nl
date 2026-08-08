@@ -35,6 +35,7 @@ final class InstalledVersionDetector {
         // layout NicoCache_nl.cfg is authoritative, so missing or malformed launcher
         // metadata must be surfaced instead of hidden by stale compatibility markers.
         if (Files.isRegularFile(applicationRoot.resolve("NicoCache_nl.exe"))
+                || Files.isRegularFile(applicationRoot.resolve("NicoCache_nl.cmd"))
                 || Files.isRegularFile(applicationRoot.resolve("NicoCache_nl"))
                 || Files.isRegularFile(applicationRoot.resolve("bin/NicoCache_nl"))
                 || Files.isRegularFile(applicationRoot.resolve("MacOS/NicoCache_nl"))) {
