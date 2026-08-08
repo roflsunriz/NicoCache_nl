@@ -19,6 +19,7 @@ $temporaryDirectory = Join-Path ([IO.Path]::GetTempPath()) (
 New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
 
 try {
+    $numericVersionPattern = '\d+(?:\.\d+){1,3}'
     $reportFile = Join-Path $temporaryDirectory 'dependency-update-report.md'
     $result = & $UpdateScript `
         -Mode Check `
@@ -28,8 +29,8 @@ try {
     if (-not (Test-Path -LiteralPath $reportFile -PathType Leaf)) {
         throw "依存更新レポートが生成されませんでした: $reportFile"
     }
-    if ([string]$result.OldVersion -notmatch '^\d+\.\d+$' -or
-        [string]$result.NewVersion -notmatch '^\d+\.\d+$') {
+    if ([string]$result.OldVersion -notmatch "^$numericVersionPattern`$" -or
+        [string]$result.NewVersion -notmatch "^$numericVersionPattern`$") {
         throw '依存更新結果の版形式が不正です'
     }
 
@@ -46,8 +47,8 @@ try {
         $escapedName = [regex]::Escape($artifactName)
         $artifactRowPattern = (
             "(?m)^\| $escapedName \| https://repo\.maven\.apache\.org/" +
-            "maven2/org/bouncycastle/$escapedName-jdk18on/\d+\.\d+/" +
-            "$escapedName-jdk18on-\d+\.\d+\.jar \| \x60[0-9a-f]{64}\x60 \| " +
+            "maven2/org/bouncycastle/$escapedName-jdk18on/$numericVersionPattern/" +
+            "$escapedName-jdk18on-$numericVersionPattern\.jar \| \x60[0-9a-f]{64}\x60 \| " +
             "[1-9]\d* \|\r?$"
         )
         if ($report -notmatch $artifactRowPattern) {
@@ -62,7 +63,7 @@ try {
 
     $updateLock = Join-Path $temporaryDirectory 'dependency-lock.psd1'
     $updateText = (Get-Content -Raw -LiteralPath $resolvedLockFile) -replace
-        "BouncyCastleVersion = '\d+\.\d+'", "BouncyCastleVersion = '1.84'"
+        "BouncyCastleVersion = '$numericVersionPattern'", "BouncyCastleVersion = '1.84'"
     [IO.File]::WriteAllText($updateLock, $updateText,
         [Text.UTF8Encoding]::new($false))
     $updateReport = Join-Path $temporaryDirectory 'dependency-update.md'

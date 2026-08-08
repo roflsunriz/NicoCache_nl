@@ -7,7 +7,9 @@ param(
 
     [string]$LockFile = (Join-Path $PSScriptRoot 'dependency-lock.psd1'),
 
-    [string]$ReportFile = (Join-Path $PSScriptRoot 'dependency-update-report.md')
+    [string]$ReportFile = (Join-Path $PSScriptRoot 'dependency-update-report.md'),
+
+    [switch]$FunctionsOnly
 )
 
 Set-StrictMode -Version Latest
@@ -59,23 +61,67 @@ function Invoke-OfficialRequest {
     Invoke-WebRequest @parameters
 }
 
-function Get-LatestStableVersion {
-    $metadataUri = [uri]::new(
-        $RepositoryBaseUri,
-        "$GroupPath/$($ArtifactIds.bcprov)/maven-metadata.xml"
+function Get-LatestCommonStableVersion {
+    param(
+        [Parameter(Mandatory)]
+        [Collections.IDictionary]$MetadataByArtifact
     )
-    [xml]$metadata = (Invoke-OfficialRequest -Uri $metadataUri).Content
-    $versions = @(
-        $metadata.metadata.versioning.versions.version |
-            ForEach-Object { [string]$_ } |
-            Where-Object { $_ -match '^\d+\.\d+$' } |
-            ForEach-Object { [version]$_ } |
-            Sort-Object -Unique
-    )
-    if ($versions.Count -eq 0) {
-        throw 'Maven metadataから安定版を取得できませんでした'
+
+    if ($MetadataByArtifact.Count -eq 0) {
+        throw 'Bouncy CastleのMavenメタデータがありません'
     }
-    return $versions[-1].ToString()
+    $common = $null
+    foreach ($entry in $MetadataByArtifact.GetEnumerator()) {
+        $versions = [Collections.Generic.HashSet[string]]::new(
+            [StringComparer]::Ordinal
+        )
+        foreach ($candidate in @(
+                $entry.Value.metadata.versioning.versions.version |
+                    ForEach-Object { ([string]$_).Trim() }
+            )) {
+            # System.Versionで数値比較できる2〜4セグメントだけを安定版とする。
+            # 接尾辞付きプレリリースや未知の版表現は自動更新へ混ぜない。
+            if ($candidate -match '^\d+(?:\.\d+){1,3}$') {
+                [void]$versions.Add($candidate)
+            }
+        }
+        if ($versions.Count -eq 0) {
+            throw "Maven metadataに安定版がありません: $($entry.Key)"
+        }
+        if ($null -eq $common) {
+            $common = [Collections.Generic.HashSet[string]]::new(
+                $versions, [StringComparer]::Ordinal
+            )
+        } else {
+            $common.IntersectWith($versions)
+        }
+    }
+    if ($null -eq $common -or $common.Count -eq 0) {
+        throw 'Bouncy Castle 3成果物の共通安定版がありません'
+    }
+
+    $latest = $null
+    foreach ($candidate in $common) {
+        if ($null -eq $latest -or
+                ([version]$candidate) -gt ([version]$latest)) {
+            $latest = $candidate
+        }
+    }
+    return $latest
+}
+
+function Get-LatestStableVersion {
+    $metadataByArtifact = [ordered]@{}
+    foreach ($artifactId in $ArtifactIds.Values) {
+        $metadataUri = [uri]::new(
+            $RepositoryBaseUri,
+            "$GroupPath/$artifactId/maven-metadata.xml"
+        )
+        $metadataByArtifact[$artifactId] = [xml](
+            Invoke-OfficialRequest -Uri $metadataUri
+        ).Content
+    }
+    return Get-LatestCommonStableVersion -MetadataByArtifact $metadataByArtifact
 }
 
 function Get-LicenseInformation {
@@ -226,11 +272,15 @@ function Write-Report {
     [IO.File]::WriteAllLines($ReportFile, $lines, [Text.UTF8Encoding]::new($false))
 }
 
+if ($FunctionsOnly) {
+    return
+}
+
 $resolvedLockFile = Resolve-Path -LiteralPath $LockFile
 $LockFile = $resolvedLockFile.Path
 $lock = Import-PowerShellDataFile -LiteralPath $LockFile
 $currentVersion = [string]$lock.BouncyCastleVersion
-if ($currentVersion -notmatch '^\d+\.\d+$') {
+if ($currentVersion -notmatch '^\d+(?:\.\d+){1,3}$') {
     throw "現在のBouncy Castle版が不正です: $currentVersion"
 }
 

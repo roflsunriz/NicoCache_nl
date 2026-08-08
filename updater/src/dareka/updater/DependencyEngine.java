@@ -13,8 +13,10 @@ import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.jar.JarFile;
@@ -25,7 +27,7 @@ final class DependencyEngine {
             .connectTimeout(Duration.ofSeconds(30))
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build();
-    private static final Pattern MAVEN_RELEASE = Pattern.compile("<release>([^<]+)</release>");
+    private static final Pattern MAVEN_VERSION = Pattern.compile("<version>([^<]+)</version>");
     private static final Pattern BOUNCY_EXPORT_VERSION = Pattern.compile(
             "(?i)\\borg\\.bouncycastle\\s*;\\s*version\\s*=\\s*\\\"?"
                     + "([0-9]+(?:\\.[0-9]+){1,3})");
@@ -65,10 +67,11 @@ final class DependencyEngine {
     List<DependencyStatus> inspectAll(int javaMajor) throws Exception {
         List<DependencyStatus> statuses = new ArrayList<DependencyStatus>(
                 platformDependencies.inspectAll(javaMajor));
+        String installed = installedBouncyCastleVersion();
         try {
-            statuses.add(checkBouncyCastleStatus());
+            statuses.add(checkBouncyCastleStatus(installed));
         } catch (Exception error) {
-            statuses.add(DependencyStatus.failure("bouncycastle", "Bouncy Castle",
+            statuses.add(bouncyCastleFailureStatus(installed,
                     error.getMessage() == null ? error.toString() : error.getMessage()));
         }
         return statuses;
@@ -111,14 +114,18 @@ final class DependencyEngine {
         return platformDependencies.selfTest();
     }
 
-    private DependencyStatus checkBouncyCastleStatus() throws Exception {
+    private DependencyStatus checkBouncyCastleStatus(String installed) throws Exception {
         BouncyRelease release = resolveBouncyCastle();
-        String installed = installedBouncyCastleVersion();
         boolean update = installed == null || compareVersions(installed, release.version) < 0;
         return new DependencyStatus("bouncycastle", "Bouncy Castle", installed,
                 release.version, "NicoCache_nl専用、SHA-256検証情報あり"
                         + (update ? "（更新あり）" : "（最新）"), true, update,
                 TargetRootResolver.isInstallation(applicationRoot));
+    }
+
+    static DependencyStatus bouncyCastleFailureStatus(String installed, String message) {
+        return new DependencyStatus("bouncycastle", "Bouncy Castle", installed,
+                null, message, true, false, false);
     }
 
     private String installedBouncyCastleVersion() {
@@ -202,16 +209,18 @@ final class DependencyEngine {
 
     private BouncyRelease resolveBouncyCastle() throws Exception {
         String base = "https://repo.maven.apache.org/maven2/org/bouncycastle/";
-        String metadata = text(URI.create(base + "bcprov-jdk18on/maven-metadata.xml"), "application/xml");
-        Matcher release = MAVEN_RELEASE.matcher(metadata);
-        if (!release.find()) throw new IOException("Bouncy Castleの最新版を取得できません");
-        String version = release.group(1);
-        List<Artifact> artifacts = new ArrayList<Artifact>();
         String[][] names = {
                 {"bcprov-jdk18on", "bcprov.jar"},
                 {"bcpkix-jdk18on", "bcpkix.jar"},
                 {"bcutil-jdk18on", "bcutil.jar"}
         };
+        List<String> metadata = new ArrayList<String>();
+        for (String[] name : names) {
+            metadata.add(text(URI.create(base + name[0] + "/maven-metadata.xml"),
+                    "application/xml"));
+        }
+        String version = latestCommonBouncyCastleVersion(metadata);
+        List<Artifact> artifacts = new ArrayList<Artifact>();
         for (String[] name : names) {
             String url = base + name[0] + "/" + version + "/" + name[0] + "-" + version + ".jar";
             String checksum = text(URI.create(url + ".sha256"), "text/plain").trim().split("\\s+")[0];
@@ -219,6 +228,38 @@ final class DependencyEngine {
             artifacts.add(new Artifact(URI.create(url), name[1], checksum));
         }
         return new BouncyRelease(version, artifacts);
+    }
+
+    static String latestCommonBouncyCastleVersion(List<String> metadataDocuments)
+            throws IOException {
+        if (metadataDocuments == null || metadataDocuments.isEmpty()) {
+            throw new IOException("Bouncy CastleのMavenメタデータがありません");
+        }
+        Set<String> common = null;
+        for (String metadata : metadataDocuments) {
+            Set<String> versions = new LinkedHashSet<String>();
+            Matcher matcher = MAVEN_VERSION.matcher(metadata == null ? "" : metadata);
+            while (matcher.find()) {
+                String version = matcher.group(1).trim();
+                if (version.matches("\\d+(?:\\.\\d+){1,3}")) versions.add(version);
+            }
+            if (versions.isEmpty()) {
+                throw new IOException("Bouncy CastleのMavenメタデータに版番号がありません");
+            }
+            if (common == null) {
+                common = new LinkedHashSet<String>(versions);
+            } else {
+                common.retainAll(versions);
+            }
+        }
+        if (common == null || common.isEmpty()) {
+            throw new IOException("Bouncy Castle 3成果物の共通公開版がありません");
+        }
+        String latest = null;
+        for (String version : common) {
+            if (latest == null || compareVersions(version, latest) > 0) latest = version;
+        }
+        return latest;
     }
 
     private static Path download(Artifact artifact, Path directory) throws Exception {

@@ -106,6 +106,32 @@ public final class NicoCacheUpdaterTest {
                 + "{\"browser_download_url\":\"https://example.invalid/NicoCache_nl-Updater-0.2.1.msi.sha256\"}"
                 + "]}");
 
+        Path migratedRoot = Files.createTempDirectory("updater-completed-root-");
+        try {
+            Files.writeString(migratedRoot.resolve("NicoCache_nl.jar"), "jar");
+            Files.writeString(migratedRoot.resolve("NicoCache_nl.version"), "1.3.1");
+            NicoCacheUpdater.ApplicationUpdateCompletion completion =
+                    NicoCacheUpdater.inspectCompletedApplicationUpdate(migratedRoot, "1.3.1");
+            assertEquals(migratedRoot.toAbsolutePath().normalize().toString(),
+                    completion.applicationRoot.toString(), "completed update root");
+            assertEquals("1.3.1", completion.installedVersion,
+                    "completed update installed version");
+            if (completion.updateAvailable) {
+                throw new AssertionError("completed GUI update remained available");
+            }
+            String headlessResult = NicoCacheUpdater.formatHeadlessApplicationUpdateResult(
+                    "Windows Installerで更新しました。", completion);
+            if (!headlessResult.contains("更新後の対象: " + migratedRoot.toAbsolutePath().normalize())
+                    || !headlessResult.contains("更新後の導入版: 1.3.1")) {
+                throw new AssertionError("headless completion did not report migrated root: "
+                        + headlessResult);
+            }
+        } finally {
+            Files.deleteIfExists(migratedRoot.resolve("NicoCache_nl.jar"));
+            Files.deleteIfExists(migratedRoot.resolve("NicoCache_nl.version"));
+            Files.deleteIfExists(migratedRoot);
+        }
+
         System.out.println("NicoCacheUpdater Java unit tests passed");
     }
 

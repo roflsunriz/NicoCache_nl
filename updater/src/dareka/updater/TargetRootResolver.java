@@ -23,7 +23,11 @@ final class TargetRootResolver {
             Path candidate = normalize(Path.of(saved));
             if (isInstallation(candidate)) return prepare(candidate);
         }
-        return prepare(defaultRoot());
+        Path preferred = defaultRoot();
+        if (UpdaterPlatform.current() == UpdaterPlatform.Kind.WINDOWS) {
+            return prepare(selectInstalledRoot(preferred, windowsProgramsRoot(), legacyRoot()));
+        }
+        return prepare(preferred);
     }
 
     static Path defaultRoot() {
@@ -34,6 +38,50 @@ final class TargetRootResolver {
         String systemDrive = System.getenv("SystemDrive");
         return normalize(Path.of(systemDrive == null || systemDrive.isBlank() ? "C:" : systemDrive,
                 "NicoCache_nl"));
+    }
+
+    static Path selectInstalledRoot(Path preferred, Path... alternatives) {
+        Path normalizedPreferred = normalize(preferred);
+        if (isInstallation(normalizedPreferred)) return normalizedPreferred;
+        for (Path alternative : alternatives) {
+            Path candidate = normalize(alternative);
+            if (isInstallation(candidate)) return candidate;
+        }
+        return normalizedPreferred;
+    }
+
+    static Path resolveAfterApplicationUpdate(Path previousRoot) throws IOException {
+        Path selected = selectPostUpdateRoot(previousRoot, defaultRoot(),
+                windowsProgramsRoot(), UpdaterPlatform.current());
+        remember(selected);
+        return selected;
+    }
+
+    static Path selectPostUpdateRoot(Path previousRoot, Path preferredRoot,
+            Path releasedProgramsRoot, UpdaterPlatform.Kind platform) throws IOException {
+        Path previous = normalize(previousRoot);
+        Path preferred = normalize(preferredRoot);
+        Path releasedPrograms = normalize(releasedProgramsRoot);
+        if (platform == UpdaterPlatform.Kind.WINDOWS
+                && previous.equals(releasedPrograms)
+                && isInstallation(preferred)) {
+            return prepare(preferred);
+        }
+        if (isInstallation(previous)) return prepare(previous);
+        if (isInstallation(preferred)) return prepare(preferred);
+        throw new IOException("更新後のNicoCache_nlインストール先を検出できません: "
+                + previous + " / " + preferred);
+    }
+
+    private static Path windowsProgramsRoot() {
+        Path localAppData;
+        String configured = System.getenv("LOCALAPPDATA");
+        if (configured == null || configured.isBlank()) {
+            localAppData = UpdaterPlatform.homeDirectory().resolve("AppData/Local");
+        } else {
+            localAppData = Path.of(configured);
+        }
+        return normalize(localAppData.resolve("Programs/NicoCache_nl"));
     }
 
     static void remember(Path root) throws IOException {

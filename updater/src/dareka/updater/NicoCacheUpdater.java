@@ -251,15 +251,21 @@ public final class NicoCacheUpdater {
             }
             @Override protected void done() {
                 try {
-                    applicationOutput.append(get());
+                    String result = get();
+                    applicationOutput.append(result);
                     applicationOutput.append("\n");
-                    String installed = InstalledVersionDetector.detect(applicationRoot);
-                    applicationUpdateAvailable = "不明".equals(installed)
-                            || latestRelease == null
-                            || compareVersions(latestRelease.version, installed) > 0;
-                    applicationOutput.append("更新後の導入版: ");
-                    applicationOutput.append(installed);
-                    applicationOutput.append("\n");
+                    Path previousRoot = applicationRoot;
+                    Path resolvedRoot = TargetRootResolver.resolveAfterApplicationUpdate(previousRoot);
+                    ApplicationUpdateCompletion completion = inspectCompletedApplicationUpdate(
+                            resolvedRoot, latestRelease == null ? null : latestRelease.version);
+                    applicationRoot = completion.applicationRoot;
+                    applicationUpdateAvailable = completion.updateAvailable;
+                    if (!previousRoot.equals(applicationRoot)) {
+                        dependencyStatuses.clear();
+                        resetDependencyRows();
+                    }
+                    refreshTargetLabel();
+                    applicationOutput.append(completion.output);
                     if (!applicationUpdateAvailable) applicationOutput.append("最新版を反映しました。\n");
                 } catch (Exception error) {
                     applicationOutput.append("更新準備に失敗しました: " + rootMessage(error) + "\n");
@@ -726,11 +732,29 @@ public final class NicoCacheUpdater {
         try {
             packageFile = downloadAndVerify(release);
             String result = applyApplicationPackage(packageFile, applicationRoot);
-            String updated = InstalledVersionDetector.detect(applicationRoot);
-            return result + "\n更新後の導入版: " + updated + System.lineSeparator();
+            Path resolvedRoot = TargetRootResolver.resolveAfterApplicationUpdate(applicationRoot);
+            ApplicationUpdateCompletion completion = inspectCompletedApplicationUpdate(
+                    resolvedRoot, release.version);
+            return formatHeadlessApplicationUpdateResult(result, completion);
         } finally {
             deleteDownloadedPackage(packageFile);
         }
+    }
+
+    static ApplicationUpdateCompletion inspectCompletedApplicationUpdate(
+            Path applicationRoot, String latestVersion) {
+        Path normalizedRoot = applicationRoot.toAbsolutePath().normalize();
+        String installed = InstalledVersionDetector.detect(normalizedRoot);
+        boolean update = "不明".equals(installed) || latestVersion == null
+                || compareVersions(latestVersion, installed) > 0;
+        String output = "更新後の対象: " + normalizedRoot + System.lineSeparator()
+                + "更新後の導入版: " + installed + System.lineSeparator();
+        return new ApplicationUpdateCompletion(normalizedRoot, installed, update, output);
+    }
+
+    static String formatHeadlessApplicationUpdateResult(String result,
+            ApplicationUpdateCompletion completion) {
+        return result + System.lineSeparator() + completion.output;
     }
 
     private static Release fetchLatestReleaseHeadless()
@@ -755,6 +779,21 @@ public final class NicoCacheUpdater {
         DependencyOperationResult(String output, List<DependencyStatus> statuses) {
             this.output = output;
             this.statuses = statuses;
+        }
+    }
+
+    static final class ApplicationUpdateCompletion {
+        final Path applicationRoot;
+        final String installedVersion;
+        final boolean updateAvailable;
+        final String output;
+
+        ApplicationUpdateCompletion(Path applicationRoot, String installedVersion,
+                boolean updateAvailable, String output) {
+            this.applicationRoot = applicationRoot;
+            this.installedVersion = installedVersion;
+            this.updateAvailable = updateAvailable;
+            this.output = output;
         }
     }
 

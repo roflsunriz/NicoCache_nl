@@ -72,6 +72,9 @@ function Invoke-PackagedE2E([string]$Executable, [string]$UpdaterRoot, [string]$
     foreach ($name in @('Eclipse Temurin JDK', 'FFmpeg', 'Bouncy Castle', 'Apache Ant', '7-Zip', 'GPAC / MP4Box', 'WinGet')) {
         Assert-True $check.Output.Contains($name) "Dependency check output missing: $name"
     }
+    $bouncyLine = @($check.Output -split '\r?\n' | Where-Object { $_ -match '^Bouncy Castle:' })
+    Assert-True ($bouncyLine.Count -eq 1) 'Bouncy Castle status was not reported exactly once'
+    Assert-True ($bouncyLine[0] -notmatch '最新版=不明|HTTP 404') 'Bouncy Castle common release was not resolved'
     Assert-True (-not (Test-Path (Join-Path $TargetRoot 'runtime'))) 'System Temurin was written into NicoCache_nl'
     Assert-True (-not (Test-Path (Join-Path $TargetRoot 'tools\ffmpeg'))) 'System FFmpeg was written into NicoCache_nl'
     Assert-True (-not (Test-Path (Join-Path $UpdaterRoot '.runtime-dependency-updater'))) 'State leaked into updater installation'
@@ -93,7 +96,7 @@ foreach ($testClass in @('dareka.updater.NicoCacheUpdaterTest', 'dareka.updater.
 }
 
 $packageType = if ($BuildMsi) { 'All' } else { 'AppImage' }
-& (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -PackageType $packageType -AppVersion 0.2.1
+& (Join-Path $root 'packaging\windows\build-standalone-updater.ps1') -PackageType $packageType -AppVersion 0.2.2
 $appImage = Join-Path $root '.test-work\standalone-updater\output\NicoCache_nl Updater'
 $appImageExe = Join-Path $appImage 'NicoCache_nl Updater.exe'
 Assert-File $appImageExe
@@ -108,6 +111,15 @@ $isolatedLocalAppData = Join-Path $work 'isolated-localappdata'
 New-Item -ItemType Directory -Path $isolatedLocalAppData | Out-Null
 $defaultRoot = Invoke-UpdaterCli $appImageExe @('--print-target-root') 60 @{ LOCALAPPDATA=$isolatedLocalAppData }
 Assert-True ($defaultRoot.Output.Trim() -eq (Join-Path $isolatedLocalAppData 'NicoCache_nl')) 'Default target is not isolated LOCALAPPDATA'
+
+$releasedProgramsRoot = Join-Path $isolatedLocalAppData 'Programs\NicoCache_nl'
+New-Item -ItemType Directory -Path $releasedProgramsRoot -Force | Out-Null
+Set-Content -LiteralPath (Join-Path $releasedProgramsRoot 'NicoCache_nl.jar') -Encoding utf8 -Value 'jar'
+Set-Content -LiteralPath (Join-Path $releasedProgramsRoot 'NicoCache_nl.version') -Encoding ascii -Value '1.3.0'
+$discoveredRoot = Invoke-UpdaterCli $appImageExe @('--print-target-root') 60 @{ LOCALAPPDATA=$isolatedLocalAppData }
+Assert-True ($discoveredRoot.Output.Trim() -eq $releasedProgramsRoot) 'Released Programs installation was not discovered'
+$discoveredVersion = Invoke-UpdaterCli $appImageExe @('--installed-version') 60 @{ LOCALAPPDATA=$isolatedLocalAppData }
+Assert-True ($discoveredVersion.Output.Trim() -eq '1.3.0') 'Released Programs installation version was not detected'
 
 if ($BuildMsi) {
     $msi = Get-ChildItem (Join-Path $root '.test-work\standalone-updater\output') -Filter '*.msi' -File | Select-Object -First 1

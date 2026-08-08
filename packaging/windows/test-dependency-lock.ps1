@@ -8,8 +8,53 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$updateScript = Join-Path $PSScriptRoot 'update-dependency-lock.ps1'
+. $updateScript -FunctionsOnly
+
+function ConvertTo-MavenMetadataXml {
+    param([Parameter(Mandatory)][string[]]$Versions)
+
+    $values = $Versions | ForEach-Object { "<version>$_</version>" }
+    return [xml](
+        '<metadata><versioning><versions>' +
+        ($values -join '') +
+        '</versions></versioning></metadata>'
+    )
+}
+
+$skewedMetadata = [ordered]@{
+    'bcprov-jdk18on' = ConvertTo-MavenMetadataXml @('1.84', '1.85', '1.85.2')
+    'bcpkix-jdk18on' = ConvertTo-MavenMetadataXml @('1.84', '1.85')
+    'bcutil-jdk18on' = ConvertTo-MavenMetadataXml @('1.84', '1.85')
+}
+$skewedVersion = Get-LatestCommonStableVersion -MetadataByArtifact $skewedMetadata
+if ($skewedVersion -ne '1.85') {
+    throw "bcprov先行公開時に未公開版を選択しました: $skewedVersion"
+}
+
+$numericMetadata = [ordered]@{}
+foreach ($artifactId in @('bcprov-jdk18on', 'bcpkix-jdk18on', 'bcutil-jdk18on')) {
+    $numericMetadata[$artifactId] = ConvertTo-MavenMetadataXml @(
+        '1.9', '1.10', '1.86', '1.86.1', '1.86.1.9', '1.86.1.10',
+        '1.100', '1.101-beta1'
+    )
+}
+$numericVersion = Get-LatestCommonStableVersion -MetadataByArtifact $numericMetadata
+if ($numericVersion -ne '1.100') {
+    throw "Bouncy Castle版を数値順に比較できませんでした: $numericVersion"
+}
+foreach ($metadata in $numericMetadata.Values) {
+    $versionNode = $metadata.CreateElement('version')
+    $versionNode.InnerText = '2.0'
+    [void]$metadata.metadata.versioning.versions.AppendChild($versionNode)
+}
+$majorVersion = Get-LatestCommonStableVersion -MetadataByArtifact $numericMetadata
+if ($majorVersion -ne '2.0') {
+    throw "Bouncy Castleの新しいメジャー版を選択できませんでした: $majorVersion"
+}
+
 $lock = Import-PowerShellDataFile -LiteralPath $LockFile
-if ([string]$lock.BouncyCastleVersion -notmatch '^\d+\.\d+$') {
+if ([string]$lock.BouncyCastleVersion -notmatch '^\d+(?:\.\d+){1,3}$') {
     throw 'BouncyCastleVersionの形式が不正です'
 }
 if ([string]$lock.BrotliDecoderVersion -notmatch '^\d+\.\d+\.\d+$') {

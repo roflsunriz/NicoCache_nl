@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -46,6 +47,38 @@ public final class DependencyEngineTest {
             }
             assertTrue("1.85".equals(DependencyEngine.readBouncyCastleVersion(osgiVersionJar)),
                     "Bouncy Castle OSGi export version was not detected");
+
+            String commonVersion = DependencyEngine.latestCommonBouncyCastleVersion(Arrays.asList(
+                    metadata("1.84", "1.85", "1.85.2"),
+                    metadata("1.84", "1.85"),
+                    metadata("1.84", "1.85")));
+            assertTrue("1.85".equals(commonVersion),
+                    "latest version of one artifact was used before all artifacts were published");
+
+            String numericVersion = DependencyEngine.latestCommonBouncyCastleVersion(Arrays.asList(
+                    metadata("1.9", "1.10", "1.86", "1.86.1", "1.86.1.9",
+                            "1.86.1.10", "1.100", "1.101-beta1"),
+                    metadata("1.9", "1.10", "1.86", "1.86.1", "1.86.1.9",
+                            "1.86.1.10", "1.100", "1.101-beta1"),
+                    metadata("1.9", "1.10", "1.86", "1.86.1", "1.86.1.9",
+                            "1.86.1.10", "1.100", "1.101-beta1")));
+            assertTrue("1.100".equals(numericVersion),
+                    "Bouncy Castle versions were compared lexicographically");
+            String majorVersion = DependencyEngine.latestCommonBouncyCastleVersion(Arrays.asList(
+                    metadata("1.86", "1.86.1", "1.100", "2.0"),
+                    metadata("1.86", "1.86.1", "1.100", "2.0"),
+                    metadata("1.86", "1.86.1", "1.100", "2.0")));
+            assertTrue("2.0".equals(majorVersion),
+                    "new Bouncy Castle major version was not selected");
+
+            DependencyStatus unavailable = DependencyEngine.bouncyCastleFailureStatus(
+                    "1.85", "HTTP 404");
+            assertTrue("1.85".equals(unavailable.installedLabel()),
+                    "installed Bouncy Castle version was hidden by a repository failure");
+            assertTrue("不明".equals(unavailable.latestLabel()),
+                    "failed latest-version lookup was not reported independently");
+            assertTrue(!unavailable.canInstall(),
+                    "repository failure unexpectedly enabled Bouncy Castle installation");
 
             System.setProperty("nicocache.updater.userProgramsRoot", root.resolve("programs").toString());
             DependencyEngine engine = new DependencyEngine(root);
@@ -94,6 +127,14 @@ public final class DependencyEngineTest {
 
     private static void assertContains(String value, String expected, String label) {
         assertTrue(value.contains(expected), label + " missing: " + expected + " in " + value);
+    }
+
+    private static String metadata(String... versions) {
+        StringBuilder xml = new StringBuilder("<metadata><versioning><versions>");
+        for (String version : versions) {
+            xml.append("<version>").append(version).append("</version>");
+        }
+        return xml.append("</versions></versioning></metadata>").toString();
     }
 
     private static void assertWingetAppExecutionAliasResolution() {

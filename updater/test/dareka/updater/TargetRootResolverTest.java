@@ -21,6 +21,38 @@ public final class TargetRootResolverTest {
             assertTrue(TargetRootResolver.requireInstallation(root).equals(root.toAbsolutePath().normalize()),
                     "validated root was changed");
 
+            Path preferred = root.resolve("preferred/NicoCache_nl");
+            Path oldProgramsRoot = root.resolve("Programs/NicoCache_nl");
+            Files.createDirectories(oldProgramsRoot);
+            Files.writeString(oldProgramsRoot.resolve("NicoCache_nl.jar"), "jar");
+            Files.writeString(oldProgramsRoot.resolve("NicoCache_nl.version"), "1.3.0");
+            Path selected = TargetRootResolver.selectInstalledRoot(preferred, oldProgramsRoot);
+            assertTrue(selected.equals(oldProgramsRoot.toAbsolutePath().normalize()),
+                    "released LOCALAPPDATA\\Programs installation was not discovered");
+            assertTrue("1.3.0".equals(InstalledVersionDetector.detect(selected)),
+                    "version in discovered Programs installation was not detected");
+            Files.createDirectories(preferred);
+            Files.writeString(preferred.resolve("NicoCache_nl.jar"), "jar");
+            assertTrue(TargetRootResolver.selectInstalledRoot(preferred, oldProgramsRoot)
+                    .equals(preferred.toAbsolutePath().normalize()),
+                    "preferred LOCALAPPDATA installation did not take precedence");
+
+            assertTrue(TargetRootResolver.selectPostUpdateRoot(oldProgramsRoot, preferred,
+                    oldProgramsRoot, UpdaterPlatform.Kind.WINDOWS)
+                    .equals(preferred.toAbsolutePath().normalize()),
+                    "released Programs installation did not migrate to the new default root");
+            Path customRoot = root.resolve("custom/NicoCache_nl");
+            Files.createDirectories(customRoot);
+            Files.writeString(customRoot.resolve("NicoCache_nl.jar"), "jar");
+            assertTrue(TargetRootResolver.selectPostUpdateRoot(customRoot, preferred,
+                    oldProgramsRoot, UpdaterPlatform.Kind.WINDOWS)
+                    .equals(customRoot.toAbsolutePath().normalize()),
+                    "custom Windows installation was replaced by the default root");
+            assertTrue(TargetRootResolver.selectPostUpdateRoot(oldProgramsRoot, preferred,
+                    oldProgramsRoot, UpdaterPlatform.Kind.LINUX)
+                    .equals(oldProgramsRoot.toAbsolutePath().normalize()),
+                    "non-Windows installation unexpectedly used Windows migration policy");
+
             Files.delete(root.resolve("NicoCache_nl.jar"));
             Files.writeString(root.resolve("NicoCache_nl.exe"), "marker");
             assertTrue(TargetRootResolver.isInstallation(root), "NicoCache_nl.exe marker was ignored");
