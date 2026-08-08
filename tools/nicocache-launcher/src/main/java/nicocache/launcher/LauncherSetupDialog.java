@@ -26,11 +26,12 @@ final class LauncherSetupDialog {
         JTextField dataRoot = new JTextField(
                 initial.getDataRoot().toString(),
                 32);
-        JCheckBox https = new JCheckBox(messages.getString("setup.https"), true);
-        JCheckBox trust = new JCheckBox(messages.getString("setup.trust"), false);
-        JCheckBox proxy = new JCheckBox(messages.getString("setup.proxy"), true);
-        JCheckBox autostart = new JCheckBox(
-                messages.getString("setup.autostart"), false);
+        OptionCheckBoxes optionCheckBoxes = recommendedOptionCheckBoxes(
+                messages);
+        JCheckBox https = optionCheckBoxes.https;
+        JCheckBox trust = optionCheckBoxes.trust;
+        JCheckBox proxy = optionCheckBoxes.proxy;
+        JCheckBox autostart = optionCheckBoxes.autostart;
         JPanel rootPanel = new JPanel(new BorderLayout(8, 8));
         JPanel pathPanel = new JPanel(new GridBagLayout());
         GridBagConstraints labelConstraints = new GridBagConstraints();
@@ -137,6 +138,37 @@ final class LauncherSetupDialog {
                     messages.getString("error.title"),
                     JOptionPane.ERROR_MESSAGE);
             return false;
+        }
+    }
+
+    static OptionCheckBoxes recommendedOptionCheckBoxes(
+            ResourceBundle messages) {
+        return new OptionCheckBoxes(
+                selectedCheckBox(messages, "setup.https"),
+                selectedCheckBox(messages, "setup.trust"),
+                selectedCheckBox(messages, "setup.proxy"),
+                selectedCheckBox(messages, "setup.autostart"));
+    }
+
+    private static JCheckBox selectedCheckBox(ResourceBundle messages,
+            String key) {
+        JCheckBox checkBox = new JCheckBox(messages.getString(key), true);
+        checkBox.setName(key);
+        return checkBox;
+    }
+
+    static final class OptionCheckBoxes {
+        final JCheckBox https;
+        final JCheckBox trust;
+        final JCheckBox proxy;
+        final JCheckBox autostart;
+
+        private OptionCheckBoxes(JCheckBox https, JCheckBox trust,
+                JCheckBox proxy, JCheckBox autostart) {
+            this.https = https;
+            this.trust = trust;
+            this.proxy = proxy;
+            this.autostart = autostart;
         }
     }
 }

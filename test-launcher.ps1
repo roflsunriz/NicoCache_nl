@@ -52,7 +52,8 @@ try {
             'nicocache.launcher.LauncherTaskTest',
             'nicocache.launcher.CoreProcessTest',
             'nicocache.launcher.TaskSchedulerTest',
-            'nicocache.launcher.DataRootInspectorTest'
+            'nicocache.launcher.DataRootInspectorTest',
+            'nicocache.launcher.LauncherSetupDialogTest'
         )) {
         & java -cp $classes $testClass
         if ($LASTEXITCODE -ne 0) {
