@@ -39,6 +39,7 @@ final class LauncherWindow {
     private final LauncherPaths paths;
     private final CoreProcess core;
     private final DiagnosticsProcess diagnostics;
+    private final LauncherLifecycle lifecycle;
     private final TaskScheduler scheduler;
     private final ResourceBundle messages;
     private final JFrame frame = new JFrame();
@@ -55,6 +56,8 @@ final class LauncherWindow {
         this.paths = paths;
         this.core = new CoreProcess(paths);
         this.diagnostics = new DiagnosticsProcess(paths);
+        this.lifecycle = new LauncherLifecycle(core::gracefulStop,
+                core::forceStop, this::closeLauncher);
         this.scheduler = new TaskScheduler(paths);
         this.messages = messages;
         buildWindow();
@@ -96,8 +99,8 @@ final class LauncherWindow {
 
     private void buildWindow() {
         frame.setTitle(messages.getString("window.title"));
-        frame.setMinimumSize(new Dimension(540, 360));
-        frame.setSize(700, 480);
+        frame.setMinimumSize(new Dimension(600, 440));
+        frame.setSize(720, 540);
         frame.setLocationByPlatform(true);
         frame.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         frame.setIconImage(createIcon(32));
@@ -108,7 +111,7 @@ final class LauncherWindow {
                 if (trayIcon != null) {
                     frame.setVisible(false);
                 } else {
-                    exitApplication();
+                    requestLauncherExit();
                 }
             }
         });
@@ -135,12 +138,19 @@ final class LauncherWindow {
         content.add(top, BorderLayout.NORTH);
 
         JPanel controls = new JPanel(new GridLayout(1, 0, 6, 6));
+        controls.setBorder(BorderFactory.createTitledBorder(
+                messages.getString("core.title")));
         addControlButton(controls, "button.start", "launcher.start",
                 this::startCoreAsync);
-        addControlButton(controls, "button.stop", "launcher.stop",
-                () -> runAsync(() -> core.gracefulStop()));
-        addControlButton(controls, "button.forceStop", "launcher.forceStop",
-                () -> runAsync(() -> core.forceStop()));
+        JButton stop = addControlButton(controls, "button.stop",
+                "launcher.stop", () -> runAsync(
+                        lifecycle::gracefulStopCore));
+        stop.setToolTipText(messages.getString("button.stop.tooltip"));
+        JButton forceStop = addControlButton(controls, "button.forceStop",
+                "launcher.forceStop", () -> runAsync(
+                        lifecycle::forceStopCore));
+        forceStop.setToolTipText(messages.getString(
+                "button.forceStop.tooltip"));
 
         JPanel tasks = new JPanel(new BorderLayout(6, 6));
         tasks.setBorder(BorderFactory.createTitledBorder(
@@ -163,9 +173,23 @@ final class LauncherWindow {
         dataRootStatusLabel.setName("launcher.data-root");
         dataRootPanel.add(dataRootStatusLabel, BorderLayout.CENTER);
 
+        JPanel lifecyclePanel = new JPanel(new BorderLayout(6, 6));
+        lifecyclePanel.setBorder(BorderFactory.createTitledBorder(
+                messages.getString("lifecycle.title")));
+        JLabel lifecycleDescription = new JLabel(
+                messages.getString("lifecycle.description"));
+        lifecycleDescription.setName("launcher.lifecycle.description");
+        lifecyclePanel.add(lifecycleDescription, BorderLayout.CENTER);
+        JButton exitLauncher = addControlButton(lifecyclePanel,
+                "button.exitLauncher", "launcher.exit",
+                this::requestLauncherExit, BorderLayout.EAST);
+        exitLauncher.setToolTipText(messages.getString(
+                "button.exitLauncher.tooltip"));
+
         JPanel upper = new JPanel(new BorderLayout(8, 8));
         upper.add(controls, BorderLayout.NORTH);
-        upper.add(dataRootPanel, BorderLayout.SOUTH);
+        upper.add(dataRootPanel, BorderLayout.CENTER);
+        upper.add(lifecyclePanel, BorderLayout.SOUTH);
 
         JPanel center = new JPanel(new BorderLayout(8, 8));
         center.add(upper, BorderLayout.NORTH);
@@ -180,12 +204,22 @@ final class LauncherWindow {
         return content;
     }
 
-    private void addControlButton(JPanel parent, String labelKey, String name,
+    private JButton addControlButton(JPanel parent, String labelKey, String name,
             Runnable action) {
         JButton button = new JButton(messages.getString(labelKey));
         button.setName(name);
         button.addActionListener(event -> action.run());
         parent.add(button);
+        return button;
+    }
+
+    private JButton addControlButton(JPanel parent, String labelKey,
+            String name, Runnable action, Object constraints) {
+        JButton button = new JButton(messages.getString(labelKey));
+        button.setName(name);
+        button.addActionListener(event -> action.run());
+        parent.add(button, constraints);
+        return button;
     }
 
     private void startCoreAsync() {
@@ -368,9 +402,10 @@ final class LauncherWindow {
                 frame.toFront();
             });
             addTrayItem(menu, "tray.start", this::startCoreAsync);
-            addTrayItem(menu, "tray.stop", () -> runAsync(core::gracefulStop));
+            addTrayItem(menu, "tray.stop", () -> runAsync(
+                    lifecycle::gracefulStopCore));
             menu.addSeparator();
-            addTrayItem(menu, "tray.exit", this::exitApplication);
+            addTrayItem(menu, "tray.exit", this::requestLauncherExit);
             trayIcon = new TrayIcon(createIcon(16),
                     messages.getString("window.title"), menu);
             trayIcon.setImageAutoSize(true);
@@ -390,33 +425,29 @@ final class LauncherWindow {
         menu.add(item);
     }
 
-    private void exitApplication() {
+    private void requestLauncherExit() {
+        int result = JOptionPane.showConfirmDialog(frame,
+                messages.getString("launcher.exit.confirm"),
+                messages.getString("launcher.exit.title"),
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            lifecycle.exitLauncher();
+        }
+    }
+
+    private void closeLauncher() {
         if (!closing.compareAndSet(false, true)) {
             return;
         }
         if (statusTimer != null) {
             statusTimer.stop();
         }
-        Thread exit = new Thread(() -> {
-            try {
-                core.gracefulStop();
-            } catch (Exception error) {
-                try {
-                    core.forceStop();
-                } catch (IOException ignored) {
-                    // The launcher itself can still close.
-                }
-            } finally {
-                SwingUtilities.invokeLater(() -> {
-                    if (trayIcon != null) {
-                        SystemTray.getSystemTray().remove(trayIcon);
-                    }
-                    frame.dispose();
-                });
-            }
-        }, "nicocache-launcher-exit");
-        exit.setDaemon(true);
-        exit.start();
+        if (trayIcon != null) {
+            SystemTray.getSystemTray().remove(trayIcon);
+            trayIcon = null;
+        }
+        frame.dispose();
     }
 
     private Image createIcon(int size) {

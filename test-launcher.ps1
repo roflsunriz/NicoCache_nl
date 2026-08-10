@@ -50,6 +50,7 @@ try {
     foreach ($testClass in @(
             'nicocache.launcher.LauncherOptionsTest',
             'nicocache.launcher.LauncherTaskTest',
+            'nicocache.launcher.LauncherLifecycleTest',
             'nicocache.launcher.CoreProcessTest',
             'nicocache.launcher.DiagnosticsProcessTest',
             'nicocache.launcher.TaskSchedulerTest',

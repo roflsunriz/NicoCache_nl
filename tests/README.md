@@ -132,7 +132,8 @@ force-shutdownによる隔離プロセス終了も検証する。graceful-shutdo
 
 `test-launcher.ps1`はWindows、Linux、macOSのCIで、引数なしでは本体を起動しないこと、
 `--tray`・`--minimized`と`--start`の組み合わせ、競合オプションの拒否、各OSのログオン時
-タスクが`--tray --start`を保持すること、登録失敗時に移行を再試行できることを検証する。
+タスクが`--tray --start`を保持すること、登録失敗時に移行を再試行できることに加え、
+本体停止とランチャー終了が互いの終了処理を呼ばないライフサイクル契約を検証する。
 
 ```powershell
 .\test-launcher.ps1
@@ -169,7 +170,9 @@ Windowsの実タスクスケジューラー連携は、次のCI専用試験で�
 `jre/bin/java.exe -jar NicoCacheLauncher.jar` でヘッドレス初回セットアップを
 実行した後、同じ入口を `--headless` 指定で専用の空きループバックポートへ
 起動し、ルートのHTTP応答とバージョン文字列を確認する。ネイティブ製品ランチャーを
-含まず、JARと同梱JREから起動することも検証する。テスト設定、
+含まず、JARと同梱JREから起動することも検証する。常駐ランチャーと診断アプリが動作中に
+別のランチャープロセスから`--headless --stop`を実行し、本体だけが停止して既存の
+ランチャーPIDと診断PIDが生存することも確認する。テスト設定、
 ログ、キャッシュは
 `.test-work/windows-package/` 内に限定し、TLS MitM、証明書登録、Windows
 プロキシー設定、タスク登録は行わない。終了時は起動した実行ファイルのパスと
