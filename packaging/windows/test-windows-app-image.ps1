@@ -64,6 +64,7 @@ $diagnosticsLockPath = Join-Path $dataRoot `
     'data\nicocache-diagnostics.lock'
 $controlStatusPath = Join-Path $dataRoot `
     'data\nicocache-control.properties'
+$incidentRoot = Join-Path $dataRoot 'diagnostics\incidents'
 $systemStatePath = Join-Path $dataRoot 'data\setup-system-state.json'
 $setupScriptPath = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
 $certificateDirectory = Join-Path $dataRoot 'certs'
@@ -490,6 +491,94 @@ try {
     $residentLauncherId = $guiProcess.Id
     $residentDiagnosticsId = $diagnosticsProcess.Id
 
+    Start-Sleep -Milliseconds 2500
+    $existingIncidentReports = @(Get-ChildItem -LiteralPath $incidentRoot `
+        -Recurse -File -Filter 'report.html' -ErrorAction SilentlyContinue)
+    if ($existingIncidentReports.Count -ne 0) {
+        throw '正常起動だけで診断インシデントが生成されました'
+    }
+    $originalControlStatus = [IO.File]::ReadAllBytes($controlStatusPath)
+    $faultListener = [Net.Sockets.TcpListener]::new(
+        [Net.IPAddress]::Loopback, 0)
+    $faultListener.Start()
+    $unreachableControlPort = (
+        [Net.IPEndPoint]$faultListener.LocalEndpoint).Port
+    $faultListener.Stop()
+    $propertiesEncoding = [Text.Encoding]::GetEncoding('iso-8859-1')
+    $statusText = $propertiesEncoding.GetString($originalControlStatus)
+    $faultedStatusText = $statusText -replace `
+        '(?m)^port=\d+\r?$', "port=$unreachableControlPort"
+    if ($faultedStatusText -eq $statusText) {
+        throw '診断故障注入用の管理ポートを置換できませんでした'
+    }
+    $faultStatusTemporary = "$controlStatusPath.fault.tmp"
+    try {
+        [IO.File]::WriteAllText($faultStatusTemporary,
+            $faultedStatusText, $propertiesEncoding)
+        [IO.File]::Move($faultStatusTemporary, $controlStatusPath, $true)
+
+        $incidentDeadline = [DateTime]::UtcNow.AddSeconds(45)
+        $incidentReport = $null
+        do {
+            $incidentReport = @(Get-ChildItem -LiteralPath $incidentRoot `
+                -Recurse -File -Filter 'report.html' `
+                -ErrorAction SilentlyContinue | Select-Object -First 1)
+            if ($incidentReport.Count -eq 0) {
+                Start-Sleep -Milliseconds 100
+            }
+        } while ($incidentReport.Count -eq 0 -and
+            [DateTime]::UtcNow -lt $incidentDeadline)
+        if ($incidentReport.Count -eq 0) {
+            throw '同梱JREで管理API断の自動診断レポートが生成されませんでした'
+        }
+        $incidentHtml = Get-Content -Raw -LiteralPath `
+            $incidentReport[0].FullName -Encoding utf8
+        foreach ($requiredReportText in @(
+                'control-heartbeat-lost',
+                'Snapshot 1',
+                'Snapshot 2',
+                'Snapshot 3',
+                'Full thread dump',
+                '&lt;APP_ROOT&gt;',
+                '&lt;DATA_ROOT&gt;'
+            )) {
+            if (-not $incidentHtml.Contains($requiredReportText)) {
+                throw "同梱JREの診断レポートに必要な内容がありません: $requiredReportText"
+            }
+        }
+        foreach ($forbiddenReportText in @(
+                $appImage,
+                $dataRoot,
+                [string]$controlStatus.token,
+                '<script'
+            )) {
+            if (-not [string]::IsNullOrEmpty($forbiddenReportText) -and
+                    $incidentHtml.Contains($forbiddenReportText)) {
+                throw '同梱JREの診断レポートに非公開情報またはスクリプトが残りました'
+            }
+        }
+        if ($incidentReport[0].Length -le 10000) {
+            throw "同梱JREの診断レポートが小さすぎます: $($incidentReport[0].Length) bytes"
+        }
+        Write-Output 'PASS 同梱JREのjcmdで管理API断から3回のスレッドダンプを自動採取'
+        Write-Output 'PASS 配布診断HTMLの自己完結性・匿名化・容量を検証'
+    } finally {
+        if (Test-Path -LiteralPath $faultStatusTemporary) {
+            Remove-Item -LiteralPath $faultStatusTemporary -Force
+        }
+        $restoreStatusTemporary = "$controlStatusPath.restore.tmp"
+        [IO.File]::WriteAllBytes($restoreStatusTemporary,
+            $originalControlStatus)
+        [IO.File]::Move($restoreStatusTemporary, $controlStatusPath, $true)
+    }
+    Start-Sleep -Seconds 7
+    if ($coreProcess.HasExited) {
+        throw '診断故障注入がNicoCache_nl本体を停止しました'
+    }
+    if ((Get-Process -Id $residentDiagnosticsId -ErrorAction Stop).HasExited) {
+        throw '自動収集後に診断アプリが終了しました'
+    }
+
     $stopOutput = @(& $launcherPath '-jar' $launcherJarPath `
         '--headless' '--stop' 2>&1)
     if ($LASTEXITCODE -ne 0 -or
@@ -513,8 +602,15 @@ try {
     if ([int]$diagnosticsStatus.pid -ne $residentDiagnosticsId) {
         throw '--headless --stopの前後で診断アプリが置き換わりました'
     }
+    Start-Sleep -Milliseconds 2500
+    $reportsAfterPlannedStop = @(Get-ChildItem -LiteralPath $incidentRoot `
+        -Recurse -File -Filter 'report.html' -ErrorAction SilentlyContinue)
+    if ($reportsAfterPlannedStop.Count -ne 1) {
+        throw '--headless --stopを障害として誤記録しました'
+    }
     Write-Output 'PASS 常駐ランチャー中の--headless --stopは本体だけを停止'
     Write-Output 'PASS 本体停止後も既存のランチャーと診断アプリが常駐'
+    Write-Output 'PASS 計画停止は新しい障害レポートを生成しない'
 
     Stop-Process -Id $guiProcess.Id -Force
     $guiProcess.WaitForExit(10000) | Out-Null

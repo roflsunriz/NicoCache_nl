@@ -125,9 +125,11 @@ Linux/macOSでは、対象OS上で次を実行する。
 ./tools/cmaf-to-mp4/test.sh
 ```
 
-GUIログのタブ、検索、メニュー、履歴保存など画面操作を変更した場合は、実Swing
-ウィンドウを使うE2Eも実行する。`-KeepWorkDir`を付けると、最小サイズと標準サイズの
-確認画像を`.test-work/e2e/gui/preview/`へ残せる。
+GUIログのタブ、検索、メニュー、履歴保存、診断アプリ、管理API、プロセス起動・停止を
+変更した場合は、実Swingウィンドウと実JARを使うE2Eも実行する。診断E2Eは隔離した本体の
+管理API断と強制終了を発生させ、3回のスレッドダンプ、匿名化HTML、自動再起動なし、
+計画停止除外を生成物で確認する。`-KeepWorkDir`を付けると、診断HTMLと最小サイズ・
+標準サイズの確認画像を`.test-work/e2e/`へ残せる。
 
 ```powershell
 .\test-e2e.ps1 -KeepWorkDir -LibraryDirectory .\.test-work\build-dependencies

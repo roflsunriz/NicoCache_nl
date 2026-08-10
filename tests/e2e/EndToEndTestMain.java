@@ -98,6 +98,8 @@ public final class EndToEndTestMain {
                     this::testParallelUsersAndRecovery);
             run("actionable upstream failure response",
                     this::testUpstreamFailure);
+            run("automatic diagnostic incident reports",
+                    this::testAutomaticDiagnosticIncidentReports);
         } finally {
             try {
                 stopProduct();
@@ -117,7 +119,7 @@ public final class EndToEndTestMain {
             }
             throw new AssertionError("end-to-end tests failed");
         }
-        System.out.println("End-to-end tests passed: 8");
+        System.out.println("End-to-end tests passed: 9");
     }
 
     private void prepareSandbox() throws IOException {
@@ -193,6 +195,7 @@ public final class EndToEndTestMain {
                 "mimeTypes=local/mime.types",
                 "touchCache=false",
                 "title=false",
+                "diagnosticsTestApiToken=e2e-config-secret",
                 "userDataRoot="
                         + data.toString().replace("\\", "\\\\"),
                 "");
@@ -318,6 +321,10 @@ public final class EndToEndTestMain {
                 "diagnostics application root");
         assertEquals(data.toString(), status.getProperty("dataRoot"),
                 "diagnostics data root");
+    }
+
+    private void testAutomaticDiagnosticIncidentReports() throws Exception {
+        new DiagnosticIncidentE2e(application, data, diagnosticsPid).run();
     }
 
     private void stopDiagnostics() throws Exception {
