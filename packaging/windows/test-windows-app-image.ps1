@@ -107,7 +107,7 @@ foreach ($requiredPath in @(
         (Join-Path $appDirectory 'build-javac.ps1'),
         (Join-Path $appDirectory 'src\dareka\NLMain.java'),
         (Join-Path $appDirectory 'tests\functional\FunctionalTestMain.java'),
-        (Join-Path $appDirectory 'how-to-dump-stack-trace.txt')
+        (Join-Path $appDirectory 'how-to-dump-stack-trace.md')
     )) {
     if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
         throw "アプリイメージに必要なファイルがありません: $requiredPath"

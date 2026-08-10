@@ -2,6 +2,16 @@
 // - カスタムしたい場合はコピーを取って下さい.
 
 function FindProxyForURL(url, host) {
+  // NicoCache_nl内部のデバッグ用仮想ホスト.
+  if (host.toLowerCase() === 'debug') {
+    return 'PROXY 127.0.0.1:8080';
+  };
+
+  // NicoCache_nl内部のデバッグ用仮想ホスト.
+  if (host.toLowerCase() === 'debug') {
+    return 'PROXY 127.0.0.1:8080';
+  };
+
   // - アニメ生放送や過去の生放送(見逃し配信中)などで"試聴する"ボタンを押した時
   //   にエラーすることへの回避策の一つ.
   // - NicoCache_nlのログに

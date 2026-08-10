@@ -394,6 +394,10 @@ public final class FirstRunSetupTest {
         assertTrue(Files.isRegularFile(directory.resolve("proxy.pac")),
                 "proxy.pac must be created");
         assertContains(
+                Files.readString(directory.resolve("proxy.pac")),
+                "host.toLowerCase() === 'debug'",
+                "proxy.pac debug virtual host route");
+        assertContains(
                 Files.readString(directory.resolve("NicoCacheGUI.property")),
                 "HideWindow=true",
                 "GUI property");

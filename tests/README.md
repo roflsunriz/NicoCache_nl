@@ -58,6 +58,8 @@ HTTP サーバーを利用する。
   ループバックしたHTTPSローカル配信
 - `/local/` の本文・MIME・Range・許可メソッドと、Extension Rewriter による
   本文・レスポンスヘッダー書換え
+- `DEBUG` 仮想ホストのスレッドダンプAPIと、利用者データルートへの
+  UTF-8ファイル出力
 - サムネイルの上流取得・ファイル保存・再利用
 - nvcomment 応答の動画別 JSON 保存（外部 TLS 接続を避けるため、テスト
   Extension が同じ `CommentSavingProcessor` をローカル HTTP fixture に登録する）

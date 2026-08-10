@@ -123,6 +123,7 @@ public final class FunctionalTestMain {
                 run("conditional retrieval and upstream connection failure",
                         this::testConditionalAndUpstreamFailure);
                 run("local file GET/range/method handling", this::testLocalFiles);
+                run("debug thread dump endpoint", this::testDebugThreadDump);
                 run("system and user nlFilter execution order",
                         this::testLayeredNlFilters);
                 run("response rewriting and Extension request filtering",
@@ -969,6 +970,26 @@ public final class FunctionalTestMain {
         assertEquals(200, linked.status, "symbolic-link local status");
         assertEquals("linked-local-content", linked.bodyText(),
                 "symbolic-link local body");
+    }
+
+    private void testDebugThreadDump() throws Exception {
+        Path dump = sandbox.resolve("debug-dump-stack.txt");
+        Files.deleteIfExists(dump);
+
+        Response response = request(
+                "GET http://DEBUG:" + nicocachePort
+                + "/debug/dump-stack HTTP/1.1\r\n"
+                + "Host: DEBUG:" + nicocachePort
+                + "\r\nConnection: close\r\n\r\n");
+        assertEquals(200, response.status, "thread dump status");
+        assertEquals("OK", response.bodyText(), "thread dump response");
+        assertContains(response.header("content-type"), "text/plain",
+                "thread dump content type");
+        assertTrue(Files.isRegularFile(dump), "thread dump file");
+
+        String content = Files.readString(dump, StandardCharsets.UTF_8);
+        assertContains(content, "Id=", "thread dump thread id");
+        assertContains(content, "\tat ", "thread dump stack");
     }
 
     private void testLayeredNlFilters() throws Exception {

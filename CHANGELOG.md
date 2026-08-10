@@ -4,6 +4,16 @@
 旧形式の履歴は `documents/archive/ChangeLog.txt` と
 `documents/archive/変更点.txt` に保存している。
 
+## [Unreleased]
+
+### Changed
+
+- 障害調査時に現行本体のデバッグAPIから正しくスレッドダンプを
+  取得できるよう、`how-to-dump-stack-trace.txt`をMarkdown形式へ変更し、
+  出力内容、localhostへの直接通信、出力先、失敗時の確認方法を実装に合わせた。
+- ブラウザーが`DEBUG`仮想ホストをDNSへ直接送信しないよう、新規セットアップで
+  配置する`proxy.pac`にデバッグ要求をNicoCache_nlへ送る規則を追加した。
+
 ## [1.3.1] - 2026-08-08
 
 ### Changed
