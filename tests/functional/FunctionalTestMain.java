@@ -1026,6 +1026,16 @@ public final class FunctionalTestMain {
         Path dump = sandbox.resolve("debug-dump-stack.txt");
         Files.deleteIfExists(dump);
 
+        Response heartbeat = request(
+                "GET http://DEBUG:" + nicocachePort
+                + "/debug/heartbeat HTTP/1.1\r\n"
+                + "Host: DEBUG:" + nicocachePort
+                + "\r\nConnection: close\r\n\r\n");
+        assertEquals(200, heartbeat.status, "proxy heartbeat status");
+        assertEquals("OK", heartbeat.bodyText(), "proxy heartbeat response");
+        assertFalse(Files.exists(dump),
+                "heartbeat must not create a thread dump file");
+
         Response response = request(
                 "GET http://DEBUG:" + nicocachePort
                 + "/debug/dump-stack HTTP/1.1\r\n"
@@ -1352,6 +1362,20 @@ public final class FunctionalTestMain {
         assertEquals("{\"status\":\"ok\"}", ping.bodyText(),
                 "control ping body");
 
+        Response snapshotUnauthorized = controlRequest(status, "GET",
+                "/api/control/diagnostics/snapshot", null, null);
+        assertEquals(401, snapshotUnauthorized.status,
+                "diagnostic snapshot requires authentication");
+        Response snapshot = controlRequest(status, "GET",
+                "/api/control/diagnostics/snapshot", token, null);
+        assertEquals(200, snapshot.status, "diagnostic snapshot response");
+        assertContains(snapshot.bodyText(), "\"threadDump\":\"",
+                "diagnostic snapshot thread dump");
+        assertContains(snapshot.bodyText(), "\"heapUsed\":",
+                "diagnostic snapshot heap metrics");
+        assertContains(snapshot.bodyText(), "Deadlocked thread count",
+                "diagnostic snapshot deadlock summary");
+
         Response unknown = controlRequest(status, "GET",
                 "/api/control/unknown", token, null);
         assertEquals(404, unknown.status, "control unknown endpoint");
@@ -1368,6 +1392,8 @@ public final class FunctionalTestMain {
         assertEquals(202, forcing.status, "control force-shutdown response");
         assertEquals("{\"status\":\"forcing\"}", forcing.bodyText(),
                 "control force-shutdown body");
+        assertExpectedStopMarker(Long.parseLong(status.getProperty("pid")),
+                "force");
         assertTrue(nicocache.waitFor(STOP_TIMEOUT.toMillis(),
                 java.util.concurrent.TimeUnit.MILLISECONDS),
                 "control force-shutdown must terminate the process");
@@ -1841,6 +1867,26 @@ public final class FunctionalTestMain {
         }
         assertContains(response.bodyText(), "\"status\":\"stopping\"",
                 "control graceful shutdown response");
+        assertExpectedStopMarker(Long.parseLong(status.getProperty("pid")),
+                "graceful");
+    }
+
+    private void assertExpectedStopMarker(long pid, String mode)
+            throws IOException {
+        Path markerPath = sandbox.resolve(
+                "data/nicocache-expected-stop.properties");
+        assertTrue(Files.isRegularFile(markerPath),
+                "expected stop marker must exist");
+        Properties marker = new Properties();
+        try (InputStream input = Files.newInputStream(markerPath)) {
+            marker.load(input);
+        }
+        assertEquals(Long.toString(pid), marker.getProperty("pid"),
+                "expected stop marker PID");
+        assertEquals(mode, marker.getProperty("mode"),
+                "expected stop marker mode");
+        assertTrue(marker.getProperty("requestedAt") != null,
+                "expected stop marker timestamp");
     }
 
     private Properties readControlProperties() throws IOException {

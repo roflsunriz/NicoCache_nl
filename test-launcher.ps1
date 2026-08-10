@@ -51,6 +51,7 @@ try {
             'nicocache.launcher.LauncherOptionsTest',
             'nicocache.launcher.LauncherTaskTest',
             'nicocache.launcher.CoreProcessTest',
+            'nicocache.launcher.DiagnosticsProcessTest',
             'nicocache.launcher.TaskSchedulerTest',
             'nicocache.launcher.DataRootInspectorTest',
             'nicocache.launcher.LauncherSetupDialogTest'

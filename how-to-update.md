@@ -15,7 +15,7 @@
 ```
 
 `build-javac.ps1`はJavaで実装した`NicoCacheBuild.jar`をブートストラップして、
-本体、CA生成、起動管理、ビルド管理の4アプリを生成する。コンパイル済みクラスは
+本体、CA生成、起動管理、常駐診断、ビルド管理の5アプリを生成する。コンパイル済みクラスは
 `.build/`へ隔離し、`src/`へ`.class`を生成しない。JDKが同じならWindows、Linux、
 macOSで同じビルドアプリを実行できる。
 
@@ -30,6 +30,8 @@ macOSで同じビルドアプリを実行できる。
 
 ```powershell
 .\test-functional.ps1 -LibraryDirectory .\.test-work\build-dependencies
+.\test-launcher.ps1
+.\test-diagnostics.ps1
 ```
 
 本体APIの仕様や削除処理を変更した場合は、隔離した実ソケットでAPI契約テストも実行する。
@@ -52,12 +54,13 @@ Linux/macOSでは次のPOSIXラッパーも利用できる。
 ./build-javac.sh
 ```
 
-生成物は次の4つである。
+生成物は次の5つである。
 
 - `NicoCache_nl.jar`: 本体。`dareka.UserDataMain`を持つ。
 - `NicoCacheCA.jar`: `certificate-targets.txt`を読み込む証明書生成アプリ。
 - `NicoCacheLauncher.jar`: GUI、タスクトレイ、ログオン時自動起動タスク、ヘッドレスCLI。
-- `NicoCacheBuild.jar`: 上記3アプリを生成するビルドアプリ。
+- `NicoCacheDiagnostics.jar`: 二系統ハートビート、匿名化、障害HTML生成を行う常駐GUI。
+- `NicoCacheBuild.jar`: 上記4つの実行アプリと自身を生成するビルドアプリ。
 
 GUIを使わずに本体を常駐起動する場合は、起動管理アプリを次のように実行する。
 
@@ -151,7 +154,7 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 追加しない。ユーザーデータを移動した場合は証明書も移動先の`certs/`へ生成し、
 `enableMitM=true`のまま`site.jks`がない状態で起動しない。
 
-ビルドスクリプトはルートの4つのJARを更新するため、必要な検証が終わったら
+ビルドスクリプトはルートの5つのJARを更新するため、必要な検証が終わったら
 `git status --short --branch` で生成物や無関係な差分が混入していないことを確認する。
 
 ## GitHub Actions とリリース
@@ -174,6 +177,7 @@ java -jar .\NicoCacheLauncher.jar --headless --start
    ```powershell
    .\test-functional.ps1 -LibraryDirectory .\.test-work\build-dependencies
    .\test-launcher.ps1
+   .\test-diagnostics.ps1
    ```
 
    JDK実行時互換性に触れる変更では、Temurinで共通テスト成果物を一度生成し、
@@ -343,8 +347,10 @@ Firefoxへ`userDataRoot/certs/ca.cer`をインポート済みであることも�
 同じアプリイメージを入力にするWindowsのMSIとZIPにも、ルートの
 `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`を収録する。
 Windowsのアプリイメージ、MSI、ZIP、およびLinux/macOSのアプリイメージ、ZIP、
-ネイティブパッケージには、4本の独立アプリJAR（`NicoCache_nl.jar`、
-`NicoCacheCA.jar`、`NicoCacheLauncher.jar`、`NicoCacheBuild.jar`）を同じ構成で収録する。
+ネイティブパッケージには、5本の独立アプリJAR（`NicoCache_nl.jar`、
+`NicoCacheCA.jar`、`NicoCacheLauncher.jar`、`NicoCacheDiagnostics.jar`、
+`NicoCacheBuild.jar`）を同じ構成で収録する。常駐診断アプリが管理API停止時にも
+スレッドダンプを取得できるよう、同梱JREには`jdk.jcmd`も含める。
 
 ```powershell
 .\packaging\windows\build-windows-package.ps1 -PackageType AppImage

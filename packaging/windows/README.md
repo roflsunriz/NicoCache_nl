@@ -11,8 +11,9 @@ Linux/macOSのアプリイメージ、ZIP、DEB/RPM、PKG/DMGは
 
 - `NicoCache_nl/`: Git追跡ファイルをclone時と同じ相対位置に置いたアプリケーションルート
 - ルート直下の`NicoCache_nl.jar`、`NicoCacheCA.jar`、`NicoCacheLauncher.jar`、
-  `NicoCacheBuild.jar`と、専用Javaランタイム`jre/`
+  `NicoCacheDiagnostics.jar`、`NicoCacheBuild.jar`と、`jcmd`を含む専用Javaランタイム`jre/`
 - `NicoCache_nl.cmd`: 同梱`jre/bin/javaw.exe`から`NicoCacheLauncher.jar`を起動する補助入口
+- `NicoCacheDiagnostics.cmd`: 常駐診断GUIを直接起動する補助入口
 - 保存済みCMAF/Domandを単一MP4へ変換する
   `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`と説明書
 - `NicoCache_nl-<version>.msi`: 対話・無人インストール兼用パッケージ
@@ -96,7 +97,7 @@ OS設定の変更前値は利用者データフォルダーの
 通常GUIでは本体の状態確認、グレイスフル停止・強制停止、タスクトレイ常駐、
 Windowsタスクスケジューラーのログオン時一回起動タスクの登録・編集・更新・削除を
 起動管理アプリが行う。アプリケーションルート、MSI、ZIPのすべてに、本体JAR、証明書生成JAR、
-起動管理JAR、ビルド管理JARの独立アプリ4本をルート直下へ含める。ショートカットと
+起動管理JAR、常駐診断JAR、ビルド管理JARの独立アプリ5本をルート直下へ含める。ショートカットと
 タスクスケジューラーはいずれも同梱`jre/bin/javaw.exe -jar NicoCacheLauncher.jar`を使う。
 
 引数なしの起動では管理GUIだけを表示し、本体は起動ボタンを押すまで起動しない。

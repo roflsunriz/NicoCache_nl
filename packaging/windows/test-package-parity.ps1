@@ -32,7 +32,7 @@ Expand-Archive -LiteralPath $zip -DestinationPath $extractRoot -Force
 
 foreach ($artifactName in @(
         'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
-        'NicoCacheBuild.jar')) {
+        'NicoCacheDiagnostics.jar', 'NicoCacheBuild.jar')) {
     $appArtifact = Join-Path $appImage $artifactName
     $zipArtifact = Join-Path $extractRoot $artifactName
     if (-not (Test-Path -LiteralPath $appArtifact -PathType Leaf)) {

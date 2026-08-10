@@ -134,6 +134,7 @@ Connection: close
 | --- | --- | --- |
 | `/api/control/status` | GET | `status`、`pid`、管理APIの`port`、`proxyPort`、`problem`、`version`を含むJSON。 |
 | `/api/control/ping` | GET | `{"status":"ok"}`。 |
+| `/api/control/diagnostics/snapshot` | GET | JVM、OS、メモリー、スレッド数、デッドロック数、全スレッドダンプを含む診断JSON。 |
 | `/api/control/graceful-shutdown` | POST | `202`、`{"status":"stopping"}`。 |
 | `/api/control/force-shutdown` | POST | `202`、`{"status":"forcing"}`。 |
 
@@ -148,6 +149,11 @@ Authorization: Bearer <data/nicocache-control.properties の token>
 状態ファイルの`state`が消えるまで待つ。管理アプリや監視ツールが必要とする状態確認、
 疎通確認、グレイスフル停止、強制停止は既存APIで完結するため、同じ意味の新しいAPIは
 追加していない。
+
+`/debug/heartbeat`はプロキシー側の`DEBUG`仮想ホストで`OK`を返す。管理APIとは別に
+実際のプロキシー受付・HTTP解析経路が動作しているかを常駐診断アプリが確認するための
+軽量なGETであり、ファイル作成や設定変更は行わない。`/debug/dump-stack`と同様に
+プロキシーポートを外部ネットワークへ公開しないこと。
 
 ## 実動作検証
 

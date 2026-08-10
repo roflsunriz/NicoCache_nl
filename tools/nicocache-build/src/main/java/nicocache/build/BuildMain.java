@@ -78,10 +78,12 @@ public final class BuildMain {
             Path mainClasses = classesRoot.resolve("main");
             Path caClasses = classesRoot.resolve("ca");
             Path launcherClasses = classesRoot.resolve("launcher");
+            Path diagnosticsClasses = classesRoot.resolve("diagnostics");
             Path buildClasses = classesRoot.resolve("build");
             deleteTree(mainClasses);
             deleteTree(caClasses);
             deleteTree(launcherClasses);
+            deleteTree(diagnosticsClasses);
             deleteTree(buildClasses);
 
             List<Path> codecLibraries = List.of(
@@ -106,6 +108,12 @@ public final class BuildMain {
                     "tools/nicocache-launcher/src/main/resources"),
                     launcherClasses);
             compile(javaSources(root.resolve(
+                    "tools/nicocache-diagnostics/src/main/java")),
+                    diagnosticsClasses, List.of());
+            copyDirectory(root.resolve(
+                    "tools/nicocache-diagnostics/src/main/resources"),
+                    diagnosticsClasses);
+            compile(javaSources(root.resolve(
                     "tools/nicocache-build/src/main/java")), buildClasses,
                     List.of());
 
@@ -120,6 +128,9 @@ public final class BuildMain {
                     "lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar", null);
             createJar(outputRoot.resolve("NicoCacheLauncher.jar"),
                     launcherClasses, "nicocache.launcher.LauncherMain", "", null);
+            createJar(outputRoot.resolve("NicoCacheDiagnostics.jar"),
+                    diagnosticsClasses,
+                    "nicocache.diagnostics.DiagnosticsMain", "", null);
             Path buildJar = outputRoot.resolve("NicoCacheBuild.jar");
             if (!isRunningBuildJar(buildJar)) {
                 createJar(buildJar, buildClasses,
@@ -132,6 +143,8 @@ public final class BuildMain {
                     + outputRoot.resolve("NicoCacheCA.jar"));
             System.out.println("NicoCacheLauncher.jar="
                     + outputRoot.resolve("NicoCacheLauncher.jar"));
+            System.out.println("NicoCacheDiagnostics.jar="
+                    + outputRoot.resolve("NicoCacheDiagnostics.jar"));
             System.out.println("NicoCacheBuild.jar="
                     + outputRoot.resolve("NicoCacheBuild.jar"));
         }

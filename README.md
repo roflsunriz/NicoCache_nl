@@ -40,7 +40,7 @@ Semeru/OpenJ9、Corretto、Oracle、Dragonwell、SapMachine、GraalVM、GraalVM 
 JetBrains Runtime、Tencent Kona）の各3世代、計39通りで同一のビルド成果物を実行します。
 廃止済みのAdopt系識別子と、17/21/25以外の外部JDKは対応対象に含めません。
 次のコマンドで実行し、`NicoCache_nl.jar`、`NicoCacheCA.jar`、
-`NicoCacheLauncher.jar`、`NicoCacheBuild.jar`を生成します。
+`NicoCacheLauncher.jar`、`NicoCacheDiagnostics.jar`、`NicoCacheBuild.jar`を生成します。
 
 ```powershell
 .\build-javac.ps1
@@ -54,7 +54,7 @@ Linux/macOSでは同じJavaビルドアプリをPOSIXラッパーから実行で
 
 Windowsのアプリケーションルート・MSI・ZIP、Linuxのアプリケーションルート・ZIP・DEB/RPM、
 macOSのアプリケーションルート・ZIP・PKG/DMGは、`git clone`直後と同じ追跡ファイル配置を
-保ち、その直下へ上記4本のプリコンパイル済みJARと専用`jre/`を重ねた共通構成です。
+保ち、その直下へ上記5本のプリコンパイル済みJARと専用`jre/`を重ねた共通構成です。
 キャッシュや個人設定は、この読み取り専用にできるアプリケーションルートとは別の
 ユーザーデータルートへ保存します。
 
@@ -91,6 +91,13 @@ java -jar .\NicoCacheLauncher.jar --minimized
 Linux/macOSでも同じCLIを利用できます。旧来のGUI起動・証明書生成スクリプトは削除し、
 配布パッケージの入口は全OSで同じ起動管理アプリに統一しています。
 `--setup --headless`は初回セットアップへ転送されます。
+
+通常の起動管理GUIまたはタスクトレイ起動では、独立した`NicoCacheDiagnostics.jar`も
+常駐します。管理APIと実際のプロキシー経路を2秒ごとに監視し、3回連続で応答しない場合や
+本体プロセスが予期せず終了した場合に、匿名化済みの自己完結HTMLレポートを利用者データへ
+自動保存します。診断アプリはNicoCache_nlを自動再起動しません。動画固有の不具合を
+識別できるよう、動画IDと動画タイトルはレポートへ保持します。詳細は
+[常駐診断アプリと自動障害レポート](documents/diagnostics-watchdog.md)を参照してください。
 
 現行ニコニコ動画向けの通常構成ではHTTPS MitMが必須で、ユーザーデータルートの
 `certs/site.jks`と`proxy.pac`が必要です。

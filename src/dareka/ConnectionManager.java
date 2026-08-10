@@ -1,6 +1,5 @@
 package dareka;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -13,10 +12,8 @@ import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.IllegalBlockingModeException;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -403,77 +400,22 @@ public class ConnectionManager implements Runnable {
         }
 
         if (path.equals("/debug/dump-stack")) {
-            java.lang.management.ThreadMXBean threadMxBean =
-                    java.lang.management.ManagementFactory.getThreadMXBean();
-
             Path dumpPath = NicoCachePaths.userPath("debug-dump-stack.txt");
-            Files.createDirectories(dumpPath.getParent());
-            try (BufferedWriter bw = Files.newBufferedWriter(dumpPath, StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
-                    StandardOpenOption.WRITE)) {
-                for (java.lang.management.ThreadInfo ti : threadMxBean.dumpAllThreads(true, true)) {
-                    dumpThreadInfo(bw, ti);
-                }
-            }
+            ThreadDumpUtil.write(dumpPath);
             Resource r = new StringResource("OK");
             r.setResponseHeader(HttpHeader.CONTENT_TYPE,
                     "text/plain; charset=UTF-8");
             return r;
         }
 
+        if (path.equals("/debug/heartbeat")) {
+            Resource response = new StringResource("OK");
+            response.setResponseHeader(HttpHeader.CONTENT_TYPE,
+                    "text/plain; charset=UTF-8");
+            return response;
+        }
+
         return StringResource.getNotFound();
-    }
-
-    // ThreadInfo.toString()にスタックトレースの深さ制限があるため再実装
-    private static void dumpThreadInfo(BufferedWriter bw, java.lang.management.ThreadInfo ti)
-            throws IOException {
-        Thread.State state = ti.getThreadState();
-        StackTraceElement[] stacktrace = ti.getStackTrace();
-        java.lang.management.LockInfo waitingOn = ti.getLockInfo();
-        String lockOwnerName = ti.getLockOwnerName();
-        long lockOwnerId = ti.getLockOwnerId();
-        java.lang.management.MonitorInfo[] monitors = ti.getLockedMonitors();
-        java.lang.management.LockInfo[] syncs = ti.getLockedSynchronizers();
-
-        bw.append('"').append(ti.getThreadName()).append("\" ");
-        bw.append("Id=" + ti.getThreadId() + " ");
-        bw.append(state.toString());
-        if (waitingOn != null) {
-            bw.append(" on ").append(waitingOn.toString());
-        }
-        if (lockOwnerName != null) {
-            bw.append(" owned by \"").append(lockOwnerName)
-                    .append("\" Id=" + lockOwnerId);
-        }
-        if (ti.isSuspended()) { bw.append(" (suspended)"); }
-        if (ti.isInNative()) { bw.append(" (in native)"); }
-        bw.append('\n');
-
-        for (int i = 0; i < stacktrace.length; i++) {
-            bw.append("\tat ").append(stacktrace[i].toString()).append("\n");
-            if (i == 0 && waitingOn != null &&
-                    (state == Thread.State.BLOCKED
-                    || state == Thread.State.WAITING
-                    || state == Thread.State.TIMED_WAITING)) {
-                bw.append("\t- waiting on ").append(waitingOn.toString()).append('\n');
-            }
-
-            for (java.lang.management.MonitorInfo monitor : monitors) {
-                if (monitor.getLockedStackDepth() == i) {
-                    bw.append("\t- locked ").append(monitor.toString()).append('\n');
-                }
-            }
-        }
-
-        if (syncs.length > 0) {
-            bw.append('\n');
-            bw.append("\tNumber of locked synchronizers = " + syncs.length + "\n");
-            for (java.lang.management.LockInfo sync : syncs) {
-                bw.append("\t- ").append(sync.toString()).append('\n');
-            }
-        }
-
-        bw.append('\n');
     }
 
     // [nl] ローカルへのリクエストなら対応するResourceを返す

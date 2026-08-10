@@ -27,10 +27,12 @@ $architecture = switch ([Runtime.InteropServices.RuntimeInformation]::OSArchitec
 }
 
 foreach ($relative in @(
-        'NicoCache_nl', 'NicoCache_nl.jar', 'NicoCacheCA.jar',
-        'NicoCacheLauncher.jar', 'NicoCacheBuild.jar', 'NicoCache_nl.version',
-        'jre/bin/java', 'jre/lib/modules', 'lib/bcprov.jar', 'lib/bcpkix.jar',
+        'NicoCache_nl', 'NicoCacheDiagnostics', 'NicoCache_nl.jar',
+        'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
+        'NicoCacheDiagnostics.jar', 'NicoCacheBuild.jar', 'NicoCache_nl.version',
+        'jre/bin/java', 'jre/bin/jcmd', 'jre/lib/modules', 'lib/bcprov.jar', 'lib/bcpkix.jar',
         'lib/bcutil.jar', 'lib/brotli-dec.jar', 'lib/zstd-jni.jar',
+        'documents/diagnostics-watchdog.md',
         'src/dareka/NLMain.java', 'build-javac.ps1',
         'tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar'
     )) {
@@ -69,6 +71,12 @@ $launcherJar = Join-Path $applicationRoot 'NicoCacheLauncher.jar'
 $help = @(& $java '-jar' $launcherJar '--help' 2>&1)
 if ($LASTEXITCODE -ne 0 -or -not (($help -join "`n").Contains('--tray'))) {
     throw "同梱JREでNicoCacheLauncher.jarを起動できません: $help"
+}
+$diagnosticsHelp = @(& $java '-jar' (
+        Join-Path $applicationRoot 'NicoCacheDiagnostics.jar') '--help' 2>&1)
+if ($LASTEXITCODE -ne 0 -or
+        -not (($diagnosticsHelp -join "`n").Contains('--collect-now'))) {
+    throw "同梱JREでNicoCacheDiagnostics.jarを起動できません: $diagnosticsHelp"
 }
 
 $zip = Join-Path $outputRoot "NicoCache_nl-$AppVersion-$platformId-$architecture.zip"

@@ -57,7 +57,7 @@ function Get-RuntimeModules {
     $modules = @($resolution | ForEach-Object {
         if ($_ -match '^root (?<module>[A-Za-z0-9.]+) ') { $Matches.module }
     })
-    $modules += @('jdk.charsets', 'java.desktop', 'java.net.http')
+    $modules += @('jdk.charsets', 'java.desktop', 'java.net.http', 'jdk.jcmd')
     $modules = @($modules | Sort-Object -Unique)
     if ($modules.Count -le 1) { throw 'JREへ含めるJavaモジュールが空です' }
     return $modules -join ','

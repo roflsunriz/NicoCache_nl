@@ -9,9 +9,11 @@ LinuxとmacOSの本体配布物は、対象OS上のTemurin JDK 25で生成する
 アプリケーションルート直下には次を置く。
 
 - Git追跡ファイル一式（`.git`、未追跡データ、シンボリックリンクを除く）
-- `NicoCache_nl.jar`、`NicoCacheCA.jar`、`NicoCacheLauncher.jar`、`NicoCacheBuild.jar`
+- `NicoCache_nl.jar`、`NicoCacheCA.jar`、`NicoCacheLauncher.jar`、
+  `NicoCacheDiagnostics.jar`、`NicoCacheBuild.jar`
 - 依存JARを置く`lib/`と、専用Javaランタイム`jre/`
 - `jre/bin/java -jar NicoCacheLauncher.jar`を実行する`NicoCache_nl`
+- 常駐診断GUIを直接起動する`NicoCacheDiagnostics`と、外部スレッドダンプ用`jre/bin/jcmd`
 - `tools/cmaf-to-mp4/nico-cmaf-to-mp4.jar`と第三者ライセンス情報
 
 別の`app/`、`lib/app/`、`Contents/Resources/`へアプリ資材を詰め替えない。

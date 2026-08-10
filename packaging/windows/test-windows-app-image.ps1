@@ -49,13 +49,17 @@ if (-not $isTestImage -and -not $isVerifiedInstalledImage) {
 }
 $appDirectory = $appImage
 $launcherJarPath = Join-Path $appImage 'NicoCacheLauncher.jar'
+$diagnosticsJarPath = Join-Path $appImage 'NicoCacheDiagnostics.jar'
 $launcherPath = Join-Path $appImage 'jre\bin\java.exe'
+$diagnosticsJavaPath = Join-Path $appImage 'jre\bin\javaw.exe'
 $coreJavaPath = $launcherPath
 $separateHeadlessLauncherPath = Join-Path $appImage 'NicoCache_nl-Headless.exe'
 $dataRoot = Join-Path $testRoot 'app-image-user-data'
 $configPath = Join-Path $appDirectory 'config.properties'
 $guiPropertiesPath = Join-Path $dataRoot 'NicoCacheGUI.property'
 $setupStatePath = Join-Path $dataRoot 'data\first-run-setup.properties'
+$diagnosticsStatusPath = Join-Path $dataRoot `
+    'data\nicocache-diagnostics-status.properties'
 $systemStatePath = Join-Path $dataRoot 'data\setup-system-state.json'
 $setupScriptPath = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
 $certificateDirectory = Join-Path $dataRoot 'certs'
@@ -71,10 +75,13 @@ foreach ($requiredPath in @(
         $launcherPath,
         (Join-Path $appDirectory 'jre\bin\java.exe'),
         (Join-Path $appDirectory 'jre\bin\javaw.exe'),
+        (Join-Path $appDirectory 'jre\bin\jcmd.exe'),
         (Join-Path $appDirectory 'NicoCache_nl.cmd'),
+        (Join-Path $appDirectory 'NicoCacheDiagnostics.cmd'),
         (Join-Path $appDirectory 'NicoCache_nl.jar'),
         (Join-Path $appDirectory 'NicoCacheCA.jar'),
         (Join-Path $appDirectory 'NicoCacheLauncher.jar'),
+        $diagnosticsJarPath,
         (Join-Path $appDirectory 'NicoCacheBuild.jar'),
         $certificateTargetsPath,
         (Join-Path $appDirectory 'lib\bcprov.jar'),
@@ -95,6 +102,7 @@ foreach ($requiredPath in @(
         (Join-Path $appDirectory 'local\mime.types.default'),
         (Join-Path $appDirectory 'how-to-update.md'),
         (Join-Path $appDirectory 'documents\api.md'),
+        (Join-Path $appDirectory 'documents\diagnostics-watchdog.md'),
         (Join-Path $appDirectory 'documents\tls.md'),
         (Join-Path $appDirectory 'documents\user-data-root.md'),
         (Join-Path $appDirectory 'packaging\windows\README.md'),
@@ -175,6 +183,23 @@ try {
     }
 } finally {
     $launcherArchive.Dispose()
+}
+$diagnosticsArchive = [System.IO.Compression.ZipFile]::OpenRead(
+    $diagnosticsJarPath)
+try {
+    $diagnosticsEntries = @($diagnosticsArchive.Entries |
+        Select-Object -ExpandProperty FullName)
+    foreach ($requiredEntry in @(
+            'nicocache/diagnostics/DiagnosticsMain.class',
+            'nicocache/diagnostics/messages.properties',
+            'nicocache/diagnostics/messages_ja.properties'
+        )) {
+        if ($requiredEntry -notin $diagnosticsEntries) {
+            throw "診断アプリJARに必要な要素がありません: $requiredEntry"
+        }
+    }
+} finally {
+    $diagnosticsArchive.Dispose()
 }
 $buildJarPath = Join-Path $appDirectory 'NicoCacheBuild.jar'
 $buildArchive = [System.IO.Compression.ZipFile]::OpenRead($buildJarPath)
@@ -268,6 +293,9 @@ function Get-ProductProcesses {
                         [System.StringComparison]::OrdinalIgnoreCase
                     ) -or [string]::Equals(
                         $_.Path, $coreJavaPath,
+                        [System.StringComparison]::OrdinalIgnoreCase
+                    ) -or [string]::Equals(
+                        $_.Path, $diagnosticsJavaPath,
                         [System.StringComparison]::OrdinalIgnoreCase
                     )
                 } catch {
@@ -401,6 +429,23 @@ try {
     if ($guiProcess.HasExited) {
         throw "引数なしの起動管理GUIが終了しました (ExitCode: $($guiProcess.ExitCode))"
     }
+    $diagnosticsDeadline = [DateTime]::UtcNow.AddSeconds(10)
+    while (-not (Test-Path -LiteralPath $diagnosticsStatusPath -PathType Leaf) `
+            -and [DateTime]::UtcNow -lt $diagnosticsDeadline) {
+        Start-Sleep -Milliseconds 100
+    }
+    if (-not (Test-Path -LiteralPath $diagnosticsStatusPath -PathType Leaf)) {
+        throw '起動管理GUIが常駐診断アプリを起動しませんでした'
+    }
+    $diagnosticsStatus = Get-Content -Raw -LiteralPath $diagnosticsStatusPath |
+        ConvertFrom-StringData
+    $diagnosticsProcess = Get-Process -Id ([int]$diagnosticsStatus.pid) `
+        -ErrorAction Stop
+    if (-not [string]::Equals(
+            $diagnosticsProcess.Path, $diagnosticsJavaPath,
+            [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "診断アプリの実行ファイルが同梱JREではありません: $($diagnosticsProcess.Path)"
+    }
     $implicitCoreProcesses = @(
         Get-ProductProcesses |
             Where-Object {
@@ -418,6 +463,7 @@ try {
     Stop-Process -Id $guiProcess.Id -Force
     $guiProcess.WaitForExit(10000) | Out-Null
     Write-Output 'PASS 引数なしのGUI起動では本体を暗黙起動しない'
+    Write-Output 'PASS 起動管理GUIから独立した常駐診断アプリを起動'
 
     $process = Start-Process -FilePath $launcherPath `
         -ArgumentList @('-jar', $launcherJarPath, '--headless') `
@@ -473,7 +519,8 @@ try {
     )
     $expectedPaths = @(
         (Resolve-Path -LiteralPath $launcherPath).Path,
-        (Resolve-Path -LiteralPath $coreJavaPath).Path
+        (Resolve-Path -LiteralPath $coreJavaPath).Path,
+        (Resolve-Path -LiteralPath $diagnosticsJavaPath).Path
     )
     foreach ($startedProcess in $startedProcesses) {
         if ($startedProcess.HasExited) {

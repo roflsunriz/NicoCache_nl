@@ -40,12 +40,15 @@ import dareka.common.Logger;
  */
 final class ControlServer implements AutoCloseable {
     static final String STATUS_RELATIVE_PATH = "data/nicocache-control.properties";
+    static final String EXPECTED_STOP_RELATIVE_PATH =
+            "data/nicocache-expected-stop.properties";
     private static final String HOST = "127.0.0.1";
     private static final int MAX_HEADER_LINES = 64;
     private static final int MAX_HEADER_LENGTH = 16 * 1024;
     private static final int MAX_BODY_LENGTH = 4096;
 
     private final Path statusPath;
+    private final Path expectedStopPath;
     private final Runnable gracefulShutdown;
     private final Runnable forceShutdown;
     private final ExecutorService requestExecutor;
@@ -54,6 +57,7 @@ final class ControlServer implements AutoCloseable {
             new AtomicReference<>("starting");
     private volatile String problem = "";
     private final String token = createToken();
+    private final Instant startedAt = Instant.now();
     private ServerSocket serverSocket;
     private Thread acceptThread;
     private int port;
@@ -62,6 +66,8 @@ final class ControlServer implements AutoCloseable {
             Runnable forceShutdown) {
         this.statusPath = dataRoot.toAbsolutePath().normalize()
                 .resolve(STATUS_RELATIVE_PATH);
+        this.expectedStopPath = dataRoot.toAbsolutePath().normalize()
+                .resolve(EXPECTED_STOP_RELATIVE_PATH);
         this.gracefulShutdown = gracefulShutdown;
         this.forceShutdown = forceShutdown;
         this.requestExecutor = Executors.newCachedThreadPool(
@@ -88,6 +94,7 @@ final class ControlServer implements AutoCloseable {
 
         ServerSocket socket = new ServerSocket();
         try {
+            Files.deleteIfExists(expectedStopPath);
             socket.setReuseAddress(true);
             socket.bind(new InetSocketAddress(HOST, configuredPort));
             serverSocket = socket;
@@ -219,6 +226,12 @@ final class ControlServer implements AutoCloseable {
                 writeResponse(socket, 200, "{\"status\":\"ok\"}");
                 return;
             }
+            if ("GET".equals(method)
+                    && "/api/control/diagnostics/snapshot".equals(path)) {
+                writeResponse(socket, 200,
+                        DiagnosticSnapshot.capture(state.get(), problem));
+                return;
+            }
             if ("POST".equals(method)
                     && ("/api/control/shutdown".equals(path)
                     || "/api/control/graceful-shutdown".equals(path))) {
@@ -257,6 +270,7 @@ final class ControlServer implements AutoCloseable {
         if (force) {
             state.set("stopping");
         }
+        markExpectedStop(force ? "force" : "graceful");
         try {
             writeStatus();
         } catch (IOException error) {
@@ -272,6 +286,21 @@ final class ControlServer implements AutoCloseable {
         }, "nicocache-control-shutdown");
         shutdown.setDaemon(true);
         shutdown.start();
+    }
+
+    void markExpectedStop(String mode) {
+        Properties properties = new Properties();
+        properties.setProperty("version", "1");
+        properties.setProperty("pid",
+                Long.toString(ProcessHandle.current().pid()));
+        properties.setProperty("requestedAt", Instant.now().toString());
+        properties.setProperty("mode", mode == null ? "graceful" : mode);
+        try {
+            writeProperties(expectedStopPath, properties,
+                    "NicoCache_nl expected stop marker");
+        } catch (IOException error) {
+            Logger.warning("正常終了マーカーを書き込めませんでした: " + error);
+        }
     }
 
     private boolean authorized(String authorization) {
@@ -346,27 +375,38 @@ final class ControlServer implements AutoCloseable {
         if (!problem.isBlank()) {
             properties.setProperty("problem", problem);
         }
-        properties.setProperty("startedAt", Instant.now().toString());
-        Path temporary = statusPath.resolveSibling(
-                statusPath.getFileName() + ".tmp");
+        properties.setProperty("startedAt", startedAt.toString());
+        writeProperties(statusPath, properties,
+                "NicoCache_nl local control endpoint");
+    }
+
+    private void writeProperties(Path destination, Properties properties,
+            String comment) throws IOException {
+        Path parent = destination.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Path temporary = destination.resolveSibling(
+                destination.getFileName() + ".tmp");
         try (var output = Files.newOutputStream(temporary,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE)) {
-            properties.store(output, "NicoCache_nl local control endpoint");
+            properties.store(output, comment);
         }
         try {
-            Files.move(temporary, statusPath, StandardCopyOption.ATOMIC_MOVE,
+            Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE,
                     StandardCopyOption.REPLACE_EXISTING);
         } catch (AtomicMoveNotSupportedException error) {
-            Files.move(temporary, statusPath, StandardCopyOption.REPLACE_EXISTING);
+            Files.move(temporary, destination,
+                    StandardCopyOption.REPLACE_EXISTING);
         }
-        restrictStatusFile();
+        restrictFile(destination);
     }
 
-    private void restrictStatusFile() {
+    private void restrictFile(Path path) {
         try {
-            Files.setPosixFilePermissions(statusPath, java.util.Set.of(
+            Files.setPosixFilePermissions(path, java.util.Set.of(
                     java.nio.file.attribute.PosixFilePermission.OWNER_READ,
                     java.nio.file.attribute.PosixFilePermission.OWNER_WRITE));
         } catch (UnsupportedOperationException | IOException ignored) {

@@ -44,7 +44,8 @@ $fileNames = @($fileRows | ForEach-Object {
 })
 foreach ($required in @(
         'NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
-        'NicoCacheBuild.jar', 'java.exe', 'javaw.exe', 'modules',
+        'NicoCacheDiagnostics.jar', 'NicoCacheBuild.jar', 'java.exe',
+        'javaw.exe', 'jcmd.exe', 'modules',
         'build-javac.ps1', 'NLMain.java'
     )) {
     if ($required -notin $fileNames) {
@@ -55,7 +56,7 @@ foreach ($forbidden in @('NicoCache_nl.exe', 'NicoCache_nl.cfg')) {
     if ($forbidden -in $fileNames) { throw "MSIにjpackage固有ファイルが残っています: $forbidden" }
 }
 foreach ($jar in @('NicoCache_nl.jar', 'NicoCacheCA.jar', 'NicoCacheLauncher.jar',
-        'NicoCacheBuild.jar')) {
+        'NicoCacheDiagnostics.jar', 'NicoCacheBuild.jar')) {
     $row = @($fileRows | Where-Object {
         $name = [string]$_[0]
         ($name -eq $jar) -or $name.EndsWith("|$jar")

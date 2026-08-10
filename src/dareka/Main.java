@@ -48,6 +48,13 @@ public class Main {
         shutdownProcessorSchedulers();
     }
 
+    static void markExpectedStop(String mode) {
+        ControlServer current = controlServer;
+        if (current != null) {
+            current.markExpectedStop(mode);
+        }
+    }
+
     public static void main(String[] args) {
         done = false;
         try {

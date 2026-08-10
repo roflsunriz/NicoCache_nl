@@ -172,6 +172,7 @@ public class NLMain {
     static native void setNativeWindowProc(JFrame frame, String params);
 
     static synchronized void shutdown() {
+        Main.markExpectedStop("graceful");
         try {
             if (guiLauncher != null) {
                 guiLauncher.activatePrimaryTab();

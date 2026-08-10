@@ -138,6 +138,14 @@ force-shutdownによる隔離プロセス終了も検証する。graceful-shutdo
 .\test-launcher.ps1
 ```
 
+`test-diagnostics.ps1`は、常駐診断アプリの認証情報・個人情報の匿名化、動画IDと動画タイトルの
+保持、3回連続失敗のデバウンス、通常停止の除外、障害HTMLのCSPとエスケープ、狭い画面でも
+操作できるSwing GUI、全ボタンの状態遷移を検証する。
+
+```powershell
+.\test-diagnostics.ps1
+```
+
 `test-e2e.ps1`は独立した`NicoCacheLauncher.jar`から本体JARを子プロセスとして起動し、
 `--headless`の前景動作、ループバック限定管理APIのBearer認証、グレイスフル停止、
 本体のHTTP応答、タスクトレイから本体を起動するログオンタスクの起動コマンド契約、

@@ -23,13 +23,15 @@ final class LauncherPaths {
     private final Path dataRoot;
     private final Path coreJar;
     private final Path launcherJar;
+    private final Path diagnosticsJar;
 
     private LauncherPaths(Path applicationRoot, Path dataRoot, Path coreJar,
-            Path launcherJar) {
+            Path launcherJar, Path diagnosticsJar) {
         this.applicationRoot = applicationRoot;
         this.dataRoot = dataRoot;
         this.coreJar = coreJar;
         this.launcherJar = launcherJar;
+        this.diagnosticsJar = diagnosticsJar;
     }
 
     static LauncherPaths resolve(Path explicitApplicationRoot,
@@ -55,8 +57,12 @@ final class LauncherPaths {
                 && Files.isRegularFile(codeSource.resolve("LauncherMain.class"))) {
             launcherJar = codeSource;
         }
+        Path diagnosticsJar = firstRegularFile(
+                codeSource == null ? null
+                        : codeSource.resolve("NicoCacheDiagnostics.jar"),
+                applicationRoot.resolve("NicoCacheDiagnostics.jar"));
         return new LauncherPaths(applicationRoot, dataRoot, coreJar,
-                launcherJar);
+                launcherJar, diagnosticsJar);
     }
 
     private static Path discoverApplicationRoot() {
@@ -213,8 +219,16 @@ final class LauncherPaths {
         return launcherJar;
     }
 
+    Path getDiagnosticsJar() {
+        return diagnosticsJar;
+    }
+
     Path getControlStatusFile() {
         return dataRoot.resolve("data/nicocache-control.properties");
+    }
+
+    Path getDiagnosticsStatusFile() {
+        return dataRoot.resolve("data/nicocache-diagnostics-status.properties");
     }
 
     Path getTaskStore() {

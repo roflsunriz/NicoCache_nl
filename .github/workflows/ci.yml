@@ -79,6 +79,10 @@ jobs:
         shell: pwsh
         run: .\test-launcher.ps1
 
+      - name: Run diagnostics watchdog tests
+        shell: pwsh
+        run: .\test-diagnostics.ps1
+
       - name: Run strict end-to-end and GUI tests
         timeout-minutes: 5
         shell: pwsh
@@ -157,6 +161,7 @@ jobs:
           ./test-functional.ps1 -LibraryDirectory ./.test-work/ci-dependencies
           ./test-first-run-setup.ps1 -LibraryDirectory ./.test-work/ci-dependencies
           ./test-launcher.ps1
+          ./test-diagnostics.ps1
 
       - name: Run strict end-to-end and GUI tests with Java 25
         if: runner.os == 'Windows'
@@ -193,6 +198,7 @@ jobs:
           .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\java-17-dependencies -Clean
           .\test-functional.ps1 -LibraryDirectory .\.test-work\java-17-dependencies
           .\test-launcher.ps1
+          .\test-diagnostics.ps1
 
   runtime-compatibility:
     name: Runtime ${{ matrix.distribution }} Java ${{ matrix.major }}

@@ -78,6 +78,7 @@ foreach ($artifactName in @(
         'NicoCache_nl.jar',
         'NicoCacheCA.jar',
         'NicoCacheLauncher.jar',
+        'NicoCacheDiagnostics.jar',
         'NicoCacheBuild.jar'
     )) {
     $source = Join-Path $artifacts $artifactName
@@ -133,6 +134,16 @@ start "" "%~dp0jre\bin\javaw.exe" -jar "%~dp0NicoCacheLauncher.jar" %*
         $launcher.Replace("`n", "`r`n"),
         [Text.UTF8Encoding]::new($false)
     )
+    $diagnosticsLauncher = @'
+@echo off
+setlocal
+start "" "%~dp0jre\bin\javaw.exe" -jar "%~dp0NicoCacheDiagnostics.jar" %*
+'@
+    [IO.File]::WriteAllText(
+        (Join-Path $destination 'NicoCacheDiagnostics.cmd'),
+        $diagnosticsLauncher.Replace("`n", "`r`n"),
+        [Text.UTF8Encoding]::new($false)
+    )
 } else {
     $launcher = @'
 #!/bin/sh
@@ -149,6 +160,22 @@ exec "$APP_ROOT/jre/bin/java" -jar "$APP_ROOT/NicoCacheLauncher.jar" "$@"
     & chmod +x $launcherPath
     if ($LASTEXITCODE -ne 0) {
         throw "Unixランチャーへ実行権限を設定できません: $launcherPath"
+    }
+    $diagnosticsLauncher = @'
+#!/bin/sh
+set -eu
+APP_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+exec "$APP_ROOT/jre/bin/java" -jar "$APP_ROOT/NicoCacheDiagnostics.jar" "$@"
+'@
+    $diagnosticsLauncherPath = Join-Path $destination 'NicoCacheDiagnostics'
+    [IO.File]::WriteAllText(
+        $diagnosticsLauncherPath,
+        $diagnosticsLauncher.Replace("`r`n", "`n"),
+        [Text.UTF8Encoding]::new($false)
+    )
+    & chmod +x $diagnosticsLauncherPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unix診断ランチャーへ実行権限を設定できません: $diagnosticsLauncherPath"
     }
 }
 
