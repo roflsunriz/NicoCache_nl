@@ -34,6 +34,11 @@ Windows・Linux・macOSパッケージ版の初回セットアップでは、キ
 `.java-version`で指定するEclipse Temurin JDK 25を既定とします。Java 17/21は
 互換性検証で明示指定する場合だけ使用し、通常のビルドや同梱ランタイムには使用しません。
 配布JARの互換ターゲットは引き続きJava 11です。
+外部JDKで実行する場合の対応範囲はJava 17、21、25だけです。GitHub Actionsでは、
+`actions/setup-java`が提供する現行13配布元（Temurin、Zulu、Liberica、Microsoft、
+Semeru/OpenJ9、Corretto、Oracle、Dragonwell、SapMachine、GraalVM、GraalVM Community、
+JetBrains Runtime、Tencent Kona）の各3世代、計39通りで同一のビルド成果物を実行します。
+廃止済みのAdopt系識別子と、17/21/25以外の外部JDKは対応対象に含めません。
 次のコマンドで実行し、`NicoCache_nl.jar`、`NicoCacheCA.jar`、
 `NicoCacheLauncher.jar`、`NicoCacheBuild.jar`を生成します。
 

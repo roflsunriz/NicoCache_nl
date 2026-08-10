@@ -139,6 +139,52 @@ Assert-ContainsLine $java17Build `
     '.\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\java-17-dependencies -Clean' `
     'Explicit Java 17 compatibility build'
 
+$ciContent = Get-Content -Raw -LiteralPath (Join-Path $root '.github\workflows\ci.yml')
+$runtimeEntries = @([regex]::Matches(
+        $ciContent,
+        "(?m)^\s*- \{ distribution: ([^,]+), java-version: '([^']+)', major: (17|21|25) \}\s*$"
+    ) | ForEach-Object {
+        [pscustomobject]@{
+            Distribution = $_.Groups[1].Value
+            Version = $_.Groups[2].Value
+            Major = [int]$_.Groups[3].Value
+        }
+    })
+$runtimeDistributions = @(
+    'temurin', 'zulu', 'liberica', 'microsoft', 'semeru', 'corretto',
+    'oracle', 'dragonwell', 'sapmachine', 'graalvm', 'graalvm-community',
+    'jetbrains', 'kona'
+)
+$expectedRuntimeEntries = @($runtimeDistributions | ForEach-Object {
+        $distribution = $_
+        17, 21, 25 | ForEach-Object { "$distribution`:$_" }
+    })
+$actualRuntimeEntries = @($runtimeEntries | ForEach-Object {
+        "$($_.Distribution):$($_.Major)"
+    })
+Assert-ExactSet $expectedRuntimeEntries $actualRuntimeEntries `
+    'Cross-vendor Java 17/21/25 runtime compatibility matrix'
+foreach ($pinnedJava17 in @('oracle', 'graalvm')) {
+    $entry = $runtimeEntries | Where-Object {
+        $_.Distribution -eq $pinnedJava17 -and $_.Major -eq 17
+    }
+    if ($entry.Version -ne '17.0.12') {
+        throw "$pinnedJava17 Java 17 must use the setup-java license-safe 17.0.12 pin"
+    }
+}
+foreach ($required in @(
+        'test-runtime-compatibility.ps1 -Mode Prepare',
+        'name: runtime-compatibility-tests',
+        'include-hidden-files: true',
+        'distribution: ${{ matrix.distribution }}',
+        'java-version: ${{ matrix.java-version }}',
+        '-ExpectedMajor ${{ matrix.major }}'
+    )) {
+    if (-not $ciContent.Contains($required)) {
+        throw "Runtime compatibility workflow contract is missing: $required"
+    }
+}
+
 $buildApplication = Get-StepBlock -Name 'Build release application root and packages'
 if ($buildApplication -match 'NlFiltersSource') {
     throw 'Release workflow must not use an external nlFilters source'

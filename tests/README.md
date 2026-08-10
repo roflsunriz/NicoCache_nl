@@ -72,6 +72,24 @@ HTTP サーバーを利用する。
 - Extension と Extension2 のロード、および Processor、stopper Processor、
   Rewriter、RequestFilter、CompleteCache、イベント、終了通知
 
+## JDK実行時互換性テスト
+
+製品とテストを既定のTemurin 25で一度だけコンパイルし、同じクラスファイルを対象JDKで
+実行する。これにより、JDK固有のコンパイラー差と、利用者が遭遇する実行時差異を分離する。
+対象はJava 17/21/25に固定し、CIではTemurin、Zulu、Liberica、Microsoft、Semeru/OpenJ9、
+Corretto、Oracle、Dragonwell、SapMachine、GraalVM、GraalVM Community、JetBrains Runtime、
+Tencent Konaの39組み合わせで、本体機能、転送タイムアウト、初回セットアップ、
+ランチャーを検証する。
+
+```powershell
+.\test-runtime-compatibility.ps1 -Mode Prepare -LibraryDirectory .\.test-work\build-dependencies
+.\test-runtime-compatibility.ps1 -Mode Run -ExpectedMajor 25
+```
+
+別のJDKをローカルで試す場合は`-JavaHome`にそのJDKのルートを指定する。
+実行成果物は`.test-work/runtime-compatibility/artifact/`に置かれ、テストごとの隔離領域は
+成功時に削除される。`-KeepWorkDir`を指定した場合だけ保持する。
+
 本体APIの契約だけを短時間で確認する場合は次を実行する。`/cache/info`、
 `info/v2`、`ajax_info`、`echo`、検索・一覧・XML、旧API、削除・移動・LST更新の
 成功系・不正入力・メソッド制限を隔離した実ソケットで検証し、`list/`からのパス脱出も

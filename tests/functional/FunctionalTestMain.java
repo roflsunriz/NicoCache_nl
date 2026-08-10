@@ -43,6 +43,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 import dareka.common.LRUMap;
+import dareka.common.HttpIOException;
 import dareka.processor.URLResource;
 import dareka.processor.URLResourceCache;
 import dareka.processor.impl.CmafCachingProcessor;
@@ -106,6 +107,8 @@ public final class FunctionalTestMain {
                 run("control force-shutdown contract", this::testControlForceShutdown);
             } else {
                 run("URL resource cache response policies", this::testUrlResourceCachePolicies);
+                run("URL resource transfer timeout uses public cancellation APIs",
+                        this::testUrlResourceTransferTimeout);
                 run("default settings layout and obsolete key removal",
                         () -> DefaultsLayoutUnitTest.run(repository));
                 run("template reload and CMAF utility validation",
@@ -366,6 +369,19 @@ public final class FunctionalTestMain {
                         .getBytes(StandardCharsets.UTF_8);
                 exchange.sendResponseHeaders(200, body.length);
                 exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/transfer-timeout".equals(path)) {
+                exchange.sendResponseHeaders(200, 2);
+                exchange.getResponseBody().write('a');
+                exchange.getResponseBody().flush();
+                try {
+                    Thread.sleep(5000L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                exchange.getResponseBody().write('b');
                 return;
             }
             if ("/conditional".equals(path)) {
@@ -765,6 +781,40 @@ public final class FunctionalTestMain {
             URLResource staleSecond = cache.cacheAndGet("stale-age", base + "stale-age");
             assertContains(resourceBody(staleSecond), "stale-age-2",
                     "stale Age repeated response");
+        } finally {
+            restoreProperty("proxyHost", oldProxyHost);
+            restoreProperty("proxyPort", oldProxyPort);
+            restoreProperty("readTimeout", oldReadTimeout);
+        }
+    }
+
+    private void testUrlResourceTransferTimeout() throws Exception {
+        String oldProxyHost = System.getProperty("proxyHost");
+        String oldProxyPort = System.getProperty("proxyPort");
+        String oldReadTimeout = System.getProperty("readTimeout");
+        try {
+            System.setProperty("proxyHost", "");
+            System.setProperty("proxyPort", "0");
+            System.setProperty("readTimeout", "10000");
+
+            URLResource resource = new URLResource(
+                    "http://127.0.0.1:" + upstreamPort + "/transfer-timeout");
+            assertTrue(resource.getResponseHeader(null, null) != null,
+                    "transfer-timeout response header");
+            resource.setTransferTimeout(250);
+            long started = System.nanoTime();
+            try {
+                resource.getResponseBody();
+                throw new AssertionError("transfer timeout must throw HttpIOException");
+            } catch (HttpIOException expected) {
+                assertContains(expected.getMessage(), "transfer timeout: 250ms",
+                        "transfer timeout message");
+            }
+            long elapsedMillis = Duration.ofNanos(
+                    System.nanoTime() - started).toMillis();
+            assertTrue(elapsedMillis < 3000L,
+                    "transfer timeout cancellation took too long: "
+                    + elapsedMillis + "ms");
         } finally {
             restoreProperty("proxyHost", oldProxyHost);
             restoreProperty("proxyPort", oldProxyPort);

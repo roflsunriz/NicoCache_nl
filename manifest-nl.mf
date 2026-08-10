@@ -1,4 +1,3 @@
 Manifest-Version: 1.0
 Main-Class: dareka.UserDataMain
 Class-Path: sqlite-jdbc.jar igo.jar library.jar NicoCacheCA.jar lib/bcpkix.jar lib/bcprov.jar lib/bcutil.jar lib/brotli-dec.jar lib/zstd-jni.jar
-Add-Opens: java.base/sun.net java.base/sun.net.www.protocol.http java.base/java.net java.base/java.lang java.base/java.lang.reflect

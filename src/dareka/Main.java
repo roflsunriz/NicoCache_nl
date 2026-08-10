@@ -163,8 +163,10 @@ public class Main {
         }
 
         Logger.info(VER_STRING);
-        Logger.info("    Running with Java %s(%s) on %s",
+        Logger.info("    Running with Java %s / %s / %s (%s) on %s",
                 System.getProperty("java.version"),
+                System.getProperty("java.vendor"),
+                System.getProperty("java.vm.name"),
                 System.getProperty("os.arch"),
                 System.getProperty("os.name"));
 

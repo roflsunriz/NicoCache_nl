@@ -96,6 +96,18 @@ jobs:
         shell: pwsh
         run: .\tests\release\test-release-workflow.ps1
 
+      - name: Prepare cross-vendor runtime compatibility tests
+        shell: pwsh
+        run: .\test-runtime-compatibility.ps1 -Mode Prepare -LibraryDirectory .\.test-work\ci-dependencies
+
+      - name: Upload runtime compatibility test artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: runtime-compatibility-tests
+          path: .test-work/runtime-compatibility/artifact
+          if-no-files-found: error
+          include-hidden-files: true
+
       - name: Check the working tree
         shell: pwsh
         run: |
@@ -181,3 +193,76 @@ jobs:
           .\build-javac.ps1 -JavaVersion 17 -LibraryDirectory .\.test-work\java-17-dependencies -Clean
           .\test-functional.ps1 -LibraryDirectory .\.test-work\java-17-dependencies
           .\test-launcher.ps1
+
+  runtime-compatibility:
+    name: Runtime ${{ matrix.distribution }} Java ${{ matrix.major }}
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 13
+      matrix:
+        include:
+          - { distribution: temurin, java-version: '17', major: 17 }
+          - { distribution: temurin, java-version: '21', major: 21 }
+          - { distribution: temurin, java-version: '25', major: 25 }
+          - { distribution: zulu, java-version: '17', major: 17 }
+          - { distribution: zulu, java-version: '21', major: 21 }
+          - { distribution: zulu, java-version: '25', major: 25 }
+          - { distribution: liberica, java-version: '17', major: 17 }
+          - { distribution: liberica, java-version: '21', major: 21 }
+          - { distribution: liberica, java-version: '25', major: 25 }
+          - { distribution: microsoft, java-version: '17', major: 17 }
+          - { distribution: microsoft, java-version: '21', major: 21 }
+          - { distribution: microsoft, java-version: '25', major: 25 }
+          - { distribution: semeru, java-version: '17', major: 17 }
+          - { distribution: semeru, java-version: '21', major: 21 }
+          - { distribution: semeru, java-version: '25', major: 25 }
+          - { distribution: corretto, java-version: '17', major: 17 }
+          - { distribution: corretto, java-version: '21', major: 21 }
+          - { distribution: corretto, java-version: '25', major: 25 }
+          - { distribution: oracle, java-version: '17.0.12', major: 17 }
+          - { distribution: oracle, java-version: '21', major: 21 }
+          - { distribution: oracle, java-version: '25', major: 25 }
+          - { distribution: dragonwell, java-version: '17', major: 17 }
+          - { distribution: dragonwell, java-version: '21', major: 21 }
+          - { distribution: dragonwell, java-version: '25', major: 25 }
+          - { distribution: sapmachine, java-version: '17', major: 17 }
+          - { distribution: sapmachine, java-version: '21', major: 21 }
+          - { distribution: sapmachine, java-version: '25', major: 25 }
+          - { distribution: graalvm, java-version: '17.0.12', major: 17 }
+          - { distribution: graalvm, java-version: '21', major: 21 }
+          - { distribution: graalvm, java-version: '25', major: 25 }
+          - { distribution: graalvm-community, java-version: '17', major: 17 }
+          - { distribution: graalvm-community, java-version: '21', major: 21 }
+          - { distribution: graalvm-community, java-version: '25', major: 25 }
+          - { distribution: jetbrains, java-version: '17', major: 17 }
+          - { distribution: jetbrains, java-version: '21', major: 21 }
+          - { distribution: jetbrains, java-version: '25', major: 25 }
+          - { distribution: kona, java-version: '17', major: 17 }
+          - { distribution: kona, java-version: '21', major: 21 }
+          - { distribution: kona, java-version: '25', major: 25 }
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download runtime compatibility test artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: runtime-compatibility-tests
+          path: .test-work/runtime-compatibility/artifact
+
+      - name: Set up target JDK
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: ${{ matrix.distribution }}
+          java-version: ${{ matrix.java-version }}
+
+      - name: Run runtime compatibility tests
+        shell: pwsh
+        run: >-
+          ./test-runtime-compatibility.ps1
+          -Mode Run
+          -ExpectedMajor ${{ matrix.major }}
+          -RunId '${{ matrix.distribution }}-${{ matrix.major }}'

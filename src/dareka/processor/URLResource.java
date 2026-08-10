@@ -16,6 +16,7 @@ import java.net.URLConnection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,6 +53,7 @@ public class URLResource extends Resource {
     private long contentLength = -1;
     private boolean canContinue = true;
     private volatile URLConnection con;
+    private volatile InputStream activeInputStream;
 
     // [nl]
     private Proxy defaultProxy;
@@ -59,7 +61,6 @@ public class URLResource extends Resource {
     private HttpResponseHeader captureResponseHeader;
     private byte[] captureResponseBody;
     private int transferTimeout;
-    private IOException transferException;
     private int readTimeout;
     private boolean alreadyRequested;
 
@@ -90,7 +91,6 @@ public class URLResource extends Resource {
                     "transferTimeout must not be a negative value");
         }
         this.transferTimeout = transferTimeout;
-        this.transferException = null;
     }
 
     public void setReadTimeout(int readTimeout) {
@@ -129,34 +129,34 @@ public class URLResource extends Resource {
             return doTransferTo(receiverIn, receiverOut,
                     requestHeaderArg, sendResponseHeader);
         }
-        final InputStream in = receiverIn;
-        final OutputStream out = receiverOut;
-        final HttpRequestHeader rh = requestHeaderArg;
-        final boolean send = sendResponseHeader;
-        new Thread() {
-            @Override
-            public void run() {
-                try {
-                    doTransferTo(in, out, rh, send);
-                } catch (IOException e) {
-                    transferException = e;
-                }
+        AtomicReference<IOException> transferFailure = new AtomicReference<>();
+        Thread transferThread = new Thread(() -> {
+            try {
+                doTransferTo(receiverIn, receiverOut,
+                        requestHeaderArg, sendResponseHeader);
+            } catch (IOException e) {
+                transferFailure.set(e);
             }
-            @Override
-            public void start() {
-                super.start();
-                try {
-                    join(transferTimeout);
-                } catch (InterruptedException e) {}
-                if (isAlive() && con != null) {
-                    Workarounds.dirtyCloseHttpURLConnectionImplSocket(con);
-                    transferException = new HttpIOException(String.format(
-                            "transfer timeout: %,dms", transferTimeout));
-                }
-            }
-        }.start();
-        if (transferException != null) {
-            throw transferException;
+        }, "URLResource transfer");
+        transferThread.setDaemon(true);
+        transferThread.start();
+        try {
+            transferThread.join(transferTimeout);
+        } catch (InterruptedException e) {
+            cancelUpstreamTransfer();
+            transferThread.interrupt();
+            Thread.currentThread().interrupt();
+            throw new HttpIOException("transfer interrupted");
+        }
+        if (transferThread.isAlive()) {
+            cancelUpstreamTransfer();
+            transferThread.interrupt();
+            throw new HttpIOException(String.format(
+                    "transfer timeout: %,dms", transferTimeout));
+        }
+        IOException failure = transferFailure.get();
+        if (failure != null) {
+            throw failure;
         }
         return canContinue;
     }
@@ -404,6 +404,7 @@ public class URLResource extends Resource {
 
             // below, assume IOException does not mean error response, so
             // it is not necessary to consume errorStream.
+            activeInputStream = in;
             try {
                 execSendingBodySequence(receiverOut, in, contentLength);
             } catch (IOException e) {
@@ -419,6 +420,9 @@ public class URLResource extends Resource {
                 }
             } finally {
                 CloseUtil.close(in);
+                if (activeInputStream == in) {
+                    activeInputStream = null;
+                }
             }
         } catch (ConnectException e) {
             throw e;
@@ -435,6 +439,20 @@ public class URLResource extends Resource {
     @Override
     public void stopTransfer() {
         super.stopTransfer();
+        cancelUpstreamTransfer();
+    }
+
+    private void cancelUpstreamTransfer() {
+        InputStream input = activeInputStream;
+        URLConnection currentConnection = con;
+        Thread cancellationThread = new Thread(() -> {
+            if (currentConnection instanceof HttpURLConnection) {
+                ((HttpURLConnection) currentConnection).disconnect();
+            }
+            CloseUtil.close(input);
+        }, "URLResource cancellation");
+        cancellationThread.setDaemon(true);
+        cancellationThread.start();
     }
 
     /**

@@ -176,6 +176,15 @@ java -jar .\NicoCacheLauncher.jar --headless --start
    .\test-launcher.ps1
    ```
 
+   JDK実行時互換性に触れる変更では、Temurinで共通テスト成果物を一度生成し、
+   対象JDKで実行する。正式な対応範囲はJava 17/21/25であり、CIでは
+   `actions/setup-java`の現行13配布元、計39通りをすべて検証する。
+
+   ```powershell
+   .\test-runtime-compatibility.ps1 -Mode Prepare -LibraryDirectory .\.test-work\build-dependencies
+   .\test-runtime-compatibility.ps1 -Mode Run -ExpectedMajor 25
+   ```
+
 6. 正規ビルドスクリプトで本体をビルドする。
 
    ```powershell
