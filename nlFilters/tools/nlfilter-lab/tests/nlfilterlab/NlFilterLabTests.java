@@ -23,6 +23,8 @@ public final class NlFilterLabTests {
         Files.createDirectories(temporary);
 
         run("追跡中フィルターをエラーなく解析", () -> trackedFiltersParse(repository));
+        run("システムフィルターに不要なルールを戻さない",
+                () -> systemFilterHasNoObsoleteRules(repository));
         run("未閉鎖ブロックを検出", () -> unclosedBlock(temporary));
         run("不正なJava正規表現を検出", () -> invalidPattern(temporary));
         run("構文エラーのルールを疑似適用対象に残さない", () -> invalidRuleDiscarded(temporary));
@@ -65,6 +67,17 @@ public final class NlFilterLabTests {
         assertEquals(8, files.size(), "追跡フィルター数");
         assertTrue(!all.hasErrors(), "既存フィルターにエラーがない");
         assertEquals(40, all.rules.size(), "既存ルール数");
+    }
+
+    private static void systemFilterHasNoObsoleteRules(Path repository) throws Exception {
+        Path systemFilter = repository.getParent().resolve("nlFilter_sys.txt");
+        ParseResult result = new FilterParser().parse(systemFilter);
+        assertTrue(!result.hasErrors(), "システムフィルターに構文エラーがない");
+        assertTrue(result.rules.stream().noneMatch(rule ->
+                "nlMainConf".equals(rule.name)
+                || "SearchExtConf".equals(rule.name)
+                || "getthumbinfo用ヘッダ偽装".equals(rule.name)),
+                "廃止済みシステムルールがない");
     }
 
     private static void unclosedBlock(Path temporary) throws Exception {

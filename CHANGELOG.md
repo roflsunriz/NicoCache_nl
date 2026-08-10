@@ -14,6 +14,12 @@
 - ブラウザーが`DEBUG`仮想ホストをDNSへ直接送信しないよう、新規セットアップで
   配置する`proxy.pac`にデバッグ要求をNicoCache_nlへ送る規則を追加した。
 
+### Removed
+
+- 現行のReact検索画面とHTTPS API経路で誤った旧HTML・HTTPへの依存を
+  残さないよう、`nlFilter_sys.txt`から利用元のない`SearchExtConf`、
+  不要な`getthumbinfo`ヘッダ書き換え、本体の既定値と重複する動画ID設定を削除した。
+
 ## [1.3.1] - 2026-08-08
 
 ### Changed

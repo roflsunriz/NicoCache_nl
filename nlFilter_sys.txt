@@ -1,73 +1,9 @@
 # nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
-# 11/11/09
-
-# --- システム設定用フィルタ ---
-# バージョンアップ時に上書きされる恐れがあるので、
-# NicoCacheに通す前に書き換える必要があるなど特に理由がない限り、
-# こちらのフィルタは使用しないでください。
-# (デフォルトのnlFilter_sysが配布アーカイブに入っていて上書きするかもって事で、
-# NicoCacheから書き込むわけではありません。)
-
-
-# nl本体への設定。URLは未使用。この設定が無い時はデフォルトが使用される
-# 1行目: 過去バージョンで使用していたが、今は未使用
-# 2行目: 過去バージョンで使用していたが、今は未使用
-# 3行目:動画IDのマッチ用。Matchは未使用
-#  *smileサーバ(←重要)*の動画IDのアルファベット部分を","区切りで指定
-[Config]
-Name = nlMainConf
-EachLine = TRUE
-Match<
-# ここは未使用 #
-# ここは未使用 #
-# ここは未使用 #
->
-Replace<
-# ここは未使用 #
-# ここは未使用 #
-sm,nm,so,za,zb,co,ax,ca,cw,fz,na,yo
->
-
-# SearchExtension用設定。URLは未使用
-# Match:検索結果の埋め込み位置
-#  マッチした直後の所に検索結果が埋め込まれる
-#  マッチした部分は置換されない
-# Replace:検索結果を埋め込む時のパターン
-#  <thumbBlock><descBlock><colorBlock>が、検索結果に置換される
-#  上記のブロックが複数あるときは、先頭から順に置換して、
-#  すべて置換されたら最初から繰り返す、となる
-#  ニコ公式の検索ページのフォーマットにあわせてやることで
-#  2→3列フィルタなどが効くようになる
-[Config]
-Name = SearchExtConf
-Match<
-<!--↓左列↓-->
->
-Replace<
-<div style="display:none; clear:both;" name="cacheResult" id="cacheResult">
-<div style="width:33%; float:left;"><div style="background-color:<colorBlock>; margin:2px; padding:4px; border:1px solid lightgray;"><thumbBlock><descBlock></div></div>
-<div style="width:33%; float:left;"><div style="background-color:<colorBlock>; margin:2px; padding:4px; border:1px solid lightgray;"><thumbBlock><descBlock></div></div>
-<div style="width:33%; float:left;"><div style="background-color:<colorBlock>; margin:2px; padding:4px; border:1px solid lightgray;"><thumbBlock><descBlock></div></div>
-</div>
->
-
-# getthumbinfoをクロスドメインでも呼び出せるように偽装
-[RequestHeader]
-Name = getthumbinfo用ヘッダ偽装
-Match<
-http://(?!ext)[^/]+\.(nicovideo\.jp/api/getthumbinfo/.+)
->
-Replace<
-http://ext.$1
->
-
-# もう意味ない.
-# [Replace]
-# Name = 削除されたswfへの対策
-# URL = www\.nicovideo\.jp/watch/
-# Match<
-# so\.addVariable\("deleted",\s*"\d+"\);
-# >
-# Replace<
-# so.addVariable("deleted", "0");
-# >
+# 2026-08-10 現在、必要なシステム置換はないため、ルールを意図的に定義していない。
+#
+# - 動画ID種別は本体の既定値とキャッシュ索引で解決する。
+# - 検索ページはReactで描画され、旧SearchExtensionのHTML挿入位置は存在しない。
+# - getthumbinfoは本体がhttps://ext.nicovideo.jp/api/getthumbinfo/を直接使用する。
+#
+# 本ファイルはEasyRewriterがシステムフィルタとして読み込むため、
+# ファイル自体と先頭の文字コード判定行は削除しないこと。
