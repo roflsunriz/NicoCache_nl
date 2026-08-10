@@ -41,7 +41,8 @@ try {
     foreach ($testClass in @(
             'nicocache.diagnostics.RedactorTest',
             'nicocache.diagnostics.HeartbeatEvaluatorTest',
-            'nicocache.diagnostics.HtmlReportWriterTest'
+            'nicocache.diagnostics.HtmlReportWriterTest',
+            'nicocache.diagnostics.DiagnosticsHeadlessProcessTest'
         )) {
         & java -cp $classes $testClass
         if ($LASTEXITCODE -ne 0) {

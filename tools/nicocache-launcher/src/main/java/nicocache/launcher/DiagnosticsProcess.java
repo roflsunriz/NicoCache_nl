@@ -6,9 +6,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 /** Starts the independent watchdog once; it never controls the core process. */
 final class DiagnosticsProcess {
+    private static final long START_TIMEOUT_SECONDS = 10L;
     private final LauncherPaths paths;
 
     DiagnosticsProcess(LauncherPaths paths) {
@@ -21,18 +23,40 @@ final class DiagnosticsProcess {
         }
         Path diagnosticsJar = paths.getDiagnosticsJar();
         if (diagnosticsJar == null || !Files.isRegularFile(diagnosticsJar)) {
-            return;
+            throw new IOException(
+                    "NicoCacheDiagnostics.jar が見つかりません");
         }
         List<String> command = buildStartCommand();
         Path logDirectory = paths.getDataRoot().resolve("data/logs");
         Files.createDirectories(logDirectory);
-        new ProcessBuilder(command)
+        Process started = new ProcessBuilder(command)
                 .directory(paths.getApplicationRoot().toFile())
                 .redirectErrorStream(true)
                 .redirectOutput(ProcessBuilder.Redirect.appendTo(
                         logDirectory.resolve("nicocache-diagnostics.log")
                                 .toFile()))
                 .start();
+        long deadline = System.nanoTime()
+                + TimeUnit.SECONDS.toNanos(START_TIMEOUT_SECONDS);
+        while (System.nanoTime() < deadline) {
+            if (isRunning()) {
+                return;
+            }
+            try {
+                Thread.sleep(100L);
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                if (started.isAlive()) {
+                    started.destroy();
+                }
+                throw new IOException("診断アプリの起動待機が中断されました", error);
+            }
+        }
+        if (started.isAlive()) {
+            started.destroy();
+        }
+        throw new IOException("診断アプリが10秒以内に起動しませんでした。"
+                + "data/logs/nicocache-diagnostics.log を確認してください");
     }
 
     List<String> buildStartCommand() {

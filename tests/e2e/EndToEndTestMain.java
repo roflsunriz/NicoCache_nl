@@ -43,35 +43,39 @@ public final class EndToEndTestMain {
     private final Path sandbox;
     private final Path productJar;
     private final Path coreJar;
+    private final Path diagnosticsJar;
     private final Path application;
     private final Path data;
     private HttpServer upstream;
     private ExecutorService upstreamExecutor;
     private Process product;
+    private long diagnosticsPid = -1L;
     private int upstreamPort;
     private int productPort;
 
     private EndToEndTestMain(Path repository, Path sandbox, Path productJar,
-            Path coreJar) {
+            Path coreJar, Path diagnosticsJar) {
         this.repository = repository;
         this.sandbox = sandbox;
         this.productJar = productJar;
         this.coreJar = coreJar;
+        this.diagnosticsJar = diagnosticsJar;
         this.application = sandbox.resolve("application");
         this.data = sandbox.resolve("data");
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 4) {
+        if (args.length != 5) {
             throw new IllegalArgumentException(
                     "usage: EndToEndTestMain <repository> <sandbox> "
-                            + "<launcher-jar> <core-jar>");
+                            + "<launcher-jar> <core-jar> <diagnostics-jar>");
         }
         EndToEndTestMain suite = new EndToEndTestMain(
                 Path.of(args[0]).toAbsolutePath().normalize(),
                 Path.of(args[1]).toAbsolutePath().normalize(),
                 Path.of(args[2]).toAbsolutePath().normalize(),
-                Path.of(args[3]).toAbsolutePath().normalize());
+                Path.of(args[3]).toAbsolutePath().normalize(),
+                Path.of(args[4]).toAbsolutePath().normalize());
         suite.execute();
     }
 
@@ -82,6 +86,8 @@ public final class EndToEndTestMain {
             startProduct();
 
             run("launcher and control API", this::testControlApi);
+            run("launcher starts diagnostics watchdog",
+                    this::testDiagnosticsStarted);
             run("real JAR local-file user flow", this::testLocalFileFlow);
             run("local-file path containment", this::testPathContainment);
             run("malformed and ambiguous HTTP rejection",
@@ -93,8 +99,15 @@ public final class EndToEndTestMain {
             run("actionable upstream failure response",
                     this::testUpstreamFailure);
         } finally {
-            stopProduct();
-            stopUpstream();
+            try {
+                stopProduct();
+            } finally {
+                try {
+                    stopDiagnostics();
+                } finally {
+                    stopUpstream();
+                }
+            }
         }
 
         if (!FAILURES.isEmpty()) {
@@ -104,7 +117,7 @@ public final class EndToEndTestMain {
             }
             throw new AssertionError("end-to-end tests failed");
         }
-        System.out.println("End-to-end tests passed: 7");
+        System.out.println("End-to-end tests passed: 8");
     }
 
     private void prepareSandbox() throws IOException {
@@ -128,6 +141,9 @@ public final class EndToEndTestMain {
         copy(repository.resolve("data/tlsclient/cacerts2"),
                 data.resolve("data/tlsclient/cacerts2"));
         Files.copy(coreJar, application.resolve("NicoCache_nl.jar"),
+                StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(diagnosticsJar,
+                application.resolve("NicoCacheDiagnostics.jar"),
                 StandardCopyOption.REPLACE_EXISTING);
         Path dependencyDirectory = coreJar.getParent().resolve("lib");
         Files.createDirectories(application.resolve("lib"));
@@ -276,6 +292,67 @@ public final class EndToEndTestMain {
         int authorized = controlRequest(status, "/api/control/status",
                 status.getProperty("token"));
         assertEquals(200, authorized, "control API authorized response");
+    }
+
+    private void testDiagnosticsStarted() throws Exception {
+        Path statusFile = data.resolve(
+                "data/nicocache-diagnostics-status.properties");
+        long deadline = System.nanoTime() + START_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline
+                && !Files.isRegularFile(statusFile)) {
+            Thread.sleep(50L);
+        }
+        assertTrue(Files.isRegularFile(statusFile),
+                "diagnostics status must be created by launcher");
+        Properties status = new Properties();
+        try (InputStream input = Files.newInputStream(statusFile)) {
+            status.load(input);
+        }
+        diagnosticsPid = Long.parseLong(status.getProperty("pid", "-1"));
+        assertTrue(diagnosticsPid > 0L
+                        && ProcessHandle.of(diagnosticsPid)
+                        .map(ProcessHandle::isAlive).orElse(false),
+                "diagnostics process must remain alive");
+        assertEquals(application.toString(),
+                status.getProperty("applicationRoot"),
+                "diagnostics application root");
+        assertEquals(data.toString(), status.getProperty("dataRoot"),
+                "diagnostics data root");
+    }
+
+    private void stopDiagnostics() throws Exception {
+        if (diagnosticsPid <= 0L) {
+            Path statusFile = data.resolve(
+                    "data/nicocache-diagnostics-status.properties");
+            if (Files.isRegularFile(statusFile)) {
+                Properties status = new Properties();
+                try (InputStream input = Files.newInputStream(statusFile)) {
+                    status.load(input);
+                }
+                diagnosticsPid = Long.parseLong(
+                        status.getProperty("pid", "-1"));
+            }
+        }
+        if (diagnosticsPid <= 0L) {
+            return;
+        }
+        ProcessHandle handle = ProcessHandle.of(diagnosticsPid).orElse(null);
+        if (handle == null || !handle.isAlive()) {
+            return;
+        }
+        String commandLine = handle.info().commandLine().orElse("");
+        if (!commandLine.isEmpty()
+                && !commandLine.contains("NicoCacheDiagnostics.jar")) {
+            throw new AssertionError(
+                    "refusing to stop unexpected process: " + diagnosticsPid);
+        }
+        handle.destroy();
+        try {
+            handle.onExit().get(5L, TimeUnit.SECONDS);
+        } catch (java.util.concurrent.TimeoutException error) {
+            handle.destroyForcibly();
+            handle.onExit().get(5L, TimeUnit.SECONDS);
+        }
     }
 
     private int controlRequest(Properties status, String endpoint,

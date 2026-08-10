@@ -12,6 +12,7 @@ $guiSandbox = Join-Path $workRoot 'gui'
 $preview = Join-Path $guiSandbox 'preview'
 $coreJar = Join-Path $workRoot 'NicoCache_nl-e2e-core.jar'
 $testJar = Join-Path $workRoot 'NicoCacheLauncher-e2e.jar'
+$diagnosticsJar = Join-Path $workRoot 'NicoCacheDiagnostics.jar'
 $codecJars = @('brotli-dec.jar', 'zstd-jni.jar') | ForEach-Object {
     $path = Join-Path $LibraryDirectory $_
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
@@ -53,10 +54,17 @@ try {
     $launcherSources = Get-ChildItem -LiteralPath $launcherSourceRoot `
         -Recurse -File -Filter '*.java' |
         Select-Object -ExpandProperty FullName
+    $diagnosticsSourceRoot = (Resolve-Path -LiteralPath (
+        Join-Path $root 'tools/nicocache-diagnostics/src/main/java'
+    )).Path
+    $diagnosticsSources = Get-ChildItem -LiteralPath $diagnosticsSourceRoot `
+        -Recurse -File -Filter '*.java' |
+        Select-Object -ExpandProperty FullName
 
     & javac --release 11 --add-modules jdk.httpserver -encoding UTF-8 `
         -Xlint:all -Werror -classpath $codecClasspath -d $classes `
-        $productSources $testSources $launcherTestSources $launcherSources
+        $productSources $testSources $launcherTestSources $launcherSources `
+        $diagnosticsSources
     if ($LASTEXITCODE -ne 0) {
         throw '本体またはE2Eテストのコンパイルに失敗しました'
     }
@@ -79,6 +87,18 @@ try {
             -Force | Out-Null
         Copy-Item -LiteralPath $resource.FullName -Destination $target -Force
     }
+    $diagnosticsResourceRoot = (Resolve-Path -LiteralPath (
+        Join-Path $root 'tools/nicocache-diagnostics/src/main/resources'
+    )).Path
+    foreach ($resource in (Get-ChildItem -LiteralPath $diagnosticsResourceRoot `
+            -Recurse -File)) {
+        $relative = $resource.FullName.Substring(
+            $diagnosticsResourceRoot.Length).TrimStart('\', '/')
+        $target = Join-Path $classes $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) `
+            -Force | Out-Null
+        Copy-Item -LiteralPath $resource.FullName -Destination $target -Force
+    }
 
     & jar cfm $coreJar (Join-Path $root 'manifest-nl.mf') `
         -C $classes dareka
@@ -95,10 +115,16 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw 'E2E用起動管理JARの作成に失敗しました'
     }
+    & jar cfe $diagnosticsJar nicocache.diagnostics.DiagnosticsMain `
+        -C $classes nicocache/diagnostics
+    if ($LASTEXITCODE -ne 0) {
+        throw 'E2E用診断JARの作成に失敗しました'
+    }
 
     $runtimeClasspath = $classes + [System.IO.Path]::PathSeparator + $codecClasspath
     & java --add-modules jdk.httpserver -cp $runtimeClasspath `
-        e2e.EndToEndTestMain $root $httpSandbox $testJar $coreJar
+        e2e.EndToEndTestMain $root $httpSandbox $testJar $coreJar `
+        $diagnosticsJar
     if ($LASTEXITCODE -ne 0) {
         throw '実JAR E2Eテストに失敗しました'
     }

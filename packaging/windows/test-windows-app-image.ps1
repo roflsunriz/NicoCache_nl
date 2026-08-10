@@ -60,6 +60,8 @@ $guiPropertiesPath = Join-Path $dataRoot 'NicoCacheGUI.property'
 $setupStatePath = Join-Path $dataRoot 'data\first-run-setup.properties'
 $diagnosticsStatusPath = Join-Path $dataRoot `
     'data\nicocache-diagnostics-status.properties'
+$diagnosticsLockPath = Join-Path $dataRoot `
+    'data\nicocache-diagnostics.lock'
 $systemStatePath = Join-Path $dataRoot 'data\setup-system-state.json'
 $setupScriptPath = Join-Path $appDirectory 'setup\windows\first-run-setup.ps1'
 $certificateDirectory = Join-Path $dataRoot 'certs'
@@ -305,6 +307,30 @@ function Get-ProductProcesses {
     )
 }
 
+function Wait-DiagnosticsProcess {
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    do {
+        if (Test-Path -LiteralPath $diagnosticsStatusPath -PathType Leaf) {
+            try {
+                $status = Get-Content -Raw -LiteralPath `
+                    $diagnosticsStatusPath | ConvertFrom-StringData
+                $diagnosticsProcess = Get-Process -Id ([int]$status.pid) `
+                    -ErrorAction Stop
+                if (-not [string]::Equals(
+                        $diagnosticsProcess.Path, $diagnosticsJavaPath,
+                        [System.StringComparison]::OrdinalIgnoreCase)) {
+                    throw "診断アプリの実行ファイルが同梱JREではありません: $($diagnosticsProcess.Path)"
+                }
+                return $diagnosticsProcess
+            } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+                # 状態ファイルとプロセス生成の境界なら再試行する。
+            }
+        }
+        Start-Sleep -Milliseconds 100
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw '常駐診断アプリが10秒以内に起動しませんでした'
+}
+
 $osStateBefore = Get-OsIntegrationState
 $initialCertificateFiles = @(
     Get-ChildItem -LiteralPath $certificateDirectory -File -ErrorAction SilentlyContinue |
@@ -429,23 +455,7 @@ try {
     if ($guiProcess.HasExited) {
         throw "引数なしの起動管理GUIが終了しました (ExitCode: $($guiProcess.ExitCode))"
     }
-    $diagnosticsDeadline = [DateTime]::UtcNow.AddSeconds(10)
-    while (-not (Test-Path -LiteralPath $diagnosticsStatusPath -PathType Leaf) `
-            -and [DateTime]::UtcNow -lt $diagnosticsDeadline) {
-        Start-Sleep -Milliseconds 100
-    }
-    if (-not (Test-Path -LiteralPath $diagnosticsStatusPath -PathType Leaf)) {
-        throw '起動管理GUIが常駐診断アプリを起動しませんでした'
-    }
-    $diagnosticsStatus = Get-Content -Raw -LiteralPath $diagnosticsStatusPath |
-        ConvertFrom-StringData
-    $diagnosticsProcess = Get-Process -Id ([int]$diagnosticsStatus.pid) `
-        -ErrorAction Stop
-    if (-not [string]::Equals(
-            $diagnosticsProcess.Path, $diagnosticsJavaPath,
-            [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "診断アプリの実行ファイルが同梱JREではありません: $($diagnosticsProcess.Path)"
-    }
+    $diagnosticsProcess = Wait-DiagnosticsProcess
     $implicitCoreProcesses = @(
         Get-ProductProcesses |
             Where-Object {
@@ -464,6 +474,13 @@ try {
     $guiProcess.WaitForExit(10000) | Out-Null
     Write-Output 'PASS 引数なしのGUI起動では本体を暗黙起動しない'
     Write-Output 'PASS 起動管理GUIから独立した常駐診断アプリを起動'
+
+    Stop-Process -Id $diagnosticsProcess.Id -Force
+    $diagnosticsProcess.WaitForExit(10000) | Out-Null
+    Remove-Item -LiteralPath $diagnosticsStatusPath -Force `
+        -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $diagnosticsLockPath -Force `
+        -ErrorAction SilentlyContinue
 
     $process = Start-Process -FilePath $launcherPath `
         -ArgumentList @('-jar', $launcherJarPath, '--headless') `
@@ -507,9 +524,11 @@ try {
     if ($response.Content -notmatch 'NicoCache_nl version') {
         throw 'ルート応答にNicoCache_nlのバージョン文字列がありません'
     }
+    $headlessDiagnosticsProcess = Wait-DiagnosticsProcess
 
     Write-Output 'PASS 異なる作業ディレクトリからuserDataRootを解決して起動'
     Write-Output "PASS 単一製品ランチャーの内部ヘッドレス起動"
+    Write-Output 'PASS ヘッドレス本体起動から常駐診断と自動監視を開始'
     Write-Output "PASS HTTPループバック応答 (port=$listenPort)"
     $testSucceeded = $true
 } finally {

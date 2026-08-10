@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.Locale;
 import java.util.ResourceBundle;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import javax.swing.SwingUtilities;
@@ -51,6 +52,10 @@ public final class DiagnosticsMain {
                 return;
             }
             if (GraphicsEnvironment.isHeadless()) {
+                if (options.hidden) {
+                    new CountDownLatch(1).await();
+                    return;
+                }
                 throw new IllegalStateException(
                         "GUIのない環境では --collect-now を指定してください");
             }
@@ -94,7 +99,7 @@ public final class DiagnosticsMain {
     private static void printHelp() {
         System.out.println("NicoCacheDiagnostics");
         System.out.println("  --app-root=<path> --data-root=<path>");
-        System.out.println("  --hidden       タスクトレイへ格納して起動");
+        System.out.println("  --hidden       タスクトレイまたはバックグラウンドで起動");
         System.out.println("  --collect-now  1回収集して終了（GUI不要）");
     }
 

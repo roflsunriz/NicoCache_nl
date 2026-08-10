@@ -140,7 +140,7 @@ force-shutdownによる隔離プロセス終了も検証する。graceful-shutdo
 
 `test-diagnostics.ps1`は、常駐診断アプリの認証情報・個人情報の匿名化、動画IDと動画タイトルの
 保持、3回連続失敗のデバウンス、通常停止の除外、障害HTMLのCSPとエスケープ、狭い画面でも
-操作できるSwing GUI、全ボタンの状態遷移を検証する。
+操作できるSwing GUI、全ボタンの状態遷移、画面のない環境での隠し常駐を検証する。
 
 ```powershell
 .\test-diagnostics.ps1

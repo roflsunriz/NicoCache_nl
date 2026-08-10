@@ -12,10 +12,12 @@ final class CoreProcess {
     private static final Duration START_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration STOP_TIMEOUT = Duration.ofSeconds(30);
     private final LauncherPaths paths;
+    private final DiagnosticsProcess diagnostics;
     private Process startedProcess;
 
     CoreProcess(LauncherPaths paths) {
         this.paths = paths;
+        this.diagnostics = new DiagnosticsProcess(paths);
     }
 
     void startGui() throws IOException {
@@ -27,6 +29,7 @@ final class CoreProcess {
     }
 
     private void start(boolean foreground, boolean headless) throws IOException {
+        diagnostics.startIfNeeded();
         Properties existing = ControlClient.readStatusIfPresent(
                 paths.getControlStatusFile());
         if (ControlClient.isAlive(existing)) {
@@ -79,6 +82,7 @@ final class CoreProcess {
         Properties existing = ControlClient.readStatusIfPresent(
                 paths.getControlStatusFile());
         if (ControlClient.isAlive(existing)) {
+            diagnostics.startIfNeeded();
             ControlClient.waitUntilReady(paths, null, START_TIMEOUT);
             waitForExistingProcess(existing);
             return 0;

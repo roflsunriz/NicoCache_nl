@@ -41,6 +41,18 @@ public final class DiagnosticsProcessTest {
             assertFalse(command.stream().anyMatch(value ->
                     value.contains("restart") || value.contains("--start")),
                     "watchdog must not receive a core start or restart option");
+            Files.delete(application.resolve("NicoCacheDiagnostics.jar"));
+            boolean missingRejected = false;
+            try {
+                new DiagnosticsProcess(LauncherPaths.resolve(
+                        application, data)).startIfNeeded();
+            } catch (IOException error) {
+                missingRejected = error.getMessage() != null
+                        && error.getMessage().contains(
+                                "NicoCacheDiagnostics.jar");
+            }
+            assertTrue(missingRejected,
+                    "core launch must not silently omit the watchdog");
             System.out.println("Diagnostics process launch tests passed");
         } finally {
             deleteTree(root);

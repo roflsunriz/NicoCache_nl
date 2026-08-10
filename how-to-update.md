@@ -70,6 +70,10 @@ java -jar .\NicoCacheLauncher.jar --headless --status
 java -jar .\NicoCacheLauncher.jar --headless --stop
 ```
 
+GUI、タスクトレイ、ヘッドレスCLIのいずれから本体を起動した場合も、ランチャーは
+`NicoCacheDiagnostics.jar`の起動完了を確認してから本体を起動する。画面のない環境では
+診断アプリはバックグラウンドで監視を継続する。
+
 未設定環境では先に`--setup --headless`を実行し、ユーザーデータ先とHTTPS、CA信頼、
 OSプロキシー、自動起動の各`true`/`false`を明示する。GUI初回ウィザードではこの4項目を
 推奨設定として初期ONにし、HTTPSの必須条件、`proxy.pac`による通常通信の性能維持、
