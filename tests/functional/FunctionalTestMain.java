@@ -440,6 +440,37 @@ public final class FunctionalTestMain {
                 exchange.getResponseBody().write(body);
                 return;
             }
+            if ("/nvcomment-fixture/v1/threads".equals(path)) {
+                String requestBody = new String(
+                        readAll(exchange.getRequestBody()), StandardCharsets.UTF_8);
+                String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+                String clientOsType = exchange.getRequestHeaders()
+                        .getFirst("x-client-os-type");
+                String frontendId = exchange.getRequestHeaders().getFirst("x-frontend-id");
+                String frontendVersion = exchange.getRequestHeaders()
+                        .getFirst("x-frontend-version");
+                boolean valid = "POST".equals(exchange.getRequestMethod())
+                        && "text/plain;charset=UTF-8".equals(contentType)
+                        && "others".equals(clientOsType)
+                        && "6".equals(frontendId)
+                        && "0".equals(frontendVersion)
+                        && requestBody.contains("\"threadKey\":\"functional-thread-key\"")
+                        && requestBody.contains("\"language\":\"ja-jp\"")
+                        && requestBody.contains("\"id\":\"9000100001\"")
+                        && requestBody.contains("\"fork\":\"main\"")
+                        && requestBody.contains("\"additionals\":{}");
+                byte[] body = (valid
+                        ? "{\"comments\":[{\"body\":\"functional-comment-download\"}]}"
+                        : "{\"error\":\"invalid nvcomment request\",\"method\":\""
+                                + exchange.getRequestMethod() + "\",\"contentType\":\""
+                                + String.valueOf(contentType) + "\",\"request\":"
+                                + (requestBody.isEmpty() ? "null" : requestBody) + "}")
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(valid ? 200 : 400, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
             if ("/api/getthumbinfo/9000100001".equals(path)) {
                 byte[] body = ("<nicovideo_thumb_response status=\"ok\"><thumb>"
                         + "<video_id>sm900010</video_id><title>Functional CMAF</title>"
@@ -457,7 +488,12 @@ public final class FunctionalTestMain {
                         : path.contains("900011") ? "sm900011" : "sm900010";
                 byte[] body = ("{\"video\":{\"id\":\"" + smid + "\","
                         + "\"title\":\"Functional CMAF\",\"duration\":1,"
-                        + "\"isDeleted\":false},\"media\":{\"domand\":{"
+                        + "\"isDeleted\":false},\"comment\":{\"nvComment\":{"
+                        + "\"threadKey\":\"functional-thread-key\","
+                        + "\"server\":\"http://127.0.0.1:" + upstreamPort
+                        + "/nvcomment-fixture\",\"params\":{\"targets\":[{"
+                        + "\"id\":\"9000100001\",\"fork\":\"main\"}],"
+                        + "\"language\":\"ja-jp\"}}},\"media\":{\"domand\":{"
                         + "\"videos\":[],\"audios\":[]}},\"system\":{"
                         + "\"isPeakTime\":false},\"viewer\":{\"isPremium\":false}}")
                         .getBytes(StandardCharsets.UTF_8);
@@ -1152,6 +1188,23 @@ public final class FunctionalTestMain {
 
         Path saved = sandbox.resolve("cache/sm900010.data/comment.0.ja-jp.json");
         waitForFileContaining(saved, "functional-comment", Duration.ofSeconds(3));
+
+        Response download = request(nicoRequest(
+                "GET", "/cache/sm900010.comments.json", ""));
+        assertEquals(200, download.status,
+                "nvcomment download status: " + download.bodyText());
+        assertContains(download.header("content-type"), "application/json",
+                "nvcomment download content type");
+        assertEquals("attachment; filename=\"sm900010.comments.json\"",
+                download.header("content-disposition"),
+                "nvcomment download filename");
+        assertContains(download.bodyText(), "functional-comment-download",
+                "nvcomment download body");
+
+        Response invalidMethod = request(nicoRequest(
+                "POST", "/cache/sm900010.comments.json", ""));
+        assertEquals(405, invalidMethod.status,
+                "nvcomment download method validation");
     }
 
     private void testCacheInfoAndPlayback() throws Exception {

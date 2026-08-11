@@ -76,7 +76,7 @@ public class CommentDownloader {
             ) throws IOException {
         // 既に受信済みのヘッダに対して設定する
         r.getResponseHeader(null, null).setMessageHeader("Content-Disposition",
-                "attachment; filename=\"" + filename + ".xml");
+                "attachment; filename=\"" + filename + ".xml\"");
     }
 
     /**

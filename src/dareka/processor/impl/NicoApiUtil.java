@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -21,6 +22,7 @@ import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
 
 import dareka.common.Logger;
+import dareka.processor.HttpHeader;
 import dareka.processor.HttpRequestHeader;
 import dareka.processor.URLResource;
 
@@ -237,8 +239,11 @@ public class NicoApiUtil {
             }
             InputStream in = null;
             if (postString != null) {
-                in = new ByteArrayInputStream(postString.getBytes());
+                byte[] postBody = postString.getBytes(StandardCharsets.UTF_8);
+                in = new ByteArrayInputStream(postBody);
                 requestHeader.setMethod("POST");
+                requestHeader.setMessageHeader(HttpHeader.CONTENT_LENGTH,
+                        Integer.toString(postBody.length));
             } else {
                 requestHeader.setMethod("GET");
             }

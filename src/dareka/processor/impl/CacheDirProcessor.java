@@ -98,6 +98,8 @@ public class CacheDirProcessor implements Processor {
             "^[a-z]{2}[0-9]+(?:low)?(?:(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\])?\\w*\\.hls)?\\.(?:mp4|mkv|webm|flv)$");
     private static final Pattern COMMENT_API_PATTERN = Pattern.compile(
             "^(\\w{2}\\d+)\\.xml(?:|\\?(.*))$");
+    private static final Pattern NVCOMMENT_API_PATTERN = Pattern.compile(
+            "^([a-z]{2}\\d+)\\.comments\\.json$");
     private static final Pattern LST_API_PATTERN = Pattern.compile(
             "^(add|trim)(r)?(list/[^\\?]+)(?:|\\?(.+))$");
     private static final Pattern SEARCH_API_PATTERN = Pattern.compile(
@@ -172,6 +174,9 @@ public class CacheDirProcessor implements Processor {
         if (result != null) return result;
 
         result = mightProcessEchoAPI(requestHeader, browser, apiPath, apiArg);
+        if (result != null) return result;
+
+        result = mightProcessNvCommentAPI(requestHeader, apiPath);
         if (result != null) return result;
 
         // このパートは削除予定. replaced by #mightProcessInfoAPI()
@@ -288,7 +293,7 @@ public class CacheDirProcessor implements Processor {
             return o.convert();
         };
 
-        // コメント取得
+        // 旧XMLコメント取得
         if ((m = COMMENT_API_PATTERN.matcher(path)).matches()) {
             String id = m.group(1);
             String params = m.group(2);
@@ -606,6 +611,34 @@ public class CacheDirProcessor implements Processor {
             return createStringResource(msg);
         } else {
             return createRedirectResponse(requestHeader);
+        }
+    }
+
+    /** /cache/&lt;動画ID&gt;.comments.json (GET) */
+    private static Resource mightProcessNvCommentAPI(
+            HttpRequestHeader requestHeader, String path) {
+        Matcher matcher = NVCOMMENT_API_PATTERN.matcher(path);
+        if (!matcher.matches()) {
+            return null;
+        }
+        if (!requestHeader.isGetMethod()) {
+            return StringResource.getMethodNotAllowed();
+        }
+
+        String id = matcher.group(1);
+        WatchVars watchVars = WatchVars.get(id);
+        if (watchVars == null) {
+            return StringResource.getInternalError(
+                    "watchページをリロードしてから再試行してください");
+        }
+        try {
+            Resource resource = NvCommentDownloader.getResource(
+                    id, watchVars, requestHeader);
+            return resource != null ? resource : StringResource.getInternalError(
+                    "現行コメント情報を取得できませんでした。watchページをリロードしてください");
+        } catch (IOException e) {
+            Logger.warning("nvcomment download failed: " + id);
+            return StringResource.getBadGateway("コメント取得に失敗しました");
         }
     }
 

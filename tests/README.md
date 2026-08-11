@@ -61,8 +61,9 @@ HTTP サーバーを利用する。
 - `DEBUG` 仮想ホストのスレッドダンプAPIと、利用者データルートへの
   UTF-8ファイル出力
 - サムネイルの上流取得・ファイル保存・再利用
-- nvcomment 応答の動画別 JSON 保存（外部 TLS 接続を避けるため、テスト
-  Extension が同じ `CommentSavingProcessor` をローカル HTTP fixture に登録する）
+- nvcomment 応答の動画別 JSON 保存と、視聴ページの現行`comment.nvComment`情報から
+  `/cache/<動画ID>.comments.json`が正しいPOST本文・MIME・ファイル名で取得する経路
+  （外部TLS接続を避けるため、ローカルHTTP fixtureを利用する）
 - DOMAND/CMAF の access-rights、master/sub playlist、AES key、初期化 chunk、
   暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生と、
   アニメ公式動画で使われる `hlsext` 経路、署名更新前後で同名セグメントが続く
@@ -91,7 +92,7 @@ Tencent Konaの39組み合わせで、本体機能、転送タイムアウト、
 成功時に削除される。`-KeepWorkDir`を指定した場合だけ保持する。
 
 本体APIの契約だけを短時間で確認する場合は次を実行する。`/cache/info`、
-`info/v2`、`ajax_info`、`echo`、検索・一覧・XML、旧API、削除・移動・LST更新の
+`info/v2`、`ajax_info`、`echo`、検索・一覧・コメントJSON、XML、旧API、削除・移動・LST更新の
 成功系・不正入力・メソッド制限を隔離した実ソケットで検証し、`list/`からのパス脱出も
 拒否されることを確認する。起動管理APIのBearer認証、status、ping、未知パス、
 force-shutdownによる隔離プロセス終了も検証する。graceful-shutdownはE2Eテストで検証する。
