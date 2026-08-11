@@ -1,8 +1,10 @@
 package nicocache.diagnostics;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -149,7 +151,8 @@ final class DiagnosticsService implements AutoCloseable {
     }
 
     private void writeStatus() throws IOException {
-        Files.createDirectories(paths.diagnosticsStatus().getParent());
+        Path destination = paths.diagnosticsStatus();
+        Files.createDirectories(destination.getParent());
         Properties properties = new Properties();
         properties.setProperty("version", "1");
         properties.setProperty("pid",
@@ -158,10 +161,19 @@ final class DiagnosticsService implements AutoCloseable {
         properties.setProperty("applicationRoot",
                 paths.applicationRoot().toString());
         properties.setProperty("dataRoot", paths.dataRoot().toString());
-        try (var output = Files.newOutputStream(paths.diagnosticsStatus(),
+        Path temporary = destination.resolveSibling(
+                destination.getFileName() + ".tmp");
+        try (var output = Files.newOutputStream(temporary,
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING,
                 StandardOpenOption.WRITE)) {
             properties.store(output, "NicoCacheDiagnostics status");
+        }
+        try {
+            Files.move(temporary, destination, StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException error) {
+            Files.move(temporary, destination,
+                    StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
