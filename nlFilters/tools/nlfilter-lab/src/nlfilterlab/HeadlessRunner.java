@@ -78,7 +78,8 @@ final class HeadlessRunner {
                 String previewPath = extract(PREVIEW_URL, renderJson, "preview URL");
                 String separator = previewPath.contains("?") ? "&" : "?";
                 String previewUrl = origin + previewPath + separator + "spaAdd=" + options.spaAdd +
-                        "&popThumbProbe=" + options.popThumbProbe;
+                        "&popThumbProbe=" + options.popThumbProbe +
+                        "&cacheMenuProbe=" + options.cacheMenuProbe;
 
                 Path domProfile = output.resolve(".profile-dom");
                 Path screenshotProfile = output.resolve(".profile-screenshot");
@@ -107,6 +108,9 @@ final class HeadlessRunner {
                 }
                 if (options.popThumbProbe && !finalHtml.contains("data-popthumb-probe-status=\"passed\"")) {
                     failures.add("popThumb性能プローブが成功しませんでした");
+                }
+                if (options.cacheMenuProbe && !finalHtml.contains("data-cache-menu-probe-status=\"passed\"")) {
+                    failures.add("NicoCacheヘッダーメニュープローブが成功しませんでした");
                 }
             }
             exitCode = failures.isEmpty() ? 0 : 1;
@@ -204,6 +208,7 @@ final class HeadlessRunner {
                 ",\"reencodedBitrate\":" + options.reencodedBitrate +
                 ",\"spaAdd\":" + options.spaAdd +
                 ",\"popThumbProbe\":" + options.popThumbProbe +
+                ",\"cacheMenuProbe\":" + options.cacheMenuProbe +
                 ",\"viewport\":{\"width\":" + options.width + ",\"height\":" + options.height + "}" +
                 ",\"browser\":" + Json.quote(browser) +
                 ",\"parserCompatibility\":" + ParserCompatibility.toJson(compatibility) +
@@ -292,6 +297,7 @@ final class HeadlessRunner {
         String contentType;
         boolean noFilters;
         boolean popThumbProbe;
+        boolean cacheMenuProbe;
         final List<String> files = new ArrayList<>();
 
         static Options parse(Path repositoryRoot, List<String> arguments) {
@@ -313,6 +319,7 @@ final class HeadlessRunner {
                     case "--file" -> { value.files.add(required(option, next)); i++; }
                     case "--no-filters" -> value.noFilters = true;
                     case "--popthumb-probe" -> value.popThumbProbe = true;
+                    case "--cache-menu-probe" -> value.cacheMenuProbe = true;
                     case "--viewport" -> {
                         String[] size = required(option, next).toLowerCase(Locale.ROOT).split("x", 2);
                         if (size.length != 2) throw new IllegalArgumentException("--viewport は 1280x900 の形式です");

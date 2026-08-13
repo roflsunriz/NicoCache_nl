@@ -7,7 +7,12 @@
     :root { color-scheme: light; font-family: "Yu Gothic UI", sans-serif; color: #20242d; background: #f2f4f7; }
     * { box-sizing: border-box; }
     body { margin: 0; }
-    .site-header { padding: 14px 24px; background: #252a34; color: white; font-weight: 700; }
+    #CommonHeader { position: sticky; top: 0; z-index: 1000; min-height: 36px; background: #252525; }
+    .nico-CommonHeaderRoot { display: flex; height: 36px; align-items: center; justify-content: space-between; color: #fff; }
+    [data-lab-service-nav] { display: flex; height: 36px; padding-left: 22px; align-items: center; }
+    [data-lab-service-nav] > a { height: 36px; padding: 0 6px; color: #ddd; font-size: 12px; line-height: 36px; }
+    [data-lab-official-other] { position: relative; height: 36px; padding: 0 6px; color: #fff; font-size: 12px; line-height: 36px; }
+    [data-lab-account] { padding-right: 22px; color: #ddd; font-size: 12px; }
     main { width: min(1120px, calc(100% - 28px)); margin: 22px auto; }
     .player-shell { aspect-ratio: 16 / 7; display: grid; place-items: center; border-radius: 12px; background: #11151c; color: white; }
     video { width: min(70%, 720px); height: 70%; background: #050608; }
@@ -19,11 +24,25 @@
     img { display: block; width: 100%; border-radius: 7px; }
     a { color: #2464a8; text-decoration: none; }
     .VideoMediaObject-title { align-self: center; font-weight: 700; }
-    @media (max-width: 700px) { .content-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 840px) {
+      [data-lab-service-nav] { display: none; }
+      .content-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
-  <header class="site-header">ニコニコ動画風ローカルfixture</header>
+  <div id="CommonHeader">
+    <div class="nico-CommonHeaderRoot">
+      <nav data-lab-service-nav aria-label="公式サービス">
+        <a href="https://www.nicovideo.jp/video_top?cmnhd_ref=pos%3Dheader_servicelink">動画</a>
+        <a href="https://seiga.nicovideo.jp/?cmnhd_ref=pos%3Dheader_servicelink">静画</a>
+        <a href="https://live.nicovideo.jp/?cmnhd_ref=pos%3Dheader_servicelink">生放送</a>
+        <a href="https://anime.nicovideo.jp/?cmnhd_ref=pos%3Dheader_servicelink">Nアニメ</a>
+        <div data-lab-official-other>その他⌄</div>
+      </nav>
+      <div data-lab-account>ログイン</div>
+    </div>
+  </div>
   <meta name="server-response" content="{&quot;meta&quot;:{&quot;status&quot;:200},&quot;data&quot;:{&quot;response&quot;:{&quot;video&quot;:{&quot;id&quot;:&quot;sm9&quot;,&quot;title&quot;:&quot;テスト動画&quot;}}}}">
   <main>
     <section class="player-shell">

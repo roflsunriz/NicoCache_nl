@@ -1,5 +1,5 @@
 # nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)
-# 23/07/04
+# 23/07/04, 26/08/14
 
 [Replace]
 Name = 空き容量警告を追加
@@ -15,7 +15,7 @@ if (<freeSpace> < 3) alert("キャッシュフォルダの空き容量が3GBを�
 >
 
 [Replace]
-Name = キャッシュ削除ボタンを追加
+Name = NicoCacheヘッダーメニューを追加
 URL = www\.nicovideo\.jp/watch/
 ContentType = text/html
 Match<

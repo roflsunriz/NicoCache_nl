@@ -163,6 +163,103 @@
     if (!passed) console.error("popThumb performance probe failed", document.documentElement.dataset.popthumbProbeMetrics);
   }
 
+  async function runCacheMenuProbe() {
+    await wait(160);
+    const failures = [];
+    const check = (condition, message) => { if (!condition) failures.push(message); };
+    let menu = document.querySelector("#ncnl_common_header_menu");
+    check(Boolean(menu), "NicoCacheメニューがありません");
+    if (!menu) {
+      document.documentElement.dataset.cacheMenuProbeStatus = "failed";
+      console.error("cache menu probe failed", JSON.stringify(failures));
+      return;
+    }
+
+    let trigger = menu.querySelector(".ncnl-common-header-trigger");
+    let popover = menu.querySelector(".ncnl-common-header-popover");
+    const item = action => menu.querySelector(`[data-ncnl-action="${action}"]`);
+    const pathname = element => element ? new URL(element.href, location.href).pathname : "";
+    check(menu.dataset.ncnlMounted === "desktop", "デスクトップ公式ナビに配置されていません");
+    check(menu.nextElementSibling?.hasAttribute("data-lab-official-other"), "公式のその他メニュー直前にありません");
+    check(menu.querySelectorAll('[role="menuitem"]').length === 5, "メニュー項目が5件ではありません");
+    check(pathname(item("movie")) === "/cache/sm9/auto/movie", "動画保存URLが不正です");
+    check(pathname(item("comments")) === "/cache/sm9.comments.json", "コメント保存URLが不正です");
+    check(pathname(item("audio")) === "/cache/sm9/auto/audio", "音声保存URLが不正です");
+    check(pathname(item("manage")) === "/cache/", "キャッシュ画面URLが不正です");
+    check(item("manage") && !item("manage").hasAttribute("download"), "キャッシュ画面リンクがdownload扱いです");
+    check(popover?.getAttribute("aria-hidden") === "true", "初期状態でメニューが閉じていません");
+
+    menu.dispatchEvent(new MouseEvent("mouseenter"));
+    check(trigger?.getAttribute("aria-expanded") === "true", "ホバーでメニューが開きません");
+    check(popover?.getAttribute("aria-hidden") === "false", "ホバー後もpopoverが非表示です");
+    menu.dispatchEvent(new MouseEvent("mouseleave"));
+    check(trigger?.getAttribute("aria-expanded") === "false", "マウス退出でメニューが閉じません");
+
+    trigger?.focus();
+    check(trigger?.getAttribute("aria-expanded") === "true", "フォーカスでメニューが開きません");
+    trigger?.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+    check(document.activeElement === item("movie"), "下矢印で先頭項目へ移動しません");
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+    check(document.activeElement === item("comments"), "下矢印で次項目へ移動しません");
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowUp", bubbles: true}));
+    check(document.activeElement === item("movie"), "上矢印で前項目へ移動しません");
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {key: "End", bubbles: true}));
+    check(document.activeElement === item("manage"), "Endで末尾項目へ移動しません");
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {key: "Home", bubbles: true}));
+    check(document.activeElement === item("movie"), "Homeで先頭項目へ移動しません");
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+    check(trigger?.getAttribute("aria-expanded") === "false", "Escapeでメニューが閉じません");
+    check(document.activeElement === trigger, "Escapeでトリガーへ戻りません");
+    trigger?.blur();
+    await wait(0);
+
+    trigger?.dispatchEvent(new PointerEvent("pointerdown", {bubbles: true}));
+    trigger?.dispatchEvent(new MouseEvent("click", {bubbles: true, detail: 1}));
+    check(trigger?.getAttribute("aria-expanded") === "true", "クリックでメニューが開きません");
+    trigger?.dispatchEvent(new PointerEvent("pointerdown", {bubbles: true}));
+    trigger?.dispatchEvent(new MouseEvent("click", {bubbles: true, detail: 1}));
+    check(trigger?.getAttribute("aria-expanded") === "false", "再クリックでメニューが閉じません");
+
+    let confirms = 0;
+    let mutationRequests = 0;
+    const originalConfirm = window.confirm;
+    const originalGet = window.NicoCache_nl?.get;
+    window.confirm = () => { confirms++; return false; };
+    if (window.NicoCache_nl) window.NicoCache_nl.get = () => { mutationRequests++; };
+    item("remove")?.click();
+    window.confirm = originalConfirm;
+    if (window.NicoCache_nl) window.NicoCache_nl.get = originalGet;
+    check(confirms === 1 && mutationRequests === 0, "削除キャンセル時に変更APIを呼び出しました");
+
+    const originalUrl = location.href;
+    history.pushState({}, "", "/watch/sm83");
+    dispatchEvent(new PopStateEvent("popstate"));
+    await wait(40);
+    check(pathname(item("movie")) === "/cache/sm83/auto/movie", "SPA動画切替へ追従しません");
+    history.replaceState({}, "", originalUrl);
+    dispatchEvent(new PopStateEvent("popstate"));
+    await wait(40);
+
+    const root = document.querySelector("#CommonHeader .nico-CommonHeaderRoot");
+    const replacement = root?.cloneNode(true);
+    replacement?.querySelector("#ncnl_common_header_menu")?.remove();
+    root?.replaceWith(replacement);
+    await wait(160);
+    menu = document.querySelector("#ncnl_common_header_menu");
+    trigger = menu?.querySelector(".ncnl-common-header-trigger");
+    popover = menu?.querySelector(".ncnl-common-header-popover");
+    check(document.querySelectorAll("#ncnl_common_header_menu").length === 1, "ヘッダー再描画後のメニュー数が不正です");
+    check(menu?.dataset.ncnlMounted === "desktop", "ヘッダー再描画後に公式ナビへ復帰しません");
+    menu?.dispatchEvent(new MouseEvent("mouseenter"));
+    check(trigger?.getAttribute("aria-expanded") === "true" && popover?.getAttribute("aria-hidden") === "false",
+      "ヘッダー再描画後のメニュー操作が無効です");
+
+    const passed = failures.length === 0;
+    document.documentElement.dataset.cacheMenuProbeStatus = passed ? "passed" : "failed";
+    document.documentElement.dataset.cacheMenuProbeMetrics = JSON.stringify({failures});
+    if (!passed) console.error("cache menu probe failed", document.documentElement.dataset.cacheMenuProbeMetrics);
+  }
+
   window.addEventListener("message", event => {
     if (event.data?.type === "nlfilter-lab" && event.data.action === "spa-add") addSpaCard();
   });
@@ -173,5 +270,6 @@
     notifyState();
     new MutationObserver(() => setTimeout(notifyState, 0)).observe(document.body, { childList: true, subtree: true });
     if (parameters.get("popThumbProbe") === "true") runPopThumbProbe();
+    if (parameters.get("cacheMenuProbe") === "true") runCacheMenuProbe();
   });
 })();
