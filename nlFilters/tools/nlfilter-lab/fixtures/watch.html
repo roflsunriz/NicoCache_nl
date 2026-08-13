@@ -12,7 +12,10 @@
     [data-lab-service-nav] { display: flex; height: 36px; padding-left: 22px; align-items: center; }
     [data-lab-service-nav] > a { height: 36px; padding: 0 6px; color: #ddd; font-size: 12px; line-height: 36px; }
     [data-lab-official-other] { position: relative; height: 36px; padding: 0 6px; color: #fff; font-size: 12px; line-height: 36px; }
-    [data-lab-account] { padding-right: 22px; color: #ddd; font-size: 12px; }
+    [data-lab-account-nav] { display: flex; height: 36px; padding-right: 22px; align-items: center; }
+    [data-lab-timeline], [data-lab-notification] { display: grid; width: 48px; height: 36px; place-items: center; }
+    [data-lab-account-menu] { display: flex; height: 36px; align-items: center; }
+    [data-lab-account-menu] > a { padding: 0 6px; color: #ddd; font-size: 12px; line-height: 36px; }
     main { width: min(1120px, calc(100% - 28px)); margin: 22px auto; }
     .player-shell { aspect-ratio: 16 / 7; display: grid; place-items: center; border-radius: 12px; background: #11151c; color: white; }
     video { width: min(70%, 720px); height: 70%; background: #050608; }
@@ -40,7 +43,11 @@
         <a href="https://anime.nicovideo.jp/?cmnhd_ref=pos%3Dheader_servicelink">Nアニメ</a>
         <div data-lab-official-other>その他⌄</div>
       </nav>
-      <div data-lab-account>ログイン</div>
+      <div data-lab-account-nav aria-label="ユーザーメニュー">
+        <div data-lab-timeline><button type="button" aria-label="フォロー新着">♙</button></div>
+        <div data-lab-notification><button type="button" aria-label="通知">♢</button></div>
+        <div data-lab-account-menu><a href="https://www.nicovideo.jp/my">アカウント</a></div>
+      </div>
     </div>
   </div>
   <meta name="server-response" content="{&quot;meta&quot;:{&quot;status&quot;:200},&quot;data&quot;:{&quot;response&quot;:{&quot;video&quot;:{&quot;id&quot;:&quot;sm9&quot;,&quot;title&quot;:&quot;テスト動画&quot;}}}}">

@@ -179,8 +179,9 @@
     let popover = menu.querySelector(".ncnl-common-header-popover");
     const item = action => menu.querySelector(`[data-ncnl-action="${action}"]`);
     const pathname = element => element ? new URL(element.href, location.href).pathname : "";
-    check(menu.dataset.ncnlMounted === "desktop", "デスクトップ公式ナビに配置されていません");
-    check(menu.nextElementSibling?.hasAttribute("data-lab-official-other"), "公式のその他メニュー直前にありません");
+    check(menu.dataset.ncnlMounted === "account", "公式アカウントナビに配置されていません");
+    check(menu.previousElementSibling?.hasAttribute("data-lab-notification"), "通知の直後にありません");
+    check(menu.nextElementSibling?.hasAttribute("data-lab-account-menu"), "アカウントメニューの直前にありません");
     check(menu.querySelectorAll('[role="menuitem"]').length === 5, "メニュー項目が5件ではありません");
     check(pathname(item("movie")) === "/cache/sm9/auto/movie", "動画保存URLが不正です");
     check(pathname(item("comments")) === "/cache/sm9.comments.json", "コメント保存URLが不正です");
@@ -249,7 +250,11 @@
     trigger = menu?.querySelector(".ncnl-common-header-trigger");
     popover = menu?.querySelector(".ncnl-common-header-popover");
     check(document.querySelectorAll("#ncnl_common_header_menu").length === 1, "ヘッダー再描画後のメニュー数が不正です");
-    check(menu?.dataset.ncnlMounted === "desktop", "ヘッダー再描画後に公式ナビへ復帰しません");
+    check(menu?.dataset.ncnlMounted === "account", "ヘッダー再描画後に公式アカウントナビへ復帰しません");
+    check(menu?.previousElementSibling?.hasAttribute("data-lab-notification"),
+      "ヘッダー再描画後に通知の直後へ復帰しません");
+    check(menu?.nextElementSibling?.hasAttribute("data-lab-account-menu"),
+      "ヘッダー再描画後にアカウントメニューの直前へ復帰しません");
     menu?.dispatchEvent(new MouseEvent("mouseenter"));
     check(trigger?.getAttribute("aria-expanded") === "true" && popover?.getAttribute("aria-hidden") === "false",
       "ヘッダー再描画後のメニュー操作が無効です");

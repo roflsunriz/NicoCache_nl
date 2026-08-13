@@ -1,6 +1,6 @@
 // - 2024-09-06, 2026-08-11, 2026-08-14.
 // - 現行watchページの公式コモンヘッダーにNicoCache専用メニューを追加する.
-// - CommonHeaderの生成クラスには依存せず、意味のあるルートと公式サービスリンクから挿入先を求める.
+// - CommonHeaderの生成クラスには依存せず、意味のあるルートと公式リンクから挿入先を求める.
 
 (function() {
   "use strict";
@@ -28,9 +28,9 @@
     style.id = "ncnl_common_header_menu_style";
     style.textContent =
       "#" + containerId + "{display:none;}" +
-      "#" + containerId + "[data-ncnl-mounted=desktop]{" +
+      "#" + containerId + "[data-ncnl-mounted]{" +
         "position:relative;display:flex;box-sizing:border-box;height:36px;padding:0 6px;" +
-        "align-items:center;color:#fff;font:400 12px/36px Avenir,Lato,-apple-system," +
+        "flex:0 0 auto;align-items:center;color:#fff;font:400 12px/36px Avenir,Lato,-apple-system," +
         "BlinkMacSystemFont,Helvetica Neue,Hiragino Kaku Gothic ProN,Meiryo,sans-serif;" +
       "}" +
       "#" + containerId + " .ncnl-common-header-trigger{" +
@@ -52,6 +52,9 @@
         "position:absolute;top:36px;left:0;z-index:100000;box-sizing:border-box;width:329px;" +
         "visibility:hidden;opacity:0;pointer-events:none;box-shadow:0 2px 5px rgba(0,0,0,.35);" +
         "transition:visibility 0s linear 80ms,opacity 80ms linear;" +
+      "}" +
+      "#" + containerId + "[data-ncnl-mounted=account] .ncnl-common-header-popover{" +
+        "right:0;left:auto;" +
       "}" +
       "#" + containerId + "[data-ncnl-open=true] .ncnl-common-header-popover{" +
         "visibility:visible;opacity:1;pointer-events:auto;transition-delay:0s;" +
@@ -128,6 +131,24 @@
     return null;
   };
 
+  var findAccountMenuItem = function(commonHeader) {
+    var root = commonHeader.querySelector(".nico-CommonHeaderRoot");
+    if (!root) return null;
+    var anchors = root.querySelectorAll("a[href]");
+    for (var i = 0; i < anchors.length; i++) {
+      try {
+        var url = new URL(anchors[i].href, window.location.href);
+        if (url.hostname === "www.nicovideo.jp" && url.pathname === "/my") {
+          var item = anchors[i].parentElement;
+          if (item && item.parentElement && item.previousElementSibling) return item;
+        }
+      } catch (error) {
+        // 不正なhrefは公式アカウント項目ではないため無視する.
+      }
+    }
+    return null;
+  };
+
   var findInsertionReference = function(navigation) {
     var children = navigation.children;
     var lastServiceLink = null;
@@ -135,7 +156,25 @@
       var href = children[i].getAttribute && children[i].getAttribute("href");
       if (href && href.indexOf("header_servicelink") >= 0) lastServiceLink = children[i];
     }
-    return lastServiceLink ? lastServiceLink.nextElementSibling : null;
+    var reference = lastServiceLink ? lastServiceLink.nextElementSibling : null;
+    return reference && reference.id === containerId ? reference.nextElementSibling : reference;
+  };
+
+  var findPlacement = function(commonHeader) {
+    var accountItem = findAccountMenuItem(commonHeader);
+    if (accountItem) {
+      return {
+        parent: accountItem.parentElement,
+        reference: accountItem,
+        mounted: "account",
+      };
+    }
+    var navigation = findServiceNavigation(commonHeader);
+    return navigation ? {
+      parent: navigation,
+      reference: findInsertionReference(navigation),
+      mounted: "service",
+    } : null;
   };
 
   var setMenuOpen = function(container, open) {
@@ -278,11 +317,11 @@
   var initialize = function() {
     var commonHeader = document.getElementById("CommonHeader");
     if (!commonHeader) return false;
-    var navigation = findServiceNavigation(commonHeader);
+    var placement = findPlacement(commonHeader);
     var container = document.getElementById(containerId) || createMenu();
-    if (navigation) {
-      navigation.insertBefore(container, findInsertionReference(navigation));
-      container.setAttribute("data-ncnl-mounted", "desktop");
+    if (placement) {
+      placement.parent.insertBefore(container, placement.reference);
+      container.setAttribute("data-ncnl-mounted", placement.mounted);
     } else if (!container.isConnected) {
       container.removeAttribute("data-ncnl-mounted");
       commonHeader.appendChild(container);
@@ -295,9 +334,11 @@
   var headerObserver = new MutationObserver(function() {
     var commonHeader = document.getElementById("CommonHeader");
     var container = document.getElementById(containerId);
-    var navigation = commonHeader && findServiceNavigation(commonHeader);
+    var placement = commonHeader && findPlacement(commonHeader);
     ensureWatchListener();
-    if (!container || (navigation && container.parentElement !== navigation)) initialize();
+    if (!container || (placement && (container.parentElement !== placement.parent
+        || container.nextElementSibling !== placement.reference
+        || container.getAttribute("data-ncnl-mounted") !== placement.mounted))) initialize();
   });
   headerObserver.observe(document.documentElement || document, {
     childList: true,
