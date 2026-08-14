@@ -11,6 +11,11 @@
   var containerId = "ncnl_common_header_menu";
   var currentVideoId = null;
   var watchListenerInitialized = false;
+  var mountedAccountItem = null;
+  var accountOriginalMarginLeft = "";
+  var accountBaseMarginLeft = "0px";
+  var accountReservedWidth = 0;
+  var positionFrame = 0;
 
   var getVideoId = function() {
     var match = window.location.pathname.match(/^\/watch\/([a-z]{2}\d+)(?:\/|$)/i);
@@ -53,8 +58,16 @@
         "visibility:hidden;opacity:0;pointer-events:none;box-shadow:0 2px 5px rgba(0,0,0,.35);" +
         "transition:visibility 0s linear 80ms,opacity 80ms linear;" +
       "}" +
-      "#" + containerId + "[data-ncnl-mounted=account] .ncnl-common-header-popover{" +
+      "#" + containerId + "[data-ncnl-mounted=account][data-ncnl-popover-align=right] " +
+      ".ncnl-common-header-popover{" +
         "right:0;left:auto;" +
+      "}" +
+      "#" + containerId + "[data-ncnl-mounted=account][data-ncnl-popover-align=left] " +
+      ".ncnl-common-header-popover{" +
+        "right:auto;left:0;" +
+      "}" +
+      "#" + containerId + "[data-ncnl-mounted=account]{" +
+        "position:fixed;z-index:101001;" +
       "}" +
       "#" + containerId + "[data-ncnl-open=true] .ncnl-common-header-popover{" +
         "visibility:visible;opacity:1;pointer-events:auto;transition-delay:0s;" +
@@ -175,6 +188,96 @@
       reference: findInsertionReference(navigation),
       mounted: "service",
     } : null;
+  };
+
+  var releaseAccountSpace = function() {
+    if (!mountedAccountItem) return;
+    if (accountOriginalMarginLeft) {
+      mountedAccountItem.style.marginLeft = accountOriginalMarginLeft;
+    } else {
+      mountedAccountItem.style.removeProperty("margin-left");
+    }
+    mountedAccountItem.removeAttribute("data-ncnl-account-space");
+    mountedAccountItem.removeAttribute("data-ncnl-account-original-margin");
+    mountedAccountItem.removeAttribute("data-ncnl-account-base-margin");
+    mountedAccountItem.removeAttribute("data-ncnl-account-width");
+    mountedAccountItem = null;
+    accountOriginalMarginLeft = "";
+    accountBaseMarginLeft = "0px";
+    accountReservedWidth = 0;
+  };
+
+  var reserveAccountSpace = function(accountItem, width) {
+    if (mountedAccountItem !== accountItem) {
+      releaseAccountSpace();
+      mountedAccountItem = accountItem;
+      if (accountItem.hasAttribute("data-ncnl-account-space")) {
+        accountOriginalMarginLeft = accountItem.getAttribute("data-ncnl-account-original-margin") || "";
+        accountBaseMarginLeft = accountItem.getAttribute("data-ncnl-account-base-margin") || "0px";
+        accountReservedWidth = Number(accountItem.getAttribute("data-ncnl-account-width")) || 0;
+      } else {
+        accountOriginalMarginLeft = accountItem.style.marginLeft;
+        accountBaseMarginLeft = getComputedStyle(accountItem).marginLeft || "0px";
+      }
+      accountItem.setAttribute("data-ncnl-account-space", "true");
+      accountItem.setAttribute("data-ncnl-account-original-margin", accountOriginalMarginLeft);
+      accountItem.setAttribute("data-ncnl-account-base-margin", accountBaseMarginLeft);
+    }
+    if (accountReservedWidth !== width) {
+      accountReservedWidth = width;
+      accountItem.style.marginLeft = "calc(" + accountBaseMarginLeft + " + " + width + "px)";
+      accountItem.setAttribute("data-ncnl-account-width", String(width));
+    }
+  };
+
+  var positionAccountMenu = function(container) {
+    if (!mountedAccountItem || !mountedAccountItem.isConnected
+        || container.getAttribute("data-ncnl-mounted") !== "account") return;
+    var width = Math.ceil(container.getBoundingClientRect().width);
+    if (width <= 0) return;
+    reserveAccountSpace(mountedAccountItem, width);
+    var accountRect = mountedAccountItem.getBoundingClientRect();
+    var left = Math.max(0, accountRect.left - width);
+    var popover = container.querySelector(".ncnl-common-header-popover");
+    var popoverWidth = popover ? Math.ceil(popover.getBoundingClientRect().width) : 0;
+    container.setAttribute("data-ncnl-popover-align",
+      popoverWidth > 0 && left + width - popoverWidth < 0 ? "left" : "right");
+    container.style.left = Math.round(left) + "px";
+    container.style.top = Math.round(accountRect.top) + "px";
+  };
+
+  var scheduleAccountMenuPosition = function() {
+    if (positionFrame) return;
+    positionFrame = requestAnimationFrame(function() {
+      positionFrame = 0;
+      var container = document.getElementById(containerId);
+      if (container) positionAccountMenu(container);
+    });
+  };
+
+  var mountAccountMenu = function(container, accountItem) {
+    container.setAttribute("data-ncnl-mounted", "account");
+    if (container.parentElement !== document.body) document.body.appendChild(container);
+    var width = Math.ceil(container.getBoundingClientRect().width);
+    if (width > 0) reserveAccountSpace(accountItem, width);
+    positionAccountMenu(container);
+  };
+
+  var clearAccountMenuPosition = function(container) {
+    releaseAccountSpace();
+    container.removeAttribute("data-ncnl-popover-align");
+    container.style.removeProperty("left");
+    container.style.removeProperty("top");
+  };
+
+  var isPlacementCurrent = function(container, placement) {
+    if (!container || !placement
+        || container.getAttribute("data-ncnl-mounted") !== placement.mounted) return false;
+    if (placement.mounted === "account") {
+      return container.parentElement === document.body && mountedAccountItem === placement.reference;
+    }
+    return container.parentElement === placement.parent
+      && container.nextElementSibling === placement.reference;
   };
 
   var setMenuOpen = function(container, open) {
@@ -319,12 +422,16 @@
     if (!commonHeader) return false;
     var placement = findPlacement(commonHeader);
     var container = document.getElementById(containerId) || createMenu();
-    if (placement) {
+    if (placement && placement.mounted === "account") {
+      mountAccountMenu(container, placement.reference);
+    } else if (placement) {
+      clearAccountMenuPosition(container);
       placement.parent.insertBefore(container, placement.reference);
       container.setAttribute("data-ncnl-mounted", placement.mounted);
-    } else if (!container.isConnected) {
+    } else {
+      clearAccountMenuPosition(container);
       container.removeAttribute("data-ncnl-mounted");
-      commonHeader.appendChild(container);
+      if (container.parentElement !== commonHeader) commonHeader.appendChild(container);
     }
     synchronizeLinks();
     ensureWatchListener();
@@ -336,9 +443,8 @@
     var container = document.getElementById(containerId);
     var placement = commonHeader && findPlacement(commonHeader);
     ensureWatchListener();
-    if (!container || (placement && (container.parentElement !== placement.parent
-        || container.nextElementSibling !== placement.reference
-        || container.getAttribute("data-ncnl-mounted") !== placement.mounted))) initialize();
+    if (!isPlacementCurrent(container, placement)) initialize();
+    else if (placement && placement.mounted === "account") scheduleAccountMenuPosition();
   });
   headerObserver.observe(document.documentElement || document, {
     childList: true,
@@ -347,5 +453,7 @@
   window.addEventListener("popstate", function() {
     setTimeout(function() { synchronizeLinks(); }, 0);
   });
+  window.addEventListener("resize", scheduleAccountMenuPosition);
+  window.addEventListener("scroll", scheduleAccountMenuPosition, true);
   initialize();
 })();

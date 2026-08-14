@@ -179,9 +179,19 @@
     let popover = menu.querySelector(".ncnl-common-header-popover");
     const item = action => menu.querySelector(`[data-ncnl-action="${action}"]`);
     const pathname = element => element ? new URL(element.href, location.href).pathname : "";
+    const isVisuallyBetween = (element, before, after) => {
+      if (!element || !before || !after) return false;
+      const elementRect = element.getBoundingClientRect();
+      const beforeRect = before.getBoundingClientRect();
+      const afterRect = after.getBoundingClientRect();
+      return elementRect.left >= beforeRect.right - 1 && elementRect.right <= afterRect.left + 1;
+    };
+    const notification = () => document.querySelector("[data-lab-notification]");
+    const account = () => document.querySelector("[data-lab-account-menu]");
     check(menu.dataset.ncnlMounted === "account", "公式アカウントナビに配置されていません");
-    check(menu.previousElementSibling?.hasAttribute("data-lab-notification"), "通知の直後にありません");
-    check(menu.nextElementSibling?.hasAttribute("data-lab-account-menu"), "アカウントメニューの直前にありません");
+    check(menu.parentElement === document.body, "公式Reactの管理外へ配置されていません");
+    check(isVisuallyBetween(menu, notification(), account()),
+      "通知とアカウントメニューの間に表示されていません");
     check(menu.querySelectorAll('[role="menuitem"]').length === 5, "メニュー項目が5件ではありません");
     check(pathname(item("movie")) === "/cache/sm9/auto/movie", "動画保存URLが不正です");
     check(pathname(item("comments")) === "/cache/sm9.comments.json", "コメント保存URLが不正です");
@@ -190,9 +200,31 @@
     check(item("manage") && !item("manage").hasAttribute("download"), "キャッシュ画面リンクがdownload扱いです");
     check(popover?.getAttribute("aria-hidden") === "true", "初期状態でメニューが閉じていません");
 
+    const menuBeforeTimelineHover = menu;
+    const accountNavigation = document.querySelector("[data-lab-account-nav]");
+    const officialAccountControls = accountNavigation && Array.from(accountNavigation.children)
+      .filter(element => element.id !== "ncnl_common_header_menu")
+      .map(element => element.cloneNode(true));
+    accountNavigation?.querySelector("[data-lab-timeline]")
+      ?.dispatchEvent(new MouseEvent("mouseenter"));
+    if (officialAccountControls) accountNavigation.replaceChildren(...officialAccountControls);
+    await wait(160);
+    menu = document.querySelector("#ncnl_common_header_menu");
+    trigger = menu?.querySelector(".ncnl-common-header-trigger");
+    popover = menu?.querySelector(".ncnl-common-header-popover");
+    check(menu === menuBeforeTimelineHover,
+      "フォロー新着の再描画でNicoCacheメニューが一度DOMから除去されました");
+    check(document.querySelectorAll("#ncnl_common_header_menu").length === 1,
+      "フォロー新着の再描画後のメニュー数が不正です");
+    check(isVisuallyBetween(menu, notification(), account()),
+      "フォロー新着の再描画後に通知とアカウントメニューの間へ復帰しません");
+
     menu.dispatchEvent(new MouseEvent("mouseenter"));
     check(trigger?.getAttribute("aria-expanded") === "true", "ホバーでメニューが開きません");
     check(popover?.getAttribute("aria-hidden") === "false", "ホバー後もpopoverが非表示です");
+    const openPopoverRect = popover?.getBoundingClientRect();
+    check(openPopoverRect && openPopoverRect.left >= -1 && openPopoverRect.right <= innerWidth + 1,
+      "popoverがビューポートの左右からはみ出しています");
     menu.dispatchEvent(new MouseEvent("mouseleave"));
     check(trigger?.getAttribute("aria-expanded") === "false", "マウス退出でメニューが閉じません");
 
@@ -251,10 +283,9 @@
     popover = menu?.querySelector(".ncnl-common-header-popover");
     check(document.querySelectorAll("#ncnl_common_header_menu").length === 1, "ヘッダー再描画後のメニュー数が不正です");
     check(menu?.dataset.ncnlMounted === "account", "ヘッダー再描画後に公式アカウントナビへ復帰しません");
-    check(menu?.previousElementSibling?.hasAttribute("data-lab-notification"),
-      "ヘッダー再描画後に通知の直後へ復帰しません");
-    check(menu?.nextElementSibling?.hasAttribute("data-lab-account-menu"),
-      "ヘッダー再描画後にアカウントメニューの直前へ復帰しません");
+    check(menu?.parentElement === document.body, "ヘッダー再描画後に公式Reactの管理外へ復帰しません");
+    check(isVisuallyBetween(menu, notification(), account()),
+      "ヘッダー再描画後に通知とアカウントメニューの間へ復帰しません");
     menu?.dispatchEvent(new MouseEvent("mouseenter"));
     check(trigger?.getAttribute("aria-expanded") === "true" && popover?.getAttribute("aria-hidden") === "false",
       "ヘッダー再描画後のメニュー操作が無効です");
