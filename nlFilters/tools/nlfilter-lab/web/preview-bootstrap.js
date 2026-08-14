@@ -222,6 +222,15 @@
     menu.dispatchEvent(new MouseEvent("mouseenter"));
     check(trigger?.getAttribute("aria-expanded") === "true", "ホバーでメニューが開きません");
     check(popover?.getAttribute("aria-hidden") === "false", "ホバー後もpopoverが非表示です");
+    const openPopoverStyle = popover ? getComputedStyle(popover) : null;
+    check(openPopoverStyle?.opacity === "1", "popoverが公式メニューにないフェード表示になっています");
+    check(openPopoverStyle?.backgroundImage === "none", "popoverにグラデーション背景が残っています");
+    check(openPopoverStyle?.backgroundColor === "rgb(244, 244, 244)",
+      "popoverの背景色が公式メニューと一致しません");
+    check(openPopoverStyle?.boxShadow === "rgba(0, 0, 0, 0.2) 0px 2px 8px 0px",
+      "popoverの影が公式メニューと一致しません");
+    check(openPopoverStyle?.transitionDuration.split(",").every(value => value.trim() === "0s"),
+      "popoverに公式メニューにないtransitionが残っています");
     const openPopoverRect = popover?.getBoundingClientRect();
     check(openPopoverRect && openPopoverRect.left >= -1 && openPopoverRect.right <= innerWidth + 1,
       "popoverがビューポートの左右からはみ出しています");

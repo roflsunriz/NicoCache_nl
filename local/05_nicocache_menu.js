@@ -55,8 +55,8 @@
       "}" +
       "#" + containerId + " .ncnl-common-header-popover{" +
         "position:absolute;top:36px;left:0;z-index:100000;box-sizing:border-box;width:329px;" +
-        "visibility:hidden;opacity:0;pointer-events:none;box-shadow:0 2px 5px rgba(0,0,0,.35);" +
-        "transition:visibility 0s linear 80ms,opacity 80ms linear;" +
+        "visibility:hidden;opacity:0;pointer-events:none;background:#f4f4f4;" +
+        "box-shadow:0 2px 8px rgba(0,0,0,.2);transition:none;" +
       "}" +
       "#" + containerId + "[data-ncnl-mounted=account][data-ncnl-popover-align=right] " +
       ".ncnl-common-header-popover{" +
@@ -70,7 +70,7 @@
         "position:fixed;z-index:101001;" +
       "}" +
       "#" + containerId + "[data-ncnl-open=true] .ncnl-common-header-popover{" +
-        "visibility:visible;opacity:1;pointer-events:auto;transition-delay:0s;" +
+        "visibility:visible;opacity:1;pointer-events:auto;" +
       "}" +
       "#" + containerId + " .ncnl-common-header-actions{" +
         "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:#fff;" +
