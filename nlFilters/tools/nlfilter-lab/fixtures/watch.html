@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- 2026-08-14 CommonHeader 3.13.0のログイン時DOMとフォロー新着パネルの構造を縮約したfixture。 -->
 <html lang="ja" data-fixture="watch">
 <head>
   <meta charset="utf-8">
@@ -12,8 +13,10 @@
     [data-lab-service-nav] { display: flex; height: 36px; padding-left: 22px; align-items: center; }
     [data-lab-service-nav] > a { height: 36px; padding: 0 6px; color: #ddd; font-size: 12px; line-height: 36px; }
     [data-lab-official-other] { position: relative; height: 36px; padding: 0 6px; color: #fff; font-size: 12px; line-height: 36px; }
-    [data-lab-account-nav] { display: flex; height: 36px; padding-right: 22px; align-items: center; }
-    [data-lab-timeline], [data-lab-notification] { display: grid; width: 48px; height: 36px; place-items: center; }
+    [data-lab-account-nav] { display: flex; position: relative; height: 36px; padding-right: 22px; align-items: center; }
+    [data-lab-timeline], [data-lab-notification] { display: grid; position: relative; width: 48px; height: 36px; place-items: center; }
+    [data-lab-timeline-panel] { position: absolute; top: 36px; right: 0; width: 320px; padding: 12px; background: #fff; color: #333; box-shadow: 0 2px 5px rgb(0 0 0 / 35%); }
+    [data-lab-timeline-list-link] { margin-top: 8px; text-align: right; }
     [data-lab-account-menu] { display: flex; height: 36px; align-items: center; }
     [data-lab-account-menu] > a { padding: 0 6px; color: #ddd; font-size: 12px; line-height: 36px; }
     main { width: min(1120px, calc(100% - 28px)); margin: 22px auto; }
@@ -46,7 +49,7 @@
       <div data-lab-account-nav aria-label="ユーザーメニュー">
         <div data-lab-timeline><button type="button" aria-label="フォロー新着">♙</button></div>
         <div data-lab-notification><button type="button" aria-label="通知">♢</button></div>
-        <div data-lab-account-menu><a href="https://www.nicovideo.jp/my">アカウント</a></div>
+        <div data-lab-account-menu><a href="https://www.nicovideo.jp/my?cmnhd_ref=device%3Dpc%26site%3Dniconico%26pos%3Dheader">アカウント</a></div>
       </div>
     </div>
   </div>
@@ -78,6 +81,17 @@
   </main>
   <script>
     document.addEventListener("DOMContentLoaded", function() {
+      var timeline = document.querySelector("[data-lab-timeline]");
+      timeline.addEventListener("mouseenter", function() {
+        if (timeline.querySelector("[data-lab-timeline-panel]")) return;
+        var panel = document.createElement("div");
+        panel.setAttribute("data-lab-timeline-panel", "");
+        panel.innerHTML = '<div data-lab-timeline-items>フォロー新着</div>' +
+          '<div data-lab-timeline-list-link>' +
+          '<a href="https://www.nicovideo.jp/my?ref=header_timeline">フォロー新着一覧へ</a>' +
+          '</div>';
+        timeline.append(panel);
+      });
       setTimeout(function() {
         var video = document.createElement("video");
         video.dataset.name = "video-content";

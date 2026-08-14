@@ -202,13 +202,13 @@
 
     const menuBeforeTimelineHover = menu;
     const accountNavigation = document.querySelector("[data-lab-account-nav]");
-    const officialAccountControls = accountNavigation && Array.from(accountNavigation.children)
-      .filter(element => element.id !== "ncnl_common_header_menu")
-      .map(element => element.cloneNode(true));
     accountNavigation?.querySelector("[data-lab-timeline]")
       ?.dispatchEvent(new MouseEvent("mouseenter"));
-    if (officialAccountControls) accountNavigation.replaceChildren(...officialAccountControls);
     await wait(160);
+    const timelineAccountLink = document.querySelector(
+      '[data-lab-timeline-panel] a[href*="ref=header_timeline"]');
+    check(Boolean(timelineAccountLink),
+      "公式CommonHeader相当のフォロー新着一覧リンクが追加されません");
     menu = document.querySelector("#ncnl_common_header_menu");
     trigger = menu?.querySelector(".ncnl-common-header-trigger");
     popover = menu?.querySelector(".ncnl-common-header-popover");

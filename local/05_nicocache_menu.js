@@ -148,18 +148,32 @@
     var root = commonHeader.querySelector(".nico-CommonHeaderRoot");
     if (!root) return null;
     var anchors = root.querySelectorAll("a[href]");
+    // CommonHeader 3.13.0はフォロー新着内にも/myリンクを追加するため、
+    // ルートに最も近い候補だけをヘッダー直下のアカウント項目として扱う.
+    var bestItem = null;
+    var bestDepth = Number.POSITIVE_INFINITY;
     for (var i = 0; i < anchors.length; i++) {
       try {
         var url = new URL(anchors[i].href, window.location.href);
         if (url.hostname === "www.nicovideo.jp" && url.pathname === "/my") {
           var item = anchors[i].parentElement;
-          if (item && item.parentElement && item.previousElementSibling) return item;
+          if (!item || !item.parentElement || !item.previousElementSibling) continue;
+          var depth = 0;
+          var ancestor = item;
+          while (ancestor && ancestor !== root) {
+            depth++;
+            ancestor = ancestor.parentElement;
+          }
+          if (ancestor === root && depth < bestDepth) {
+            bestItem = item;
+            bestDepth = depth;
+          }
         }
       } catch (error) {
         // 不正なhrefは公式アカウント項目ではないため無視する.
       }
     }
-    return null;
+    return bestItem;
   };
 
   var findInsertionReference = function(navigation) {
