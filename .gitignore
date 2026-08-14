@@ -58,7 +58,7 @@ Uninstall.exe
 
 # Locally served/generated files (keep the distributed defaults)
 /local/**
-!/local/05_cache_remove_button.js
+!/local/05_nicocache_menu.js
 !/local/15_cached_link_color.js
 !/local/20_watchpage.js
 !/local/ncnl_cache_display.js

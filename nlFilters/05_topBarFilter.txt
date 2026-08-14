@@ -22,5 +22,5 @@ Match<
 (?=<!--nicocachenl-head-->)
 >
 Replace<
-<script type="text/javascript" src="/$TS(local/05_cache_remove_button.js)"></script><CRLF>
+<script type="text/javascript" src="/$TS(local/05_nicocache_menu.js)"></script><CRLF>
 >

@@ -7,7 +7,7 @@ extensions/eventListenerSample.java
 extensions/extLoggerSample.java
 extensions/makedoc.cmd
 extensions/readme.txt
-local/05_cache_remove_button.js
+local/05_nicocache_menu.js
 local/15_cached_link_color.js
 local/20_watchpage.js
 local/list.js.default

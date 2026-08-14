@@ -8,7 +8,7 @@ const vm = require("node:vm");
 
 const repositoryRoot = path.resolve(__dirname, "..", "..");
 const source = fs.readFileSync(
-  path.join(repositoryRoot, "local", "05_cache_remove_button.js"),
+  path.join(repositoryRoot, "local", "05_nicocache_menu.js"),
   "utf8",
 );
 
@@ -19,6 +19,13 @@ class FakeElement {
     this.children = [];
     this.attributes = new Map();
     this.listeners = new Map();
+    this.parentElement = null;
+    this.style = {
+      marginLeft: "",
+      removeProperty: (name) => {
+        this.style[name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = "";
+      },
+    };
     this.textContent = "";
     this.disabled = false;
   }
@@ -40,7 +47,12 @@ class FakeElement {
     return this.attributes.get(name) ?? null;
   }
 
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
+
   appendChild(child) {
+    child.parentElement = this;
     this.children.push(child);
     return child;
   }
@@ -53,12 +65,27 @@ class FakeElement {
     this.listeners.get("click")?.({target: this});
   }
 
+  contains(target) {
+    return target === this || this.children.some((child) => child.contains(target));
+  }
+
+  querySelector(selector) {
+    return this.querySelectorAll(selector)[0] || null;
+  }
+
   querySelectorAll(selector) {
     const found = [];
     const visit = (element) => {
-      if (selector === "a[data-ncnl-action]"
-          && element.tagName === "A"
-          && element.attributes.has("data-ncnl-action")) {
+      const matches = selector === "a[data-ncnl-action]"
+        ? element.tagName === "A" && element.attributes.has("data-ncnl-action")
+        : selector === "[role=menuitem]"
+          ? element.getAttribute("role") === "menuitem"
+          : selector === "a[href]"
+            ? element.tagName === "A" && typeof element.href === "string"
+            : selector.startsWith(".")
+              ? element.className?.split(/\s+/).includes(selector.slice(1))
+              : false;
+      if (matches) {
         found.push(element);
       }
       element.children.forEach(visit);
@@ -78,6 +105,7 @@ function createPage() {
     getElementById(id) {
       return elements.get(id) || null;
     },
+    addEventListener() {},
   };
   document.documentElement = document.createElement("html");
   document.head = document.createElement("head");
@@ -121,18 +149,23 @@ function createPage() {
     window,
   });
   vm.runInContext(source, context, {
-    filename: "local/05_cache_remove_button.js",
+    filename: "local/05_nicocache_menu.js",
   });
   return {alerts, document, requests, watchListeners};
 }
 
-test("watchページの4操作を現行APIへ接続しSPA動画切替へ追従する", () => {
+test("watchページのNicoCacheメニューを現行APIへ接続しSPA動画切替へ追従する", () => {
   const page = createPage();
-  const container = page.document.getElementById("cache_remove_workaround");
+  const container = page.document.getElementById("ncnl_common_header_menu");
   assert.ok(container);
-  assert.equal(container.children.length, 4);
+  assert.equal(container.parentElement.id, "CommonHeader");
+  assert.equal(container.children[0].textContent, "NicoCache");
+
+  const popover = page.document.getElementById("ncnl_common_header_popover");
+  const actionLinks = container.querySelectorAll("a[data-ncnl-action]")
+    .filter((link) => typeof link._ncnlSuffix === "string");
   assert.deepEqual(
-    container.children.slice(0, 3).map((link) => link.href),
+    actionLinks.map((link) => link.href),
     [
       "/cache/sm9/auto/movie",
       "/cache/sm9.comments.json",
@@ -140,11 +173,18 @@ test("watchページの4操作を現行APIへ接続しSPA動画切替へ追従�
     ],
   );
   assert.deepEqual(
-    container.children.slice(0, 3).map((link) => link.getAttribute("download")),
+    actionLinks.map((link) => link.getAttribute("download")),
     ["", "", ""],
   );
 
-  const removeButton = container.children[3];
+  const menuItems = popover.querySelectorAll("[role=menuitem]");
+  const removeButton = menuItems.find(
+    (item) => item.getAttribute("data-ncnl-action") === "remove",
+  );
+  const manageLink = menuItems.find(
+    (item) => item.getAttribute("data-ncnl-action") === "manage",
+  );
+  assert.equal(manageLink.href, "/cache/");
   removeButton.click();
   assert.equal(removeButton.disabled, true);
   assert.equal(page.requests[0].url, "/cache/ajax_rmall?sm9");
@@ -154,7 +194,7 @@ test("watchページの4操作を現行APIへ接続しSPA動画切替へ追従�
 
   page.watchListeners.get("videoChanged")("sm10");
   assert.deepEqual(
-    container.children.slice(0, 3).map((link) => link.href),
+    actionLinks.map((link) => link.href),
     [
       "/cache/sm10/auto/movie",
       "/cache/sm10.comments.json",
