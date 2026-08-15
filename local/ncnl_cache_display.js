@@ -1,5 +1,5 @@
 // NicoCache_nl cache display shared by list pages and the watch page.
-// CMAF/Domand cache details come from /cache/info/v2 dmcMovieType.
+// CMAF/Domand cache details come from /cache/info/v3.
 (function() {
   "use strict";
 
@@ -43,32 +43,8 @@
   const selectCache = function(videoInfo) {
     if (!videoInfo || !videoInfo.caches) return null;
 
-    // HLS is the current CMAF/Domand cache. Prefer the server-selected HLS cache
-    // before the compatibility-oriented preferredHTML5/preferred values.
-    const preferredCmaf = completedCache(videoInfo, videoInfo.preferredDmcHls);
-    if (preferredCmaf) return preferredCmaf;
-
-    // Older /cache/info/v2 producers may omit preferredDmcHls. Pick the best
-    // completed HLS entry by resolution and audio bitrate in that case.
-    const cmafCandidates = Object.keys(videoInfo.caches).map(function(cacheId) {
-      return completedCache(videoInfo, cacheId);
-    }).filter(function(selected) {
-      return selected && selected.cacheData.dmc === true
-        && selected.cacheData.movieType === "hls"
-        && selected.cacheData.dmcMovieType;
-    });
-    cmafCandidates.sort(function(left, right) {
-      const leftType = left.cacheData.dmcMovieType;
-      const rightType = right.cacheData.dmcMovieType;
-      return getHeight(rightType.videoMode) - getHeight(leftType.videoMode)
-        || asPositiveNumber(rightType.audioBitrate) - asPositiveNumber(leftType.audioBitrate);
-    });
-    if (cmafCandidates.length) return cmafCandidates[0];
-
-    for (const cacheId of [videoInfo.preferredHTML5, videoInfo.preferred]) {
-      const selected = completedCache(videoInfo, cacheId);
-      if (selected) return selected;
-    };
+    const preferred = completedCache(videoInfo, videoInfo.preferred);
+    if (preferred) return preferred;
 
     const completeIds = Array.isArray(videoInfo.completes) ? videoInfo.completes : [];
     for (const cacheId of completeIds) {
@@ -87,27 +63,21 @@
     if (!selected) return null;
 
     const cacheData = selected.cacheData;
-    const movieType = cacheData.dmcMovieType || {};
-    const isCmaf = cacheData.dmc === true && cacheData.movieType === "hls"
-      && typeof movieType.videoMode === "string";
-    const videoMode = isCmaf ? movieType.videoMode : "";
-    const videoBitrate = isCmaf ? asPositiveNumber(movieType.videoBitrate) : 0;
-    const audioBitrate = isCmaf ? asPositiveNumber(movieType.audioBitrate) : 0;
+    const isCmaf = typeof cacheData.videoMode === "string";
+    const videoMode = isCmaf ? cacheData.videoMode : "";
+    const audioBitrate = isCmaf ? asPositiveNumber(cacheData.audioBitrate) : 0;
     const quality = isCmaf ? getQualityClass(videoMode) : "legacy";
 
     const details = [];
     if (videoMode) details.push("映像 " + videoMode);
-    if (videoBitrate) details.push("映像 " + videoBitrate + "kbps");
     if (audioBitrate) details.push("音声 " + audioBitrate + "kbps");
-    if (!details.length) details.push(cacheData.economy ? "旧形式・低品質" : "旧形式");
+    if (!details.length) details.push("CMAF/Domand");
 
     return {
       cacheId: selected.cacheId,
       cacheData: cacheData,
       isCmaf: isCmaf,
-      economy: cacheData.economy === true,
       videoMode: videoMode,
-      videoBitrate: videoBitrate,
       audioBitrate: audioBitrate,
       quality: quality,
       title: "NicoCache_nl キャッシュ済み: " + details.join(" / "),
@@ -145,7 +115,7 @@
         label.appendChild(audio);
       }
     } else {
-      label.textContent = description.economy ? "CACHE LOW" : "CACHE";
+      label.textContent = "CACHE";
     }
     icon.appendChild(label);
   };
@@ -156,9 +126,7 @@
     const renderKey = [
       description.cacheId,
       description.quality,
-      description.economy ? "1" : "0",
       description.videoMode,
-      description.videoBitrate,
       description.audioBitrate,
       compactMode ? "1" : "0",
     ].join("|");
@@ -187,10 +155,9 @@
   const applyLinkClasses = function(element, description) {
     if (!element || !description) return;
     element.classList.add("nl-cached-common");
-    element.classList.add(description.economy
-      ? "nl-cached-smile-economy" : "nl-cached-smile-normal");
+    element.classList.add("nl-cached-smile-normal");
     // Compatibility classes no longer imply a separate DMC color.
-    element.classList.add(description.economy ? "cached-v1-economy" : "cached-v1-normal");
+    element.classList.add("cached-v1-normal");
   };
 
   NicoCache_nl.cacheDisplay = {

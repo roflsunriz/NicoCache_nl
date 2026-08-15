@@ -2586,22 +2586,19 @@ class DomandCVIUtil {
             throw new NoIdInfoException();
         };
 
-        // - srcIdがnullである方は非lowとして扱う.
-        boolean lowAccess = getLowAccess(idInfo, videoSrcId, audioSrcId);
-
         // - dmcLow(360p-lowestのようなもの. これは360pとは違う.)かどうか
         //   はVideoDescriptorのコンストラクタ内でvideoModeから判定される.
         // - dmc時代のdmcLowは1種類だった(らしい)が現在(2025年)は違う.
         //   正常に対応出来ているか怪しい. 要検証.
         VideoDescriptor videoDescriptor = getVideoDescriptor(
-            videoType + videoNumId, postfix, lowAccess, videoMode, audioKbps
+            videoType + videoNumId, postfix, videoMode, audioKbps
             , /*srcid*/"");
 
-        Cache cache = getCache(idInfo, videoDescriptor, lowAccess);
+        Cache cache = getCache(idInfo, videoDescriptor);
 
         DomandCVIEntry entry = new DomandCVIEntry(
             entryKeyName, videoType, videoNumId, videoHeight, audioKbps
-            , videoMode, videoSrcId, audioSrcId, lowAccess, postfix
+            , videoMode, videoSrcId, audioSrcId, false, postfix
             , idInfo, videoDescriptor, cache);
 
         NLShared.INSTANCE.getDomandCVIManager().update(entry);
@@ -2609,45 +2606,25 @@ class DomandCVIUtil {
         return entry;
     };
 
-    // - lowとは最高画質ではないか最高音質ではないということ.
-    // - videoSrcIdがnullである場合、画質がlowであるかどうかを判定しない.
-    // - audioSrcIdがnullである場合、音質がlowであるかどうかを判定しない.
-    private static boolean getLowAccess(
-        NicoIdInfoCache.Entry idInfo, String videoSrcId, String audioSrcId) {
-        // DMCのメソッドを使っているのは誤りではない.
-        if (videoSrcId != null) {
-            Boolean low = idInfo.getDmcVideoEconomy(videoSrcId);
-            if (null != low && low) {
-                return true;
-            };
-        };
-        if (audioSrcId != null) {
-            Boolean low = idInfo.getDmcAudioEconomy(audioSrcId);
-            if (null != low && low) {
-                return true;
-            };
-        };
-        return false;
-    };
-
     private static VideoDescriptor getVideoDescriptor(
-        String smid, String postfix, boolean lowAccess, String videoMode,
+        String smid, String postfix, String videoMode,
         int audioKbps, String srcId) {
         // - DMCのメソッドを使っているのは誤りではない.
         // - videoBitrate使用はDMCよりも前に廃止された.
         VideoDescriptor vd = VideoDescriptor.newDmc(
-            smid, postfix, lowAccess, videoMode, /*videoBitrate*/0
+            smid, postfix, false, videoMode, /*videoBitrate*/0
             , audioKbps, srcId);
         VideoDescriptor regvd = Cache.getRegisteredVideoDescriptor(vd);
         if (regvd != null) {
-            return regvd;
+            // 保存済みlowキャッシュは同一品質として参照できる一方、新規の
+            // 一時・完成キャッシュ名にはlowを引き継がない。
+            return regvd.replaceLow(false);
         };
         return vd;
     };
 
     private static Cache getCache(
-        NicoIdInfoCache.Entry idInfo, VideoDescriptor vd
-        , boolean lowAccess) {
+        NicoIdInfoCache.Entry idInfo, VideoDescriptor vd) {
 
         Cache cache;
         if (idInfo == null) {
@@ -2656,95 +2633,6 @@ class DomandCVIUtil {
         else {
             cache = new Cache(vd, idInfo.getTitle());
         };
-        if (!lowAccess) {
-            cache.unmarkLow();
-        };
         return cache;
     };
-};
-
-/**
- * キャッシュ用データ管理クラス
- */
-class DomandMovieData {
-    private String smid; // sm,so,nm付きの動画番号ID.
-    // HLS版のbitrateの単位はキロ. こちらではそれを明記する.
-    private int audioKbps;
-    private int videoHeight;
-    private String postfix; // 拡張子
-    private NicoIdInfoCache.Entry idInfo; // videoNumId と紐付いている情報.
-    private VideoDescriptor videoDescriptor;
-    private Cache cache;
-    private String videoType; // sm,so,nmなど.
-    private String videoNumId; // smなどを除いた動画番号.
-    private boolean lowAccess; // 最上のvideoと最上のaudioならばfalse.
-    private String videoMode; // 例: "1080p"
-    // domand仕様に"360p_low"はない(2024-03).
-
-    public DomandMovieData(
-        String videoType, String videoNumId, String videoHeight, String audioKbps
-        , String videoMode, String videoSrcId, String audioSrcId)
-        throws NoIdInfoException, NumberFormatException {
-
-        this.videoType = videoType;
-        this.videoNumId = videoNumId;
-        this.smid = videoType + videoNumId;
-        initIdInfo(videoNumId);
-        this.postfix = Cache.HLS;
-        this.audioKbps = Integer.parseInt(audioKbps);
-        this.videoHeight = Integer.parseInt(videoHeight);
-        initLowAccess(videoSrcId, audioSrcId);
-        this.videoMode = videoMode;
-        initCache(this.idInfo, this.videoMode);
-    };
-
-    private void initIdInfo(String videoNumId) throws NoIdInfoException {
-        this.idInfo = NicoIdInfoCache.getInstance().get(videoNumId);
-        if (this.idInfo == null) {
-            throw new NoIdInfoException();
-        };
-    };
-
-    private void initLowAccess(String videoSrcId, String audioSrcId) {
-        // 引数例: "video-h264-1080p", "audio-aac-128kbps"
-
-        // DMCのメソッドを使っているのは誤りではない.
-        Boolean videoLow = idInfo.getDmcVideoEconomy(videoSrcId);
-        Boolean audioLow = idInfo.getDmcAudioEconomy(audioSrcId);
-        if (videoLow == null && audioSrcId == null) {
-            this.lowAccess = false;
-            return;
-        };
-        this.lowAccess = videoLow || audioLow;
-    };
-
-    private void initCache(NicoIdInfoCache.Entry idInfo, String videoMode) {
-        this.videoDescriptor = VideoDescriptor.newDmc(
-            smid, postfix, lowAccess, videoMode,
-            /*videoBitrate*/0, audioKbps, /*srcid*/"");
-        VideoDescriptor regVideoDesc =
-            Cache.getRegisteredVideoDescriptor(this.videoDescriptor);
-        if (regVideoDesc != null) {
-            this.videoDescriptor = regVideoDesc;
-        };
-        if (this.idInfo == null) {
-            // HLSにならってこう書く. ここを通ることはあるか？
-            cache = new Cache(videoDescriptor);
-        }
-        else {
-            cache = new Cache(videoDescriptor, idInfo.getTitle());
-        };
-        if (!this.lowAccess) {
-            cache.unmarkLow();
-        };
-    };
-
-    public Cache getCache() { return cache;};
-    public String getSmid() { return smid;};
-    public VideoDescriptor getVideoDescriptor() { return videoDescriptor;};
-    public String getPostfix() { return postfix;};
-    public NicoIdInfoCache.Entry getIdInfo() { return idInfo;};
-    public String getVideoType() { return videoType;};
-    public String getVideoId() { return videoNumId;};
-    public int getVideoHeight() {return videoHeight;};
 };

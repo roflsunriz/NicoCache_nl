@@ -1104,34 +1104,12 @@ public class DomandCVIEntry {
     public static Cache createCacheFileHandler
     (String smid, String videoNumId, String videoMode, int audioKbps) {
         NicoIdInfoCache.Entry idInfo = NicoIdInfoCache.getInstance().get(videoNumId);
-        boolean lowAudio = false;
-        boolean lowVideo = false;
-        if (idInfo != null) {
-            {
-                Boolean a = idInfo.estimateDmcAudioEconomyFromKbps(audioKbps);
-                if (a == null) {
-                    Logger.info(smid + ": unknown audio kbps " + audioKbps
-                                + ", treated as low.");
-                    a = false;
-                };
-                lowAudio = a;
-            };
-            {
-                Boolean v = idInfo.estimateDmcVideoEconomyFromVideoMode(videoMode);
-                if (v == null) {
-                    Logger.info(smid + ": unknown video mode " + videoMode
-                                + ", treated as low.");
-                    v = false;
-                };
-                lowVideo = v;
-            };
-        };
-        boolean lowAccess = lowAudio || lowVideo;
         VideoDescriptor finalvd = VideoDescriptor.newDmc(
-            smid, Cache.HLS, lowAccess, videoMode, 0, audioKbps, "");
+            smid, Cache.HLS, false, videoMode, 0, audioKbps, "");
         VideoDescriptor regvd = Cache.getRegisteredVideoDescriptor(finalvd);
         if (regvd != null) {
-            finalvd = regvd;
+            // 既存lowファイルとの照合は維持しつつ、新しいファイル名へlowを継承しない。
+            finalvd = regvd.replaceLow(false);
         };
 
         if (idInfo == null) {

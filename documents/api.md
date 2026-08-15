@@ -29,14 +29,15 @@ AJAX版は`200`とプレーンテキストの`OK`または`NG`を返す。AJAX�
 | エンドポイント | メソッド | 引数・本文 | 応答 |
 | --- | --- | --- | --- |
 | `/cache/info` | GET/POST | GETは`?smid[,smid...]`、POSTは本文に同じID列 | IDをキーとするJSON。未登録IDは`null`。空入力は`{}`。 |
-| `/cache/info/v2` | GET/POST | `/cache/info`と同じ | 品質別の`preferred`、`cacheIds`、`cachings`、`completes`、`caches`などを含むJSON。 |
-| `/cache/ajax_info` | GET | 単一の従来型IDをクエリに指定 | `OK,<low>,<拡張子>,<サイズ>,<最終サイズ>,<タイトル>`または`NG`。新規利用では`info/v2`を使う。 |
+| `/cache/info/v2` | GET/POST | `/cache/info`と同じ | 旧形式、旧DMC、CMAF/Domandをまとめた互換JSON。既存利用者向けに維持する。 |
+| `/cache/info/v3` | GET/POST | `/cache/info`と同じ | CMAF/Domand専用。`preferred`、`cacheIds`、`cachings`、`completes`、`caches`を含むJSON。 |
+| `/cache/ajax_info` | GET | 単一の従来型IDをクエリに指定 | `OK,<low>,<拡張子>,<サイズ>,<最終サイズ>,<タイトル>`または`NG`。新規利用では`info/v3`を使う。 |
 | `/cache/echo` | GET | 解析対象の代替IDをクエリに指定 | `rawQuery`、`decodedQuery`、`altId`、`smid`、`videoDescriptor`、対応キャッシュパスを含む診断JSON。引数なしは400。 |
 
 例:
 
 ```text
-GET http://www.nicovideo.jp/cache/info/v2?sm900001,sm900002 HTTP/1.1
+GET http://www.nicovideo.jp/cache/info/v3?sm900001,sm900002 HTTP/1.1
 Host: www.nicovideo.jp
 Connection: close
 ```
@@ -52,13 +53,16 @@ Content-Length: 17
 sm900001,sm900002
 ```
 
-`/cache/info/v2`では、現行Domand/CMAFキャッシュを`preferredDmcHls`が指す。
-対応する`caches[cacheId]`は`complete: true`、`movieType: "hls"`、互換名の
-`dmc: true`を持ち、`dmcMovieType`に`videoMode`、`videoBitrate`、`audioBitrate`を
-含む。現行Domand/CMAFでは映像品質を`videoMode`（例:`1080p`、`360p-lowest`）、
-音質を`audioBitrate`（kbps）で表し、`videoBitrate`は0である。`dmc`はDMCと
-Domand/CMAFの両方で真になる保存形式互換フィールドなので、配信世代の判定には使わない。
-完成済みかどうかは`completes`または各エントリーの`complete`で確認する。
+`/cache/info/v3`は現行Domand/CMAFの`.hls`キャッシュだけを返す。`preferred`は本体が
+選んだCMAFキャッシュIDを指し、各`caches[cacheId]`は`complete`、`caching`、
+`videoMode`（例:`1080p`、`360p-lowest`）、`audioBitrate`（kbps）、サイズ、タイトル、
+保存先情報を直接持つ。完成済みかどうかは`completes`または各エントリーの`complete`で
+確認する。新規キャッシュ名には`low`を付けない。既存の`low`付きCMAFキャッシュも列挙し、
+その場合だけ`legacyLow: true`を返す。
+
+`/cache/info/v2`は互換性維持のため従来形式のまま残す。現行Domand/CMAFキャッシュは
+`preferredDmcHls`が指し、対応する`caches[cacheId]`の`dmcMovieType`に`videoMode`、
+`videoBitrate`、`audioBitrate`が入る。新しい組み込み機能や外部ツールはv3を使用する。
 
 ## 動画・コメント・音声の保存API
 

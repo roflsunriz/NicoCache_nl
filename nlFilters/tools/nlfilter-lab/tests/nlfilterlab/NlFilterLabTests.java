@@ -216,15 +216,14 @@ public final class NlFilterLabTests {
 
     private static void cacheApiQuality() {
         String high = LabServer.cacheEntry("sm9", FilterRule.CacheState.DMC);
-        assertContains(high, "\"preferredDmcHls\":\"sm9[1080p,192].hls\"", "CMAF優先ID");
-        assertContains(high, "\"movieType\":\"hls\"", "CMAF movieType");
+        assertContains(high, "\"preferred\":\"sm9[1080p,192].hls\"", "CMAF優先ID");
         assertContains(high, "\"videoMode\":\"1080p\"", "CMAF映像モード");
-        assertContains(high, "\"videoBitrate\":0", "Domand映像bitrate");
         assertContains(high, "\"audioBitrate\":192", "Domand音声kbps");
 
         String low = LabServer.cacheEntry("sm9", FilterRule.CacheState.DMC_ECONOMY);
         assertContains(low, "\"videoMode\":\"360p-lowest\"", "低品質映像モード");
         assertContains(low, "\"audioBitrate\":64", "低品質音声kbps");
+        assertContains(low, "\"legacyLow\":true", "既存low名の互換情報");
     }
 
     private static void cacheDisplayPerformance(Path repository) throws Exception {

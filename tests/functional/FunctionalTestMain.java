@@ -230,13 +230,16 @@ public final class FunctionalTestMain {
                 "legacy-flv-content".getBytes(StandardCharsets.UTF_8));
         Files.write(sandbox.resolve("cache/sm900005_Functional.swf"),
                 "legacy-swf-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/sm900007low_Functional.mp4"),
+                "legacy-low-content".getBytes(StandardCharsets.UTF_8));
         Path hls = sandbox.resolve("cache/sm900003[720p,128]_Functional.hls");
         Files.createDirectories(hls);
         Files.writeString(hls.resolve("master.m3u8"),
                 "#EXTM3U\n#EXT-X-VERSION:7\nsegment.ts\n", StandardCharsets.UTF_8);
         Files.writeString(hls.resolve("segment.ts"),
                 "legacy-hls-segment", StandardCharsets.UTF_8);
-        Path lowerHls = sandbox.resolve("cache/sm900003[360p,64]_Functional.hls");
+        Path lowerHls = sandbox.resolve(
+                "cache/sm900003low[360p-lowest,64]_Functional.hls");
         Files.createDirectories(lowerHls);
         Files.writeString(lowerHls.resolve("master.m3u8"),
                 "#EXTM3U\n#EXT-X-VERSION:7\nsegment.ts\n", StandardCharsets.UTF_8);
@@ -494,7 +497,10 @@ public final class FunctionalTestMain {
                         + "/nvcomment-fixture\",\"params\":{\"targets\":[{"
                         + "\"id\":\"9000100001\",\"fork\":\"main\"}],"
                         + "\"language\":\"ja-jp\"}}},\"media\":{\"domand\":{"
-                        + "\"videos\":[],\"audios\":[]}},\"system\":{"
+                        + "\"videos\":[{\"id\":\"video-h264-1080p\",\"isAvailable\":true},"
+                        + "{\"id\":\"video-h264-720p\",\"isAvailable\":true}],"
+                        + "\"audios\":[{\"id\":\"audio-aac-192kbps\",\"isAvailable\":true},"
+                        + "{\"id\":\"audio-aac-128kbps\",\"isAvailable\":true}]}},\"system\":{"
                         + "\"isPeakTime\":false},\"viewer\":{\"isPremium\":false}}")
                         .getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -1209,13 +1215,35 @@ public final class FunctionalTestMain {
 
     private void testCacheInfoAndPlayback() throws Exception {
         Response info = request(nicoRequest("GET",
-                "/cache/info/v2?sm900001,sm900002,sm900003,sm900004,sm900005", ""));
+                "/cache/info/v2?sm900001,sm900002,sm900003,sm900004,sm900005,sm900007", ""));
         assertEquals(200, info.status, "cache info status");
         assertContains(info.bodyText(), "sm900001_Functional.mp4", "legacy cache info");
         assertContains(info.bodyText(), "sm900002[720p,128]_Functional.mp4", "DMC cache info");
         assertContains(info.bodyText(), "sm900003[720p,128]_Functional.hls", "HLS cache info");
         assertContains(info.bodyText(), "sm900004_Functional.flv", "FLV cache info");
         assertContains(info.bodyText(), "sm900005_Functional.swf", "SWF cache info");
+        assertContains(info.bodyText(), "sm900007low_Functional.mp4",
+                "existing classic low cache info");
+
+        Response cmafInfo = request(nicoRequest("GET",
+                "/cache/info/v3?sm900001,sm900002,sm900003,sm900004,sm900005,sm900007", ""));
+        assertEquals(200, cmafInfo.status, "CMAF cache info status");
+        assertContains(cmafInfo.bodyText(), "sm900003[720p,128].hls",
+                "CMAF cache info preferred cache");
+        assertContains(cmafInfo.bodyText(), "sm900003low[360p-lowest,64].hls",
+                "existing low CMAF cache compatibility");
+        assertContains(cmafInfo.bodyText(), "\"legacyLow\":true",
+                "existing low CMAF cache compatibility flag");
+        assertContains(cmafInfo.bodyText(), "\"videoMode\":\"720p\"",
+                "CMAF direct video mode");
+        assertContains(cmafInfo.bodyText(), "\"audioBitrate\":128",
+                "CMAF direct audio bitrate");
+        assertFalse(cmafInfo.bodyText().contains("sm900001_Functional.mp4"),
+                "v3 must exclude classic caches");
+        assertFalse(cmafInfo.bodyText().contains("sm900002[720p,128]_Functional.mp4"),
+                "v3 must exclude old DMC MP4 caches");
+        assertFalse(cmafInfo.bodyText().contains("sm900007low_Functional.mp4"),
+                "v3 must exclude classic low caches");
 
         Response playback = request(nicoRequest("GET", "/cache/sm900001.mp4", ""));
         assertEquals(200, playback.status, "cache playback status");
@@ -1238,6 +1266,11 @@ public final class FunctionalTestMain {
         assertEquals(200, swf.status, "SWF playback status");
         assertEquals("legacy-swf-content", swf.bodyText(), "SWF playback body");
 
+        Response classicLow = request(nicoRequest("GET", "/cache/sm900007low.mp4", ""));
+        assertEquals(200, classicLow.status, "existing classic low playback status");
+        assertEquals("legacy-low-content", classicLow.bodyText(),
+                "existing classic low playback body");
+
         String hlsBase = "/cache/file/nicocachenl_refcache=sm900003//";
         Response hlsMaster = request(nicoRequest("GET", hlsBase + "master.m3u8", ""));
         assertEquals(200, hlsMaster.status, "legacy HLS master status");
@@ -1247,7 +1280,7 @@ public final class FunctionalTestMain {
         assertEquals("legacy-hls-segment", hlsSegment.bodyText(), "legacy HLS segment body");
 
         String exactHlsBase = "/cache/file/nicocachenl_refcache="
-                + "sm900003[360p,64].hls//";
+                + "sm900003[360p-lowest,64].hls//";
         Response exactHlsSegment = request(nicoRequest(
                 "GET", exactHlsBase + "segment.ts", ""));
         assertEquals(200, exactHlsSegment.status, "quality-specific HLS status");
@@ -1255,7 +1288,7 @@ public final class FunctionalTestMain {
                 "quality-specific HLS body");
 
         String exactHlsWithoutPostfix = "/cache/file/nicocachenl_refcache="
-                + "sm900003[360p,64]//segment.ts";
+                + "sm900003[360p-lowest,64]//segment.ts";
         Response exactHlsWithoutPostfixResponse = request(nicoRequest(
                 "GET", exactHlsWithoutPostfix, ""));
         assertEquals(200, exactHlsWithoutPostfixResponse.status,
@@ -1283,6 +1316,14 @@ public final class FunctionalTestMain {
         exerciseCmafMedia("sm900010", "hlsbid", "video", "video-h264-720p", "cmfv");
 
         Path completed = waitForCompletedCmafCache("sm900010", Duration.ofSeconds(8));
+        assertFalse(completed.getFileName().toString().startsWith("sm900010low"),
+                "new CMAF cache filename must not contain low");
+        Response cmafInfo = request(nicoRequest("GET", "/cache/info/v3?sm900010", ""));
+        assertEquals(200, cmafInfo.status, "generated CMAF cache info status");
+        assertContains(cmafInfo.bodyText(), "sm900010[720p,128].hls",
+                "generated CMAF cache ID must not contain low");
+        assertContains(cmafInfo.bodyText(), "\"legacyLow\":false",
+                "generated CMAF cache low compatibility flag");
         assertCmafProgressLogHasPositiveSizes("sm900010");
         assertFileContains(sandbox.resolve("extension-complete-cache.txt"), "sm900010");
         assertFileContains(sandbox.resolve("extension-event-6.txt"), "6");
@@ -1473,6 +1514,19 @@ public final class FunctionalTestMain {
         assertContains(infoV2Post.bodyText(), "\"sm900001\"",
                 "cache info v2 POST response");
 
+        Response emptyInfoV3 = request(nicoRequest("GET", "/cache/info/v3", ""));
+        assertEquals(200, emptyInfoV3.status, "empty cache info v3 status");
+        assertEquals("{}", emptyInfoV3.bodyText(), "empty cache info v3 response");
+
+        Response infoV3Post = request(nicoRequestWithBody(
+                "POST", "/cache/info/v3", "sm900001,sm900003"));
+        assertEquals(200, infoV3Post.status, "cache info v3 POST status");
+        assertContains(infoV3Post.bodyText(),
+                "\"sm900001\":{\"videoId\":\"sm900001\",\"preferred\":null",
+                "cache info v3 must represent a legacy-only video as empty CMAF data");
+        assertContains(infoV3Post.bodyText(), "\"videoMode\":\"720p\"",
+                "cache info v3 POST response");
+
         Response ajaxInfo = request(nicoRequest(
                 "GET", "/cache/ajax_info?sm900001", ""));
         assertEquals(200, ajaxInfo.status, "ajax_info status");
@@ -1575,6 +1629,9 @@ public final class FunctionalTestMain {
         Response invalidInfo = request(nicoRequest(
                 "GET", "/cache/info?not-an-id", ""));
         assertEquals(400, invalidInfo.status, "cache info invalid parameter");
+        Response invalidInfoV3 = request(nicoRequest(
+                "GET", "/cache/info/v3?not-an-id", ""));
+        assertEquals(400, invalidInfoV3.status, "cache info v3 invalid parameter");
         Response invalidRemove = request(nicoRequest("GET", "/cache/ajax_rm", ""));
         assertEquals(400, invalidRemove.status, "cache rm invalid parameter");
         Response invalidTempRemove = request(nicoRequest(
@@ -1854,7 +1911,8 @@ public final class FunctionalTestMain {
         assertFalse(Files.exists(sandbox.resolve("cache/sm900001_Functional.mp4")),
                 "cache file must be removed only inside sandbox");
 
-        for (String id : List.of("sm900002", "sm900003", "sm900004", "sm900005")) {
+        for (String id : List.of(
+                "sm900002", "sm900003", "sm900004", "sm900005", "sm900007")) {
             Response legacyRemoved = request(nicoRequest("GET", "/cache/ajax_rmall?" + id, ""));
             assertEquals(200, legacyRemoved.status, id + " removal status");
             assertEquals("OK", legacyRemoved.bodyText(), id + " removal response");
@@ -1863,12 +1921,15 @@ public final class FunctionalTestMain {
                 "DMC MP4 cache must be removed");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900003[720p,128]_Functional.hls")),
                 "legacy HLS cache must be removed");
-        assertFalse(Files.exists(sandbox.resolve("cache/sm900003[360p,64]_Functional.hls")),
+        assertFalse(Files.exists(sandbox.resolve(
+                "cache/sm900003low[360p-lowest,64]_Functional.hls")),
                 "lower-quality HLS cache must be removed");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900004_Functional.flv")),
                 "FLV cache must be removed");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900005_Functional.swf")),
                 "SWF cache must be removed");
+        assertFalse(Files.exists(sandbox.resolve("cache/sm900007low_Functional.mp4")),
+                "existing classic low cache must be removed");
         assertFileContains(sandbox.resolve("extension-event-8.txt"), "8");
         assertFileContains(sandbox.resolve("extension-event-9.txt"), "9");
     }

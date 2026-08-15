@@ -13,7 +13,7 @@
 #     DOMに動画等アイテムの要素及び内容が追加されて完成した後に、
 #     動画キャッシュの情報と共に呼ばれる
 #       elem: アイテムのroot要素
-#       info: 動画キャッシュの情報(info/v2), 動画以外の時null
+#       info: CMAF/Domand動画キャッシュの情報(info/v3), 動画以外の時null
 #   options.all
 #     trueの時，動画以外のアイテムも対象にする
 
@@ -111,7 +111,7 @@ AbstractPageProcessor.prototype = {
         var ids = myQueue.map(function(x) { return x[0] })
           .filter(function(el, i, a) { return !(el in infoCache) && !(el in dup) && (dup[el] = 1) });
         if (ids.length > 0) {
-          NicoCache_nl.get("/cache/info/v2?" + ids.join(","), function(resp) {
+          NicoCache_nl.get("/cache/info/v3?" + ids.join(","), function(resp) {
             if (resp.status != 200) return;
             var json = JSON.parse(resp.responseText);
             for (var id in json) { infoCache[id] = json[id] }

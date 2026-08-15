@@ -100,7 +100,7 @@
     const smids = Array.from(batch.keys());
     if (smids.length === 0) return;
 
-    NicoCache_nl.get("/cache/info/v2?" + smids.join(","), function(response) {
+    NicoCache_nl.get("/cache/info/v3?" + smids.join(","), function(response) {
       if (!response || response.status !== 200) {
         console.warn("NicoCache_nl: 視聴ページのキャッシュ情報を取得できませんでした。");
         return;

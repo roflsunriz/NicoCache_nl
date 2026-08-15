@@ -23,7 +23,7 @@
 #   <非dmc通常$$非dmcエコノミー$$dmc通常$$dmcエコノミー>
 #   非dmc通常<$>非dmcエコノミー<$>dmc通常<$>dmcエコノミー
 # これは保存互換の静的分岐であり、現行CMAF/Domandの品質は下記JavaScriptが
-# /cache/info/v2のvideoMode/audioBitrateから表示する。
+# /cache/info/v3のvideoMode/audioBitrateから表示する。
 #
 # CMAF/Domandキャッシュの画質・音質をキャッシュバッジへ表示するか。
 #   true : 1080p・192kなど、映像モードと音声kbpsを表示する

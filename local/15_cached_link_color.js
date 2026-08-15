@@ -265,7 +265,7 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
   };
 
   const requestCacheInfo = async function(ids) {
-    const response = await fetch("/cache/info/v2?" + ids.join(","), {cache: "no-cache"});
+    const response = await fetch("/cache/info/v3?" + ids.join(","), {cache: "no-cache"});
     if (!response.ok) throw new Error("HTTP " + response.status);
     const json = await response.json();
     if (!json || typeof json !== "object") throw new Error("invalid JSON response");

@@ -245,43 +245,40 @@ function createPage(cacheInfo, thumbnailWidths = {}) {
   return {cards, observers, resizeObservers, requests};
 }
 
-function videoInfo({dmc, economy}) {
-  const cache = {complete: true, dmc, economy};
-  if (dmc) {
-    cache.movieType = "hls";
-    cache.dmcMovieType = {
-      videoMode: economy ? "360p" : "1080p",
-      audioBitrate: economy ? 64 : 192,
-    };
-  }
+function videoInfo({videoMode = "1080p", audioBitrate = 192, legacyLow = false} = {}) {
+  const cache = {complete: true, videoMode, audioBitrate, legacyLow};
   return {
     caches: {
       cache,
     },
     preferred: "cache",
-    preferredDmcHls: dmc ? "cache" : undefined,
   };
 }
 
 const flushAsyncWork = () => new Promise((resolve) => setTimeout(resolve, 20));
 
-test("4種類のキャッシュ状態をリンク色classとサムネイルアイコンへ反映する", async () => {
+test("v3のCMAF品質とキャッシュなしをリンク色classとアイコンへ反映する", async () => {
   const page = createPage({
-    sm1: videoInfo({dmc: false, economy: true}),
-    sm2: videoInfo({dmc: true, economy: true}),
-    sm3: videoInfo({dmc: false, economy: false}),
-    sm4: videoInfo({dmc: true, economy: false}),
+    sm1: videoInfo({videoMode: "360p-lowest", audioBitrate: 64, legacyLow: true}),
+    sm2: videoInfo({videoMode: "720p", audioBitrate: 192}),
+    sm3: null,
+    sm4: videoInfo(),
   });
   await flushAsyncWork();
 
-  assert.deepEqual(page.requests, ["/cache/info/v2?sm1,sm2,sm3,sm4"]);
+  assert.deepEqual(page.requests, ["/cache/info/v3?sm1,sm2,sm3,sm4"]);
   const expected = [
-    ["nl-cached-smile-economy", "ncnl-cache-quality-legacy"],
-    ["nl-cached-smile-economy", "ncnl-cache-quality-low"],
-    ["nl-cached-smile-normal", "ncnl-cache-quality-legacy"],
+    ["nl-cached-smile-normal", "ncnl-cache-quality-low"],
+    ["nl-cached-smile-normal", "ncnl-cache-quality-hd"],
+    null,
     ["nl-cached-smile-normal", "ncnl-cache-quality-fhd"],
   ];
   page.cards.forEach(({anchor, thumbnailHost}, index) => {
+    if (expected[index] === null) {
+      assert.equal(anchor.classList.contains("nl-cached-common"), false);
+      assert.equal(thumbnailHost.querySelector("[data-ncnl-cache-icon]"), null);
+      return;
+    }
     assert.equal(anchor.classList.contains(expected[index][0]), true);
     const icon = thumbnailHost.querySelector("[data-ncnl-cache-icon]");
     assert.ok(icon);
@@ -296,10 +293,10 @@ test("4種類のキャッシュ状態をリンク色classとサムネイルア�
 
 test("SPAで既存リンクのhrefが変わるとclassとアイコンを更新・除去する", async () => {
   const page = createPage({
-    sm1: videoInfo({dmc: false, economy: true}),
-    sm2: videoInfo({dmc: true, economy: true}),
-    sm3: videoInfo({dmc: false, economy: false}),
-    sm4: videoInfo({dmc: true, economy: false}),
+    sm1: videoInfo({videoMode: "360p-lowest", audioBitrate: 64, legacyLow: true}),
+    sm2: videoInfo({videoMode: "720p"}),
+    sm3: null,
+    sm4: videoInfo(),
   });
   await flushAsyncWork();
 
@@ -327,7 +324,7 @@ test("SPAで既存リンクのhrefが変わるとclassとアイコンを更新�
 
 test("従来のnlFilterが追加したアイコンとは重複しない", async () => {
   const page = createPage({
-    sm1: videoInfo({dmc: false, economy: true}),
+    sm1: videoInfo({videoMode: "360p-lowest", audioBitrate: 64, legacyLow: true}),
     sm2: null,
     sm3: null,
     sm4: null,
@@ -343,7 +340,7 @@ test("従来のnlFilterが追加したアイコンとは重複しない", async 
 
 test("サムネイル幅が120px未満ならCアイコンへ切り替え、リサイズにも追従する", async () => {
   const page = createPage({
-    sm1: videoInfo({dmc: false, economy: false}),
+    sm1: videoInfo(),
     sm2: null,
     sm3: null,
     sm4: null,
@@ -361,7 +358,7 @@ test("サムネイル幅が120px未満ならCアイコンへ切り替え、リ�
 
 test("キャッシュ情報取得後に遅延描画されたサムネイルへアイコンを追加する", async () => {
   const page = createPage({
-    sm1: videoInfo({dmc: true, economy: false}),
+    sm1: videoInfo(),
     sm2: null,
     sm3: null,
     sm4: null,
@@ -460,7 +457,7 @@ function createWatchPage(thumbnailWidth) {
       callback({
         status: 200,
         responseText: JSON.stringify({
-          sm1: videoInfo({dmc: true, economy: false}),
+          sm1: videoInfo(),
         }),
       });
     },
@@ -491,7 +488,7 @@ test("視聴ページの関連動画もサムネイル幅に応じてアイコ�
   const page = createWatchPage(160);
   await flushAsyncWork();
 
-  assert.deepEqual(page.requests, ["/cache/info/v2?sm1"]);
+  assert.deepEqual(page.requests, ["/cache/info/v3?sm1"]);
   const icon = page.item.querySelector(":scope .cacheIcon");
   assert.equal(icon.classList.contains("ncnl-cache-quality-fhd"), true);
   assert.equal(icon.classList.contains("ncnl-cache-icon--compact"), false);

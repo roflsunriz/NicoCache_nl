@@ -72,7 +72,7 @@ final class LabServer {
         server.createContext("/api/logs", this::logs);
         server.createContext("/api/client-log", this::clientLog);
         server.createContext("/preview/", this::preview);
-        server.createContext("/cache/info/v2", this::cacheInfo);
+        server.createContext("/cache/info/v3", this::cacheInfo);
         server.createContext("/cache/", this::blockedCacheMutation);
         server.createContext("/local/", this::localAsset);
         server.createContext("/thumbnails/", this::thumbnail);
@@ -372,25 +372,23 @@ final class LabServer {
     }
 
     static String cacheEntry(String id, FilterRule.CacheState state) {
-        if (state == FilterRule.CacheState.NONE) {
-            return "{\"caches\":{},\"cachings\":[],\"completes\":[],\"preferred\":null," +
-                    "\"preferredHTML5\":null,\"preferredDmcHls\":null}";
-        }
         boolean dmc = state == FilterRule.CacheState.DMC || state == FilterRule.CacheState.DMC_ECONOMY;
+        if (!dmc) {
+            return "{\"videoId\":" + Json.quote(id) +
+                    ",\"preferred\":null,\"cacheIds\":[],\"cachings\":[]," +
+                    "\"completes\":[],\"caches\":{}}";
+        }
         boolean economy = state == FilterRule.CacheState.ECONOMY || state == FilterRule.CacheState.DMC_ECONOMY;
-        String cacheId = dmc
-                ? id + (economy ? "low[360p-lowest,64].hls" : "[1080p,192].hls")
-                : id + (economy ? "low" : "") + ".mp4";
-        String quality = state == FilterRule.CacheState.DMC_ECONOMY
-                ? "{\"videoMode\":\"360p-lowest\",\"videoBitrate\":0,\"audioBitrate\":64}"
-                : "{\"videoMode\":\"1080p\",\"videoBitrate\":0,\"audioBitrate\":192}";
-        return "{\"caches\":{" + Json.quote(cacheId) + ":{\"complete\":true,\"dmc\":" + dmc +
-                ",\"economy\":" + economy + ",\"movieType\":\"" + (dmc ? "hls" : "mp4") + "\"" +
-                (dmc ? ",\"dmcMovieType\":" + quality : "") +
-                ",\"size\":1048576,\"position\":1048576}}," +
-                "\"cachings\":[],\"completes\":[" + Json.quote(cacheId) + "],\"preferredHTML5\":" +
-                Json.quote(cacheId) + ",\"preferred\":" + Json.quote(cacheId) +
-                ",\"preferredDmcHls\":" + (dmc ? Json.quote(cacheId) : "null") + "}";
+        String cacheId = id + (economy ? "low[360p-lowest,64].hls" : "[1080p,192].hls");
+        String videoMode = economy ? "360p-lowest" : "1080p";
+        int audioBitrate = economy ? 64 : 192;
+        return "{\"videoId\":" + Json.quote(id) + ",\"preferred\":" + Json.quote(cacheId) +
+                ",\"cacheIds\":[" + Json.quote(cacheId) + "],\"cachings\":[],\"completes\":[" +
+                Json.quote(cacheId) + "],\"caches\":{" + Json.quote(cacheId) +
+                ":{\"videoId\":" + Json.quote(id) + ",\"cacheId\":" + Json.quote(cacheId) +
+                ",\"complete\":true,\"caching\":false,\"videoMode\":" + Json.quote(videoMode) +
+                ",\"audioBitrate\":" + audioBitrate + ",\"legacyLow\":" + economy +
+                ",\"size\":1048576}}}";
     }
 
     private void blockedCacheMutation(HttpExchange exchange) throws IOException {

@@ -662,6 +662,7 @@ public class CacheDirProcessor implements Processor {
     /**
      * /cache/info (GET,POST)
      * /cache/info/v2 (GET,POST)
+     * /cache/info/v3 (GET,POST)
      * /cache/ajax_info (GET)
      *
      * 2026-06-28: 以前は空のqueryには"no method:xxx"とhttp-404を返していた.
@@ -700,6 +701,16 @@ public class CacheDirProcessor implements Processor {
             };
             if (ispost) {
                 return processCacheInfoAPI(loadPostContent(requestHeader, browser), 2);
+            };
+            return StringResource.getMethodNotAllowed();
+        };
+
+        if (path.equals("info/v3")) {
+            if (isget) {
+                return processCacheInfoAPI(query, 3);
+            };
+            if (ispost) {
+                return processCacheInfoAPI(loadPostContent(requestHeader, browser), 3);
             };
             return StringResource.getMethodNotAllowed();
         };
@@ -778,12 +789,22 @@ public class CacheDirProcessor implements Processor {
             boolean success = false;
             if (version == 1) {
                 success = setCacheInfo(sb, smid);
-            } else if (version == 2) {
+            } else if (version == 2 || version == 3) {
                 if (smid != null) {
                     smid = smid.substring(0, 2) + NLShared.INSTANCE.vid2cid(smid.substring(2));
-                    success = setCacheInfo2(sb, smid);
+                    if (version == 2) {
+                        success = setCacheInfo2(sb, smid);
+                    } else {
+                        CmafCacheInfo.append(sb, smid);
+                        success = true;
+                    }
                 } else {
-                    success = setCacheInfo2(sb, id);
+                    if (version == 2) {
+                        success = setCacheInfo2(sb, id);
+                    } else {
+                        CmafCacheInfo.append(sb, id);
+                        success = true;
+                    }
                 }
             } else {
                 Logger.info("processCacheInfoAPI: programming error: version=" + version);

@@ -24,24 +24,22 @@
 ## 現行 NicoCache_nl のキャッシュ契約
 
 - 現行の動画配信・保存経路は Domand の CMAF セグメントである。保存先がディレクトリで拡張子相当が
-  `.hls` のキャッシュを、`Cache`、`VideoDescriptor`、`/cache/info/v2` を通して扱う。
+  `.hls` のキャッシュを、`Cache`、`VideoDescriptor`、`/cache/info/v3` を通して扱う。
 - `VideoDescriptor.isDmc()` と `/cache/info/v2` の `dmc` は公開ABI・保存済みキャッシュとの
   互換名であり、「現在もDMC配信を使っている」という意味ではない。Domand/CMAFもこの値が
   `true` になるため、UI文言、アイコン、色の世代判定へそのまま使わない。
-- `/cache/info/v2` の動画ごとの値には `preferred`、`preferredHTML5`、`preferredDmcHls`、
-  `cacheIds`、`cachings`、`completes`、`caches` がある。現行CMAF/Domandの表示対象はまず
-  `preferredDmcHls` を使い、該当する `caches[cacheId]` の `complete` を確認する。
-- 各 `caches[cacheId]` の `movieType` が `hls` で、`dmcMovieType` に `videoMode`、
-  `videoBitrate`、`audioBitrate` が入る。現行Domand/CMAFでは `videoMode` が `1080p`、
-  `720p-mid`、`360p-lowest` などの映像品質、`audioBitrate` が音声kbpsを表し、
-  `videoBitrate` は0である。`videoBitrate`の非0値は旧DMCキャッシュの補足値としてだけ扱う。
-  フィールド欠落や0から架空の品質を推測しない。
-- `economy` / `VideoDescriptor.isLow()` はDMC以降では「取得時に選択可能だった最高品質より低い」
-  ことを示す互換フラグであり、旧SmileVideoのエコノミーモードと同一ではない。
-  `videoMode`内の `_low` / `-lowest` とも別概念なので、品質表示は個別フィールドを優先する。
+- `/cache/info/v3` の動画ごとの値には `preferred`、`cacheIds`、`cachings`、`completes`、
+  `caches` がある。表示対象はまず `preferred` を使い、該当する `caches[cacheId]` の
+  `complete` を確認する。
+- 各 `caches[cacheId]` には `videoMode`、`audioBitrate` が直接入る。`videoMode` は
+  `1080p`、`720p-mid`、`360p-lowest` などの映像品質、`audioBitrate` は音声kbpsを表す。
+  フィールド欠落から架空の品質を推測しない。
+- 新規CMAF/Domandキャッシュ名には`low`を付けない。保存済み`low`名は互換読み込みし、
+  v3では`legacyLow`として区別する。`videoMode`内の`_low` / `-lowest`は映像品質名であり、
+  ファイル名の`low`とは別概念として扱う。
 - `idGroup` の `<通常$$エコノミー$$dmc通常$$dmcエコノミー>` は本体DSLが維持する旧互換分岐で、
   CMAF/Domandの解像度・音声品質を表現できない。静的置換は汎用フォールバックに留め、現行DOMの
-  品質表示は `/cache/info/v2` と `local/ncnl_cache_display.js` を使う。
+  品質表示は `/cache/info/v3` と `local/ncnl_cache_display.js` を使う。
 - キャッシュ表示の共通契約は `local/ncnl_cache_display.js`、外観は `local/nl_cacheIcon.css` に置く。
   一覧用 `local/15_cached_link_color.js` と視聴ページ用 `local/20_watchpage.js` へ品質選択や
   アイコンDOM生成を重複実装しない。
@@ -129,7 +127,7 @@
 - グローバル汚染と他フィルターとの変数衝突を避けるため、独立した処理は IIFE などでスコープを閉じる。共有が必要なものだけを、既存契約に従って `window.NicoCache_nl` 配下へ置く。
 - SPA と遅延描画を扱う場合は、初期DOMと後続Mutationの両方を処理し、二重登録・二重挿入を属性、クラス、`WeakSet` などで防ぐ。MutationObserver の監視範囲とコールバック内の探索量を最小限にする。
 - DOM セレクターは、表示文言、生成ハッシュ、壊れやすい階層だけに依存させない。対象ページの現行DOMを確認し、URL、安定属性、意味のある要素を優先する。
-- 複数動画の `/cache/info/v2` 取得は可能な限りまとめ、同じ動画や要素への重複リクエストを避ける。HTTPエラー、JSON不正、要素消失を扱い、失敗時に無限再試行しない。
+- 複数動画の `/cache/info/v3` 取得は可能な限りまとめ、同じ動画や要素への重複リクエストを避ける。HTTPエラー、JSON不正、要素消失を扱い、失敗時に無限再試行しない。
 - ページ側へ差し込むコードは、対象ブラウザーと NicoCache_nl がそのまま配信できる JavaScript/CSS にする。このリポジトリにはトランスパイルやバンドル工程がないため、ビルドで補正されると仮定しない。
 - `console` 出力は障害解析に必要な警告・エラーへ限定し、動画ID、Cookie、レスポンス本文などを大量に出力しない。
 - CSS は既存のキャッシュアイコンやポップアップの詳細度を確認し、`!important`、固定座標、サイト全体に波及するセレクターを最小限にする。
