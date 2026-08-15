@@ -262,7 +262,8 @@ final class ControlServer implements AutoCloseable {
         }
         if (!force) {
             boolean accepted = state.compareAndSet("running", "stopping")
-                    || state.compareAndSet("degraded", "stopping");
+                    || state.compareAndSet("degraded", "stopping")
+                    || state.compareAndSet("starting", "stopping");
             if (!accepted) {
                 return;
             }

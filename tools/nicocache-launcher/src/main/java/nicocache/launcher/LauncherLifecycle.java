@@ -2,7 +2,7 @@ package nicocache.launcher;
 
 import java.io.IOException;
 
-/** Keeps the core, launcher, and diagnostics process lifecycles separate. */
+/** Keeps the launcher resident while core stop actions include diagnostics. */
 final class LauncherLifecycle {
     @FunctionalInterface
     interface StopAction {

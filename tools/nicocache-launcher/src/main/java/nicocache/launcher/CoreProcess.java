@@ -167,6 +167,7 @@ final class CoreProcess {
         if (ControlClient.isAlive(status)) {
             throw new IOException("本体が graceful shutdown 時間内に終了しませんでした");
         }
+        diagnostics.stopIfRunning();
     }
 
     void forceStop() throws IOException {
@@ -190,6 +191,16 @@ final class CoreProcess {
                 handle.destroyForcibly();
             }
         }
+        try {
+            ControlClient.waitForExit(status, Duration.ofSeconds(5));
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            throw new IOException("強制停止の完了待機が中断されました", error);
+        }
+        if (ControlClient.isAlive(status)) {
+            throw new IOException("本体を強制停止できませんでした");
+        }
+        diagnostics.stopIfRunning();
     }
 
     private boolean isProductProcess(ProcessHandle handle) {

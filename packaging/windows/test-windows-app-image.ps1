@@ -449,7 +449,7 @@ try {
             -not (($helpOutput -join "`n").Contains('--tray')) -or
             -not (($helpOutput -join "`n").Contains('--minimized')) -or
             -not (($helpOutput -join "`n").Contains(
-                'core stop only; resident launcher and diagnostics continue'))) {
+                'core and diagnostics stop together; resident launcher continues'))) {
         throw "Windowsランチャーの表示モードCLIが不正です: $helpOutput"
     }
 
@@ -461,7 +461,6 @@ try {
     if ($guiProcess.HasExited) {
         throw "引数なしの起動管理GUIが終了しました (ExitCode: $($guiProcess.ExitCode))"
     }
-    $diagnosticsProcess = Wait-DiagnosticsProcess
     $implicitCoreProcesses = @(
         Get-ProductProcesses |
             Where-Object {
@@ -476,6 +475,9 @@ try {
     if ($implicitCoreProcesses.Count -ne 0) {
         throw '引数なしの起動管理GUIがNicoCache_nl本体を暗黙起動しました'
     }
+    if (Test-Path -LiteralPath $diagnosticsStatusPath -PathType Leaf) {
+        throw '本体未起動の起動管理GUIが診断アプリを暗黙起動しました'
+    }
 
     $startOutput = @(& $launcherPath '-jar' $launcherJarPath `
         '--headless' '--start' 2>&1)
@@ -488,6 +490,7 @@ try {
     $controlStatus = Get-Content -Raw -LiteralPath $controlStatusPath |
         ConvertFrom-StringData
     $coreProcess = Get-Process -Id ([int]$controlStatus.pid) -ErrorAction Stop
+    $diagnosticsProcess = Wait-DiagnosticsProcess
     $residentLauncherId = $guiProcess.Id
     $residentDiagnosticsId = $diagnosticsProcess.Id
 
@@ -583,7 +586,7 @@ try {
         '--headless' '--stop' 2>&1)
     if ($LASTEXITCODE -ne 0 -or
             -not (($stopOutput -join "`n").Contains(
-                'resident launcher and diagnostics unchanged'))) {
+                'diagnostics stopped gracefully; resident launcher unchanged'))) {
         throw "常駐ランチャー併用時の本体停止に失敗しました: $stopOutput"
     }
     $coreProcess.WaitForExit(10000) | Out-Null
@@ -594,13 +597,13 @@ try {
     if ((Get-Process -Id $residentLauncherId -ErrorAction Stop).HasExited) {
         throw '--headless --stopが常駐ランチャーまで終了しました'
     }
-    if ((Get-Process -Id $residentDiagnosticsId -ErrorAction Stop).HasExited) {
-        throw '--headless --stopが診断アプリまで終了しました'
+    $diagnosticsProcess.WaitForExit(10000) | Out-Null
+    $diagnosticsProcess.Refresh()
+    if (-not $diagnosticsProcess.HasExited) {
+        throw '--headless --stop後も診断アプリが動作しています'
     }
-    $diagnosticsStatus = Get-Content -Raw -LiteralPath `
-        $diagnosticsStatusPath | ConvertFrom-StringData
-    if ([int]$diagnosticsStatus.pid -ne $residentDiagnosticsId) {
-        throw '--headless --stopの前後で診断アプリが置き換わりました'
+    if (Test-Path -LiteralPath $diagnosticsStatusPath -PathType Leaf) {
+        throw '--headless --stop後も診断アプリの状態ファイルが残っています'
     }
     Start-Sleep -Milliseconds 2500
     $reportsAfterPlannedStop = @(Get-ChildItem -LiteralPath $incidentRoot `
@@ -608,21 +611,14 @@ try {
     if ($reportsAfterPlannedStop.Count -ne 1) {
         throw '--headless --stopを障害として誤記録しました'
     }
-    Write-Output 'PASS 常駐ランチャー中の--headless --stopは本体だけを停止'
-    Write-Output 'PASS 本体停止後も既存のランチャーと診断アプリが常駐'
+    Write-Output 'PASS 常駐ランチャー中の--headless --stopは本体と診断アプリを停止'
+    Write-Output 'PASS 本体停止後も既存のランチャーだけが常駐'
     Write-Output 'PASS 計画停止は新しい障害レポートを生成しない'
 
     Stop-Process -Id $guiProcess.Id -Force
     $guiProcess.WaitForExit(10000) | Out-Null
     Write-Output 'PASS 引数なしのGUI起動では本体を暗黙起動しない'
-    Write-Output 'PASS 起動管理GUIから独立した常駐診断アプリを起動'
-
-    Stop-Process -Id $diagnosticsProcess.Id -Force
-    $diagnosticsProcess.WaitForExit(10000) | Out-Null
-    Remove-Item -LiteralPath $diagnosticsStatusPath -Force `
-        -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath $diagnosticsLockPath -Force `
-        -ErrorAction SilentlyContinue
+    Write-Output 'PASS 本体の起動と正常終了に診断アプリが同期'
 
     $process = Start-Process -FilePath $launcherPath `
         -ArgumentList @('-jar', $launcherJarPath, '--headless') `

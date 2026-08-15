@@ -77,6 +77,26 @@ final class CoreProbe {
         return response.body();
     }
 
+    boolean requestGracefulShutdown() throws IOException, InterruptedException {
+        if (!Files.isRegularFile(paths.controlStatus())) {
+            return false;
+        }
+        Properties status = readControlStatus();
+        long pid = parseLong(status.getProperty("pid"), -1L);
+        if (pid <= 0L || !ProcessHandle.of(pid)
+                .map(ProcessHandle::isAlive).orElse(false)) {
+            return false;
+        }
+        HttpResponse<String> response = send(status,
+                "/api/control/graceful-shutdown", Duration.ofSeconds(5),
+                true);
+        if (response.statusCode() != 200 && response.statusCode() != 202) {
+            throw new IOException("graceful shutdown HTTP "
+                    + response.statusCode());
+        }
+        return true;
+    }
+
     boolean expectedStop(long pid) {
         if (pid <= 0L || !Files.isRegularFile(paths.expectedStop())) {
             return false;
@@ -118,7 +138,7 @@ final class CoreProbe {
         long started = System.nanoTime();
         try {
             HttpResponse<String> response = send(status, endpoint,
-                    REQUEST_TIMEOUT);
+                    REQUEST_TIMEOUT, false);
             boolean ok = response.statusCode() == 200;
             return new Probe(ok, elapsed(started), ok ? "" : "control-http-"
                     + response.statusCode());
@@ -133,13 +153,21 @@ final class CoreProbe {
 
     private HttpResponse<String> send(Properties status, String endpoint,
             Duration timeout) throws IOException, InterruptedException {
+        return send(status, endpoint, timeout, false);
+    }
+
+    private HttpResponse<String> send(Properties status, String endpoint,
+            Duration timeout, boolean post)
+            throws IOException, InterruptedException {
         int port = parsePort(status.getProperty("port"));
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:" + port + endpoint))
                 .timeout(timeout)
                 .header("Authorization", "Bearer "
-                        + status.getProperty("token"))
-                .GET().build();
+                        + status.getProperty("token"));
+        HttpRequest request = post
+                ? builder.POST(HttpRequest.BodyPublishers.noBody()).build()
+                : builder.GET().build();
         return httpClient.send(request, HttpResponse.BodyHandlers.ofString(
                 StandardCharsets.UTF_8));
     }

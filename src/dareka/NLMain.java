@@ -116,6 +116,14 @@ public class NLMain {
         NicoCachePaths.publishDataRoot(dataDirectory);
         System.setProperty("user.dir", dataDirectory.toString());
         GUILauncher.refreshUserFiles();
+        try {
+            DiagnosticsLifecycle.start();
+        } catch (java.io.IOException error) {
+            System.err.println("NicoCacheDiagnosticsを起動できません: "
+                    + error.getMessage());
+            System.exit(1);
+            return;
+        }
         if (startGUI) {
             try {
                 guiLauncher = new GUILauncher();
@@ -201,6 +209,7 @@ public class NLMain {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
+        DiagnosticsLifecycle.stopPlanned("graceful");
     }
 
     static synchronized void disconnect() {

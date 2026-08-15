@@ -100,6 +100,8 @@ public final class EndToEndTestMain {
                     this::testUpstreamFailure);
             run("automatic diagnostic incident reports",
                     this::testAutomaticDiagnosticIncidentReports);
+            run("direct core planned lifecycle after crash",
+                    this::testDirectCorePlannedLifecycleAfterCrash);
         } finally {
             try {
                 stopProduct();
@@ -119,7 +121,7 @@ public final class EndToEndTestMain {
             }
             throw new AssertionError("end-to-end tests failed");
         }
-        System.out.println("End-to-end tests passed: 9");
+        System.out.println("End-to-end tests passed: 10");
     }
 
     private void prepareSandbox() throws IOException {
@@ -325,6 +327,80 @@ public final class EndToEndTestMain {
 
     private void testAutomaticDiagnosticIncidentReports() throws Exception {
         new DiagnosticIncidentE2e(application, data, diagnosticsPid).run();
+    }
+
+    private void testDirectCorePlannedLifecycleAfterCrash() throws Exception {
+        if (product != null && product.isAlive()) {
+            assertTrue(product.waitFor(STOP_TIMEOUT.toMillis(),
+                            TimeUnit.MILLISECONDS),
+                    "foreground launcher must exit after the crashed core");
+        }
+        Path log = sandbox.resolve("direct-core.log");
+        product = new ProcessBuilder(
+                javaExecutable(),
+                "-Djava.awt.headless=true",
+                "-Dnicocache.applicationRoot=" + application,
+                "-Dnicocache.userDataRoot=" + data,
+                "-jar", application.resolve("NicoCache_nl.jar").toString(),
+                "--headless")
+                .directory(data.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(log.toFile())
+                .start();
+
+        long deadline = System.nanoTime() + START_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline) {
+            Properties status = readPropertiesIfPresent(data.resolve(
+                    "data/nicocache-control.properties"));
+            if (status != null
+                    && Long.toString(product.pid()).equals(
+                            status.getProperty("pid"))
+                    && "running".equals(status.getProperty("state"))) {
+                break;
+            }
+            if (!product.isAlive()) {
+                throw new AssertionError(
+                        "direct core exited during startup; log=" + log);
+            }
+            Thread.sleep(50L);
+        }
+        Properties status = readPropertiesIfPresent(data.resolve(
+                "data/nicocache-control.properties"));
+        assertTrue(status != null && Long.toString(product.pid()).equals(
+                        status.getProperty("pid"))
+                        && "running".equals(status.getProperty("state")),
+                "direct core must publish its own lifecycle status");
+        assertTrue(ProcessHandle.of(diagnosticsPid)
+                        .map(ProcessHandle::isAlive).orElse(false),
+                "diagnostics must survive the crash and pair with restart");
+
+        requestGracefulShutdown();
+        assertTrue(product.waitFor(STOP_TIMEOUT.toMillis(),
+                        TimeUnit.MILLISECONDS),
+                "direct core must stop gracefully");
+        deadline = System.nanoTime() + STOP_TIMEOUT.toNanos();
+        while (System.nanoTime() < deadline && ProcessHandle.of(diagnosticsPid)
+                .map(ProcessHandle::isAlive).orElse(false)) {
+            Thread.sleep(50L);
+        }
+        assertTrue(!ProcessHandle.of(diagnosticsPid)
+                        .map(ProcessHandle::isAlive).orElse(false),
+                "planned direct core stop must stop diagnostics");
+        assertTrue(!Files.exists(data.resolve(
+                        "data/nicocache-diagnostics-status.properties")),
+                "planned stop must remove diagnostics status");
+    }
+
+    private static Properties readPropertiesIfPresent(Path path)
+            throws IOException {
+        if (!Files.isRegularFile(path)) {
+            return null;
+        }
+        Properties properties = new Properties();
+        try (InputStream input = Files.newInputStream(path)) {
+            properties.load(input);
+        }
+        return properties;
     }
 
     private void stopDiagnostics() throws Exception {

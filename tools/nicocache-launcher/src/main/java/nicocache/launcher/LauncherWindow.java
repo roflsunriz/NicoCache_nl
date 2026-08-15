@@ -38,7 +38,6 @@ import javax.swing.Timer;
 final class LauncherWindow {
     private final LauncherPaths paths;
     private final CoreProcess core;
-    private final DiagnosticsProcess diagnostics;
     private final LauncherLifecycle lifecycle;
     private final TaskScheduler scheduler;
     private final ResourceBundle messages;
@@ -55,14 +54,12 @@ final class LauncherWindow {
     LauncherWindow(LauncherPaths paths, ResourceBundle messages) {
         this.paths = paths;
         this.core = new CoreProcess(paths);
-        this.diagnostics = new DiagnosticsProcess(paths);
         this.lifecycle = new LauncherLifecycle(core::gracefulStop,
                 core::forceStop, this::closeLauncher);
         this.scheduler = new TaskScheduler(paths);
         this.messages = messages;
         buildWindow();
         createTray();
-        runAsync(diagnostics::startIfNeeded);
         refreshDataRoot();
         refreshTasks();
         statusTimer = new Timer(1000, event -> refreshStatus());

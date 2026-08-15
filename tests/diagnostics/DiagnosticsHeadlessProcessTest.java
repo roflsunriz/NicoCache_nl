@@ -43,6 +43,21 @@ public final class DiagnosticsHeadlessProcessTest {
                     "status PID must identify the hidden watchdog");
             assertTrue(process.isAlive(),
                     "headless hidden watchdog must remain running");
+            Process shutdown = new ProcessBuilder(java.toString(),
+                    "-Djava.awt.headless=true", "-cp",
+                    System.getProperty("java.class.path"),
+                    DiagnosticsMain.class.getName(),
+                    "--app-root=" + application,
+                    "--data-root=" + data, "--shutdown")
+                    .redirectErrorStream(true).start();
+            assertTrue(shutdown.waitFor(15L, TimeUnit.SECONDS),
+                    "planned shutdown command must finish");
+            assertEquals(0, shutdown.exitValue(),
+                    "planned shutdown command exit code");
+            assertTrue(process.waitFor(5L, TimeUnit.SECONDS),
+                    "planned shutdown must stop the watchdog");
+            assertTrue(!Files.exists(statusPath),
+                    "planned shutdown must remove diagnostics status");
             System.out.println("Diagnostics headless process tests passed");
         } finally {
             if (process != null && process.isAlive()) {

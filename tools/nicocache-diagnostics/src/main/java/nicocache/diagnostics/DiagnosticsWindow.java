@@ -67,6 +67,12 @@ final class DiagnosticsWindow implements DiagnosticsService.Listener {
         frame.setVisible(false);
     }
 
+    void showError(String message) {
+        SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(frame,
+                message, messages.getString("error.title"),
+                JOptionPane.ERROR_MESSAGE));
+    }
+
     private void buildWindow() {
         frame.setName("diagnostics.window");
         frame.setTitle(messages.getString("window.title"));

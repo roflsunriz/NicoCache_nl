@@ -150,6 +150,8 @@ Logger.debugWithThread(name + " " + kind + " count=" + event.count());
                         }
                         Logger.warning(jarName +
                                 " is modified, going to system exit...");
+                        Main.markExpectedStop("jar-replaced");
+                        DiagnosticsLifecycle.stopPlanned("jar-replaced");
                         System.exit(jarExitStatus);
                     } else if (key == nlFiltersFolder
                             || key == systemNlFiltersFolder) {

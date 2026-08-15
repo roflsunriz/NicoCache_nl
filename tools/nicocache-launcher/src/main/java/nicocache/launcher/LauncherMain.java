@@ -38,9 +38,7 @@ public final class LauncherMain {
                     ? error.toString() : error.getMessage()));
             exitCode = 1;
         }
-        if (exitCode != 0) {
-            System.exit(exitCode);
-        }
+        System.exit(exitCode);
     }
 
     private static void startGui(LauncherOptions options) {
@@ -92,13 +90,13 @@ public final class LauncherMain {
             return 0;
         case STOP:
             core.gracefulStop();
-            System.out.println("NicoCache_nl core stopped gracefully; "
-                    + "resident launcher and diagnostics unchanged");
+            System.out.println("NicoCache_nl and diagnostics stopped "
+                    + "gracefully; resident launcher unchanged");
             return 0;
         case FORCE_STOP:
             core.forceStop();
-            System.out.println("NicoCache_nl core force-stop requested; "
-                    + "resident launcher and diagnostics unchanged");
+            System.out.println("NicoCache_nl and diagnostics force-stop "
+                    + "completed; resident launcher unchanged");
             return 0;
         case STATUS:
             printStatus(paths);
@@ -186,8 +184,8 @@ public final class LauncherMain {
         System.out.println("NicoCacheLauncher");
         System.out.println("Usage: java -jar NicoCacheLauncher.jar [options]");
         System.out.println("  --start / --stop / --force-stop / --status");
-        System.out.println("    core stop only; resident launcher and "
-                + "diagnostics continue");
+        System.out.println("    core and diagnostics stop together; "
+                + "resident launcher continues");
         System.out.println("  --tray [--start]  タスクトレイで起動");
         System.out.println("  --minimized [--start]  最小化して起動");
         System.out.println("  --check-data-root  ユーザーデータルートを診断");

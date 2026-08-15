@@ -3,14 +3,17 @@ package nicocache.launcher;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
-/** Starts the independent watchdog once; it never controls the core process. */
+/** Starts and normally stops the watchdog paired with the core process. */
 final class DiagnosticsProcess {
     private static final long START_TIMEOUT_SECONDS = 10L;
+    private static final long STOP_TIMEOUT_SECONDS = 20L;
     private final LauncherPaths paths;
 
     DiagnosticsProcess(LauncherPaths paths) {
@@ -74,7 +77,47 @@ final class DiagnosticsProcess {
         return command;
     }
 
-    private boolean isRunning() {
+    void stopIfRunning() throws IOException {
+        if (!isRunning()) {
+            return;
+        }
+        Process process = new ProcessBuilder(buildStopCommand())
+                .directory(paths.getApplicationRoot().toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.appendTo(
+                        paths.getDataRoot().resolve(
+                                "data/logs/nicocache-diagnostics.log")
+                                .toFile()))
+                .start();
+        try {
+            if (!process.waitFor(STOP_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new IOException(
+                        "診断アプリ終了コマンドがタイムアウトしました");
+            }
+            if (process.exitValue() != 0 || isRunning()) {
+                throw new IOException("診断アプリが正常終了しませんでした"
+                        + " (exit=" + process.exitValue() + ")");
+            }
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+            process.destroyForcibly();
+            throw new IOException("診断アプリの終了待機が中断されました", error);
+        }
+    }
+
+    List<String> buildStopCommand() {
+        List<String> command = new ArrayList<>();
+        command.add(paths.getJavaExecutable(false).toString());
+        command.add("-jar");
+        command.add(paths.getDiagnosticsJar().toString());
+        command.add("--shutdown");
+        command.add("--app-root=" + paths.getApplicationRoot());
+        command.add("--data-root=" + paths.getDataRoot());
+        return command;
+    }
+
+    boolean isRunning() {
         Path diagnosticsJar = paths.getDiagnosticsJar();
         if (diagnosticsJar == null) {
             return false;
@@ -94,11 +137,26 @@ final class DiagnosticsProcess {
                 return false;
             }
             return pid > 0L && ProcessHandle.of(pid).filter(
-                    ProcessHandle::isAlive).map(handle -> handle.info()
-                    .commandLine().map(command -> command.contains(
-                            diagnosticsJar.toString()))
-                    .orElse(true)).orElse(false);
+                    ProcessHandle::isAlive).map(handle -> matchesProcess(
+                            handle, status, diagnosticsJar)).orElse(false);
         } catch (IOException | NumberFormatException error) {
+            return false;
+        }
+    }
+
+    private static boolean matchesProcess(ProcessHandle handle,
+            Properties status, Path diagnosticsJar) {
+        String commandLine = handle.info().commandLine().orElse("");
+        if (!commandLine.isEmpty()) {
+            return commandLine.contains(diagnosticsJar.toString())
+                    || commandLine.contains("NicoCacheDiagnostics.jar");
+        }
+        try {
+            Instant recorded = Instant.parse(status.getProperty("startedAt"));
+            Instant actual = handle.info().startInstant().orElse(null);
+            return actual != null && Duration.between(recorded, actual)
+                    .abs().compareTo(Duration.ofSeconds(5)) <= 0;
+        } catch (RuntimeException error) {
             return false;
         }
     }

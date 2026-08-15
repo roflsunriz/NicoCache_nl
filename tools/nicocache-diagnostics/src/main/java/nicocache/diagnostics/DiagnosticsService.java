@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -39,17 +40,25 @@ final class DiagnosticsService implements AutoCloseable {
     private final Deque<HeartbeatSample> timeline = new ArrayDeque<>();
     private final AtomicBoolean collecting = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final Runnable plannedStopAction;
+    private final String instanceId = UUID.randomUUID().toString();
     private volatile Listener listener;
     private volatile HeartbeatSample lastSample;
     private volatile Path lastReport;
 
     DiagnosticsService(DiagnosticsPaths paths) {
-        this(paths, new CoreProbe(paths));
+        this(paths, new CoreProbe(paths), () -> { });
     }
 
     DiagnosticsService(DiagnosticsPaths paths, CoreProbe probe) {
+        this(paths, probe, () -> { });
+    }
+
+    DiagnosticsService(DiagnosticsPaths paths, CoreProbe probe,
+            Runnable plannedStopAction) {
         this.paths = paths;
         this.probe = probe;
+        this.plannedStopAction = plannedStopAction;
         this.collector = new IncidentCollector(paths, probe);
         this.monitor = Executors.newSingleThreadScheduledExecutor(runnable ->
                 daemon(runnable, "nicocache-diagnostics-monitor"));
@@ -76,12 +85,21 @@ final class DiagnosticsService implements AutoCloseable {
     HeartbeatSample lastSample() { return lastSample; }
     Path lastReport() { return lastReport; }
 
+    boolean requestCoreShutdown() throws IOException, InterruptedException {
+        return probe.requestGracefulShutdown();
+    }
+
     private void monitorOnce() {
         if (closed.get()) {
             return;
         }
         try {
             consumeShowRequest();
+            if (DiagnosticsControl.consumeShutdownRequest(paths,
+                    ProcessHandle.current().pid(), instanceId)) {
+                plannedStopAction.run();
+                return;
+            }
             HeartbeatSample sample = probe.probe();
             lastSample = sample;
             appendTimeline(sample);
@@ -158,6 +176,7 @@ final class DiagnosticsService implements AutoCloseable {
         properties.setProperty("pid",
                 Long.toString(ProcessHandle.current().pid()));
         properties.setProperty("startedAt", Instant.now().toString());
+        properties.setProperty("instanceId", instanceId);
         properties.setProperty("applicationRoot",
                 paths.applicationRoot().toString());
         properties.setProperty("dataRoot", paths.dataRoot().toString());

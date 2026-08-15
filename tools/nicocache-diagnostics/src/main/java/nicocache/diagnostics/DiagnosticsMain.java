@@ -10,6 +10,8 @@ import java.util.Locale;
 import java.util.ResourceBundle;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -28,6 +30,11 @@ public final class DiagnosticsMain {
             }
             DiagnosticsPaths paths = DiagnosticsPaths.resolve(
                     options.applicationRoot, options.dataRoot);
+            if (options.shutdown) {
+                DiagnosticsControl.requestShutdown(paths,
+                        java.time.Duration.ofSeconds(15));
+                return;
+            }
             SingleInstanceLock lock = SingleInstanceLock.tryAcquire(
                     paths.diagnosticsLock());
             if (lock == null) {
@@ -36,7 +43,33 @@ public final class DiagnosticsMain {
                 }
                 return;
             }
-            DiagnosticsService service = new DiagnosticsService(paths);
+            AtomicBoolean exiting = new AtomicBoolean();
+            AtomicReference<DiagnosticsService> serviceHolder =
+                    new AtomicReference<>();
+            AtomicReference<DiagnosticsWindow> windowHolder =
+                    new AtomicReference<>();
+            Runnable terminate = () -> {
+                if (!exiting.compareAndSet(false, true)) {
+                    return;
+                }
+                DiagnosticsWindow window = windowHolder.get();
+                if (window != null) {
+                    window.dispose();
+                }
+                DiagnosticsService active = serviceHolder.get();
+                if (active != null) {
+                    active.close();
+                }
+                try {
+                    lock.close();
+                } catch (IOException ignored) {
+                    // The shutdown hook repeats best-effort cleanup.
+                }
+                System.exit(0);
+            };
+            DiagnosticsService service = new DiagnosticsService(paths,
+                    new CoreProbe(paths), terminate);
+            serviceHolder.set(service);
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 service.close();
                 try { lock.close(); }
@@ -63,17 +96,39 @@ public final class DiagnosticsMain {
                     "nicocache.diagnostics.messages", Locale.getDefault());
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
             SwingUtilities.invokeLater(() -> {
-                final DiagnosticsWindow[] holder = new DiagnosticsWindow[1];
-                Runnable exit = () -> {
-                    if (holder[0] != null) {
-                        holder[0].dispose();
-                    }
-                    service.close();
-                    System.exit(0);
+                Runnable userExit = () -> {
+                    Thread requester = new Thread(() -> {
+                        try {
+                            if (service.requestCoreShutdown()) {
+                                return;
+                            }
+                            terminate.run();
+                        } catch (IOException | InterruptedException error) {
+                            if (error instanceof InterruptedException) {
+                                Thread.currentThread().interrupt();
+                            }
+                            String message = error.getMessage() == null
+                                    ? error.toString() : error.getMessage();
+                            DiagnosticsWindow active = windowHolder.get();
+                            if (active == null) {
+                                System.err.println(
+                                        "NicoCacheDiagnostics: " + message);
+                            } else {
+                                active.showError(message);
+                            }
+                        }
+                    }, "nicocache-diagnostics-core-shutdown");
+                    requester.setDaemon(true);
+                    requester.start();
                 };
-                holder[0] = new DiagnosticsWindow(service, paths, messages, exit);
+                DiagnosticsWindow window = new DiagnosticsWindow(
+                        service, paths, messages, userExit);
+                windowHolder.set(window);
                 if (!options.hidden) {
-                    holder[0].show();
+                    window.show();
+                }
+                if (exiting.get()) {
+                    window.dispose();
                 }
             });
         } catch (Exception error) {
@@ -101,6 +156,7 @@ public final class DiagnosticsMain {
         System.out.println("  --app-root=<path> --data-root=<path>");
         System.out.println("  --hidden       タスクトレイまたはバックグラウンドで起動");
         System.out.println("  --collect-now  1回収集して終了（GUI不要）");
+        System.out.println("  --shutdown     正常終了要求を実行中の診断アプリへ送信");
     }
 
     private static final class Options {
@@ -108,6 +164,7 @@ public final class DiagnosticsMain {
         Path dataRoot;
         boolean hidden;
         boolean collectNow;
+        boolean shutdown;
         boolean help;
 
         static Options parse(String[] args) {
@@ -123,11 +180,17 @@ public final class DiagnosticsMain {
                     options.hidden = true;
                 } else if ("--collect-now".equals(arg)) {
                     options.collectNow = true;
+                } else if ("--shutdown".equals(arg)) {
+                    options.shutdown = true;
                 } else if ("--help".equals(arg) || "-h".equals(arg)) {
                     options.help = true;
                 } else {
                     throw new IllegalArgumentException("不明な引数です: " + arg);
                 }
+            }
+            if (options.collectNow && options.shutdown) {
+                throw new IllegalArgumentException(
+                        "--collect-now と --shutdown は同時に指定できません");
             }
             return options;
         }

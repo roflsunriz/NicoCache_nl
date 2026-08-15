@@ -2,7 +2,7 @@ package nicocache.launcher;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Regression tests for independent process lifecycle operations. */
+/** Regression tests for paired core/diagnostics and resident launcher actions. */
 public final class LauncherLifecycleTest {
     private LauncherLifecycleTest() {
     }
@@ -26,13 +26,13 @@ public final class LauncherLifecycleTest {
 
         lifecycle.gracefulStopCore();
         assertEquals(1, coreGracefulStops.get(),
-                "graceful stop must target only the core");
+                "graceful paired stop action must run");
         assertEquals(1, launcherExits.get(),
                 "core stop must not exit the launcher");
 
         lifecycle.forceStopCore();
         assertEquals(1, coreForceStops.get(),
-                "force stop must target only the core");
+                "force paired stop action must run");
         assertEquals(1, launcherExits.get(),
                 "force stop must not exit the launcher");
         System.out.println("Launcher lifecycle tests passed");

@@ -89,6 +89,7 @@ public class Main {
 
     /** Immediately terminate the process after closing active resources. */
     static void forceStop() {
+        DiagnosticsLifecycle.stopPlanned("force");
         if (directoryWatcher != null) {
             directoryWatcher.interrupt();
         }

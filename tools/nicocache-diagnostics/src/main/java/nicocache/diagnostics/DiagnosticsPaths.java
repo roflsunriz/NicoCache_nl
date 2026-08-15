@@ -126,6 +126,9 @@ final class DiagnosticsPaths {
     Path incidentsRoot() { return dataRoot.resolve("diagnostics/incidents"); }
     Path diagnosticsStatus() { return dataRoot.resolve("data/nicocache-diagnostics-status.properties"); }
     Path diagnosticsLock() { return dataRoot.resolve("data/nicocache-diagnostics.lock"); }
+    Path diagnosticsShutdownRequest() {
+        return dataRoot.resolve("data/nicocache-diagnostics-shutdown.request");
+    }
 
     Path jcmdExecutable() {
         boolean windows = System.getProperty("os.name", "")

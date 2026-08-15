@@ -41,6 +41,13 @@ public final class DiagnosticsProcessTest {
             assertFalse(command.stream().anyMatch(value ->
                     value.contains("restart") || value.contains("--start")),
                     "watchdog must not receive a core start or restart option");
+            List<String> stopCommand = diagnostics.buildStopCommand();
+            assertTrue(stopCommand.contains("--shutdown"),
+                    "planned core stop must request diagnostics shutdown");
+            assertTrue(stopCommand.contains("--app-root=" + application),
+                    "shutdown must target the same application root");
+            assertTrue(stopCommand.contains("--data-root=" + data),
+                    "shutdown must target the same data root");
             Files.delete(application.resolve("NicoCacheDiagnostics.jar"));
             boolean missingRejected = false;
             try {
