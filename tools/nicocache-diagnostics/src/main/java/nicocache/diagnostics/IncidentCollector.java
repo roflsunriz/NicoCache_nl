@@ -46,6 +46,11 @@ final class IncidentCollector {
 
     Path collect(String reason, long pid, List<HeartbeatSample> timeline)
             throws IOException {
+        return collect(reason, pid, timeline, List.of());
+    }
+
+    Path collect(String reason, long pid, List<HeartbeatSample> timeline,
+            List<String> recentSnapshots) throws IOException {
         Redactor redactor = new Redactor(paths);
         IncidentReport report = new IncidentReport(redactor.redact(reason),
                 Instant.now(), pid, sanitizeTimeline(timeline, redactor));
@@ -55,9 +60,17 @@ final class IncidentCollector {
         collectLogs(report, redactor);
         boolean externalFirst = reason.contains("control-heartbeat")
                 || reason.contains("all-heartbeats");
-        threadDumps.collect(pid, report, redactor, externalFirst);
+        boolean processEnded = "process-exited".equals(reason)
+                || pid <= 0L || !ProcessHandle.of(pid)
+                .map(ProcessHandle::isAlive).orElse(false);
+        threadDumps.collect(pid, report, redactor, externalFirst,
+                processEnded, recentSnapshots);
         for (int index = 0; index < report.errors.size(); index++) {
             report.errors.set(index, redactor.redact(report.errors.get(index)));
+        }
+        for (int index = 0; index < report.notices.size(); index++) {
+            report.notices.set(index,
+                    redactor.redact(report.notices.get(index)));
         }
         report.redactionCounts = redactor.counts();
         return writer.write(paths.incidentsRoot(), report);

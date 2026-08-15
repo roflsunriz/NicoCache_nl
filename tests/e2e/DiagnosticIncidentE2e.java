@@ -54,7 +54,7 @@ final class DiagnosticIncidentE2e {
         try {
             writePropertiesAtomically(statusFile, unreachableControl);
             verifyReport(waitForIncidentCount(1),
-                    "control-heartbeat-lost", corePid, true);
+                    "control-heartbeat-lost", corePid, 3);
         } finally {
             if (core.isAlive()) {
                 writePropertiesAtomically(statusFile, originalStatus);
@@ -70,8 +70,7 @@ final class DiagnosticIncidentE2e {
         core.destroyForcibly();
         core.onExit().get(PROCESS_STOP_TIMEOUT.toMillis(),
                 TimeUnit.MILLISECONDS);
-        verifyReport(waitForIncidentCount(2), "process-exited", corePid,
-                false);
+        verifyReport(waitForIncidentCount(2), "process-exited", corePid, 1);
 
         Thread.sleep(2500L);
         long afterCrashPid = Long.parseLong(readProperties(statusFile)
@@ -95,7 +94,7 @@ final class DiagnosticIncidentE2e {
     }
 
     private void verifyReport(Path report, String reason, long corePid,
-            boolean requireThreadDumps) throws IOException {
+            int minimumSnapshots) throws IOException {
         String html = Files.readString(report, StandardCharsets.UTF_8);
         assertContains(html, reason, "incident reason");
         assertContains(html, Long.toString(corePid), "incident core PID");
@@ -125,10 +124,16 @@ final class DiagnosticIncidentE2e {
         assertNotContains(html, data.toString(),
                 "raw data path must be omitted");
         assertNotContains(html, "<script", "report must not contain scripts");
-        if (requireThreadDumps) {
-            assertContains(html, "Snapshot 1", "first thread dump");
-            assertContains(html, "Snapshot 2", "second thread dump");
-            assertContains(html, "Snapshot 3", "third thread dump");
+        for (int index = 1; index <= minimumSnapshots; index++) {
+            assertContains(html, "Snapshot " + index,
+                    "required JVM snapshot " + index);
+        }
+        if ("process-exited".equals(reason)) {
+            assertContains(html, "Captured before incident",
+                    "pre-failure snapshot after unexpected exit");
+            assertContains(html, "<h2>収集エラー</h2><ul>"
+                    + "<li class=\"ok\">なし</li>",
+                    "post-exit report must have no collection errors");
         }
     }
 

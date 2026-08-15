@@ -17,6 +17,7 @@ final class IncidentReport {
     final Map<String, String> configuration = new LinkedHashMap<>();
     final Map<String, String> logs = new LinkedHashMap<>();
     final List<String> snapshots = new ArrayList<>();
+    final List<String> notices = new ArrayList<>();
     final List<String> errors = new ArrayList<>();
     Map<String, Integer> redactionCounts = Map.of();
 

@@ -82,6 +82,15 @@ final class HtmlReportWriter {
                         .append(entry.getValue()).append("</li>");
             }
         }
+        html.append("</ul></section><section><h2>収集注記</h2><ul>");
+        if (report.notices.isEmpty()) {
+            html.append("<li class=\"ok\">なし</li>");
+        } else {
+            for (String notice : report.notices) {
+                html.append("<li class=\"muted\">").append(escape(notice))
+                        .append("</li>");
+            }
+        }
         html.append("</ul></section><section><h2>収集エラー</h2><ul>");
         if (report.errors.isEmpty()) {
             html.append("<li class=\"ok\">なし</li>");

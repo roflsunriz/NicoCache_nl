@@ -17,12 +17,15 @@ public final class HtmlReportWriterTest {
         report.environment.put("OS", "Test OS");
         report.configuration.put("config", "token=<OMITTED>");
         report.snapshots.add("sm123456 タイトル <thread>");
+        report.notices.add("終了前スナップショットを収録");
         report.logs.put("debug.log", "Cookie: <OMITTED>");
         HtmlReportWriter writer = new HtmlReportWriter();
         String html = writer.render(report);
         assertContains(html, "Content-Security-Policy");
         assertContains(html, "sm123456 タイトル");
         assertContains(html, "&lt;thread&gt;");
+        assertContains(html, "収集注記");
+        assertContains(html, "終了前スナップショットを収録");
         assertNotContains(html, "<unsafe>");
         assertNotContains(html, "<script");
         Path root = Files.createTempDirectory("diagnostics-html-");

@@ -1,11 +1,14 @@
 package nicocache.diagnostics;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
 
@@ -133,8 +136,51 @@ final class DiagnosticsPaths {
     Path jcmdExecutable() {
         boolean windows = System.getProperty("os.name", "")
                 .toLowerCase(Locale.ROOT).contains("win");
-        return Path.of(System.getProperty("java.home"), "bin",
-                windows ? "jcmd.exe" : "jcmd")
+        String executable = windows ? "jcmd.exe" : "jcmd";
+        List<Path> candidates = new ArrayList<>();
+        addJcmdHome(candidates, System.getProperty("java.home"), executable);
+        candidates.add(applicationRoot.resolve("jre/bin").resolve(executable));
+        addJcmdHome(candidates, System.getenv("JDK_JAVA_HOME"), executable);
+        addJcmdHome(candidates, System.getenv("JAVA_HOME"), executable);
+        String path = System.getenv("PATH");
+        if (path != null) {
+            for (String directory : path.split(
+                    java.util.regex.Pattern.quote(File.pathSeparator))) {
+                String cleaned = directory.trim().replaceAll(
+                        "^\\\"|\\\"$", "");
+                if (!cleaned.isEmpty()) {
+                    try {
+                        candidates.add(Path.of(cleaned).resolve(executable));
+                    } catch (RuntimeException ignored) {
+                        // Ignore malformed PATH entries and keep searching.
+                    }
+                }
+            }
+        }
+        for (Path candidate : candidates) {
+            try {
+                Path normalized = candidate.toAbsolutePath().normalize();
+                if (Files.isRegularFile(normalized)
+                        && (windows || Files.isExecutable(normalized))) {
+                    return normalized;
+                }
+            } catch (RuntimeException ignored) {
+                // Continue with the remaining well-formed candidates.
+            }
+        }
+        return Path.of(System.getProperty("java.home"), "bin", executable)
                 .toAbsolutePath().normalize();
+    }
+
+    private static void addJcmdHome(List<Path> candidates, String home,
+            String executable) {
+        if (home == null || home.isBlank()) {
+            return;
+        }
+        try {
+            candidates.add(Path.of(home).resolve("bin").resolve(executable));
+        } catch (RuntimeException ignored) {
+            // Ignore malformed environment values and keep searching.
+        }
     }
 }

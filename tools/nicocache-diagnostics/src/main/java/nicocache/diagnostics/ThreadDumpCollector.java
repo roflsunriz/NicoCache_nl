@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
@@ -29,6 +30,16 @@ final class ThreadDumpCollector {
 
     void collect(long pid, IncidentReport report, Redactor redactor,
             boolean externalFirst) {
+        collect(pid, report, redactor, externalFirst, false, List.of());
+    }
+
+    void collect(long pid, IncidentReport report, Redactor redactor,
+            boolean externalFirst, boolean processEnded,
+            List<String> recentSnapshots) {
+        if (processEnded || !isAlive(pid)) {
+            addPreFailureSnapshots(report, redactor, recentSnapshots);
+            return;
+        }
         for (int index = 0; index < delaysMillis.length; index++) {
             if (delaysMillis[index] > 0L) {
                 try {
@@ -39,6 +50,10 @@ final class ThreadDumpCollector {
                     return;
                 }
             }
+            if (!isAlive(pid)) {
+                addPreFailureSnapshots(report, redactor, recentSnapshots);
+                return;
+            }
             String snapshot;
             if (externalFirst) {
                 try {
@@ -47,6 +62,11 @@ final class ThreadDumpCollector {
                     try {
                         snapshot = probe.diagnosticSnapshot();
                     } catch (Exception controlError) {
+                        if (!isAlive(pid)) {
+                            addPreFailureSnapshots(report, redactor,
+                                    recentSnapshots);
+                            return;
+                        }
                         report.errors.add("thread dump " + (index + 1)
                                 + " failed: " + safe(attachError) + "; "
                                 + safe(controlError));
@@ -60,6 +80,11 @@ final class ThreadDumpCollector {
                     try {
                         snapshot = externalDump(pid);
                     } catch (Exception attachError) {
+                        if (!isAlive(pid)) {
+                            addPreFailureSnapshots(report, redactor,
+                                    recentSnapshots);
+                            return;
+                        }
                         report.errors.add("thread dump " + (index + 1)
                                 + " failed: " + safe(controlError) + "; "
                                 + safe(attachError));
@@ -69,6 +94,26 @@ final class ThreadDumpCollector {
             }
             report.snapshots.add("Captured " + Instant.now() + "\n"
                     + redactor.redact(snapshot));
+        }
+    }
+
+    private static boolean isAlive(long pid) {
+        return pid > 0L && ProcessHandle.of(pid)
+                .map(ProcessHandle::isAlive).orElse(false);
+    }
+
+    private static void addPreFailureSnapshots(IncidentReport report,
+            Redactor redactor, List<String> recentSnapshots) {
+        for (String snapshot : recentSnapshots) {
+            report.snapshots.add(redactor.redact(snapshot));
+        }
+        if (recentSnapshots.isEmpty()) {
+            report.notices.add("本体プロセス終了後のためスレッドダンプを"
+                    + "取得できず、終了前スナップショットもまだありません。");
+        } else {
+            report.notices.add("本体プロセス終了後のため、終了前に保持した"
+                    + recentSnapshots.size()
+                    + "件のJVMスナップショットを収録しました。");
         }
     }
 

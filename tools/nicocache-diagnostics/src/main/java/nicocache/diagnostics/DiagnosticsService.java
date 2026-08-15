@@ -34,9 +34,11 @@ final class DiagnosticsService implements AutoCloseable {
     private final DiagnosticsPaths paths;
     private final CoreProbe probe;
     private final IncidentCollector collector;
+    private final RecentSnapshots recentSnapshots = new RecentSnapshots();
     private final HeartbeatEvaluator evaluator = new HeartbeatEvaluator(3);
     private final ScheduledExecutorService monitor;
     private final ExecutorService collectionExecutor;
+    private final ExecutorService snapshotExecutor;
     private final Deque<HeartbeatSample> timeline = new ArrayDeque<>();
     private final AtomicBoolean collecting = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -64,6 +66,8 @@ final class DiagnosticsService implements AutoCloseable {
                 daemon(runnable, "nicocache-diagnostics-monitor"));
         this.collectionExecutor = Executors.newSingleThreadExecutor(runnable ->
                 daemon(runnable, "nicocache-diagnostics-collector"));
+        this.snapshotExecutor = Executors.newSingleThreadExecutor(runnable ->
+                daemon(runnable, "nicocache-diagnostics-snapshot"));
     }
 
     void setListener(Listener listener) {
@@ -107,6 +111,8 @@ final class DiagnosticsService implements AutoCloseable {
             if (current != null) {
                 current.heartbeat(sample);
             }
+            recentSnapshots.captureIfDue(sample, probe::diagnosticSnapshot,
+                    snapshotExecutor);
             long expectedPid = sample.pid > 0L
                     ? sample.pid : evaluator.sessionPid();
             boolean expectedStop = probe.expectedStop(expectedPid)
@@ -136,9 +142,11 @@ final class DiagnosticsService implements AutoCloseable {
             current.collectionStarted(reason);
         }
         List<HeartbeatSample> history = timelineSnapshot();
+        List<String> snapshots = recentSnapshots.snapshotsFor(pid);
         return CompletableFuture.supplyAsync(() -> {
             try {
-                Path report = collector.collect(reason, pid, history);
+                Path report = collector.collect(reason, pid, history,
+                        snapshots);
                 lastReport = report;
                 Listener active = listener;
                 if (active != null) {
@@ -217,8 +225,10 @@ final class DiagnosticsService implements AutoCloseable {
             return;
         }
         monitor.shutdownNow();
+        snapshotExecutor.shutdownNow();
         collectionExecutor.shutdown();
         try {
+            snapshotExecutor.awaitTermination(10L, TimeUnit.SECONDS);
             collectionExecutor.awaitTermination(10L, TimeUnit.SECONDS);
         } catch (InterruptedException error) {
             Thread.currentThread().interrupt();

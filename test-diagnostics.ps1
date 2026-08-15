@@ -40,7 +40,10 @@ try {
     }
     foreach ($testClass in @(
             'nicocache.diagnostics.RedactorTest',
+            'nicocache.diagnostics.DiagnosticsPathsTest',
             'nicocache.diagnostics.HeartbeatEvaluatorTest',
+            'nicocache.diagnostics.RecentSnapshotsTest',
+            'nicocache.diagnostics.ThreadDumpCollectorTest',
             'nicocache.diagnostics.HtmlReportWriterTest',
             'nicocache.diagnostics.DiagnosticsHeadlessProcessTest'
         )) {
