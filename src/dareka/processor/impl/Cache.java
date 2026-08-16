@@ -50,6 +50,8 @@ public class Cache extends CacheManager {
     // ことがあるため、短時間だけ再試行してから削除失敗と判定する。
     private static final int DELETE_RETRY_COUNT = 20;
     private static final long DELETE_RETRY_DELAY_MILLIS = 50L;
+    private static final Set<String> TMP_DELETE_SET =
+            ConcurrentHashMap.newKeySet();
 
     private VideoDescriptor video;
     private String desc;
@@ -293,6 +295,99 @@ public class Cache extends CacheManager {
         //[xmlfix]
         removeXmlCache(TYPE_TEMPLIST, null);
         return true;
+    }
+
+    /**
+     * 指定した動画IDに属する一時キャッシュをすべて削除する。
+     * ダウンロード中の一時キャッシュは安全に処理を終えた時点で削除する。
+     * 完成済みキャッシュは対象にしない。
+     *
+     * @param id 修飾のない動画ID
+     * @return 一時キャッシュを削除したか、削除を予約した場合はtrue
+     */
+    public static boolean removeTmpAll(String id) {
+        if (id == null) {
+            return false;
+        }
+        if (id.endsWith("low")) {
+            id = id.substring(0, id.length() - "low".length());
+        }
+        Set<VideoDescriptor> videos = id2Videos.get(id);
+        if (videos == null) {
+            return false;
+        }
+
+        TMP_DELETE_SET.add(id);
+        boolean accepted = false;
+        boolean failed = false;
+        for (VideoDescriptor video : new ArrayList<>(videos)) {
+            File tmp = video2Tmp.get(video);
+            if (tmp == null || !tmp.exists()) {
+                continue;
+            }
+            accepted = true;
+            if (!getDLFlag(video) && !removeTmp(video)) {
+                failed = true;
+            }
+        }
+        if (!hasActiveTmp(id)) {
+            TMP_DELETE_SET.remove(id);
+        }
+        return accepted && !failed;
+    }
+
+    /** ダウンロード終了時に予約済みの一時キャッシュを削除する。 */
+    static void deleteReservedTmpAfterDownload(VideoDescriptor video) {
+        if (video == null || !TMP_DELETE_SET.contains(video.getId())
+                || getDLFlag(video)) {
+            return;
+        }
+        try {
+            if (!new Cache(video).deleteTmp()) {
+                Logger.warning("予約した一時キャッシュを削除できません: " + video);
+            }
+        } catch (IOException e) {
+            Logger.warning("予約した一時キャッシュを削除できません: " + video);
+            Logger.debugWithThread(e);
+        }
+        if (!hasActiveTmp(video.getId())) {
+            TMP_DELETE_SET.remove(video.getId());
+        }
+    }
+
+    /** store直前に予約を適用し、完成済みキャッシュへの移動を中止する。 */
+    private static boolean consumeReservedTmpBeforeStore(VideoDescriptor video) {
+        if (video == null || !TMP_DELETE_SET.contains(video.getId())) {
+            return false;
+        }
+        video2DL.remove(video);
+        video2DLFinalSize.remove(video);
+        try {
+            if (!new Cache(video).deleteTmp()) {
+                Logger.warning("予約した一時キャッシュを保存前に削除できません: " + video);
+            }
+        } catch (IOException e) {
+            Logger.warning("予約した一時キャッシュを保存前に削除できません: " + video);
+            Logger.debugWithThread(e);
+        }
+        if (!hasActiveTmp(video.getId())) {
+            TMP_DELETE_SET.remove(video.getId());
+        }
+        return true;
+    }
+
+    private static boolean hasActiveTmp(String id) {
+        Set<VideoDescriptor> videos = id2Videos.get(id);
+        if (videos == null) {
+            return false;
+        }
+        for (VideoDescriptor video : new ArrayList<>(videos)) {
+            File tmp = video2Tmp.get(video);
+            if (tmp != null && tmp.exists() && getDLFlag(video)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // [nl] 指定IDに関連する以下のファイルを全て取り除く
@@ -963,6 +1058,11 @@ public class Cache extends CacheManager {
 // eco=1を実装したので、同一IDの通常･エコノミーキャッシュが
 // 同時に作成されないよう排他制御
         synchronized (LockObj.FileStoreLock) {
+
+            if (consumeReservedTmpBeforeStore(video)) {
+                Logger.info("reserved temporary cache removed: " + video);
+                return;
+            }
 
             //[xmlfix] 一時ファイル一覧のXMLキャッシュを削除
             removeXmlCache(TYPE_TEMPLIST, null);

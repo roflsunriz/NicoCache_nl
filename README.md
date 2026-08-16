@@ -120,6 +120,8 @@ java -jar NicoCacheLauncher.jar --headless --check-data-root
 - **本体API**: キャッシュの検索・保存・削除と、本体の状態確認・停止をローカルAPIから
   操作できるようになりました。外部ツールから利用する場合は`documents/api.md`の引数と
   応答形式に従います。CMAF/Domandのキャッシュ情報には`/cache/info/v3`を使用します。
+  同じ動画IDの全一時キャッシュは`/cache/rmtmpall`で削除でき、ダウンロード中のものは
+  完了・中断後に安全に削除されます。
 - **Brotli／Zstandard対応**: 上流の`br`と`zstd`圧縮応答を展開して書き換えられるように
   なりました。通信時に自動判定されるため設定は不要です。
 - **Java LTS 17／21／25対応**: 外部Javaで起動する場合に長期サポート版(LTS)である3世代を正式対応とし、Java 25を

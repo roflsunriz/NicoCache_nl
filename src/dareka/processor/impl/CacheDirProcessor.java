@@ -1054,9 +1054,11 @@ public class CacheDirProcessor implements Processor {
     /**
      * /cache/rm (GET)
      * /cache/rmtmp (GET)
+     * /cache/rmtmpall (GET)
      * /cache/rmall (GET)
      * /cache/ajax_rm (GET)
      * /cache/ajax_rmtmp (GET)
+     * /cache/ajax_rmtmpall (GET)
      * /cache/ajax_rmall (GET)
      *
      * rmall, ajax_rmall ではsmid以外の修飾(品質や拡張子)が付いている場合は
@@ -1129,6 +1131,23 @@ public class CacheDirProcessor implements Processor {
             if (path.startsWith("ajax_")) {
                 return createStringResource(msg);
             };
+            return createRedirectResponse(requestHeader);
+        };
+
+        if (path.equals("rmtmpall") || path.equals("ajax_rmtmpall")) {
+            if (!isget) {
+                return StringResource.getMethodNotAllowed();
+            }
+            if (!query.matches("[a-z]{2}[0-9]+")) {
+                return StringResource.getBadRequest();
+            }
+
+            Logger.info("Remove All Temporary Cache: " + query);
+            String msg = Cache.removeTmpAll(query) ? "OK" : "NG";
+            Logger.info("..." + msg);
+            if (path.startsWith("ajax_")) {
+                return createStringResource(msg);
+            }
             return createRedirectResponse(requestHeader);
         };
 

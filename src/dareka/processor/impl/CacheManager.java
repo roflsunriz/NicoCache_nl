@@ -1356,6 +1356,7 @@ public class CacheManager {
         } else {
             video2DL.remove(video);
             video2DLFinalSize.remove(video);
+            Cache.deleteReservedTmpAfterDownload(video);
         }
         return c;
     }

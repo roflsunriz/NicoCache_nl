@@ -105,6 +105,8 @@ public final class FunctionalTestMain {
 
             if (apiOnly) {
                 run("control API contract and authentication", this::testControlApiContract);
+                run("temporary cache family deletion reservation",
+                        this::testTemporaryCacheFamilyDeletionReservation);
                 run("core cache API contract and validation", this::testCacheApiContract);
                 run("control force-shutdown contract", this::testControlForceShutdown);
             } else {
@@ -286,6 +288,16 @@ public final class FunctionalTestMain {
                 "api-ajax-legacy-rmtmp-content".getBytes(StandardCharsets.UTF_8));
         Files.write(sandbox.resolve("cache/sm900024_Api.mp4"),
                 "api-ajax-legacy-rmall-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900025_Api.mp4"),
+                "api-rmtmpall-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900025low_Api.mp4"),
+                "api-rmtmpall-low-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900025[720p,128]_Api.mp4"),
+                "api-rmtmpall-dmc-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900026_Api.mp4"),
+                "api-rmtmpall-unrelated-content".getBytes(StandardCharsets.UTF_8));
+        Files.write(sandbox.resolve("cache/nltmp_sm900027_Api.mp4"),
+                "api-redirect-rmtmpall-content".getBytes(StandardCharsets.UTF_8));
         Files.writeString(sandbox.resolve("list/api.txt"),
                 "beta\nalpha\nalpha\n", StandardCharsets.UTF_8);
 
@@ -1495,6 +1507,54 @@ public final class FunctionalTestMain {
                 "control force-shutdown must terminate the process");
     }
 
+    private void testTemporaryCacheFamilyDeletionReservation() throws Exception {
+        Path directory = sandbox.resolve("remove-tmp-all-unit");
+        Files.createDirectories(directory);
+        Path activeFile = directory.resolve("nltmp_sm990001_Active.mp4");
+        Path inactiveFile = directory.resolve("nltmp_sm990001low_Inactive.mp4");
+        Path completingDirectory = directory.resolve(
+                "nltmp_sm990001[720p,128]abcdef_Active.hls");
+        Path completedFile = directory.resolve("sm990001_Completed.mp4");
+        Files.writeString(activeFile, "active", StandardCharsets.UTF_8);
+        Files.writeString(inactiveFile, "inactive", StandardCharsets.UTF_8);
+        Files.createDirectories(completingDirectory);
+        Files.writeString(completingDirectory.resolve("segment.cmfv"),
+                "segment", StandardCharsets.UTF_8);
+
+        System.setProperty("cacheFolder", directory.toString());
+        Cache.init();
+        Files.writeString(completedFile, "completed", StandardCharsets.UTF_8);
+
+        VideoDescriptor active = Cache.altIdToVideoDescriptor("sm990001.mp4");
+        VideoDescriptor completing = Cache.altIdToVideoDescriptor(
+                "sm990001[720p,128]abcdef.hls");
+        Cache.incrementDL(active);
+        Cache.incrementDL(completing);
+
+        assertTrue(Cache.removeTmpAll("sm990001"),
+                "removeTmpAll must accept an existing temp family");
+        assertTrue(Files.exists(activeFile),
+                "active temp must remain until its download ends");
+        assertFalse(Files.exists(inactiveFile),
+                "inactive temp must be removed immediately");
+        assertTrue(Files.exists(completingDirectory),
+                "another active temp must remain until store");
+        assertTrue(Files.exists(completedFile),
+                "completed cache must not be removed");
+
+        Cache.decrementDL(active);
+        assertFalse(Files.exists(activeFile),
+                "reserved active temp must be removed after download end");
+        assertTrue(Files.exists(completingDirectory),
+                "reservation must remain while another download is active");
+
+        new Cache(completing).store();
+        assertFalse(Files.exists(completingDirectory),
+                "reserved temp must be removed instead of stored on completion");
+        assertTrue(Files.exists(completedFile),
+                "completed cache must remain after reservation completion");
+    }
+
     private void testCacheApiContract() throws Exception {
         VideoDescriptor classicAltId = Cache.altIdToVideoDescriptor(
                 "sm900001low.mp4");
@@ -1685,9 +1745,17 @@ public final class FunctionalTestMain {
         Response invalidAllRemove = request(nicoRequest(
                 "GET", "/cache/ajax_rmall?sm900001[720p,128]", ""));
         assertEquals(400, invalidAllRemove.status, "cache rmall invalid parameter");
+        Response invalidTempAllRemove = request(nicoRequest(
+                "GET", "/cache/ajax_rmtmpall?sm900025low", ""));
+        assertEquals(400, invalidTempAllRemove.status,
+                "cache rmtmpall invalid parameter");
         Response wrongRemoveMethod = request(nicoRequest(
                 "POST", "/cache/ajax_rm?sm900001", ""));
         assertEquals(405, wrongRemoveMethod.status, "cache rm method validation");
+        Response wrongTempAllRemoveMethod = request(nicoRequest(
+                "POST", "/cache/ajax_rmtmpall?sm900025", ""));
+        assertEquals(405, wrongTempAllRemoveMethod.status,
+                "cache rmtmpall method validation");
 
         Response rm = request(nicoRequest(
                 "GET", "/cache/ajax_rm?sm900006", ""));
@@ -1702,6 +1770,24 @@ public final class FunctionalTestMain {
         assertEquals("OK", rmtmp.bodyText(), "cache ajax_rmtmp response");
         assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900007_Api.mp4")),
                 "cache ajax_rmtmp deletion");
+
+        Files.write(sandbox.resolve("cache/sm900025_Api.mp4"),
+                "api-rmtmpall-completed-content".getBytes(StandardCharsets.UTF_8));
+        Response rmtmpall = request(nicoRequest(
+                "GET", "/cache/ajax_rmtmpall?sm900025", ""));
+        assertEquals(200, rmtmpall.status, "cache ajax_rmtmpall status");
+        assertEquals("OK", rmtmpall.bodyText(), "cache ajax_rmtmpall response");
+        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900025_Api.mp4")),
+                "cache ajax_rmtmpall normal temp deletion");
+        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900025low_Api.mp4")),
+                "cache ajax_rmtmpall low temp deletion");
+        assertFalse(Files.exists(sandbox.resolve(
+                "cache/nltmp_sm900025[720p,128]_Api.mp4")),
+                "cache ajax_rmtmpall DMC temp deletion");
+        assertTrue(Files.exists(sandbox.resolve("cache/sm900025_Api.mp4")),
+                "cache ajax_rmtmpall must preserve completed cache");
+        assertTrue(Files.exists(sandbox.resolve("cache/nltmp_sm900026_Api.mp4")),
+                "cache ajax_rmtmpall must preserve another video temp");
 
         Response rmall = request(nicoRequest(
                 "GET", "/cache/ajax_rmall?sm900008", ""));
@@ -1722,6 +1808,12 @@ public final class FunctionalTestMain {
         assertEquals(302, redirectRmtmp.status, "cache rmtmp redirect status");
         assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900013_Api.mp4")),
                 "cache rmtmp deletion");
+        Response redirectRmtmpall = request(nicoRequest(
+                "GET", "/cache/rmtmpall?sm900027", ""));
+        assertEquals(302, redirectRmtmpall.status,
+                "cache rmtmpall redirect status");
+        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900027_Api.mp4")),
+                "cache rmtmpall redirect deletion");
         Response redirectRmall = request(nicoRequest(
                 "GET", "/cache/rmall?sm900014", ""));
         assertEquals(302, redirectRmall.status, "cache rmall redirect status");

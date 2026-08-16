@@ -86,10 +86,11 @@ sm900001,sm900002
 | --- | --- | --- | --- |
 | `/cache/rm` / `/cache/ajax_rm` | GET | 1つの代替ID。品質・拡張子の指定可 | 成功`OK`、対象なし・削除失敗`NG` |
 | `/cache/rmtmp` / `/cache/ajax_rmtmp` | GET | 1つの代替IDのダウンロード中一時ファイル | 成功`OK`、対象なし・削除失敗`NG` |
+| `/cache/rmtmpall` / `/cache/ajax_rmtmpall` | GET | 修飾のない動画IDに属する全一時キャッシュ。ダウンロード中は終了時の削除を予約し、完成済みキャッシュは残す | 削除・予約成功`OK`、対象なし・削除失敗`NG` |
 | `/cache/rmall` / `/cache/ajax_rmall` | GET | 修飾のない動画IDだけ。通常、低品質、DMCをまとめて対象にする | 成功`OK`、対象なし・削除失敗`NG` |
 
-`rmall`に`[720p,128]`や`.mp4`などを付けることはできない。不正な空引数、
-部分一致で余分な文字を含むID、`rmall`への修飾付きIDは400になる。AJAXでない
+`rmtmpall`と`rmall`に`low`、`[720p,128]`、`.mp4`などを付けることはできない。
+不正な空引数、部分一致で余分な文字を含むID、両APIへの修飾付きIDは400になる。AJAXでない
 エンドポイントは削除結果を本文に返さず、通常`http://www.nicovideo.jp/`へ302で戻る。
 
 例:

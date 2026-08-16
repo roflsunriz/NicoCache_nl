@@ -503,6 +503,7 @@ MEMBER dareka.processor.impl.Cache | public static boolean remove(java.lang.Stri
 MEMBER dareka.processor.impl.Cache | public static boolean remove(dareka.processor.impl.VideoDescriptor); | descriptor: (Ldareka/processor/impl/VideoDescriptor;)Z
 MEMBER dareka.processor.impl.Cache | public static boolean removeTmp(java.lang.String); | descriptor: (Ljava/lang/String;)Z
 MEMBER dareka.processor.impl.Cache | public static boolean removeTmp(dareka.processor.impl.VideoDescriptor); | descriptor: (Ldareka/processor/impl/VideoDescriptor;)Z
+MEMBER dareka.processor.impl.Cache | public static boolean removeTmpAll(java.lang.String); | descriptor: (Ljava/lang/String;)Z
 MEMBER dareka.processor.impl.Cache | public static boolean removeAll(java.lang.String); | descriptor: (Ljava/lang/String;)Z
 MEMBER dareka.processor.impl.Cache | public static boolean removeAll(java.lang.String, boolean); | descriptor: (Ljava/lang/String;Z)Z
 MEMBER dareka.processor.impl.Cache | protected void setPostfix(java.lang.String); | descriptor: (Ljava/lang/String;)V
