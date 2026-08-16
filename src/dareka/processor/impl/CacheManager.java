@@ -959,27 +959,14 @@ public class CacheManager {
     /**
      * AltIDからVideoDescriptorに変換する．
      * @param altId
-     *   非dmc表現として許容されるのはsmidとlowありなしだけでそれ以外を含めてはならない.
-     * @param postfix null可. altIdが非dmc表現の時に適用する拡張子
+     *   非dmc表現ではsmid、low、任意の対応拡張子を許容する.
+     * @param postfix null可. altIdが拡張子を含まない非dmc表現の時に適用する拡張子
      * @return
      */
     public static VideoDescriptor altIdToVideoDescriptor(String altId, String postfix) {
-        Matcher m = ALTID_PATTERN.matcher(altId);
-        if (m.matches()) {
-            if (m.group(3) != null) {
-                // dmc
-                int videoBitrate = m.group(4) != null ? Integer.parseInt(m.group(4)) : 0;
-                int audioBitrate = Integer.parseInt(m.group(5));
-                return VideoDescriptor.newDmc(m.group(1), m.group(7),
-                        m.group(2).equals("low"), m.group(3),
-                        videoBitrate, audioBitrate, m.group(6));
-            } else {
-                // classic
-                return VideoDescriptor.newClassic(m.group(1), postfix,
-                        m.group(2).equals("low"));
-            }
-        }
-        return null;
+        AltVideoIdParser.ParsedId parsed =
+                AltVideoIdParser.parse(altId, postfix);
+        return parsed == null ? null : parsed.video;
     }
     public static VideoDescriptor altIdToVideoDescriptor(String altId) {
         return altIdToVideoDescriptor(altId, null);

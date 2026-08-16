@@ -46,8 +46,10 @@ import dareka.common.LRUMap;
 import dareka.common.HttpIOException;
 import dareka.processor.URLResource;
 import dareka.processor.URLResourceCache;
+import dareka.processor.impl.Cache;
 import dareka.processor.impl.CmafCachingProcessor;
 import dareka.processor.impl.DomandCVIEntry;
+import dareka.processor.impl.VideoDescriptor;
 import dareka.processor.util.LocalFlvTemplate;
 
 public final class FunctionalTestMain {
@@ -1494,6 +1496,16 @@ public final class FunctionalTestMain {
     }
 
     private void testCacheApiContract() throws Exception {
+        VideoDescriptor classicAltId = Cache.altIdToVideoDescriptor(
+                "sm900001low.mp4");
+        assertTrue(classicAltId != null, "classic alt ID parser result");
+        assertFalse(classicAltId.isDmc(), "classic alt ID parser type");
+        assertEquals(".mp4", classicAltId.getPostfix(),
+                "classic alt ID parser postfix");
+        assertTrue(Cache.altIdToVideoDescriptor(
+                "prefix-sm900001.mp4-suffix") == null,
+                "alt ID parser must reject partial matches");
+
         Response emptyInfo = request(nicoRequest("GET", "/cache/info", ""));
         assertEquals(200, emptyInfo.status, "empty cache info status");
         assertEquals("{}", emptyInfo.bodyText(), "empty cache info response");
@@ -1552,6 +1564,39 @@ public final class FunctionalTestMain {
         assertEquals(200, echo.status, "cache echo status");
         assertContains(echo.bodyText(), "sm900001\\\"",
                 "cache echo must escape quotes as JSON");
+        Response classicExtensionEcho = request(nicoRequest(
+                "GET", "/cache/echo?sm900001low.mp4", ""));
+        assertEquals(200, classicExtensionEcho.status,
+                "cache echo classic extension status");
+        assertContains(classicExtensionEcho.bodyText(),
+                "\"altId\":\"sm900001low.mp4\"",
+                "classic alt ID must retain its extension");
+        assertContains(classicExtensionEcho.bodyText(),
+                "\"videoDescriptor.postfix\":\".mp4\"",
+                "classic alt ID extension must reach VideoDescriptor");
+        assertContains(classicExtensionEcho.bodyText(),
+                "\"videoDescriptor.isDmc\":\"false\"",
+                "classic alt ID must not become DMC");
+
+        Response dmcEcho = request(nicoRequest(
+                "GET", "/cache/echo?sm900001%5B720p%2C1200%2C128%5Dabcdef.mp4", ""));
+        assertEquals(200, dmcEcho.status, "cache echo DMC status");
+        assertContains(dmcEcho.bodyText(),
+                "\"altId\":\"sm900001[720p,1200,128]abcdef.mp4\"",
+                "DMC alt ID must be parsed as an exact value");
+        assertContains(dmcEcho.bodyText(),
+                "\"videoDescriptor.isDmc\":\"true\"",
+                "DMC alt ID must remain DMC");
+
+        Response trailingAltIdEcho = request(nicoRequest(
+                "GET", "/cache/echo?prefix-sm900001.mp4-suffix", ""));
+        assertEquals(200, trailingAltIdEcho.status,
+                "cache echo invalid trailing input status");
+        assertContains(trailingAltIdEcho.bodyText(), "\"altId\":\"\"",
+                "partial alt ID matches must be rejected");
+        assertContains(trailingAltIdEcho.bodyText(),
+                "\"videoDescriptor\":\"null\"",
+                "invalid alt ID must not produce VideoDescriptor");
         Response emptyEcho = request(nicoRequest("GET", "/cache/echo", ""));
         assertEquals(400, emptyEcho.status, "cache echo parameter validation");
 

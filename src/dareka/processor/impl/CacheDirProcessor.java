@@ -66,26 +66,6 @@ public class CacheDirProcessor implements Processor {
         return null;
     }
 
-    // api urlに続くAlt IDを検出するために^$は省略.
-    private static final Pattern ALT_ID_PATTERN = Pattern.compile(
-        // group(1), マッチ全体.
-        "(" +
-        // group(2). smXXX.
-        "([a-z]{2}[0-9]+)" +
-        // group(3).
-        "(low)?" +
-        // group(4), dmc部分, 省略可.
-        "(" +
-        // video mode, video kbps, audio kbps
-        "\\[[\\w-]+(?:,\\d+)?,\\d+\\]" +
-        // srcId(wクラスではなく[0-9a-f]ではないか？)
-        "\\w*" +
-        // 拡張子
-        "\\.(?:swf|flv|mp4|hls|webm|mkv)" +
-        ")?" +
-        ")"
-        );
-
     private static final Pattern LEGACY_SINGLE_FILE_PATTERN = Pattern.compile(
             "^[a-z]{2}[0-9]+(?:low)?(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\]\\w*)?"
                     + "(?:\\.(?:flv|swf|mp4|webm|mkv)){1,2}$");
@@ -225,7 +205,8 @@ public class CacheDirProcessor implements Processor {
         Cache cache = null;
 
         {
-            Specifier spec = new Specifier(path);
+            Specifier spec = new Specifier(
+                    getSpecifierInput(apiPath, apiArg));
             altid = spec.altid;
             smid = spec.smid;
             video = spec.video;
@@ -1453,6 +1434,33 @@ public class CacheDirProcessor implements Processor {
     };
 
     /**
+     * 旧title/move/topmove APIは「代替ID-引数」を1つのqueryに格納するため、
+     * 区切り候補の直前が厳密な代替IDになる位置だけを採用する。
+     */
+    private static String getSpecifierInput(String apiPath, String query) {
+        if (query == null) {
+            return apiPath;
+        }
+        String decoded = URLDecoder.decode(query, StandardCharsets.UTF_8);
+        String command = apiPath.startsWith("ajax_")
+                ? apiPath.substring("ajax_".length()) : apiPath;
+        if (!command.equals("title")
+                && !command.equals("move")
+                && !command.equals("topmove")) {
+            return decoded;
+        }
+
+        for (int separator = decoded.lastIndexOf('-'); separator >= 0;
+                separator = decoded.lastIndexOf('-', separator - 1)) {
+            String candidate = decoded.substring(0, separator);
+            if (AltVideoIdParser.parse(candidate) != null) {
+                return candidate;
+            }
+        }
+        return decoded;
+    }
+
+    /**
      * 単一のキャッシュ指定表現のパース結果を保持する.
      */
     static class Specifier {
@@ -1465,25 +1473,14 @@ public class CacheDirProcessor implements Processor {
          * @param query URLデコードされた後のquery. 冒頭の'?'を含まない.
          */
         public Specifier(String query) {
-            // - ALT_ID_PATTERNを部分一致で探す.
-            // - 厳密一致にするべきだがこのファイルの整理が済むまではこのまま.
-
-            if (query == null) {
+            AltVideoIdParser.ParsedId parsed = AltVideoIdParser.parse(query);
+            if (parsed == null) {
                 return;
             }
-
-            Matcher m = ALT_ID_PATTERN.matcher(query);
-            if (!m.find()) {
-                return;
-            };
-            altid = m.group(1);
-            smid = m.group(2);
-
-            video = Cache.altIdToVideoDescriptor(altid);
-
-            if (video != null) {
-                cache = new Cache(video);
-            };
+            altid = parsed.altId;
+            smid = parsed.smid;
+            video = parsed.video;
+            cache = new Cache(video);
         };
     };
 }
