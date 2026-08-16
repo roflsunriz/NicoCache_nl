@@ -122,10 +122,8 @@ final class DiagnosticsControl {
     private static boolean matchesProcess(ProcessHandle handle,
             Properties status, DiagnosticsPaths paths) {
         String commandLine = handle.info().commandLine().orElse("");
-        Path jar = paths.applicationRoot().resolve("NicoCacheDiagnostics.jar");
         if (!commandLine.isEmpty()) {
-            return commandLine.contains(jar.toString())
-                    || commandLine.contains("NicoCacheDiagnostics.jar");
+            return matchesCommandLine(commandLine, paths);
         }
         try {
             Instant recorded = Instant.parse(status.getProperty("startedAt"));
@@ -135,6 +133,46 @@ final class DiagnosticsControl {
         } catch (RuntimeException error) {
             return false;
         }
+    }
+
+    static boolean matchesCommandLine(String commandLine,
+            DiagnosticsPaths paths) {
+        Path jar = paths.applicationRoot().resolve("NicoCacheDiagnostics.jar");
+        if (commandLine.contains(jar.toString())
+                || commandLine.contains("NicoCacheDiagnostics.jar")) {
+            return true;
+        }
+        return containsCommandArgument(commandLine,
+                        DiagnosticsMain.class.getName())
+                && containsCommandArgument(commandLine,
+                        "--app-root=" + paths.applicationRoot())
+                && containsCommandArgument(commandLine,
+                        "--data-root=" + paths.dataRoot());
+    }
+
+    private static boolean containsCommandArgument(String commandLine,
+            String argument) {
+        int from = 0;
+        while (from <= commandLine.length() - argument.length()) {
+            int start = commandLine.indexOf(argument, from);
+            if (start < 0) {
+                return false;
+            }
+            int end = start + argument.length();
+            boolean startsAtBoundary = start == 0
+                    || isCommandBoundary(commandLine.charAt(start - 1));
+            boolean endsAtBoundary = end == commandLine.length()
+                    || isCommandBoundary(commandLine.charAt(end));
+            if (startsAtBoundary && endsAtBoundary) {
+                return true;
+            }
+            from = start + 1;
+        }
+        return false;
+    }
+
+    private static boolean isCommandBoundary(char value) {
+        return Character.isWhitespace(value) || value == '"' || value == '\'';
     }
 
     private static long parseLong(String value, long fallback) {

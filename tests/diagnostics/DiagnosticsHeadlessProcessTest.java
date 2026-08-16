@@ -1,6 +1,7 @@
 package nicocache.diagnostics;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -21,6 +22,21 @@ public final class DiagnosticsHeadlessProcessTest {
             Path data = root.resolve("data");
             Files.createDirectories(application);
             Files.createDirectories(data);
+            DiagnosticsPaths paths = DiagnosticsPaths.resolve(
+                    application, data);
+            String classPathCommand = "java -cp diagnostics-tests "
+                    + DiagnosticsMain.class.getName()
+                    + " --app-root=" + paths.applicationRoot()
+                    + " --data-root=" + paths.dataRoot() + " --hidden";
+            assertTrue(DiagnosticsControl.matchesCommandLine(
+                            classPathCommand, paths),
+                    "test classpath launch must match its exact roots");
+            assertTrue(!DiagnosticsControl.matchesCommandLine(
+                            classPathCommand.replace(
+                                    "--data-root=" + paths.dataRoot(),
+                                    "--data-root=" + root.resolve("other")),
+                            paths),
+                    "classpath launch with another data root must not match");
             Path java = Path.of(System.getProperty("java.home"), "bin",
                     isWindows() ? "java.exe" : "java");
             process = new ProcessBuilder(java.toString(),
@@ -52,8 +68,12 @@ public final class DiagnosticsHeadlessProcessTest {
                     .redirectErrorStream(true).start();
             assertTrue(shutdown.waitFor(15L, TimeUnit.SECONDS),
                     "planned shutdown command must finish");
+            String shutdownOutput = new String(
+                    shutdown.getInputStream().readAllBytes(),
+                    StandardCharsets.UTF_8);
             assertEquals(0, shutdown.exitValue(),
-                    "planned shutdown command exit code");
+                    "planned shutdown command exit code; output="
+                            + shutdownOutput.trim());
             assertTrue(process.waitFor(5L, TimeUnit.SECONDS),
                     "planned shutdown must stop the watchdog");
             assertTrue(!Files.exists(statusPath),
