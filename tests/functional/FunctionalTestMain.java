@@ -203,6 +203,10 @@ public final class FunctionalTestMain {
                 application.resolve("nlFilter_sys.txt"));
         Files.writeString(sandbox.resolve("local/fixture.txt"),
                 "local-functional-content", StandardCharsets.UTF_8);
+        Files.writeString(sandbox.resolve("local/日本語 [テスト].txt"),
+                "special-local-content", StandardCharsets.UTF_8);
+        Files.writeString(sandbox.resolve("local/raw[brackets].txt"),
+                "raw-bracket-content", StandardCharsets.UTF_8);
         Files.writeString(application.resolve("local/system-only.txt"),
                 "system-local-content", StandardCharsets.UTF_8);
         Files.writeString(application.resolve("local/overlay.txt"),
@@ -1076,6 +1080,60 @@ public final class FunctionalTestMain {
         assertEquals(200, linked.status, "symbolic-link local status");
         assertEquals("linked-local-content", linked.bodyText(),
                 "symbolic-link local body");
+
+        Response encodedSpecial = request(nicoRequest("GET",
+                "/local/%E6%97%A5%E6%9C%AC%E8%AA%9E%20%5B%E3%83%86%E3%82%B9%E3%83%88%5D.txt",
+                ""));
+        assertEquals(200, encodedSpecial.status,
+                "percent-encoded special local status");
+        assertEquals("special-local-content", encodedSpecial.bodyText(),
+                "percent-encoded special local body");
+
+        Response rawBrackets = request(nicoRequest(
+                "GET", "/local/raw[brackets].txt", ""));
+        assertEquals(200, rawBrackets.status, "raw bracket local status");
+        assertEquals("raw-bracket-content", rawBrackets.bodyText(),
+                "raw bracket local body");
+
+        Response missing = request(nicoRequest(
+                "GET", "/local/missing-special.txt", ""));
+        assertEquals(404, missing.status, "missing local status");
+        assertEquals("404 Not Found", missing.bodyText(),
+                "missing local response body");
+        assertEquals(Integer.toString("404 Not Found".getBytes(
+                        StandardCharsets.UTF_8).length),
+                missing.header("content-length"),
+                "missing local content length");
+        assertEquals("text/plain; charset=UTF-8",
+                missing.header("content-type"),
+                "missing local content type");
+
+        Response missingHead = request(nicoRequest(
+                "HEAD", "/local/missing-special.txt", ""));
+        assertEquals(404, missingHead.status, "missing local HEAD status");
+        assertEquals("", missingHead.bodyText(),
+                "missing local HEAD response body");
+        assertEquals(Integer.toString("404 Not Found".getBytes(
+                        StandardCharsets.UTF_8).length),
+                missingHead.header("content-length"),
+                "missing local HEAD content length");
+
+        Response invalidEscape = request(nicoRequest(
+                "GET", "/local/%ZZ.txt", ""));
+        assertEquals(404, invalidEscape.status,
+                "invalid URL escape local status");
+        assertFalse(invalidEscape.bodyText().isBlank(),
+                "invalid URL escape local body");
+
+        Response traversal = request(nicoRequest(
+                "GET", "/local/%2e%2e/config.properties", ""));
+        assertEquals(404, traversal.status,
+                "encoded traversal local status");
+
+        Response encodedSlash = request(nicoRequest(
+                "GET", "/local/features%2Flinked.txt", ""));
+        assertEquals(404, encodedSlash.status,
+                "encoded slash local status");
     }
 
     private void testDebugThreadDump() throws Exception {

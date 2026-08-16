@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -29,6 +30,9 @@ import dareka.common.Logger;
  * @since NicoCache_nl+101219mod
  */
 public class LocalFileResource extends Resource implements ConfigObserver {
+    private static final byte[] NOT_FOUND_BODY =
+            "404 Not Found".getBytes(StandardCharsets.UTF_8);
+
     private File file;
     private long start, end, decodedLength;
     private String statusline;
@@ -36,6 +40,7 @@ public class LocalFileResource extends Resource implements ConfigObserver {
     private boolean needsSendingBody, needsDecodingBody;
     private boolean headRequest, rangeUnsatisfied;
     private boolean setLastModified = true;
+    private byte[] errorBody;
     private HttpResponseHeader responseHeader;
 
     private static final Map<String, String> mimeTypes =
@@ -111,6 +116,9 @@ public class LocalFileResource extends Resource implements ConfigObserver {
     }
 
     public long getLength() {
+        if (errorBody != null) {
+            return errorBody.length;
+        }
         if (needsDecodingBody) {
             return getDecodedLength();
         }
@@ -138,6 +146,7 @@ public class LocalFileResource extends Resource implements ConfigObserver {
             boolean setMandatoryHeader) throws IOException {
         needsSendingBody = needsDecodingBody = false;
         headRequest = rangeUnsatisfied = false;
+        errorBody = null;
 
         String contentEncoding = null;
         String path = file.getPath();
@@ -176,6 +185,13 @@ public class LocalFileResource extends Resource implements ConfigObserver {
             }
         } else {
             statusline = "HTTP/1.1 404 Not Found";
+            errorBody = NOT_FOUND_BODY;
+            String method = requestHeader.getMethod();
+            if (HttpHeader.GET.equalsIgnoreCase(method)) {
+                needsSendingBody = true;
+            } else if (HttpHeader.HEAD.equalsIgnoreCase(method)) {
+                headRequest = true;
+            }
         }
 
         responseHeader = new HttpResponseHeader(statusline + "\r\n\r\n");
@@ -183,7 +199,8 @@ public class LocalFileResource extends Resource implements ConfigObserver {
             responseHeader.setMessageHeader(HttpHeader.CONTENT_ENCODING,
                     contentEncoding);
         }
-        String contentType = getMimeType(path);
+        String contentType = errorBody == null
+                ? getMimeType(path) : "text/plain; charset=UTF-8";
         if (contentType != null) {
             responseHeader.setMessageHeader(HttpHeader.CONTENT_TYPE,
                     contentType);
@@ -205,7 +222,9 @@ public class LocalFileResource extends Resource implements ConfigObserver {
         InputStream in = null;
         try {
             if (needsSendingBody) {
-                in = getDecodedInputStream();
+                in = errorBody == null
+                        ? getDecodedInputStream()
+                        : new ByteArrayInputStream(errorBody);
                 ByteArrayOutputStream bout = new ByteArrayOutputStream();
                 if (FileUtil.copy(in, bout) > 0) {
                     return bout.toByteArray();
@@ -318,7 +337,9 @@ public class LocalFileResource extends Resource implements ConfigObserver {
             InputStream in = null;
             try {
                 StringBuilder sb = new StringBuilder(file.getPath());
-                if (useRange) {
+                if (errorBody != null) {
+                    in = new ByteArrayInputStream(errorBody);
+                } else if (useRange) {
                     in = getRangeBody();
                     sb.append(String.format("[range=%d-%d]", start, end));
                 } else if (needsDecodingBody) {
@@ -339,7 +360,11 @@ public class LocalFileResource extends Resource implements ConfigObserver {
     @Override
     protected void doSetMandatoryResponseHeader(HttpResponseHeader responseHeader) {
         long contentLength = 0L;
-        if (isValid()) {
+        if (errorBody != null) {
+            if (needsSendingBody || headRequest) {
+                contentLength = getLength();
+            }
+        } else if (isValid()) {
             if (needsSendingBody || headRequest) {
                 contentLength = getLength();
             }
