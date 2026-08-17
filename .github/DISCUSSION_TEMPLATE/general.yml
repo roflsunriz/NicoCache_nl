@@ -1,0 +1,32 @@
+title: "[雑談] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        NicoCache_nlに関する共有や、Q&A・機能提案に当てはまらない話題のためのフォームです。
+        使い方の質問はQ&A、新機能の提案はIdeasを選ぶと見つけてもらいやすくなります。
+  - type: textarea
+    id: topic
+    attributes:
+      label: 話したいこと
+      description: 背景を含め、他の人が内容を理解できるように書いてください。
+      placeholder: 共有したい内容、気付いたこと、相談したい背景など
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 関係する領域
+      options:
+        - キャッシュ・プロキシー本体 / API
+        - ランチャー・初回セットアップ
+        - 診断アプリ
+        - 独立アップデーター
+        - Windows / Linux / macOS 配布
+        - 標準 nlFilter / nlFilter Lab
+        - ブラウザー表示・ローカル資産
+        - ドキュメント
+        - プロジェクト運用
+        - その他
+    validations:
+      required: true

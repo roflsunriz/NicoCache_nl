@@ -1,0 +1,44 @@
+title: "[質問] "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        導入や使い方の質問用です。秘密情報を含む設定、Cookie、証明書、未確認のログは
+        投稿しないでください。不具合を再現できる場合はIssueの不具合報告を使用してください。
+  - type: textarea
+    id: question
+    attributes:
+      label: 質問
+      description: 最終的に実現したいことと、分からない点を具体的に書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: 確認・試行したこと
+      description: 読んだ文書、変更した設定、表示されたメッセージを秘密情報を除いて書いてください。
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NicoCache_nlの版
+      placeholder: "例: 1.4.2"
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - その他・不明
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: 補足
+      description: 匿名化済みの画面や診断情報があれば添付してください。

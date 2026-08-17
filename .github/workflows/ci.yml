@@ -100,6 +100,10 @@ jobs:
         shell: pwsh
         run: .\tests\release\test-release-workflow.ps1
 
+      - name: Run GitHub community file contract tests
+        shell: pwsh
+        run: .\tests\release\test-github-community-files.ps1
+
       - name: Prepare cross-vendor runtime compatibility tests
         shell: pwsh
         run: .\test-runtime-compatibility.ps1 -Mode Prepare -LibraryDirectory .\.test-work\ci-dependencies

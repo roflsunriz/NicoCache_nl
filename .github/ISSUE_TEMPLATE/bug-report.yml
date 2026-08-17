@@ -1,0 +1,118 @@
+name: 不具合報告
+description: 再現可能な問題を、修正に必要な情報とともに報告します。
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        質問はQ&A Discussion、機能提案はIdeas Discussionを使用してください。
+        セキュリティ脆弱性は公開せず、Security Advisoryから非公開で報告してください。
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 事前確認
+      options:
+        - label: 同じ問題が既存のIssueとDiscussionにないことを検索しました。
+          required: true
+        - label: 可能な範囲で最新の公開版でも再現することを確認しました。
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 対象領域
+      options:
+        - キャッシュ・プロキシー本体 / API
+        - ランチャー・初回セットアップ
+        - 診断アプリ
+        - 独立アップデーター
+        - Windows / Linux / macOS 配布
+        - 標準 nlFilter / nlFilter Lab
+        - ブラウザー表示・ローカル資産
+        - ドキュメント
+        - その他・判断できない
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NicoCache_nlの版
+      description: ランチャー、GUI、配布ファイル名などで確認できる版を書いてください。
+      placeholder: "例: 1.4.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: 導入方法
+      options:
+        - Windows MSI
+        - Windows ZIP / アプリイメージ
+        - Linuxパッケージ / ZIP
+        - macOSパッケージ / ZIP
+        - ソースからビルド
+        - 旧版から更新
+        - その他・不明
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      multiple: true
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - その他・不明
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OSの版とCPU
+      placeholder: "例: Windows 11 24H2 x64 / Ubuntu 24.04 x64 / macOS 15 arm64"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 新しい環境でも同じ操作を再現できるよう、番号付きで書いてください。
+      placeholder: |
+        1. NicoCacheLauncherを起動する
+        2. ...
+        3. 問題が発生する
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した結果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の結果
+      description: エラーメッセージは省略せず、秘密情報だけを伏せてください。
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 診断情報
+      description: 診断アプリの匿名化済みHTMLや、秘密情報を除いた画面を添付できます。
+  - type: textarea
+    id: additional
+    attributes:
+      label: 補足
+      description: 発生頻度、直前の更新、回避策などがあれば書いてください。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 公開情報の確認
+      options:
+        - label: Cookie、トークン、証明書秘密鍵、個人情報が本文と添付に含まれていないことを確認しました。
+          required: true

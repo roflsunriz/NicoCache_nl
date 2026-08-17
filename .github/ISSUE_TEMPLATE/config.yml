@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 使い方・設定の質問
+    url: https://github.com/roflsunriz/NicoCache_nl/discussions/categories/q-a
+    about: Q&A Discussionで状況を整理しながら質問できます。
+  - name: 新機能・改善の提案
+    url: https://github.com/roflsunriz/NicoCache_nl/discussions/categories/ideas
+    about: 実装前に目的、代替案、互換性を相談します。
+  - name: 導入・利用ガイド
+    url: https://roflsunriz.github.io/setup-nicocache-nl/
+    about: 初回設定と基本的な使い方を確認できます。
+  - name: セキュリティ脆弱性の非公開報告
+    url: https://github.com/roflsunriz/NicoCache_nl/security/advisories/new
+    about: 脆弱性の詳細を公開Issueへ投稿しないでください。

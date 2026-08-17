@@ -6,6 +6,19 @@ HTTP/HTTPSプロキシー兼キャッシュサーバーです。
 導入と初回設定は [NicoCache_nl USAGE GUIDE](https://roflsunriz.github.io/setup-nicocache-nl/)
 を参照してください。
 
+## 質問・提案・不具合報告
+
+- 使い方や設定の質問は [Q&A Discussions](https://github.com/roflsunriz/NicoCache_nl/discussions/categories/q-a)
+- 新機能や改善案は [Ideas Discussions](https://github.com/roflsunriz/NicoCache_nl/discussions/categories/ideas)
+- 再現可能な不具合や文書の誤りは [Issue作成画面](https://github.com/roflsunriz/NicoCache_nl/issues/new/choose)
+- 脆弱性は公開Issueへ書かず、[`SECURITY.md`](SECURITY.md) の非公開報告手順
+
+報告先の詳しい選び方と、公開してはいけない情報は [`SUPPORT.md`](SUPPORT.md) を参照して
+ください。コードや文書を変更する場合は [`CONTRIBUTING.md`](CONTRIBUTING.md) に従います。
+
+本体コードと標準資材は [NicoCache License](LICENSE) で提供されます。配布物に含まれる
+外部依存関係の権利表示は `packaging/windows/THIRD-PARTY-NOTICES.txt` を確認してください。
+
 ## NicoCache_nl本体の簡単な使い方
 
 1. 初回セットアップで利用者データの保存先を選び、HTTPS MitM、ローカルCAの信頼登録、

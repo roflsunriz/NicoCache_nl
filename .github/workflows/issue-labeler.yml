@@ -1,0 +1,130 @@
+name: Issue labeling
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+      - reopened
+
+permissions:
+  issues: write
+
+concurrency:
+  group: issue-labeling-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Apply triage, area, and platform labels
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const definitions = [
+              ['status: needs triage', 'fbca04', '確認と分類が必要なIssue'],
+              ['area: core', '5319e7', 'キャッシュ、プロキシー本体、API'],
+              ['area: launcher', '1d76db', 'ランチャーと初回セットアップ'],
+              ['area: diagnostics', '0e8a16', '診断アプリと障害レポート'],
+              ['area: updater', '006b75', '独立アップデーター'],
+              ['area: packaging', 'c5def5', 'インストーラーと配布物'],
+              ['area: nlfilter', 'b60205', '標準nlFilterとnlFilter Lab'],
+              ['area: browser', 'd4c5f9', 'ブラウザー表示とlocal資産'],
+              ['area: documentation', '0075ca', '利用者・開発者向け文書'],
+              ['area: ci', '2088ff', 'CI、Release、GitHub Actions'],
+              ['platform: windows', '00a4ef', 'Windows固有またはWindowsで再現'],
+              ['platform: linux', 'f9d0c4', 'Linux固有またはLinuxで再現'],
+              ['platform: macos', 'bfdadc', 'macOS固有またはmacOSで再現']
+            ];
+
+            const {owner, repo} = context.repo;
+            const existing = await github.paginate(
+              github.rest.issues.listLabelsForRepo,
+              {owner, repo, per_page: 100}
+            );
+            const existingNames = new Set(existing.map(label => label.name));
+
+            for (const [name, color, description] of definitions) {
+              if (existingNames.has(name)) continue;
+              try {
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name,
+                  color,
+                  description
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            }
+
+            const body = context.payload.issue.body || '';
+            const lines = body.split(/\r?\n/);
+            function answerFor(heading) {
+              const marker = `### ${heading}`;
+              const start = lines.findIndex(line => line.trim() === marker);
+              if (start < 0) return '';
+              const answer = [];
+              for (let index = start + 1; index < lines.length; index += 1) {
+                if (lines[index].startsWith('### ')) break;
+                answer.push(lines[index]);
+              }
+              return answer.join('\n').trim();
+            }
+
+            const areaLabels = new Map([
+              ['キャッシュ・プロキシー本体 / API', 'area: core'],
+              ['ランチャー・初回セットアップ', 'area: launcher'],
+              ['診断アプリ', 'area: diagnostics'],
+              ['独立アップデーター', 'area: updater'],
+              ['Windows / Linux / macOS 配布', 'area: packaging'],
+              ['標準 nlFilter / nlFilter Lab', 'area: nlfilter'],
+              ['ブラウザー表示・ローカル資産', 'area: browser'],
+              ['ドキュメント', 'area: documentation'],
+              ['プロジェクト運用', 'area: ci']
+            ]);
+            const areaAnswer = answerFor('対象領域');
+            const osAnswer = answerFor('OS');
+            const desired = [];
+
+            if (areaLabels.has(areaAnswer)) {
+              desired.push(areaLabels.get(areaAnswer));
+            }
+            if (osAnswer.includes('Windows')) desired.push('platform: windows');
+            if (osAnswer.includes('Linux')) desired.push('platform: linux');
+            if (osAnswer.includes('macOS')) desired.push('platform: macos');
+            if (['opened', 'reopened'].includes(context.payload.action)) {
+              desired.push('status: needs triage');
+            }
+
+            const shouldSyncClassification = areaAnswer !== '' || osAnswer !== '';
+            if (shouldSyncClassification) {
+              const current = context.payload.issue.labels.map(label =>
+                typeof label === 'string' ? label : label.name
+              );
+              const managed = current.filter(name =>
+                name.startsWith('area: ') || name.startsWith('platform: ')
+              );
+              for (const name of managed) {
+                if (desired.includes(name)) continue;
+                await github.rest.issues.removeLabel({
+                  owner,
+                  repo,
+                  issue_number: context.issue.number,
+                  name
+                });
+              }
+            }
+
+            if (desired.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: context.issue.number,
+                labels: [...new Set(desired)]
+              });
+            }

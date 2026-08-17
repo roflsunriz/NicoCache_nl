@@ -1,0 +1,55 @@
+name: ドキュメント報告
+description: 説明の誤り、不足、分かりにくい手順を報告します。
+title: "[Docs] "
+labels:
+  - documentation
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 対象領域
+      options:
+        - ドキュメント
+    validations:
+      required: true
+  - type: dropdown
+    id: document
+    attributes:
+      label: 対象ドキュメント
+      options:
+        - README
+        - NicoCache_nl USAGE GUIDE
+        - API仕様
+        - TLS・証明書
+        - 更新手順
+        - Windows / Linux / macOS 配布手順
+        - nlFilter / nlFilter Lab
+        - その他
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: 該当箇所
+      description: URL、ファイルパス、見出し名などを書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 現在の問題
+      description: 誤っている内容、迷った点、再現できなかった手順を説明してください。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する説明
+      description: 正しい内容や、追加すると理解しやすい情報が分かれば書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: 補足
+      description: 参考資料やスクリーンショットがあれば添付してください。

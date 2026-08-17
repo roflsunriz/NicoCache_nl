@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- 質問、改善提案、不具合、文書修正、脆弱性を適切な窓口へ案内できるよう、
+  Discussion・Issue・Pull Requestテンプレートと、貢献、サポート、セキュリティ、
+  行動規範、コード所有者、既存NicoCache Licenseの案内を追加した。
+- Issueの対象領域とOS、Pull Requestの変更ファイルを自動分類し、Pull Requestタイトルを
+  Conventional Commits形式で検証できるよう、最小権限のGitHub Actionsを追加した。
+
 ### Fixed
 
 - Linux/macOSのCIで診断アプリをクラスパス起動した場合も安全に計画停止を

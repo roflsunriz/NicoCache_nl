@@ -1,0 +1,89 @@
+name: Pull request governance
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions: {}
+
+concurrency:
+  group: pull-request-governance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-title:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate Conventional Commits title
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const pattern = /^(feat|fix|docs|refactor|perf|test|build|ci|chore|revert|release)(\([a-z0-9._/-]+\))?!?: \S.+$/;
+            if (!pattern.test(title)) {
+              core.setFailed(
+                'PRタイトルは type(scope): 要約 形式にしてください。' +
+                '例: fix(cache): 一時キャッシュ削除の競合を修正'
+              );
+            }
+
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Create managed labels when missing
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const definitions = [
+              ['area: core', '5319e7', 'キャッシュ、プロキシー本体、API'],
+              ['area: launcher', '1d76db', 'ランチャーと初回セットアップ'],
+              ['area: diagnostics', '0e8a16', '診断アプリと障害レポート'],
+              ['area: updater', '006b75', '独立アップデーター'],
+              ['area: packaging', 'c5def5', 'インストーラーと配布物'],
+              ['area: nlfilter', 'b60205', '標準nlFilterとnlFilter Lab'],
+              ['area: browser', 'd4c5f9', 'ブラウザー表示とlocal資産'],
+              ['area: documentation', '0075ca', '利用者・開発者向け文書'],
+              ['area: ci', '2088ff', 'CI、Release、GitHub Actions'],
+              ['platform: windows', '00a4ef', 'Windows固有またはWindowsで再現'],
+              ['platform: linux', 'f9d0c4', 'Linux固有またはLinuxで再現'],
+              ['platform: macos', 'bfdadc', 'macOS固有またはmacOSで再現']
+            ];
+
+            const {owner, repo} = context.repo;
+            const existing = await github.paginate(
+              github.rest.issues.listLabelsForRepo,
+              {owner, repo, per_page: 100}
+            );
+            const existingNames = new Set(existing.map(label => label.name));
+            for (const [name, color, description] of definitions) {
+              if (existingNames.has(name)) continue;
+              try {
+                await github.rest.issues.createLabel({
+                  owner,
+                  repo,
+                  name,
+                  color,
+                  description
+                });
+              } catch (error) {
+                if (error.status !== 422) throw error;
+              }
+            }
+
+      - name: Apply changed-file labels
+        uses: actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1
+        with:
+          repo-token: ${{ github.token }}
+          configuration-path: .github/labeler.yml
+          sync-labels: true

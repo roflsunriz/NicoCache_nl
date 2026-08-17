@@ -1,0 +1,101 @@
+"area: core":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/dareka/**"
+          - "src/nicocacheca/**"
+          - "defaults/**"
+          - "data/**"
+          - "extensions/**"
+          - "build-javac.ps1"
+          - "build-javac.sh"
+          - "manifest-nl.mf"
+
+"area: launcher":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tools/nicocache-launcher/**"
+          - "tests/launcher/**"
+          - "tests/setup/**"
+          - "test-launcher.ps1"
+          - "test-first-run-setup.ps1"
+          - "src/dareka/FirstRun*.java"
+          - "src/dareka/Setup*.java"
+          - "src/dareka/UnixSetupIntegration.java"
+
+"area: diagnostics":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tools/nicocache-diagnostics/**"
+          - "tests/diagnostics/**"
+          - "tests/e2e/DiagnosticIncidentE2e.java"
+          - "documents/diagnostics-watchdog.md"
+          - "test-diagnostics.ps1"
+          - "src/dareka/Diagnostic*.java"
+          - "src/dareka/DiagnosticsLifecycle.java"
+
+"area: updater":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "updater/**"
+          - "packaging/windows/build-standalone-updater.ps1"
+          - "packaging/windows/test-standalone-updater.ps1"
+          - "packaging/unix/build-standalone-updater.ps1"
+          - "packaging/unix/test-standalone-updater.ps1"
+          - ".github/workflows/standalone-updater.yml"
+
+"area: packaging":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packaging/**"
+          - ".github/workflows/release.yml"
+          - ".github/workflows/unix-packages.yml"
+          - ".github/workflows/windows-installer.yml"
+
+"area: nlfilter":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "nlFilters/**"
+          - "nlFilter_sys.txt"
+
+"area: browser":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "local/**"
+          - "tests/local/**"
+          - "proxy_sample.pac"
+
+"area: documentation":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.md"
+          - "documents/**"
+          - "**/README.md"
+          - "**/readme.txt"
+
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/dependabot.yml"
+          - ".github/labeler.yml"
+          - "tests/release/**"
+
+"platform: windows":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packaging/windows/**"
+          - "src/native/**"
+          - "NicoCacheGUI_native*.dll"
+          - ".github/workflows/windows-installer.yml"
+
+"platform: linux":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packaging/unix/**"
+          - ".github/workflows/unix-packages.yml"
+
+"platform: macos":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "packaging/unix/**"
+          - ".github/workflows/unix-packages.yml"
