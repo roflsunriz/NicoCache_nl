@@ -10,7 +10,6 @@ extensions/readme.txt
 local/05_nicocache_menu.js
 local/15_cached_link_color.js
 local/20_watchpage.js
-local/list.js.default
 local/mime.types.default
 local/nl_cacheIcon.css
 local/nllib_watch.js

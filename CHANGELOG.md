@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-08-18
+
 ### Added
 
 - ニコニコ動画本体のURL空間とローカル管理機能を分離するため、`https://nicocachenl.test/`に
@@ -19,8 +21,14 @@
 - Issueの対象領域とOS、Pull Requestの変更ファイルを自動分類し、Pull Requestタイトルを
   Conventional Commits形式で検証できるよう、最小権限のGitHub Actionsを追加した。
 
+### Changed
+
+- 専用管理サイトと新しいREST・メディア配信経路を含む本体を1.5.0として公開する版番号へ更新した。
+
 ### Fixed
 
+- 旧キャッシュ管理画面の廃止後もWindows配布物のシステム資材一覧が
+  `local/list.js.default`を要求してパッケージ検証に失敗する不整合を修正した。
 - filter-matomeなどの利用側が本体APIだけで削除予約とメディア存在確認を完結できるよう、
   動画単位DELETEで取得中キャッシュが残る場合は`202 scheduled`を返し、`/media`のHEADに
   変換処理なしで応答するよう修正した。

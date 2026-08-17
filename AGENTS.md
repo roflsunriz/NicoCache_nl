@@ -43,7 +43,7 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 ## 変更時の注意
 
 - ユーザー操作、設定、ビルド手順が変わる場合は、付属 README、`documents/`、変更履歴の更新要否も確認する。
-- `nicocachenl.test/api/v1` REST APIを変更または利用するときは、実装と構造化エラー形式を確認する。代表的な実装は`src/dareka/processor/impl/NicoCacheWebProcessor.java`にある。`/cache/file/*`と具体的なキャッシュファイルはAPIではなくメディア内部配信経路として扱う。
+- `nicocachenl.test/api/v1` REST APIを変更または利用するときは、実装と構造化エラー形式を確認する。代表的な実装は`src/dareka/processor/impl/NicoCacheWebProcessor.java`にある。キャッシュ実体と再生中CMAFは`nicocachenl.test/media/v1`の内部配信経路として扱い、旧`/cache/*`へ戻さない。
 - `window.NicoCache_nl.watch` は互換ヘルパーであり、ニコニコ動画側の構造変更に影響される。動画 ID は URL や呼び出し元、再生状態は `HTMLMediaElement` などページ上の実体を優先し、このヘルパーは型と失敗時処理を確認したフォールバックとして使う。
 - 用途が不明なファイルを推測で変更しない。付属文書、設定、ソース、リンク先を確認する。
 
