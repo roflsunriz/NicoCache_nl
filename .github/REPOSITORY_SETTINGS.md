@@ -33,6 +33,11 @@ Squash merge時のコミットタイトルはPull Requestタイトルを使い�
 - Require branches to be up to date before merging
 - Require conversation resolution before merging
 
+Bypass listにはリポジトリ所有者`@roflsunriz`だけを`Always allow`で追加します。これにより、
+外部の共同作業者にはPull Requestと必須checkを要求しながら、所有者はmainへ直接pushできます。
+直接pushはcheck完了前にmainへ反映されるため、push前にローカル検証と脆弱性監査を完了し、
+push後のCI失敗を放置しないでください。
+
 必須status checkは、各ワークフローを一度実行してGitHubの候補に表示された後に選択します。
 少なくとも次を候補にします。
 
@@ -47,8 +52,8 @@ status check名としてワイルドカード展開されません。個別の�
 
 単独保守で自分のPull Requestを自分でマージする場合、Required approvalsを1にすると自分を
 ロックアウトします。別の継続的なレビュアーが参加するまではRequired approvalsを0とし、
-Code Owner reviewを必須にしないでください。`CODEOWNERS`は、それでも担当表示とレビュー依頼に
-利用できます。
+Code Owner reviewを必須にしません。`CODEOWNERS`は、それでも担当表示とレビュー依頼に
+利用できます。マージ方法はSquashだけを許可します。
 
 ## 3. Actions
 

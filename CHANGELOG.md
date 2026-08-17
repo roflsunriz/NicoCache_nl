@@ -18,7 +18,8 @@
 
 - GitHubの既定Workflow権限を不要に広げず依存更新Pull Requestを作成できるよう、
   ActionsによるPull Request作成を有効にする設定へ管理チェックリストを訂正した。
-  あわせて全Javaランタイム互換matrixをRulesetで確実に必須化できる固定名の集約checkを追加した。
+  あわせて全Javaランタイム互換matrixをRulesetで確実に必須化できる固定名の集約checkと、
+  所有者だけがmainへ直接pushできるRuleset bypass手順を追加した。
 - Linux/macOSのCIで診断アプリをクラスパス起動した場合も安全に計画停止を
   検証できるよう、メインクラスとアプリ・データルートが一致するプロセスを
   診断CLIの終了対象として照合するよう修正した。

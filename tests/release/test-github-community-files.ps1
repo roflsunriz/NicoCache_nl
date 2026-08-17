@@ -145,6 +145,7 @@ foreach ($required in @(
         'Workflow permissions: Read repository contents and packages permissions'
         'Allow GitHub Actions to create and approve pull requests: 有効'
         '`runtime-compatibility-gate`'
+        'リポジトリ所有者`@roflsunriz`だけを`Always allow`'
     )) {
     Assert-Contains $settingsChecklist $required 'Repository settings checklist'
 }
