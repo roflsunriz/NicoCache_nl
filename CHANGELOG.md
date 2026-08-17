@@ -16,6 +16,8 @@
 
 ### Fixed
 
+- Javaランタイム互換CIが配布元の一時的なHTTPエラーだけで失敗しにくいよう、対象JDKの取得に
+  失敗した場合は1回だけ再試行し、再試行も失敗した場合は集約checkを失敗させるよう修正した。
 - GitHubの既定Workflow権限を不要に広げず依存更新Pull Requestを作成できるよう、
   ActionsによるPull Request作成を有効にする設定へ管理チェックリストを訂正した。
   あわせて全Javaランタイム互換matrixをRulesetで確実に必須化できる固定名の集約checkと、

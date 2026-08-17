@@ -264,6 +264,15 @@ jobs:
           path: .test-work/runtime-compatibility/artifact
 
       - name: Set up target JDK
+        id: setup-target-jdk
+        continue-on-error: true
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: ${{ matrix.distribution }}
+          java-version: ${{ matrix.java-version }}
+
+      - name: Retry target JDK setup after a transient provider failure
+        if: steps.setup-target-jdk.outcome == 'failure'
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: ${{ matrix.distribution }}
