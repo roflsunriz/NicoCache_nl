@@ -24,6 +24,8 @@
 - filter-matomeなどの利用側が本体APIだけで削除予約とメディア存在確認を完結できるよう、
   動画単位DELETEで取得中キャッシュが残る場合は`202 scheduled`を返し、`/media`のHEADに
   変換処理なしで応答するよう修正した。
+- `FilterMatomeCacheControl`を安全に廃止できるよう、HLSだけを対象に即時削除または
+  変種単位の完了前削除予約を行い、MP4・FLV・SWFを保持する本体APIを追加した。
 - Javaランタイム互換CIが配布元の一時的なHTTPエラーだけで失敗しにくいよう、対象JDKの取得に
   失敗した場合は1回だけ再試行し、再試行も失敗した場合は集約checkを失敗させるよう修正した。
 - GitHubの既定Workflow権限を不要に広げず依存更新Pull Requestを作成できるよう、

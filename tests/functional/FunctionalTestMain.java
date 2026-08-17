@@ -265,6 +265,8 @@ public final class FunctionalTestMain {
                 "#EXTM3U\n#EXT-X-VERSION:7\nsegment.ts\n", StandardCharsets.UTF_8);
         Files.writeString(lowerHls.resolve("segment.ts"),
                 "lower-quality-hls-segment", StandardCharsets.UTF_8);
+        Files.write(sandbox.resolve("cache/sm900003_Keep.mp4"),
+                "non-hls-preserved-content".getBytes(StandardCharsets.UTF_8));
 
         Files.createDirectories(sandbox.resolve("cache/api-target"));
         Files.createDirectories(sandbox.resolve("list"));
@@ -1502,11 +1504,18 @@ public final class FunctionalTestMain {
         Path completingDirectory = directory.resolve(
                 "nltmp_sm990001[720p,128]abcdef_Active.hls");
         Path completedFile = directory.resolve("sm990001_Completed.mp4");
+        Path hlsOnlyDirectory = directory.resolve(
+                "nltmp_sm990002[720p,128]abcdef_Active.hls");
+        Path nonHlsTemporary = directory.resolve("nltmp_sm990002_Active.mp4");
         Files.writeString(activeFile, "active", StandardCharsets.UTF_8);
         Files.writeString(inactiveFile, "inactive", StandardCharsets.UTF_8);
         Files.createDirectories(completingDirectory);
         Files.writeString(completingDirectory.resolve("segment.cmfv"),
                 "segment", StandardCharsets.UTF_8);
+        Files.createDirectories(hlsOnlyDirectory);
+        Files.writeString(hlsOnlyDirectory.resolve("segment.cmfv"),
+                "segment", StandardCharsets.UTF_8);
+        Files.writeString(nonHlsTemporary, "mp4", StandardCharsets.UTF_8);
 
         System.setProperty("cacheFolder", directory.toString());
         Cache.init();
@@ -1515,8 +1524,13 @@ public final class FunctionalTestMain {
         VideoDescriptor active = Cache.altIdToVideoDescriptor("sm990001.mp4");
         VideoDescriptor completing = Cache.altIdToVideoDescriptor(
                 "sm990001[720p,128]abcdef.hls");
+        VideoDescriptor hlsOnly = Cache.altIdToVideoDescriptor(
+                "sm990002[720p,128]abcdef.hls");
+        VideoDescriptor nonHls = Cache.altIdToVideoDescriptor("sm990002.mp4");
         Cache.incrementDL(active);
         Cache.incrementDL(completing);
+        Cache.incrementDL(hlsOnly);
+        Cache.incrementDL(nonHls);
 
         assertTrue(Cache.removeTmpAll("sm990001"),
                 "removeTmpAll must accept an existing temp family");
@@ -1540,6 +1554,17 @@ public final class FunctionalTestMain {
                 "reserved temp must be removed instead of stored on completion");
         assertTrue(Files.exists(completedFile),
                 "completed cache must remain after reservation completion");
+
+        java.lang.reflect.Method removeHlsAll = Cache.class.getDeclaredMethod(
+                "removeHlsAll", String.class);
+        removeHlsAll.setAccessible(true);
+        removeHlsAll.invoke(null, "sm990002");
+        Cache.decrementDL(hlsOnly);
+        Cache.decrementDL(nonHls);
+        assertFalse(Files.exists(hlsOnlyDirectory),
+                "HLS-only reservation must remove the completed variant");
+        assertTrue(Files.exists(nonHlsTemporary),
+                "HLS-only reservation must preserve active MP4 temp");
     }
 
     private void testNicoCacheWebApiContract() throws Exception {
@@ -1623,6 +1648,22 @@ public final class FunctionalTestMain {
                 "internal cache media route status");
         assertEquals("legacy-mp4-content", internalMedia.bodyText(),
                 "internal cache media route body");
+
+        Response hlsRemoval = request(nicoCacheWebRequest("DELETE",
+                "/api/v1/videos/sm900003/hls-cache-entries", "", ""));
+        assertEquals(200, hlsRemoval.status, "REST HLS-only deletion status");
+        assertContains(hlsRemoval.bodyText(), "\"target\":\"hls\"",
+                "REST HLS-only deletion target");
+        assertContains(hlsRemoval.bodyText(), "\"preservesNonHls\":true",
+                "REST HLS-only deletion preservation contract");
+        assertFalse(Files.exists(sandbox.resolve(
+                "cache/sm900003[720p,128]_Functional.hls")),
+                "REST HLS-only deletion removes completed HLS");
+        assertFalse(Files.exists(sandbox.resolve(
+                "cache/sm900003low[360p-lowest,64]_Functional.hls")),
+                "REST HLS-only deletion removes low HLS");
+        assertTrue(Files.exists(sandbox.resolve("cache/sm900003_Keep.mp4")),
+                "REST HLS-only deletion preserves MP4");
 
         Response preflight = request(nicoCacheWebRequest("OPTIONS",
                 "/api/v1/videos/sm900003/cache-entries", "",

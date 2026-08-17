@@ -61,6 +61,7 @@ https://nicocachenl.test/
 | `DELETE /api/v1/cache-entries/<キャッシュID>` | 特定の完成キャッシュを削除 |
 | `DELETE /api/v1/temporary-cache-entries/<キャッシュID>` | 特定の停止中一時キャッシュを削除 |
 | `DELETE /api/v1/videos/<動画ID>/temporary-cache-entries` | 動画に属する全一時キャッシュを削除。取得中は削除予約 |
+| `DELETE /api/v1/videos/<動画ID>/hls-cache-entries` | HLSだけを削除・変種単位で削除予約し、MP4・FLV・SWFを保持 |
 | `DELETE /api/v1/videos/<動画ID>/cache-entries` | 動画に属する完成・一時キャッシュを削除・削除予約 |
 
 即時削除は200、取得完了待ちの予約は202、対象なしの動画単位削除は200と`not_found`を返す。

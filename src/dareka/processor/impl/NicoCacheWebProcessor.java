@@ -41,7 +41,7 @@ public final class NicoCacheWebProcessor implements Processor {
     private static final Pattern URL_PATTERN = Pattern.compile(
             "^https?://" + Pattern.quote(HOST) + "(?:/|$)");
     private static final Pattern VIDEO_ROUTE = Pattern.compile(
-            "^/api/v1/videos/([a-z]{2}[0-9]+)/(cache-entries|temporary-cache-entries|media|exports/(video|audio|comments))$");
+            "^/api/v1/videos/([a-z]{2}[0-9]+)/(cache-entries|temporary-cache-entries|hls-cache-entries|media|exports/(video|audio|comments))$");
     private static final Pattern ENTRY_ROUTE = Pattern.compile(
             "^/api/v1/(temporary-)?cache-entries/(.+)$");
     private static final Pattern SNAPSHOT_ROUTE = Pattern.compile(
@@ -279,6 +279,14 @@ public final class NicoCacheWebProcessor implements Processor {
             return deletionResult(videoId, accepted,
                     Cache.isTemporaryDeletionPending(videoId));
         }
+        if ("hls-cache-entries".equals(action)) {
+            if (!request.isDeleteMethod()) {
+                return methodNotAllowed("DELETE");
+            }
+            Cache.HlsDeletionResult result = Cache.removeHlsAll(videoId);
+            return scopedDeletionResult(videoId, result,
+                    Cache.isHlsDeletionPending(videoId));
+        }
         if ("media".equals(action)) {
             if (!request.isGetMethod() && !request.isHeadMethod()) {
                 return methodNotAllowed("GET, HEAD");
@@ -402,6 +410,18 @@ public final class NicoCacheWebProcessor implements Processor {
         return json(pending ? 202 : 200, pending ? "Accepted" : "OK",
                 "{\"videoId\":" + quote(videoId) + ",\"status\":"
                 + quote(pending ? "scheduled" : "deleted") + "}");
+    }
+
+    private static Resource scopedDeletionResult(String videoId,
+            Cache.HlsDeletionResult result, boolean pending) {
+        String status = !result.accepted ? "not_found"
+                : result.failed && result.changed ? "partial"
+                : result.failed ? "failed"
+                : pending ? "scheduled" : "deleted";
+        return json(pending ? 202 : 200, pending ? "Accepted" : "OK",
+                "{\"videoId\":" + quote(videoId) + ",\"status\":"
+                + quote(status)
+                + ",\"target\":\"hls\",\"preservesNonHls\":true}");
     }
 
     private static String captureRuntime() {

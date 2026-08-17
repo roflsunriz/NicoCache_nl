@@ -52,6 +52,8 @@ public class Cache extends CacheManager {
     private static final long DELETE_RETRY_DELAY_MILLIS = 50L;
     private static final Set<String> TMP_DELETE_SET =
             ConcurrentHashMap.newKeySet();
+    private static final Set<VideoDescriptor> HLS_DELETE_SET =
+            ConcurrentHashMap.newKeySet();
 
     private VideoDescriptor video;
     private String desc;
@@ -338,8 +340,11 @@ public class Cache extends CacheManager {
 
     /** ダウンロード終了時に予約済みの一時キャッシュを削除する。 */
     static void deleteReservedTmpAfterDownload(VideoDescriptor video) {
-        if (video == null || !TMP_DELETE_SET.contains(video.getId())
-                || getDLFlag(video)) {
+        if (video == null || getDLFlag(video)) {
+            return;
+        }
+        boolean hlsReserved = consumeHlsDeleteReservation(video);
+        if (!hlsReserved && !TMP_DELETE_SET.contains(video.getId())) {
             return;
         }
         try {
@@ -357,7 +362,9 @@ public class Cache extends CacheManager {
 
     /** store直前に予約を適用し、完成済みキャッシュへの移動を中止する。 */
     private static boolean consumeReservedTmpBeforeStore(VideoDescriptor video) {
-        if (video == null || !TMP_DELETE_SET.contains(video.getId())) {
+        boolean hlsReserved = consumeHlsDeleteReservation(video);
+        if (video == null || (!hlsReserved
+                && !TMP_DELETE_SET.contains(video.getId()))) {
             return false;
         }
         video2DL.remove(video);
@@ -407,6 +414,82 @@ public class Cache extends CacheManager {
             }
         }
         return false;
+    }
+
+    /** 指定動画IDのHLSだけを削除し、取得中の変種は完了前の削除を予約する。 */
+    static HlsDeletionResult removeHlsAll(String id) {
+        HlsDeletionResult result = new HlsDeletionResult();
+        if (id == null) {
+            return result;
+        }
+        Set<VideoDescriptor> videos = id2Videos.get(id);
+        if (videos == null) {
+            return result;
+        }
+        for (VideoDescriptor video : new ArrayList<>(videos)) {
+            if (!HLS.equals(video.getPostfix())) {
+                continue;
+            }
+            boolean downloading = getDLFlag(video);
+            File completed = video2File_get(video);
+            File temporary = video2Tmp.get(video);
+            boolean hasCompleted = completed != null && completed.exists();
+            boolean hasTemporary = temporary != null && temporary.exists();
+            if (!downloading && !hasCompleted && !hasTemporary) {
+                continue;
+            }
+            result.accepted = true;
+            if (downloading) {
+                HLS_DELETE_SET.add(video);
+                result.changed = true;
+            }
+            if (hasCompleted) {
+                if (remove(video)) {
+                    result.changed = true;
+                } else {
+                    result.failed = true;
+                }
+            }
+            if (!downloading && hasTemporary) {
+                if (removeTmp(video)) {
+                    result.changed = true;
+                } else {
+                    result.failed = true;
+                }
+            }
+        }
+        return result;
+    }
+
+    static boolean isHlsDeletionPending(String id) {
+        if (id == null) {
+            return false;
+        }
+        for (VideoDescriptor video : new ArrayList<>(HLS_DELETE_SET)) {
+            if (id.equals(video.getId()) && getDLFlag(video)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean consumeHlsDeleteReservation(VideoDescriptor video) {
+        if (video == null) {
+            return false;
+        }
+        for (VideoDescriptor reserved : new ArrayList<>(HLS_DELETE_SET)) {
+            if (reserved.stripSrcId().equals(video.stripSrcId())) {
+                HLS_DELETE_SET.remove(reserved);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static final class HlsDeletionResult {
+        boolean accepted;
+        boolean changed;
+        boolean failed;
     }
 
     // [nl] 指定IDに関連する以下のファイルを全て取り除く
