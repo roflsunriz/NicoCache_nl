@@ -266,7 +266,8 @@ public final class NicoCacheWebProcessor implements Processor {
             }
             if (request.isDeleteMethod()) {
                 boolean removed = Cache.removeAll(videoId);
-                return deletionResult(videoId, removed, false);
+                return deletionResult(videoId, removed,
+                        Cache.hasActiveDownload(videoId));
             }
             return methodNotAllowed("GET, DELETE");
         }
@@ -278,11 +279,14 @@ public final class NicoCacheWebProcessor implements Processor {
             return deletionResult(videoId, accepted,
                     Cache.isTemporaryDeletionPending(videoId));
         }
+        if ("media".equals(action)) {
+            if (!request.isGetMethod() && !request.isHeadMethod()) {
+                return methodNotAllowed("GET, HEAD");
+            }
+            return media(request, videoId);
+        }
         if (!request.isGetMethod()) {
             return methodNotAllowed("GET");
-        }
-        if ("media".equals(action)) {
-            return media(videoId);
         }
         return export(request, videoId, action.substring("exports/".length()));
     }
@@ -366,7 +370,8 @@ public final class NicoCacheWebProcessor implements Processor {
         return resource;
     }
 
-    private Resource media(String videoId) throws IOException {
+    private Resource media(HttpRequestHeader request, String videoId)
+            throws IOException {
         VideoDescriptor video = Cache.getPreferredCachedVideo(videoId);
         if (video == null) {
             return error(404, "Not Found", "completed_cache_not_found",
@@ -378,6 +383,9 @@ public final class NicoCacheWebProcessor implements Processor {
                     "完成済みキャッシュが見つかりません");
         }
         if (Cache.HLS.equals(cache.getPostfix())) {
+            if (request.isHeadMethod()) {
+                return text(200, "OK", "", "video/mp4");
+            }
             return new Hls2SingleConverter(cache, videoId + ".mp4", null).convert();
         }
         Resource resource = new LocalFileResource(cache.getCacheFile());

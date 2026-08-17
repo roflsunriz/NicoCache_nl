@@ -47,7 +47,7 @@ https://nicocachenl.test/
 
 | メソッドとパス | 内容 |
 | --- | --- |
-| `GET /api/v1/videos/<動画ID>/media` | 完成キャッシュを再生用に返す |
+| `GET/HEAD /api/v1/videos/<動画ID>/media` | 完成キャッシュを再生用に返す。HEADは存在確認だけを行う |
 | `GET /api/v1/videos/<動画ID>/exports/video` | 動画を添付ファイルとして返す |
 | `GET /api/v1/videos/<動画ID>/exports/audio` | 音声をM4AまたはMP3として抽出する |
 | `GET /api/v1/videos/<動画ID>/exports/comments` | 現行NVComment JSONを返す |

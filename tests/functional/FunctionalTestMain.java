@@ -1613,6 +1613,10 @@ public final class FunctionalTestMain {
         assertEquals(200, media.status, "REST cached media status");
         assertEquals("legacy-mp4-content", media.bodyText(),
                 "REST cached media body");
+        Response mediaHead = request(nicoCacheWebRequest("HEAD",
+                "/api/v1/videos/sm900001/media", "", ""));
+        assertEquals(200, mediaHead.status, "REST cached media HEAD status");
+        assertEquals("", mediaHead.bodyText(), "REST cached media HEAD body");
         Response internalMedia = request(nicoRequest(
                 "GET", "/cache/sm900001.mp4", ""));
         assertEquals(200, internalMedia.status,

@@ -395,6 +395,20 @@ public class Cache extends CacheManager {
         return id != null && TMP_DELETE_SET.contains(id) && hasActiveTmp(id);
     }
 
+    /** 指定動画IDにダウンロード中のキャッシュが残っているか。 */
+    static boolean hasActiveDownload(String id) {
+        Set<VideoDescriptor> videos = id2Videos.get(id);
+        if (videos == null) {
+            return false;
+        }
+        for (VideoDescriptor video : new ArrayList<>(videos)) {
+            if (getDLFlag(video)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // [nl] 指定IDに関連する以下のファイルを全て取り除く
     // 通常キャッシュ、エコノミーキャッシュ、それらの一時ファイル
     public static boolean removeAll(String id) {
