@@ -137,6 +137,18 @@ foreach ($label in @(
     Assert-Contains $pullWorkflow "['$label'," 'Managed pull request labels'
 }
 
+$settingsChecklist = Get-Content -Raw -LiteralPath (
+    Join-Path $root '.github/REPOSITORY_SETTINGS.md'
+)
+foreach ($required in @(
+        'Require actions to be pinned to a full-length commit SHA: 有効'
+        'Workflow permissions: Read repository contents and packages permissions'
+        'Allow GitHub Actions to create and approve pull requests: 有効'
+        '`runtime-compatibility-gate`'
+    )) {
+    Assert-Contains $settingsChecklist $required 'Repository settings checklist'
+}
+
 $license = Get-Content -Raw -LiteralPath (Join-Path $root 'LICENSE')
 foreach ($required in @(
         'NicoCache License'

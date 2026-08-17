@@ -276,3 +276,20 @@ jobs:
           -Mode Run
           -ExpectedMajor ${{ matrix.major }}
           -RunId '${{ matrix.distribution }}-${{ matrix.major }}'
+
+  runtime-compatibility-gate:
+    name: runtime-compatibility-gate
+    if: ${{ always() }}
+    needs: runtime-compatibility
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Require every runtime compatibility job
+        shell: bash
+        env:
+          RUNTIME_RESULT: ${{ needs.runtime-compatibility.result }}
+        run: |
+          if [ "$RUNTIME_RESULT" != 'success' ]; then
+            echo "Runtime compatibility matrix result: $RUNTIME_RESULT" >&2
+            exit 1
+          fi

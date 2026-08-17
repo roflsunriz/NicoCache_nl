@@ -178,7 +178,11 @@ foreach ($required in @(
         'include-hidden-files: true',
         'distribution: ${{ matrix.distribution }}',
         'java-version: ${{ matrix.java-version }}',
-        '-ExpectedMajor ${{ matrix.major }}'
+        '-ExpectedMajor ${{ matrix.major }}',
+        '  runtime-compatibility-gate:',
+        'name: runtime-compatibility-gate',
+        'needs: runtime-compatibility',
+        'RUNTIME_RESULT: ${{ needs.runtime-compatibility.result }}'
     )) {
     if (-not $ciContent.Contains($required)) {
         throw "Runtime compatibility workflow contract is missing: $required"

@@ -12,8 +12,8 @@
   - Discussions: 有効
 - Pull Requests
   - Allow squash merging: 有効（通常の推奨）
-  - Allow merge commits: 履歴を一本化するなら無効
-  - Allow rebase merging: チームの履歴方針が決まるまで無効でよい
+  - Allow merge commits: 無効
+  - Allow rebase merging: 無効
   - Always suggest updating pull request branches: 有効
   - Automatically delete head branches: 有効
 
@@ -37,8 +37,13 @@ Squash merge時のコミットタイトルはPull Requestタイトルを使い�
 少なくとも次を候補にします。
 
 - `build-and-test`（CIの主要ジョブ）
+- `runtime-compatibility-gate`（全Javaベンダー・17/21/25 matrixの集約結果）
 - `validate-title`（Pull request governanceのタイトル検証）
-- Windows、Linux、macOSの配布経路を変更する場合は対応するパッケージworkflow
+
+matrixジョブの `${{ matrix.distribution }}` などを含む定義上の名前は、Rulesetの
+status check名としてワイルドカード展開されません。個別の実行名をすべて登録する代わりに、
+全matrixへ依存する固定名の`runtime-compatibility-gate`を必須にします。
+`validate-title`は最初のPull Requestで一度実行されるまで候補に表示されません。
 
 単独保守で自分のPull Requestを自分でマージする場合、Required approvalsを1にすると自分を
 ロックアウトします。別の継続的なレビュアーが参加するまではRequired approvalsを0とし、
@@ -50,12 +55,15 @@ Code Owner reviewを必須にしないでください。`CODEOWNERS`は、それ
 `Settings` → `Actions` → `General` で次を確認します。
 
 - Actions permissions: GitHubが作成したActionだけを許可すれば、現行workflowを実行可能
+- Require actions to be pinned to a full-length commit SHA: 有効
 - Workflow permissions: Read repository contents and packages permissions
-- Allow GitHub Actions to create and approve pull requests: 無効のままでよい
+- Allow GitHub Actions to create and approve pull requests: 有効
 - Fork pull request workflows: 初回実行を管理者承認にする
 
 各workflowは必要な権限を明示しています。Issueラベルには`issues: write`、Pull Requestラベルには
 `pull-requests: write`だけを使用し、外部forkのコードを権限付きで実行しません。
+ActionsによるPull Request作成は、毎週の依存関係更新workflowが検証済みの更新候補を
+レビュー用Pull Requestとして作成するために必要です。自動承認や自動マージは行いません。
 
 ## 4. セキュリティ
 
