@@ -2,34 +2,38 @@ package dareka.processor.impl;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import dareka.common.Logger;
 import dareka.processor.HttpHeader;
 import dareka.processor.HttpRequestHeader;
-import dareka.processor.LocalFileResource;
 import dareka.processor.Processor;
 import dareka.processor.Resource;
 import dareka.processor.StringResource;
-import dareka.processor.util.Hls2SingleConverter;
 
-/** `/cache/*` のキャッシュメディア配信専用Processor。 */
+/** 専用ホストの内部メディア配信と旧経路の遮断を担当するProcessor。 */
 public class CacheDirProcessor implements Processor {
     private static final String[] SUPPORTED_METHODS = { null };
     private static final Pattern CACHE_DIR_PATTERN = Pattern.compile(
-            "^https?://[^/]+\\.nicovideo\\.jp/cache(?:/|$)");
-    private static final Pattern SINGLE_FILE_PATTERN = Pattern.compile(
-            "^[a-z]{2}[0-9]+(?:low)?(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\]\\w*)?"
-                    + "(?:\\.(?:flv|swf|mp4|webm|mkv)){1,2}$");
-    private static final Pattern HLS_CACHE_PATTERN = Pattern.compile(
-            "^([a-z]{2}[0-9]+(?:low)?(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\]\\w*)?\\.hls)$");
-    private static final Pattern HLS_CONVERT_PATTERN = Pattern.compile(
-            "^[a-z]{2}[0-9]+(?:low)?(?:(?:\\[[\\w-]+(?:,\\d+)?,\\d+\\])?\\w*\\.hls)?"
-                    + "\\.(?:mp4|mkv|webm|flv)$");
+            "^(?:https?://" + Pattern.quote(NicoCacheWebProcessor.HOST)
+                    + "/media/v1(?:/|$)"
+                    + "|https?://[^/]+\\.nicovideo\\.jp/cache(?:[/?]|$))");
+    private static final Pattern CACHE_ENTRY_FILES_PATTERN = Pattern.compile(
+            "^/media/v1/cache-entries/([^/]+)/files(?:/(.*))?$");
+    private static final Pattern PLAYBACK_SESSION_FILES_PATTERN = Pattern.compile(
+            "^/media/v1/playback-sessions/([A-Za-z0-9._~,=-]{1,256})/files(?:/(.*))?$");
 
-    private final CmafUseCacheProcessor cmafCacheProcessor =
-            new CmafUseCacheProcessor();
+    private final CmafUseCacheProcessor cmafCacheProcessor;
+
+    public CacheDirProcessor() {
+        this(new CmafUseCacheProcessor());
+    }
+
+    CacheDirProcessor(CmafUseCacheProcessor cmafCacheProcessor) {
+        this.cmafCacheProcessor = cmafCacheProcessor;
+    }
 
     @Override
     public String[] getSupportedMethods() {
@@ -54,61 +58,49 @@ public class CacheDirProcessor implements Processor {
             return StringResource.getMethodNotAllowed();
         }
         String requestPath = request.getPathWithoutQuery();
-        if (requestPath == null || !requestPath.startsWith("/cache/")) {
+        if (requestPath == null) {
             return StringResource.getNotFound();
         }
-        String path = requestPath.substring("/cache/".length());
-
-        if (path.startsWith("file/")) {
-            return cmafCacheProcessor.onRequestSubPath(
-                    path.substring("file/".length()), request, browser);
+        // 旧配信経路を上流のnicovideo.jpへ誤転送しない。
+        if (requestPath.equals("/cache") || requestPath.startsWith("/cache/")) {
+            return StringResource.getNotFound();
         }
 
-        Specifier specifier = new Specifier(path);
-        VideoDescriptor video = specifier.video;
-        Cache cache = specifier.cache;
-        if (video != null && cache != null && !cache.exists()) {
-            VideoDescriptor preferred = Cache.getPreferredCachedVideo(specifier.smid);
-            if (preferred != null) {
-                video = preferred;
-                cache = new Cache(preferred);
-            }
-        }
-
-        if (SINGLE_FILE_PATTERN.matcher(path).matches()) {
-            if (cache == null || !cache.exists()) {
+        Matcher cacheEntry = CACHE_ENTRY_FILES_PATTERN.matcher(requestPath);
+        if (cacheEntry.matches()) {
+            String cacheId = decodePathSegment(cacheEntry.group(1));
+            Specifier specifier = new Specifier(cacheId);
+            if (specifier.cache == null || specifier.video == null
+                    || !specifier.altid.equals(cacheId)
+                    || !Cache.HLS.equals(specifier.cache.getPostfix())) {
                 return StringResource.getNotFound();
             }
-            if (Cache.HLS.equals(cache.getPostfix())) {
-                return new Hls2SingleConverter(cache, path,
-                        request.getMessageHeader("User-Agent")).convert();
-            }
-            Logger.info("Local cache: " + cache.getId() + " " + cache.getTitle());
-            if (Boolean.getBoolean("touchCache")) {
-                cache.touch();
-            }
-            Resource resource = new LocalFileResource(cache.getCacheFile());
-            LimitFlvSpeedListener.addTo(resource);
-            resource.addCacheControlResponseHeaders(12960000);
-            return resource;
+            return cmafCacheProcessor.onCacheEntryPath(
+                    specifier.cache, cacheEntry.group(2), request, browser);
         }
 
-        Matcher hls = HLS_CACHE_PATTERN.matcher(path);
-        if (hls.matches()) {
-            return StringResource.getRedirect(request.getScheme()
-                    + "://www.nicovideo.jp/cache/file/nicocachenl_refcache="
-                    + hls.group(1) + "//");
-        }
-
-        if (HLS_CONVERT_PATTERN.matcher(path).matches()) {
-            if (cache == null || !cache.exists()) {
-                return StringResource.getNotFound();
-            }
-            return new Hls2SingleConverter(cache, path,
-                    request.getMessageHeader("User-Agent")).convert();
+        Matcher playbackSession = PLAYBACK_SESSION_FILES_PATTERN.matcher(requestPath);
+        if (playbackSession.matches()) {
+            return cmafCacheProcessor.onPlaybackSessionPath(
+                    playbackSession.group(1), playbackSession.group(2),
+                    request, browser);
         }
 
         return StringResource.getNotFound();
+    }
+
+    static String playbackSessionFileUrl(String sessionId, String relativePath) {
+        return "https://" + NicoCacheWebProcessor.HOST
+                + "/media/v1/playback-sessions/" + sessionId
+                + "/files/" + relativePath;
+    }
+
+    private static String decodePathSegment(String value) {
+        try {
+            return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException error) {
+            return "";
+        }
     }
 
     /** 単一キャッシュ指定を厳密に解析する。 */

@@ -81,12 +81,16 @@ https://nicocachenl.test/
 
 ## メディア内部経路
 
-次はREST APIではなく、再生データの内部配信経路として維持する。
+再生データは管理APIと分離した専用ホストの`/media/v1`から配信する。
+いずれもGET・HEAD・Rangeに対応し、HLSプレイリストからは同じ資源配下の
+相対ファイルを参照する。
 
-- `/cache/file/<内部パラメーター>//<相対パス>`
-- `/cache/<キャッシュID>.<拡張子>`
+- `/media/v1/cache-entries/<キャッシュID>/files/<相対パス>`
+- `/media/v1/playback-sessions/<セッションID>/files/<相対パス>`
 
-情報取得、検索、一覧、削除、移動、LST更新、管理画面、動画・音声・コメント保存に使われていた旧 `/cache/*` APIは廃止した。
+前者は完成済みHLSのキャッシュIDを固定して配信し、再生中に別品質へ切り替わらない。
+後者はニコニコ動画の再生要求と結び付いた一時的なCMAF配信にだけ使う。
+旧`/cache/file/*`と`/cache/<キャッシュID>`を含む`/cache/*`経路はすべて廃止した。
 
 ## ランチャー用ControlServer
 

@@ -1067,15 +1067,14 @@ public class CmafCachingProcessor implements Processor {
         File file = new File(cacheDir, "master.m3u8");
 
         boolean loadFailed = false;
-        String urlPrefix = requestHeader.getScheme() + "://" + requestHeader.getHost();
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
-            String params = "nicocachenl_domandcvikey=" + data.getKey();
             String line;
             while (null != (line = br.readLine())) {
                 // - CmafUseCacheProcessorを呼び出すURLをセット.
                 line = M3u8Util.replaceURL(line, (url,_line) -> {
-                        return urlPrefix + "/cache/file/" + params + "//" + url;
+                        return CacheDirProcessor.playbackSessionFileUrl(
+                                data.getKey(), url);
                     });
                 baos.write(line.getBytes(StandardCharsets.UTF_8));
                 baos.write('\n');
@@ -1186,16 +1185,15 @@ public class CmafCachingProcessor implements Processor {
         };
 
         boolean loadFailedm3u8 = false;
-        String urlPrefix = requestHeader.getScheme() + "://" + requestHeader.getHost();
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (BufferedReader br = new BufferedReader(new FileReader(file))) {
-            String params = "nicocachenl_domandcvikey=" + movieInfo.getKey();
             String line;
             // - なぜ一行ずつ処理することにしたか覚えていない.
             while (null != (line = br.readLine())) {
                 // - CmafUseCacheProcessorを呼び出すNicoCache URLをセット.
                 line = M3u8Util.replaceURL(line, (url,_line) -> {
-                        return urlPrefix + "/cache/file/" + params + "//" + url;
+                        return CacheDirProcessor.playbackSessionFileUrl(
+                                movieInfo.getKey(), url);
                     });
                 baos.write(line.getBytes(StandardCharsets.UTF_8));
                 baos.write('\n');

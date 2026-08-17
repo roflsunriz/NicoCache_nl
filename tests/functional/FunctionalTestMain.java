@@ -9,6 +9,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -1331,17 +1332,40 @@ public final class FunctionalTestMain {
         assertFileContains(sandbox.resolve("extension-complete-cache.txt"), "sm900010");
         assertFileContains(sandbox.resolve("extension-event-6.txt"), "6");
 
+        String cachedVideoKey = "sm900010video-h264-720p";
+        Response cachedVideoPlaylist = request(absoluteRequest(
+                cmafBase("hlsbid")
+                + "/playlists/media/video-h264-720p.m3u8?token=cached"
+                + "&nicocachenl_domandcvikey=" + cachedVideoKey,
+                "delivery.domand.nicovideo.jp"));
+        assertEquals(200, cachedVideoPlaylist.status,
+                "cached CMAF video playlist status");
+        assertContains(cachedVideoPlaylist.bodyText(),
+                "https://nicocachenl.test/media/v1/playback-sessions/",
+                "cached CMAF dedicated segment URL");
+        Response sessionPlaylist = request(nicoCacheWebRequest("GET",
+                "/media/v1/playback-sessions/" + cachedVideoKey
+                + "/files/video/01.cmfv",
+                "", "Origin: https://www.nicovideo.jp\r\n"));
+        assertEquals(200, sessionPlaylist.status,
+                "CMAF playback session segment status");
+        assertEquals("video-segment", sessionPlaylist.bodyText(),
+                "CMAF playback session segment body");
+
         stopUpstream();
-        String offlineBase = "/cache/file/nicocachenl_refcache=sm900010//";
-        Response offlineMaster = request(nicoRequest("GET", offlineBase + "master.m3u8", ""));
+        String offlineBase = cacheEntryMediaBase("sm900010[720p,128].hls");
+        Response offlineMaster = request(nicoCacheWebRequest(
+                "GET", offlineBase + "master.m3u8", "", ""));
         assertEquals(200, offlineMaster.status, "offline CMAF master status");
         assertContains(offlineMaster.bodyText(), "video", "offline CMAF master video reference");
         assertContains(offlineMaster.bodyText(), "audio", "offline CMAF master audio reference");
 
-        Response offlineVideo = request(nicoRequest("GET", offlineBase + "video/01.cmfv", ""));
+        Response offlineVideo = request(nicoCacheWebRequest(
+                "GET", offlineBase + "video/01.cmfv", "", ""));
         assertEquals(200, offlineVideo.status, "offline CMAF video segment status");
         assertEquals("video-segment", offlineVideo.bodyText(), "offline CMAF video segment");
-        Response offlineAudio = request(nicoRequest("GET", offlineBase + "audio/01.cmfa", ""));
+        Response offlineAudio = request(nicoCacheWebRequest(
+                "GET", offlineBase + "audio/01.cmfa", "", ""));
         assertEquals(200, offlineAudio.status, "offline CMAF audio segment status");
         assertEquals("audio-segment", offlineAudio.bodyText(), "offline CMAF audio segment");
         assertContains(completed.getFileName().toString(), "sm900010",
@@ -1369,18 +1393,22 @@ public final class FunctionalTestMain {
         exerciseCmafMedia("sm900011", "hlsext", "video", "video-h264-720p", "cmfv");
         waitForCompletedCmafCache("sm900011", Duration.ofSeconds(8));
 
-        String localBase = "/cache/file/nicocachenl_refcache=sm900011//";
-        Response video = request(nicoRequest("GET", localBase + "video/01.cmfv", ""));
+        String localBase = cacheEntryMediaBase("sm900011[720p,128].hls");
+        Response video = request(nicoCacheWebRequest(
+                "GET", localBase + "video/01.cmfv", "", ""));
         assertEquals(200, video.status, "hlsext decrypted video status");
         assertEquals("video-segment", video.bodyText(), "hlsext decrypted video body");
-        Response videoSecond = request(nicoRequest("GET", localBase + "video/02.cmfv", ""));
+        Response videoSecond = request(nicoCacheWebRequest(
+                "GET", localBase + "video/02.cmfv", "", ""));
         assertEquals(200, videoSecond.status, "hlsext second decrypted video status");
         assertEquals("video-segment-2", videoSecond.bodyText(),
                 "hlsext second decrypted video body");
-        Response audio = request(nicoRequest("GET", localBase + "audio/01.cmfa", ""));
+        Response audio = request(nicoCacheWebRequest(
+                "GET", localBase + "audio/01.cmfa", "", ""));
         assertEquals(200, audio.status, "hlsext decrypted audio status");
         assertEquals("audio-segment", audio.bodyText(), "hlsext decrypted audio body");
-        Response audioSecond = request(nicoRequest("GET", localBase + "audio/02.cmfa", ""));
+        Response audioSecond = request(nicoCacheWebRequest(
+                "GET", localBase + "audio/02.cmfa", "", ""));
         assertEquals(200, audioSecond.status, "hlsext second decrypted audio status");
         assertEquals("audio-segment-2", audioSecond.bodyText(),
                 "hlsext second decrypted audio body");
@@ -1644,10 +1672,38 @@ public final class FunctionalTestMain {
         assertEquals("", mediaHead.bodyText(), "REST cached media HEAD body");
         Response internalMedia = request(nicoRequest(
                 "GET", "/cache/sm900001.mp4", ""));
-        assertEquals(200, internalMedia.status,
-                "internal cache media route status");
-        assertEquals("legacy-mp4-content", internalMedia.bodyText(),
-                "internal cache media route body");
+        assertEquals(404, internalMedia.status,
+                "removed internal cache media route status");
+
+        String hlsMediaBase = cacheEntryMediaBase(
+                "sm900003[720p,128].hls");
+        Response hlsMaster = request(nicoCacheWebRequest(
+                "GET", hlsMediaBase + "master.m3u8", "", ""));
+        assertEquals(200, hlsMaster.status,
+                "dedicated HLS media master status");
+        assertContains(hlsMaster.header("content-type"), "mpegurl",
+                "dedicated HLS media master content type");
+        Response hlsSegment = request(nicoCacheWebRequest(
+                "GET", hlsMediaBase + "segment.ts", "", ""
+                + "Origin: https://www.nicovideo.jp\r\n"
+                + "Range: bytes=0-3\r\n"));
+        assertEquals(206, hlsSegment.status,
+                "dedicated HLS media segment range status");
+        assertEquals("lega", hlsSegment.bodyText(),
+                "dedicated HLS media segment range body");
+        assertEquals("https://www.nicovideo.jp",
+                hlsSegment.header("access-control-allow-origin"),
+                "dedicated HLS media CORS origin");
+        Response hlsSegmentHead = request(nicoCacheWebRequest(
+                "HEAD", hlsMediaBase + "segment.ts", "", ""));
+        assertEquals(200, hlsSegmentHead.status,
+                "dedicated HLS media segment HEAD status");
+        assertEquals("", hlsSegmentHead.bodyText(),
+                "dedicated HLS media segment HEAD body");
+        Response traversal = request(nicoCacheWebRequest(
+                "GET", hlsMediaBase + "../sm900001.mp4", "", ""));
+        assertEquals(404, traversal.status,
+                "dedicated HLS media traversal rejection");
 
         Response hlsRemoval = request(nicoCacheWebRequest("DELETE",
                 "/api/v1/videos/sm900003/hls-cache-entries", "", ""));
@@ -2129,6 +2185,12 @@ public final class FunctionalTestMain {
                 + (bodyBytes.length > 0
                         ? "Content-Length: " + bodyBytes.length + "\r\n" : "")
                 + "Connection: close\r\n\r\n" + body;
+    }
+
+    private static String cacheEntryMediaBase(String cacheId) {
+        String encoded = URLEncoder.encode(cacheId, StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        return "/media/v1/cache-entries/" + encoded + "/files/";
     }
 
     private static String nicoRequestWithBody(String method, String path, String body) {

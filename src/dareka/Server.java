@@ -333,8 +333,8 @@ public class Server {
 
         // [nl] Processorの登録
         registerProcessor(new LocalDirProcessor(), worker, true);
-        registerProcessor(new NicoCacheWebProcessor(), worker, true);
         registerProcessor(new CacheDirProcessor(), worker, true);
+        registerProcessor(new NicoCacheWebProcessor(), worker, true);
 
         if (Boolean.getBoolean("cacheThumbnail")) {
             registerProcessor(new ThumbProcessor2(), worker);
