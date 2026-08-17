@@ -140,6 +140,10 @@ function createPage() {
     confirm() { return true; },
     document,
     encodeURIComponent,
+    fetch(url, init) {
+      requests.push({url, init});
+      return Promise.resolve({ok: true});
+    },
     MutationObserver: class {
       disconnect() {}
       observe() {}
@@ -154,7 +158,7 @@ function createPage() {
   return {alerts, document, requests, watchListeners};
 }
 
-test("watchページのNicoCacheメニューを現行APIへ接続しSPA動画切替へ追従する", () => {
+test("watchページのNicoCacheメニューをREST APIへ接続しSPA動画切替へ追従する", async () => {
   const page = createPage();
   const container = page.document.getElementById("ncnl_common_header_menu");
   assert.ok(container);
@@ -167,9 +171,9 @@ test("watchページのNicoCacheメニューを現行APIへ接続しSPA動画切
   assert.deepEqual(
     actionLinks.map((link) => link.href),
     [
-      "/cache/sm9/auto/movie",
-      "/cache/sm9.comments.json",
-      "/cache/sm9/auto/audio",
+      "https://nicocachenl.test/api/v1/videos/sm9/exports/video",
+      "https://nicocachenl.test/api/v1/videos/sm9/exports/comments",
+      "https://nicocachenl.test/api/v1/videos/sm9/exports/audio",
     ],
   );
   assert.deepEqual(
@@ -184,11 +188,13 @@ test("watchページのNicoCacheメニューを現行APIへ接続しSPA動画切
   const manageLink = menuItems.find(
     (item) => item.getAttribute("data-ncnl-action") === "manage",
   );
-  assert.equal(manageLink.href, "/cache/");
+  assert.equal(manageLink.href, "https://nicocachenl.test/cache");
   removeButton.click();
   assert.equal(removeButton.disabled, true);
-  assert.equal(page.requests[0].url, "/cache/ajax_rmall?sm9");
-  page.requests[0].callback({status: 200, responseText: "OK"});
+  assert.equal(page.requests[0].url,
+    "https://nicocachenl.test/api/v1/videos/sm9/cache-entries");
+  assert.equal(page.requests[0].init.method, "DELETE");
+  await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(removeButton.disabled, false);
   assert.deepEqual(page.alerts, ["キャッシュを削除しました: sm9"]);
 
@@ -196,9 +202,9 @@ test("watchページのNicoCacheメニューを現行APIへ接続しSPA動画切
   assert.deepEqual(
     actionLinks.map((link) => link.href),
     [
-      "/cache/sm10/auto/movie",
-      "/cache/sm10.comments.json",
-      "/cache/sm10/auto/audio",
+      "https://nicocachenl.test/api/v1/videos/sm10/exports/video",
+      "https://nicocachenl.test/api/v1/videos/sm10/exports/comments",
+      "https://nicocachenl.test/api/v1/videos/sm10/exports/audio",
     ],
   );
 });

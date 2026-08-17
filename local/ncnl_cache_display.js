@@ -1,5 +1,5 @@
 // NicoCache_nl cache display shared by list pages and the watch page.
-// CMAF/Domand cache details come from /cache/info/v3.
+// CMAF/Domand cache details come from the NicoCache REST API.
 (function() {
   "use strict";
 

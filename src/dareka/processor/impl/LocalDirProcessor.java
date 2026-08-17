@@ -71,12 +71,6 @@ public class LocalDirProcessor implements Processor {
                 // booster
                 file = getLocalFile(path, null);
             }
-            else if ("/list.js".equals(m.group(2))) {
-                file = getLocalFile(m.group(2), m.group(3));
-                if (file == null || !file.exists()) {
-                    file = getLocalFile("list.js.default", null);
-                }
-            }
             else if (m.group(2) != null && !m.group(2).equals("")
                                         && !m.group(2).equals("/")) {
                 file = getLocalFile(m.group(2), m.group(3));

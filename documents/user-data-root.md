@@ -12,7 +12,7 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
 - ルートの存在、ディレクトリ種別、読み書き権限
 - 初回セットアップが作成する `cache/`、`certs/`、`cvcache/`、`data/`、`extensions/`、
   `list/`、`local/`、`nlFilters/`、`thcache/`
-- `list/` は nlFilter の LST（文字列・動画IDリスト）と `/cache/addlist`・`/cache/trimlist`
+- `list/` は nlFilter の LST（文字列・動画IDリスト）
   が使う保存先です。LSTを使わない場合は空のままでも本体起動を妨げませんが、標準構成を
   そろえる場合はユーザーデータルート直下に空の `list/` を作成します。
 - TLSクライアント証明書ストア。ユーザーデータ側にない場合は、アプリケーション側の

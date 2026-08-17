@@ -1,4 +1,4 @@
 # NicoCache_nl.jar の全 dareka.* public/protected ABI を
 # tests/compat/get-extension-api-hash.ps1 で正規化した SHA-256。
-# 基準作成時: public/protected 型 134、正規化行 3083。
-2e228c0cb3ced62f647b0c81a343662da6fa7190dd8de1f3b3a5f3eb8569062b
+# 基準作成時: public/protected 型 135、正規化行 3099。
+262f69da3c2b2553655cacbbe61561e6c9297bdbc9a626ce9f3f90294c3cc276

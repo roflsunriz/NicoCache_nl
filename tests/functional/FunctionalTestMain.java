@@ -44,6 +44,8 @@ import com.sun.net.httpserver.HttpServer;
 
 import dareka.common.LRUMap;
 import dareka.common.HttpIOException;
+import dareka.common.json.Json;
+import dareka.common.json.JsonObject;
 import dareka.processor.URLResource;
 import dareka.processor.URLResourceCache;
 import dareka.processor.impl.Cache;
@@ -107,7 +109,8 @@ public final class FunctionalTestMain {
                 run("control API contract and authentication", this::testControlApiContract);
                 run("temporary cache family deletion reservation",
                         this::testTemporaryCacheFamilyDeletionReservation);
-                run("core cache API contract and validation", this::testCacheApiContract);
+                run("dedicated REST API contract and validation",
+                        this::testNicoCacheWebApiContract);
                 run("control force-shutdown contract", this::testControlForceShutdown);
             } else {
                 run("URL resource cache response policies", this::testUrlResourceCachePolicies);
@@ -142,7 +145,8 @@ public final class FunctionalTestMain {
                 run("shlsbid playlist refresh keeps segment decrypt generation",
                         this::testShlsbidPlaylistRefreshDecryptInfo);
                 run("DOMAND/CMAF completion and offline playback", this::testCmafMasterFlow);
-                run("cache info and legacy cache playback", this::testCacheInfoAndPlayback);
+                run("dedicated REST API contract and validation",
+                        this::testNicoCacheWebApiContract);
                 run("cache removal API and validation", this::testCacheRemoval);
                 run("Extension and Extension2 registrations and events", this::testExtensionDispatch);
             }
@@ -182,6 +186,7 @@ public final class FunctionalTestMain {
     private void prepareSandbox() throws Exception {
         Files.createDirectories(application.resolve("defaults"));
         Files.createDirectories(application.resolve("local"));
+        Files.createDirectories(application.resolve("local/nicocache-web"));
         Files.createDirectories(application.resolve("nlFilters"));
         Files.createDirectories(sandbox.resolve("nlFilters"));
         Files.createDirectories(sandbox.resolve("local"));
@@ -199,6 +204,10 @@ public final class FunctionalTestMain {
 
         copy(repository.resolve("local/mime.types.default"),
                 application.resolve("local/mime.types.default"));
+        for (String asset : List.of("index.html", "app.js", "styles.css")) {
+            copy(repository.resolve("local/nicocache-web").resolve(asset),
+                    application.resolve("local/nicocache-web").resolve(asset));
+        }
         copy(repository.resolve("nlFilter_sys.txt"),
                 application.resolve("nlFilter_sys.txt"));
         Files.writeString(sandbox.resolve("local/fixture.txt"),
@@ -207,6 +216,9 @@ public final class FunctionalTestMain {
                 "special-local-content", StandardCharsets.UTF_8);
         Files.writeString(sandbox.resolve("local/raw[brackets].txt"),
                 "raw-bracket-content", StandardCharsets.UTF_8);
+        Files.writeString(sandbox.resolve("proxy.pac"),
+                "function FindProxyForURL(url, host) {\n  return 'DIRECT';\n}\n",
+                StandardCharsets.UTF_8);
         Files.writeString(application.resolve("local/system-only.txt"),
                 "system-local-content", StandardCharsets.UTF_8);
         Files.writeString(application.resolve("local/overlay.txt"),
@@ -1267,8 +1279,8 @@ public final class FunctionalTestMain {
         Path saved = sandbox.resolve("cache/sm900010.data/comment.0.ja-jp.json");
         waitForFileContaining(saved, "functional-comment", Duration.ofSeconds(3));
 
-        Response download = request(nicoRequest(
-                "GET", "/cache/sm900010.comments.json", ""));
+        Response download = request(nicoCacheWebRequest(
+                "GET", "/api/v1/videos/sm900010/exports/comments", "", ""));
         assertEquals(200, download.status,
                 "nvcomment download status: " + download.bodyText());
         assertContains(download.header("content-type"), "application/json",
@@ -1279,95 +1291,11 @@ public final class FunctionalTestMain {
         assertContains(download.bodyText(), "functional-comment-download",
                 "nvcomment download body");
 
-        Response invalidMethod = request(nicoRequest(
-                "POST", "/cache/sm900010.comments.json", ""));
+        Response invalidMethod = request(nicoCacheWebRequest(
+                "POST", "/api/v1/videos/sm900010/exports/comments", "{}",
+                "Content-Type: application/json\r\n"));
         assertEquals(405, invalidMethod.status,
                 "nvcomment download method validation");
-    }
-
-    private void testCacheInfoAndPlayback() throws Exception {
-        Response info = request(nicoRequest("GET",
-                "/cache/info/v2?sm900001,sm900002,sm900003,sm900004,sm900005,sm900007", ""));
-        assertEquals(200, info.status, "cache info status");
-        assertContains(info.bodyText(), "sm900001_Functional.mp4", "legacy cache info");
-        assertContains(info.bodyText(), "sm900002[720p,128]_Functional.mp4", "DMC cache info");
-        assertContains(info.bodyText(), "sm900003[720p,128]_Functional.hls", "HLS cache info");
-        assertContains(info.bodyText(), "sm900004_Functional.flv", "FLV cache info");
-        assertContains(info.bodyText(), "sm900005_Functional.swf", "SWF cache info");
-        assertContains(info.bodyText(), "sm900007low_Functional.mp4",
-                "existing classic low cache info");
-
-        Response cmafInfo = request(nicoRequest("GET",
-                "/cache/info/v3?sm900001,sm900002,sm900003,sm900004,sm900005,sm900007", ""));
-        assertEquals(200, cmafInfo.status, "CMAF cache info status");
-        assertContains(cmafInfo.bodyText(), "sm900003[720p,128].hls",
-                "CMAF cache info preferred cache");
-        assertContains(cmafInfo.bodyText(), "sm900003low[360p-lowest,64].hls",
-                "existing low CMAF cache compatibility");
-        assertContains(cmafInfo.bodyText(), "\"legacyLow\":true",
-                "existing low CMAF cache compatibility flag");
-        assertContains(cmafInfo.bodyText(), "\"videoMode\":\"720p\"",
-                "CMAF direct video mode");
-        assertContains(cmafInfo.bodyText(), "\"audioBitrate\":128",
-                "CMAF direct audio bitrate");
-        assertFalse(cmafInfo.bodyText().contains("sm900001_Functional.mp4"),
-                "v3 must exclude classic caches");
-        assertFalse(cmafInfo.bodyText().contains("sm900002[720p,128]_Functional.mp4"),
-                "v3 must exclude old DMC MP4 caches");
-        assertFalse(cmafInfo.bodyText().contains("sm900007low_Functional.mp4"),
-                "v3 must exclude classic low caches");
-
-        Response playback = request(nicoRequest("GET", "/cache/sm900001.mp4", ""));
-        assertEquals(200, playback.status, "cache playback status");
-        assertEquals("legacy-mp4-content", playback.bodyText(), "cache playback body");
-
-        Response range = request(nicoRequest("GET", "/cache/sm900001.mp4",
-                "Range: bytes=7-9\r\n"));
-        assertEquals(206, range.status, "cache range status");
-        assertEquals("mp4", range.bodyText(), "cache range body");
-
-        Response dmc = request(nicoRequest("GET", "/cache/sm900002.mp4", ""));
-        assertEquals(200, dmc.status, "DMC MP4 playback status");
-        assertEquals("dmc-mp4-content", dmc.bodyText(), "DMC MP4 playback body");
-
-        Response flv = request(nicoRequest("GET", "/cache/sm900004.flv", ""));
-        assertEquals(200, flv.status, "FLV playback status");
-        assertEquals("legacy-flv-content", flv.bodyText(), "FLV playback body");
-
-        Response swf = request(nicoRequest("GET", "/cache/sm900005.swf", ""));
-        assertEquals(200, swf.status, "SWF playback status");
-        assertEquals("legacy-swf-content", swf.bodyText(), "SWF playback body");
-
-        Response classicLow = request(nicoRequest("GET", "/cache/sm900007low.mp4", ""));
-        assertEquals(200, classicLow.status, "existing classic low playback status");
-        assertEquals("legacy-low-content", classicLow.bodyText(),
-                "existing classic low playback body");
-
-        String hlsBase = "/cache/file/nicocachenl_refcache=sm900003//";
-        Response hlsMaster = request(nicoRequest("GET", hlsBase + "master.m3u8", ""));
-        assertEquals(200, hlsMaster.status, "legacy HLS master status");
-        assertContains(hlsMaster.bodyText(), "segment.ts", "legacy HLS master body");
-        Response hlsSegment = request(nicoRequest("GET", hlsBase + "segment.ts", ""));
-        assertEquals(200, hlsSegment.status, "legacy HLS segment status");
-        assertEquals("legacy-hls-segment", hlsSegment.bodyText(), "legacy HLS segment body");
-
-        String exactHlsBase = "/cache/file/nicocachenl_refcache="
-                + "sm900003[360p-lowest,64].hls//";
-        Response exactHlsSegment = request(nicoRequest(
-                "GET", exactHlsBase + "segment.ts", ""));
-        assertEquals(200, exactHlsSegment.status, "quality-specific HLS status");
-        assertEquals("lower-quality-hls-segment", exactHlsSegment.bodyText(),
-                "quality-specific HLS body");
-
-        String exactHlsWithoutPostfix = "/cache/file/nicocachenl_refcache="
-                + "sm900003[360p-lowest,64]//segment.ts";
-        Response exactHlsWithoutPostfixResponse = request(nicoRequest(
-                "GET", exactHlsWithoutPostfix, ""));
-        assertEquals(200, exactHlsWithoutPostfixResponse.status,
-                "quality-specific HLS status without postfix");
-        assertEquals("lower-quality-hls-segment",
-                exactHlsWithoutPostfixResponse.bodyText(),
-                "quality-specific HLS body without postfix");
     }
 
     private void testCmafMasterFlow() throws Exception {
@@ -1390,7 +1318,8 @@ public final class FunctionalTestMain {
         Path completed = waitForCompletedCmafCache("sm900010", Duration.ofSeconds(8));
         assertFalse(completed.getFileName().toString().startsWith("sm900010low"),
                 "new CMAF cache filename must not contain low");
-        Response cmafInfo = request(nicoRequest("GET", "/cache/info/v3?sm900010", ""));
+        Response cmafInfo = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900010/cache-entries", "", ""));
         assertEquals(200, cmafInfo.status, "generated CMAF cache info status");
         assertContains(cmafInfo.bodyText(), "sm900010[720p,128].hls",
                 "generated CMAF cache ID must not contain low");
@@ -1613,305 +1542,123 @@ public final class FunctionalTestMain {
                 "completed cache must remain after reservation completion");
     }
 
-    private void testCacheApiContract() throws Exception {
-        VideoDescriptor classicAltId = Cache.altIdToVideoDescriptor(
-                "sm900001low.mp4");
-        assertTrue(classicAltId != null, "classic alt ID parser result");
-        assertFalse(classicAltId.isDmc(), "classic alt ID parser type");
-        assertEquals(".mp4", classicAltId.getPostfix(),
-                "classic alt ID parser postfix");
-        assertTrue(Cache.altIdToVideoDescriptor(
-                "prefix-sm900001.mp4-suffix") == null,
-                "alt ID parser must reject partial matches");
+    private void testNicoCacheWebApiContract() throws Exception {
+        assertFileContains(sandbox.resolve("proxy.pac"), "nicocachenl.test");
+        assertTrue(Files.isRegularFile(
+                sandbox.resolve("proxy.pac.pre-rest-api.bak")),
+                "proxy PAC migration backup");
+        Response page = request(nicoCacheWebRequest("GET", "/", "", ""));
+        assertEquals(200, page.status, "management page status");
+        assertContains(page.header("content-type"), "text/html",
+                "management page content type");
+        assertContains(page.bodyText(), "NicoCache_nl",
+                "management page body");
 
-        Response emptyInfo = request(nicoRequest("GET", "/cache/info", ""));
-        assertEquals(200, emptyInfo.status, "empty cache info status");
-        assertEquals("{}", emptyInfo.bodyText(), "empty cache info response");
+        Response live = request(nicoCacheWebRequest(
+                "GET", "/api/v1/health/live", "", ""));
+        assertEquals(200, live.status, "REST liveness status");
+        assertContains(live.bodyText(), "\"status\":\"ok\"",
+                "REST liveness body");
 
-        Response infoPost = request(nicoRequestWithBody(
-                "POST", "/cache/info", "sm900001,sm900002"));
-        assertEquals(200, infoPost.status, "cache info POST status");
-        assertContains(infoPost.bodyText(), "\"sm900001\"",
-                "cache info POST response");
+        Response runtime = request(nicoCacheWebRequest(
+                "GET", "/api/v1/diagnostics/runtime", "", ""));
+        assertEquals(200, runtime.status, "runtime diagnostics status");
+        assertContains(runtime.bodyText(), "\"heapUsed\"",
+                "runtime diagnostics memory");
+        assertContains(runtime.bodyText(), "\"deadlockedThreadCount\"",
+                "runtime diagnostics deadlock count");
 
-        Response emptyInfoV2 = request(nicoRequest("GET", "/cache/info/v2", ""));
-        assertEquals(200, emptyInfoV2.status, "empty cache info v2 status");
-        assertEquals("{}", emptyInfoV2.bodyText(), "empty cache info v2 response");
+        Response snapshot = request(nicoCacheWebRequest(
+                "POST", "/api/v1/diagnostic-snapshots", "{}",
+                "Content-Type: application/json\r\n"));
+        assertEquals(201, snapshot.status, "diagnostic snapshot status");
+        JsonObject snapshotCreated = Json.parseObject(snapshot.bodyText());
+        String snapshotId = snapshotCreated == null
+                ? null : snapshotCreated.getString("id");
+        assertTrue(snapshotId != null && !snapshotId.isBlank(),
+                "diagnostic snapshot id");
+        Response threadDump = request(nicoCacheWebRequest("GET",
+                "/api/v1/diagnostic-snapshots/" + snapshotId + "/thread-dump",
+                "", ""));
+        assertEquals(200, threadDump.status, "thread dump status");
+        assertContains(threadDump.bodyText(), "Deadlocked thread count:",
+                "thread dump body");
 
-        Response infoV2Post = request(nicoRequestWithBody(
-                "POST", "/cache/info/v2", "sm900001"));
-        assertEquals(200, infoV2Post.status, "cache info v2 POST status");
-        assertContains(infoV2Post.bodyText(), "\"sm900001\"",
-                "cache info v2 POST response");
+        Response cacheInfo = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900003/cache-entries", "", ""));
+        assertEquals(200, cacheInfo.status, "REST cache entry status");
+        assertContains(cacheInfo.bodyText(), "\"videoId\":\"sm900003\"",
+                "REST cache entry video id");
+        assertContains(cacheInfo.bodyText(), "\"videoMode\":\"720p\"",
+                "REST cache entry mode");
 
-        Response emptyInfoV3 = request(nicoRequest("GET", "/cache/info/v3", ""));
-        assertEquals(200, emptyInfoV3.status, "empty cache info v3 status");
-        assertEquals("{}", emptyInfoV3.bodyText(), "empty cache info v3 response");
+        Response batch = request(nicoCacheWebRequest("POST",
+                "/api/v1/cache-entry-queries",
+                "{\"videoIds\":[\"sm900001\",\"sm900003\"]}",
+                "Content-Type: application/json\r\n"));
+        assertEquals(200, batch.status, "REST batch cache query status");
+        assertContains(batch.bodyText(), "\"sm900001\"",
+                "REST batch cache query first id");
+        assertContains(batch.bodyText(), "\"sm900003\"",
+                "REST batch cache query second id");
 
-        Response infoV3Post = request(nicoRequestWithBody(
-                "POST", "/cache/info/v3", "sm900001,sm900003"));
-        assertEquals(200, infoV3Post.status, "cache info v3 POST status");
-        assertContains(infoV3Post.bodyText(),
-                "\"sm900001\":{\"videoId\":\"sm900001\",\"preferred\":null",
-                "cache info v3 must represent a legacy-only video as empty CMAF data");
-        assertContains(infoV3Post.bodyText(), "\"videoMode\":\"720p\"",
-                "cache info v3 POST response");
-
-        Response ajaxInfo = request(nicoRequest(
-                "GET", "/cache/ajax_info?sm900001", ""));
-        assertEquals(200, ajaxInfo.status, "ajax_info status");
-        assertContains(ajaxInfo.bodyText(), "OK", "ajax_info response");
-        Response ajaxInfoPost = request(nicoRequest(
-                "POST", "/cache/ajax_info?sm900001", ""));
-        assertEquals(405, ajaxInfoPost.status, "ajax_info method validation");
-
-        Response oldInfo = request(nicoRequest(
-                "GET", "/cache/oldinfo?sm900001", ""));
-        assertEquals(200, oldInfo.status, "legacy cache info status");
-        assertContains(oldInfo.bodyText(), "\"sm900001\"",
-                "legacy cache info response");
-        Response oldInfoV2 = request(nicoRequest(
-                "GET", "/cache/oldinfo/v2?sm900001", ""));
-        assertEquals(200, oldInfoV2.status, "legacy cache info v2 status");
-        Response oldInfoPost = request(nicoRequestWithBody(
-                "POST", "/cache/oldinfo", "sm900001"));
-        assertEquals(200, oldInfoPost.status, "legacy cache info POST status");
-
-        Response echo = request(nicoRequest(
-                "GET", "/cache/echo?sm900001%22", ""));
-        assertEquals(200, echo.status, "cache echo status");
-        assertContains(echo.bodyText(), "sm900001\\\"",
-                "cache echo must escape quotes as JSON");
-        Response classicExtensionEcho = request(nicoRequest(
-                "GET", "/cache/echo?sm900001low.mp4", ""));
-        assertEquals(200, classicExtensionEcho.status,
-                "cache echo classic extension status");
-        assertContains(classicExtensionEcho.bodyText(),
-                "\"altId\":\"sm900001low.mp4\"",
-                "classic alt ID must retain its extension");
-        assertContains(classicExtensionEcho.bodyText(),
-                "\"videoDescriptor.postfix\":\".mp4\"",
-                "classic alt ID extension must reach VideoDescriptor");
-        assertContains(classicExtensionEcho.bodyText(),
-                "\"videoDescriptor.isDmc\":\"false\"",
-                "classic alt ID must not become DMC");
-
-        Response dmcEcho = request(nicoRequest(
-                "GET", "/cache/echo?sm900001%5B720p%2C1200%2C128%5Dabcdef.mp4", ""));
-        assertEquals(200, dmcEcho.status, "cache echo DMC status");
-        assertContains(dmcEcho.bodyText(),
-                "\"altId\":\"sm900001[720p,1200,128]abcdef.mp4\"",
-                "DMC alt ID must be parsed as an exact value");
-        assertContains(dmcEcho.bodyText(),
-                "\"videoDescriptor.isDmc\":\"true\"",
-                "DMC alt ID must remain DMC");
-
-        Response trailingAltIdEcho = request(nicoRequest(
-                "GET", "/cache/echo?prefix-sm900001.mp4-suffix", ""));
-        assertEquals(200, trailingAltIdEcho.status,
-                "cache echo invalid trailing input status");
-        assertContains(trailingAltIdEcho.bodyText(), "\"altId\":\"\"",
-                "partial alt ID matches must be rejected");
-        assertContains(trailingAltIdEcho.bodyText(),
-                "\"videoDescriptor\":\"null\"",
-                "invalid alt ID must not produce VideoDescriptor");
-        Response emptyEcho = request(nicoRequest("GET", "/cache/echo", ""));
-        assertEquals(400, emptyEcho.status, "cache echo parameter validation");
-
-        Response search = request(nicoRequest(
-                "GET", "/cache/search/Api", ""));
-        assertEquals(200, search.status, "cache search status");
+        Response search = request(nicoCacheWebRequest("GET",
+                "/api/v1/cache-entries?query=Api&order=desc", "", ""));
+        assertEquals(200, search.status, "REST cache search status");
         assertContains(search.bodyText(), "sm900006",
-                "cache search response");
-        Response regexSearch = request(nicoRequest(
-                "GET", "/cache/rsearch/Api?order=d", ""));
-        assertEquals(200, regexSearch.status, "cache regex search status");
+                "REST cache search body");
 
-        for (String path : List.of("/cache/cachelist.json", "/cache/templist.json",
-                "/cache/dirlist.json", "/cache/flvlist.json")) {
-            Response list = request(nicoRequest("GET", path, ""));
-            assertEquals(200, list.status, path + " status");
-            assertContains(list.header("content-type"), "application/json",
-                    path + " content type");
-        }
-        Response ajaxList = request(nicoRequest("GET", "/cache/ajax", ""));
-        assertEquals(200, ajaxList.status, "cache ajax list status");
-        assertContains(ajaxList.bodyText(), "dirList", "cache ajax list response");
-        Response flvList = request(nicoRequest("GET", "/cache/flvlist", ""));
-        assertEquals(200, flvList.status, "cache flv list status");
-        assertContains(flvList.bodyText(), "# my cache", "cache flv list response");
-        Response cachePage = request(nicoRequest("GET", "/cache/", ""));
-        assertEquals(200, cachePage.status, "cache management page status");
-        Response logPage = request(nicoRequest("GET", "/cache/log", ""));
-        assertEquals(200, logPage.status, "cache log page status");
-        Response xml = request(nicoRequest(
-                "GET", "/cache/getxml?type=dirlist", ""));
-        assertEquals(200, xml.status, "cache XML list status");
-        assertContains(xml.header("content-type"), "application/xml",
-                "cache XML list content type");
-        assertContains(xml.bodyText(), "dirList", "cache XML list response");
-        for (String type : List.of("templist", "cachelist", "cachelistall")) {
-            Response typedXml = request(nicoRequest(
-                    "GET", "/cache/getxml?type=" + type, ""));
-            assertEquals(200, typedXml.status, "cache XML " + type + " status");
-            assertContains(typedXml.header("content-type"), "application/xml",
-                    "cache XML " + type + " content type");
-        }
+        Response media = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900001/media", "", ""));
+        assertEquals(200, media.status, "REST cached media status");
+        assertEquals("legacy-mp4-content", media.bodyText(),
+                "REST cached media body");
+        Response internalMedia = request(nicoRequest(
+                "GET", "/cache/sm900001.mp4", ""));
+        assertEquals(200, internalMedia.status,
+                "internal cache media route status");
+        assertEquals("legacy-mp4-content", internalMedia.bodyText(),
+                "internal cache media route body");
 
-        Response title = request(nicoRequest(
-                "GET", "/cache/ajax_title?sm900017-API%20title", ""));
-        assertEquals(200, title.status, "cache title status");
-        assertContains(title.bodyText(), "OK", "cache title response");
-        Response move = request(nicoRequest(
-                "GET", "/cache/ajax_move?sm900015-/api-target", ""));
-        assertEquals(200, move.status, "cache move status");
-        assertEquals("OK", move.bodyText(), "cache move response");
-        assertTrue(Files.exists(sandbox.resolve("cache/api-target/sm900015_Api.mp4")),
-                "cache move destination");
-        Response topMove = request(nicoRequest(
-                "GET", "/cache/ajax_topmove?sm900016-/api-target", ""));
-        assertEquals(200, topMove.status, "cache topmove status");
-        assertEquals("OK", topMove.bodyText(), "cache topmove response");
-        assertTrue(Files.exists(sandbox.resolve("cache/api-target/sm900016_Api.mp4")),
-                "cache topmove destination");
+        Response preflight = request(nicoCacheWebRequest("OPTIONS",
+                "/api/v1/videos/sm900003/cache-entries", "",
+                "Origin: https://www.nicovideo.jp\r\n"
+                + "Access-Control-Request-Method: DELETE\r\n"
+                + "Access-Control-Request-Headers: content-type\r\n"));
+        assertEquals(200, preflight.status, "REST CORS preflight status");
+        assertEquals("https://www.nicovideo.jp",
+                preflight.header("access-control-allow-origin"),
+                "REST CORS allowed origin");
+        assertContains(preflight.header("access-control-allow-methods"),
+                "DELETE", "REST CORS methods");
 
-        Response addList = request(nicoRequest(
-                "GET", "/cache/ajax_addlist/api.txt?gamma", ""));
-        assertEquals(200, addList.status, "cache addlist status");
-        assertEquals("OK", addList.bodyText(), "cache addlist response");
-        Response trimList = request(nicoRequest(
-                "GET", "/cache/ajax_trimlist/api.txt?type=smid", ""));
-        assertEquals(200, trimList.status, "cache trimlist status");
-        assertEquals("OK", trimList.bodyText(), "cache trimlist response");
-        Response unsafeList = request(nicoRequest(
-                "GET", "/cache/ajax_addlist/../escaped.txt?bad", ""));
-        assertEquals(400, unsafeList.status, "cache list path validation");
-        assertFalse(Files.exists(sandbox.resolve("escaped.txt")),
-                "unsafe cache list path must not write outside list");
+        Response wrongMethod = request(nicoCacheWebRequest("POST",
+                "/api/v1/videos/sm900003/cache-entries", "{}",
+                "Content-Type: application/json\r\n"));
+        assertEquals(405, wrongMethod.status, "REST method validation");
+        assertContains(wrongMethod.header("allow"), "GET",
+                "REST Allow response header");
 
-        Response invalidInfo = request(nicoRequest(
-                "GET", "/cache/info?not-an-id", ""));
-        assertEquals(400, invalidInfo.status, "cache info invalid parameter");
-        Response invalidInfoV3 = request(nicoRequest(
-                "GET", "/cache/info/v3?not-an-id", ""));
-        assertEquals(400, invalidInfoV3.status, "cache info v3 invalid parameter");
-        Response invalidRemove = request(nicoRequest("GET", "/cache/ajax_rm", ""));
-        assertEquals(400, invalidRemove.status, "cache rm invalid parameter");
-        Response invalidTempRemove = request(nicoRequest(
-                "GET", "/cache/ajax_rmtmp?not-an-id", ""));
-        assertEquals(400, invalidTempRemove.status, "cache rmtmp invalid parameter");
-        Response invalidAllRemove = request(nicoRequest(
-                "GET", "/cache/ajax_rmall?sm900001[720p,128]", ""));
-        assertEquals(400, invalidAllRemove.status, "cache rmall invalid parameter");
-        Response invalidTempAllRemove = request(nicoRequest(
-                "GET", "/cache/ajax_rmtmpall?sm900025low", ""));
-        assertEquals(400, invalidTempAllRemove.status,
-                "cache rmtmpall invalid parameter");
-        Response wrongRemoveMethod = request(nicoRequest(
-                "POST", "/cache/ajax_rm?sm900001", ""));
-        assertEquals(405, wrongRemoveMethod.status, "cache rm method validation");
-        Response wrongTempAllRemoveMethod = request(nicoRequest(
-                "POST", "/cache/ajax_rmtmpall?sm900025", ""));
-        assertEquals(405, wrongTempAllRemoveMethod.status,
-                "cache rmtmpall method validation");
+        Response oldApi = request(nicoRequest(
+                "GET", "/cache/info/v3?sm900003", ""));
+        assertEquals(404, oldApi.status, "removed cache info API");
+        Response oldRemoval = request(nicoRequest(
+                "GET", "/cache/ajax_rmall?sm900006", ""));
+        assertEquals(404, oldRemoval.status, "removed cache deletion API");
+        assertTrue(Files.exists(sandbox.resolve("cache/sm900006_Api.mp4")),
+                "removed GET deletion API must not mutate cache");
 
-        Response rm = request(nicoRequest(
-                "GET", "/cache/ajax_rm?sm900006", ""));
-        assertEquals(200, rm.status, "cache ajax_rm status");
-        assertEquals("OK", rm.bodyText(), "cache ajax_rm response");
+        Response exactRemoval = request(nicoCacheWebRequest("DELETE",
+                "/api/v1/cache-entries/sm900006", "", ""));
+        assertEquals(200, exactRemoval.status, "REST exact deletion status");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900006_Api.mp4")),
-                "cache ajax_rm deletion");
+                "REST exact deletion result");
 
-        Response rmtmp = request(nicoRequest(
-                "GET", "/cache/ajax_rmtmp?sm900007", ""));
-        assertEquals(200, rmtmp.status, "cache ajax_rmtmp status");
-        assertEquals("OK", rmtmp.bodyText(), "cache ajax_rmtmp response");
+        Response tempRemoval = request(nicoCacheWebRequest("DELETE",
+                "/api/v1/temporary-cache-entries/sm900007", "", ""));
+        assertEquals(200, tempRemoval.status, "REST temporary deletion status");
         assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900007_Api.mp4")),
-                "cache ajax_rmtmp deletion");
-
-        Files.write(sandbox.resolve("cache/sm900025_Api.mp4"),
-                "api-rmtmpall-completed-content".getBytes(StandardCharsets.UTF_8));
-        Response rmtmpall = request(nicoRequest(
-                "GET", "/cache/ajax_rmtmpall?sm900025", ""));
-        assertEquals(200, rmtmpall.status, "cache ajax_rmtmpall status");
-        assertEquals("OK", rmtmpall.bodyText(), "cache ajax_rmtmpall response");
-        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900025_Api.mp4")),
-                "cache ajax_rmtmpall normal temp deletion");
-        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900025low_Api.mp4")),
-                "cache ajax_rmtmpall low temp deletion");
-        assertFalse(Files.exists(sandbox.resolve(
-                "cache/nltmp_sm900025[720p,128]_Api.mp4")),
-                "cache ajax_rmtmpall DMC temp deletion");
-        assertTrue(Files.exists(sandbox.resolve("cache/sm900025_Api.mp4")),
-                "cache ajax_rmtmpall must preserve completed cache");
-        assertTrue(Files.exists(sandbox.resolve("cache/nltmp_sm900026_Api.mp4")),
-                "cache ajax_rmtmpall must preserve another video temp");
-
-        Response rmall = request(nicoRequest(
-                "GET", "/cache/ajax_rmall?sm900008", ""));
-        assertEquals(200, rmall.status, "cache ajax_rmall status");
-        assertEquals("OK", rmall.bodyText(), "cache ajax_rmall response");
-        assertFalse(Files.exists(sandbox.resolve("cache/sm900008_Api.mp4")),
-                "cache ajax_rmall deletion");
-
-        Response redirectRm = request(nicoRequest(
-                "GET", "/cache/rm?sm900009", ""));
-        assertEquals(302, redirectRm.status, "cache rm redirect status");
-        assertEquals("http://www.nicovideo.jp/", redirectRm.header("location"),
-                "cache rm redirect target");
-        assertFalse(Files.exists(sandbox.resolve("cache/sm900009_Api.mp4")),
-                "cache rm deletion");
-        Response redirectRmtmp = request(nicoRequest(
-                "GET", "/cache/rmtmp?sm900013", ""));
-        assertEquals(302, redirectRmtmp.status, "cache rmtmp redirect status");
-        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900013_Api.mp4")),
-                "cache rmtmp deletion");
-        Response redirectRmtmpall = request(nicoRequest(
-                "GET", "/cache/rmtmpall?sm900027", ""));
-        assertEquals(302, redirectRmtmpall.status,
-                "cache rmtmpall redirect status");
-        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900027_Api.mp4")),
-                "cache rmtmpall redirect deletion");
-        Response redirectRmall = request(nicoRequest(
-                "GET", "/cache/rmall?sm900014", ""));
-        assertEquals(302, redirectRmall.status, "cache rmall redirect status");
-        assertFalse(Files.exists(sandbox.resolve("cache/sm900014_Api.mp4")),
-                "cache rmall deletion");
-
-        Response legacyRemove = request(nicoRequest(
-                "GET", "/cache/oldrm?sm900018", ""));
-        assertEquals(302, legacyRemove.status, "legacy cache rm redirect status");
-        assertFalse(Files.exists(sandbox.resolve("cache/sm900018_Api.mp4")),
-                "legacy cache rm deletion");
-        Response legacyRemoveAll = request(nicoRequest(
-                "GET", "/cache/oldrmall?sm900019", ""));
-        assertEquals(302, legacyRemoveAll.status, "legacy cache rmall redirect status");
-        assertFalse(Files.exists(sandbox.resolve("cache/sm900019_Api.mp4")),
-                "legacy cache rmall deletion");
-
-        Response legacyTempRemove = request(nicoRequest(
-                "GET", "/cache/oldrmtmp?sm900021", ""));
-        assertEquals(302, legacyTempRemove.status,
-                "legacy cache rmtmp redirect status");
-        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900021_Api.mp4")),
-                "legacy cache rmtmp deletion");
-
-        for (String id : List.of("sm900022", "sm900023", "sm900024")) {
-            String operation = id.equals("sm900022") ? "oldrm"
-                    : id.equals("sm900023") ? "oldrmtmp" : "oldrmall";
-            Response ajaxLegacy = request(nicoRequest(
-                    "GET", "/cache/ajax_" + operation + "?" + id, ""));
-            assertEquals(200, ajaxLegacy.status,
-                    "ajax legacy " + operation + " status");
-            assertEquals("OK", ajaxLegacy.bodyText(),
-                    "ajax legacy " + operation + " response");
-        }
-        assertFalse(Files.exists(sandbox.resolve("cache/sm900022_Api.mp4")),
-                "ajax legacy cache rm deletion");
-        assertFalse(Files.exists(sandbox.resolve("cache/nltmp_sm900023_Api.mp4")),
-                "ajax legacy cache rmtmp deletion");
-        assertFalse(Files.exists(sandbox.resolve("cache/sm900024_Api.mp4")),
-                "ajax legacy cache rmall deletion");
+                "REST temporary deletion result");
     }
 
     private Path waitForCmafSegment(String smid, String relativePath, Duration timeout)
@@ -2096,21 +1843,23 @@ public final class FunctionalTestMain {
     }
 
     private void testCacheRemoval() throws Exception {
-        Response invalid = request(nicoRequest("GET",
-                "/cache/ajax_rmall?sm900001[720p,128]", ""));
-        assertEquals(400, invalid.status, "invalid rmall status");
+        Response invalid = request(nicoCacheWebRequest("DELETE",
+                "/api/v1/cache-entries/prefix-sm900001.mp4-suffix", "", ""));
+        assertEquals(400, invalid.status, "invalid REST cache id status");
 
-        Response removed = request(nicoRequest("GET", "/cache/ajax_rmall?sm900001", ""));
-        assertEquals(200, removed.status, "rmall status");
-        assertEquals("OK", removed.bodyText(), "rmall response");
+        Response removed = request(nicoCacheWebRequest("DELETE",
+                "/api/v1/videos/sm900001/cache-entries", "", ""));
+        assertEquals(200, removed.status, "REST video cache removal status");
+        assertContains(removed.bodyText(), "\"status\":\"deleted\"",
+                "REST video cache removal response");
         assertFalse(Files.exists(sandbox.resolve("cache/sm900001_Functional.mp4")),
                 "cache file must be removed only inside sandbox");
 
         for (String id : List.of(
                 "sm900002", "sm900003", "sm900004", "sm900005", "sm900007")) {
-            Response legacyRemoved = request(nicoRequest("GET", "/cache/ajax_rmall?" + id, ""));
-            assertEquals(200, legacyRemoved.status, id + " removal status");
-            assertEquals("OK", legacyRemoved.bodyText(), id + " removal response");
+            Response restRemoved = request(nicoCacheWebRequest("DELETE",
+                    "/api/v1/videos/" + id + "/cache-entries", "", ""));
+            assertEquals(200, restRemoved.status, id + " REST removal status");
         }
         assertFalse(Files.exists(sandbox.resolve("cache/sm900002[720p,128]_Functional.mp4")),
                 "DMC MP4 cache must be removed");
@@ -2324,6 +2073,17 @@ public final class FunctionalTestMain {
     private static String nicoRequest(String method, String path, String extraHeaders) {
         return method + " http://www.nicovideo.jp" + path + " HTTP/1.1\r\n"
                 + "Host: www.nicovideo.jp\r\n" + extraHeaders + "Connection: close\r\n\r\n";
+    }
+
+    private static String nicoCacheWebRequest(String method, String path,
+            String body, String extraHeaders) {
+        byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+        return method + " http://nicocachenl.test" + path + " HTTP/1.1\r\n"
+                + "Host: nicocachenl.test\r\n"
+                + extraHeaders
+                + (bodyBytes.length > 0
+                        ? "Content-Length: " + bodyBytes.length + "\r\n" : "")
+                + "Connection: close\r\n\r\n" + body;
     }
 
     private static String nicoRequestWithBody(String method, String path, String body) {

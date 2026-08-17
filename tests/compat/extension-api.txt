@@ -913,6 +913,13 @@ MEMBER dareka.processor.impl.NicoApiUtil | public static dareka.processor.URLRes
 MEMBER dareka.processor.impl.NicoApiUtil | public static java.lang.String getResourceContent(dareka.processor.URLResource); | descriptor: (Ldareka/processor/URLResource;)Ljava/lang/String;
 MEMBER dareka.processor.impl.NicoApiUtil | public static java.lang.String getFlapiContent(java.lang.String, dareka.processor.HttpRequestHeader, java.lang.String); | descriptor: (Ljava/lang/String;Ldareka/processor/HttpRequestHeader;Ljava/lang/String;)Ljava/lang/String;
 MEMBER dareka.processor.impl.NicoApiUtil | public static java.lang.String getFlapiContent(java.lang.String, java.util.Map<java.lang.String, java.lang.String>, dareka.processor.HttpRequestHeader, java.lang.String); | descriptor: (Ljava/lang/String;Ljava/util/Map;Ldareka/processor/HttpRequestHeader;Ljava/lang/String;)Ljava/lang/String;
+TYPE dareka.processor.impl.NicoCacheWebProcessor | public final class dareka.processor.impl.NicoCacheWebProcessor implements dareka.processor.Processor {
+MEMBER dareka.processor.impl.NicoCacheWebProcessor | public static final java.lang.String HOST; | descriptor: Ljava/lang/String;
+MEMBER dareka.processor.impl.NicoCacheWebProcessor | public dareka.processor.impl.NicoCacheWebProcessor(); | descriptor: ()V
+MEMBER dareka.processor.impl.NicoCacheWebProcessor | public java.lang.String[] getSupportedMethods(); | descriptor: ()[Ljava/lang/String;
+MEMBER dareka.processor.impl.NicoCacheWebProcessor | public java.util.regex.Pattern getSupportedURLAsPattern(); | descriptor: ()Ljava/util/regex/Pattern;
+MEMBER dareka.processor.impl.NicoCacheWebProcessor | public java.lang.String getSupportedURLAsString(); | descriptor: ()Ljava/lang/String;
+MEMBER dareka.processor.impl.NicoCacheWebProcessor | public dareka.processor.Resource onRequest(dareka.processor.HttpRequestHeader, java.net.Socket) throws java.io.IOException; | descriptor: (Ldareka/processor/HttpRequestHeader;Ljava/net/Socket;)Ldareka/processor/Resource;
 TYPE dareka.processor.impl.NicoCachingListener | public class dareka.processor.impl.NicoCachingListener implements dareka.processor.TransferListener {
 MEMBER dareka.processor.impl.NicoCachingListener | public dareka.processor.impl.NicoCachingListener(dareka.processor.impl.Cache, java.util.concurrent.FutureTask<java.lang.String>, java.io.InputStream, dareka.processor.impl.NLEventSource, long); | descriptor: (Ldareka/processor/impl/Cache;Ljava/util/concurrent/FutureTask;Ljava/io/InputStream;Ldareka/processor/impl/NLEventSource;J)V
 MEMBER dareka.processor.impl.NicoCachingListener | public void onResponseHeader(dareka.processor.HttpResponseHeader); | descriptor: (Ldareka/processor/HttpResponseHeader;)V

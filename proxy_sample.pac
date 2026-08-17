@@ -2,8 +2,8 @@
 // - カスタムしたい場合はコピーを取って下さい.
 
 function FindProxyForURL(url, host) {
-  // NicoCache_nl内部のデバッグ用仮想ホスト.
-  if (host.toLowerCase() === 'debug') {
+  // NicoCache_nlの管理サイトとREST API専用仮想ホスト.
+  if (host.toLowerCase() === 'nicocachenl.test') {
     return 'PROXY 127.0.0.1:8080';
   };
 

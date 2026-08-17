@@ -38,6 +38,13 @@ test("DEBUG仮想ホストをNicoCache_nlへ送る", () => {
   );
 });
 
+test("専用管理ホストをNicoCache_nlへ送る", () => {
+  assert.equal(
+    findProxy("https://nicocachenl.test/api/v1/health/live", "nicocachenl.test"),
+    "PROXY 127.0.0.1:8080",
+  );
+});
+
 test("対象外ホストとlive2は従来どおり直接接続する", () => {
   assert.equal(findProxy("https://example.com/", "example.com"), "DIRECT");
   assert.equal(

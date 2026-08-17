@@ -7,7 +7,7 @@
 (function() {
   "use strict";
 
-  if (!window.NicoCache_nl || typeof NicoCache_nl.get !== "function") return;
+  if (!window.NicoCache_nl || typeof fetch !== "function") return;
   if (!NicoCache_nl.cacheDisplay) return;
   if (window.__ncnlWatchCacheIconsInitialized) return;
   window.__ncnlWatchCacheIconsInitialized = true;
@@ -93,22 +93,28 @@
     insertCacheIcon(item, videoInfo);
   };
 
-  const flushPendingItems = function() {
+  const flushPendingItems = async function() {
     flushTimer = null;
     const batch = new Map(pendingItems);
     pendingItems.clear();
     const smids = Array.from(batch.keys());
     if (smids.length === 0) return;
 
-    NicoCache_nl.get("/cache/info/v3?" + smids.join(","), function(response) {
-      if (!response || response.status !== 200) {
+    try {
+      const response = await fetch("https://nicocachenl.test/api/v1/cache-entry-queries", {
+        method: "POST",
+        cache: "no-store",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({videoIds: smids})
+      });
+      if (!response.ok) {
         console.warn("NicoCache_nl: 視聴ページのキャッシュ情報を取得できませんでした。");
         return;
       };
 
       let json;
       try {
-        json = JSON.parse(response.responseText);
+        json = await response.json();
       } catch (error) {
         console.warn("NicoCache_nl: 視聴ページのキャッシュ情報が不正です。", error);
         return;
@@ -121,7 +127,9 @@
           applyInfo(smid, item, videoInfo);
         });
       });
-    });
+    } catch (error) {
+      console.warn("NicoCache_nl: 視聴ページのキャッシュ情報を取得できませんでした。", error);
+    };
   };
 
   const enqueueItem = function(item) {

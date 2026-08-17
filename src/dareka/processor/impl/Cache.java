@@ -390,6 +390,11 @@ public class Cache extends CacheManager {
         return false;
     }
 
+    /** 指定動画IDの一時キャッシュ削除がダウンロード完了待ちか。 */
+    static boolean isTemporaryDeletionPending(String id) {
+        return id != null && TMP_DELETE_SET.contains(id) && hasActiveTmp(id);
+    }
+
     // [nl] 指定IDに関連する以下のファイルを全て取り除く
     // 通常キャッシュ、エコノミーキャッシュ、それらの一時ファイル
     public static boolean removeAll(String id) {

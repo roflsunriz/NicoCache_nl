@@ -265,7 +265,12 @@ window.NicocacheNLVideoAnchorHooks = window.NicocacheNLVideoAnchorHooks || [];
   };
 
   const requestCacheInfo = async function(ids) {
-    const response = await fetch("/cache/info/v3?" + ids.join(","), {cache: "no-cache"});
+    const response = await fetch("https://nicocachenl.test/api/v1/cache-entry-queries", {
+      method: "POST",
+      cache: "no-cache",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({videoIds: ids})
+    });
     if (!response.ok) throw new Error("HTTP " + response.status);
     const json = await response.json();
     if (!json || typeof json !== "object") throw new Error("invalid JSON response");

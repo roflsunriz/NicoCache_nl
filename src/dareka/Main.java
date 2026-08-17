@@ -277,6 +277,7 @@ public class Main {
 
         startupDirectoryWatcher(config); // [nl]
 
+        ProxyPacUpdater.update();
         server = new Server(config);
         controlServer = ControlServer.start(
                 NicoCachePaths.dataRoot(), NLMain::shutdown, Main::forceStop);

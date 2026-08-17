@@ -62,13 +62,15 @@ HTTP サーバーを利用する。
   UTF-8ファイル出力
 - サムネイルの上流取得・ファイル保存・再利用
 - nvcomment 応答の動画別 JSON 保存と、視聴ページの現行`comment.nvComment`情報から
-  `/cache/<動画ID>.comments.json`が正しいPOST本文・MIME・ファイル名で取得する経路
+  専用ホストの`/api/v1/videos/<動画ID>/exports/comments`が正しいPOST本文・MIME・
+  ファイル名で取得する経路
   （外部TLS接続を避けるため、ローカルHTTP fixtureを利用する）
 - DOMAND/CMAF の access-rights、master/sub playlist、AES key、初期化 chunk、
   暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生と、
   アニメ公式動画で使われる `hlsext` 経路、署名更新前後で同名セグメントが続く
   `shlsbid` 経路の鍵・IV世代分離
-- `/cache/*` の情報取得、配信、Range、削除、不正入力と既存エラー形式
+- `nicocachenl.test`のREST情報取得、検索、配信、Range、DELETE、診断、CORS、構造化エラーと、
+  旧管理APIが404になり副作用を起こさないこと
 - 単一 MP4・FLV・SWF、旧 DMC MP4・HLS の検索、配信、削除
 - Extension と Extension2 のロード、および Processor、stopper Processor、
   Rewriter、RequestFilter、CompleteCache、イベント、終了通知
@@ -91,10 +93,9 @@ Tencent Konaの39組み合わせで、本体機能、転送タイムアウト、
 実行成果物は`.test-work/runtime-compatibility/artifact/`に置かれ、テストごとの隔離領域は
 成功時に削除される。`-KeepWorkDir`を指定した場合だけ保持する。
 
-本体APIの契約だけを短時間で確認する場合は次を実行する。`/cache/info`、
-`info/v2`、`info/v3`、`ajax_info`、`echo`、検索・一覧・コメントJSON、XML、旧API、削除・移動・LST更新の
-成功系・不正入力・メソッド制限を隔離した実ソケットで検証し、`list/`からのパス脱出も
-拒否されることを確認する。起動管理APIのBearer認証、status、ping、未知パス、
+本体APIの契約だけを短時間で確認する場合は次を実行する。専用管理ページ、ヘルス、
+ランタイム診断、スレッドダンプ、キャッシュ単一・一括照会、検索、再生、DELETE、CORS、
+旧管理APIの無効化を隔離した実ソケットで検証する。起動管理APIのBearer認証、status、ping、未知パス、
 force-shutdownによる隔離プロセス終了も検証する。graceful-shutdownはE2Eテストで検証する。
 
 ```powershell

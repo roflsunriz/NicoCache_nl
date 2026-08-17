@@ -21,3 +21,4 @@
 *.video.nimg.jp
 *.dmc.nico
 *.nvcomment.nicovideo.jp
+nicocachenl.test

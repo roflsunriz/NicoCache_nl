@@ -7,6 +7,7 @@ import java.io.StringWriter;
 import java.net.ConnectException;
 import java.net.Socket;
 import java.net.SocketException;
+import java.net.URI;
 import java.nio.channels.CancelledKeyException;
 import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.IllegalBlockingModeException;
@@ -31,6 +32,7 @@ import dareka.processor.HttpRequestHeader;
 import dareka.processor.Processor;
 import dareka.processor.Resource;
 import dareka.processor.StringResource;
+import dareka.processor.impl.NicoCacheWebProcessor;
 
 public class ConnectionManager implements Runnable {
     private Server server;
@@ -365,6 +367,7 @@ public class ConnectionManager implements Runnable {
                         resource = StringResource.getPayloadTooLarge();
                     }
                 }
+                applyNicoCacheWebCors(requestHeader, resource);
                 if (corsLiar != null) {
                     corsLiar.applyToResource(requestHeader, resource);
                 }
@@ -421,6 +424,26 @@ public class ConnectionManager implements Runnable {
     // [nl] ローカルへのリクエストなら対応するResourceを返す
     private Resource getLocalResource(HttpRequestHeader requestHeader
             ) throws IOException {
+        if (NicoCacheWebProcessor.HOST.equalsIgnoreCase(requestHeader.getHost())
+                && !browser.getInetAddress().isLoopbackAddress()) {
+            return StringResource.getForbidden();
+        }
+        if (NicoCacheWebProcessor.HOST.equalsIgnoreCase(requestHeader.getHost())
+                && requestHeader.isOptionsMethod()) {
+            Resource response = new StringResource("");
+            applyNicoCacheWebCors(requestHeader, response);
+            response.setResponseHeader("Access-Control-Allow-Methods",
+                    "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+            String requestedHeaders = requestHeader.getMessageHeader(
+                    "Access-Control-Request-Headers");
+            if (requestedHeaders != null && !requestedHeaders.isBlank()) {
+                response.setResponseHeader("Access-Control-Allow-Headers",
+                        requestedHeaders);
+            }
+            response.setResponseHeader("Access-Control-Max-Age", "600");
+            response.setResponseHeader("Cache-Control", "no-store");
+            return response;
+        }
         if (requestHeader.getHost().equals("LOCAL")) {
             File localFile;
             String path = requestHeader.getPath();
@@ -478,6 +501,41 @@ public class ConnectionManager implements Runnable {
             return StringResource.getNotFound();
         }
         return null;
+    }
+
+    private static void applyNicoCacheWebCors(HttpRequestHeader requestHeader,
+            Resource resource) {
+        if (!NicoCacheWebProcessor.HOST.equalsIgnoreCase(requestHeader.getHost())) {
+            return;
+        }
+        String origin = requestHeader.getMessageHeader("Origin");
+        if (!isAllowedNicoCacheWebOrigin(origin)) {
+            return;
+        }
+        resource.setResponseHeader("Access-Control-Allow-Origin", origin);
+        resource.setResponseHeader("Vary", "Origin");
+    }
+
+    private static boolean isAllowedNicoCacheWebOrigin(String origin) {
+        if (origin == null || origin.isBlank()) {
+            return false;
+        }
+        try {
+            URI uri = URI.create(origin);
+            String host = uri.getHost();
+            String scheme = uri.getScheme();
+            if (host == null || scheme == null
+                    || !(scheme.equalsIgnoreCase("http")
+                    || scheme.equalsIgnoreCase("https"))) {
+                return false;
+            }
+            return host.equalsIgnoreCase(NicoCacheWebProcessor.HOST)
+                    || host.equalsIgnoreCase("nicovideo.jp")
+                    || host.toLowerCase(java.util.Locale.ROOT)
+                            .endsWith(".nicovideo.jp");
+        } catch (IllegalArgumentException error) {
+            return false;
+        }
     }
 
 //    private boolean useProcessor(HttpRequestHeader requestHeader,

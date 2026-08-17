@@ -12,12 +12,16 @@ import java.io.File;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-/** Builds the CMAF/Domand-only cache information returned by /cache/info/v3. */
+/** Builds the CMAF/Domand-only cache information returned by the REST API. */
 final class CmafCacheInfo {
     private CmafCacheInfo() {
     }
 
     static void append(StringBuilder output, String videoId) {
+        create(videoId).toJson(output);
+    }
+
+    static JsonObject create(String videoId) {
         SortedSet<VideoDescriptor> registered = CacheManager.id2Videos.get(videoId);
         if (registered != null) {
             // Refresh stale registrations before taking the response snapshot.
@@ -67,7 +71,7 @@ final class CmafCacheInfo {
         info.put("cachings", cachings);
         info.put("completes", completes);
         info.put("caches", caches);
-        info.toJson(output);
+        return info;
     }
 
     private static JsonObject cacheEntry(String videoId, String cacheId,

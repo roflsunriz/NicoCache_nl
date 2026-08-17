@@ -169,6 +169,20 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 追加しない。ユーザーデータを移動した場合は証明書も移動先の`certs/`へ生成し、
 `enableMitM=true`のまま`site.jks`がない状態で起動しない。
 
+専用管理サイト`https://nicocachenl.test/`を初めて含む版へ更新すると、本体は既存の
+`proxy.pac`へ専用ホスト経路を追加し、変更前を`proxy.pac.pre-rest-api.bak`へ一度だけ
+保存する。独自PACで`FindProxyForURL`を使用していない場合は自動変更せず警告する。
+`certificate-targets.txt`へ`nicocachenl.test`が追加された版では、ランチャーの
+データルート診断・修復からサイト証明書を再生成し、`certs/site.targets`が専用ホストを
+含むことを確認する。問題時はPACバックアップを戻し、旧証明書を退避して再生成する。
+
+専用管理サイト`https://nicocachenl.test/`を初めて含む版へ更新すると、本体は既存の
+`proxy.pac`へ専用ホスト経路を追加し、変更前を`proxy.pac.pre-rest-api.bak`へ一度だけ
+保存する。独自PACで`FindProxyForURL`を使用していない場合は自動変更せず警告する。
+`certificate-targets.txt`へ`nicocachenl.test`が追加された版では、ランチャーの
+データルート診断・修復からサイト証明書を再生成し、`certs/site.targets`が専用ホストを
+含むことを確認する。問題時はPACバックアップを戻し、旧証明書を退避して再生成する。
+
 ビルドスクリプトはルートの5つのJARを更新するため、必要な検証が終わったら
 `git status --short --branch` で生成物や無関係な差分が混入していないことを確認する。
 

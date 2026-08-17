@@ -128,7 +128,8 @@
     container.setAttribute("data-ncnl-video-id", videoId);
     container.querySelectorAll("a[data-ncnl-action]").forEach(function(link) {
       if (typeof link._ncnlSuffix === "string") {
-        link.href = "/cache/" + encodeURIComponent(videoId) + link._ncnlSuffix;
+        link.href = "https://nicocachenl.test/api/v1/videos/"
+          + encodeURIComponent(videoId) + link._ncnlSuffix;
       }
     });
   };
@@ -326,9 +327,9 @@
 
     var actions = document.createElement("div");
     actions.className = "ncnl-common-header-actions";
-    actions.appendChild(createActionLink("movie", "動画保存", "/auto/movie"));
-    actions.appendChild(createActionLink("comments", "コメント保存", ".comments.json"));
-    actions.appendChild(createActionLink("audio", "音声のみ保存", "/auto/audio"));
+    actions.appendChild(createActionLink("movie", "動画保存", "/exports/video"));
+    actions.appendChild(createActionLink("comments", "コメント保存", "/exports/comments"));
+    actions.appendChild(createActionLink("audio", "音声のみ保存", "/exports/audio"));
 
     var removeButton = document.createElement("button");
     removeButton.type = "button";
@@ -338,19 +339,21 @@
     removeButton.textContent = "キャッシュ削除";
     removeButton.addEventListener("click", function() {
       var videoId = getVideoId();
-      if (!videoId || !window.NicoCache_nl
-          || typeof NicoCache_nl.get !== "function") return;
+      if (!videoId) return;
       if (!confirm("本当にキャッシュを削除しますか？: " + videoId)) return;
       removeButton.disabled = true;
-      NicoCache_nl.get("/cache/ajax_rmall?" + encodeURIComponent(videoId),
-        function(response) {
+      fetch("https://nicocachenl.test/api/v1/videos/"
+          + encodeURIComponent(videoId) + "/cache-entries", {method: "DELETE"})
+        .then(function(response) {
           removeButton.disabled = false;
-          if (response && response.status === 200
-              && response.responseText.trim() === "OK") {
+          if (response.ok) {
             alert("キャッシュを削除しました: " + videoId);
           } else {
             alert("キャッシュを削除できませんでした: " + videoId);
           }
+        }).catch(function() {
+          removeButton.disabled = false;
+          alert("キャッシュを削除できませんでした: " + videoId);
         });
     });
     actions.appendChild(removeButton);
@@ -359,7 +362,7 @@
     var footer = document.createElement("div");
     footer.className = "ncnl-common-header-footer";
     var cacheLink = document.createElement("a");
-    cacheLink.href = "/cache/";
+    cacheLink.href = "https://nicocachenl.test/cache";
     cacheLink.setAttribute("data-ncnl-action", "manage");
     cacheLink.setAttribute("role", "menuitem");
     cacheLink.textContent = "キャッシュへ";

@@ -220,9 +220,9 @@ function createPage(cacheInfo, thumbnailWidths = {}) {
     URL,
     console,
     document,
-    fetch: async (url) => {
-      requests.push(url);
-      const ids = url.split("?")[1].split(",");
+    fetch: async (url, init) => {
+      requests.push({url, init});
+      const ids = JSON.parse(init.body).videoIds;
       return {
         ok: true,
         json: async () => Object.fromEntries(ids.map((id) => [id, cacheInfo[id] || null])),
@@ -266,7 +266,10 @@ test("v3のCMAF品質とキャッシュなしをリンク色classとアイコン
   });
   await flushAsyncWork();
 
-  assert.deepEqual(page.requests, ["/cache/info/v3?sm1,sm2,sm3,sm4"]);
+  assert.equal(page.requests[0].url,
+    "https://nicocachenl.test/api/v1/cache-entry-queries");
+  assert.deepEqual(JSON.parse(page.requests[0].init.body).videoIds,
+    ["sm1", "sm2", "sm3", "sm4"]);
   const expected = [
     ["nl-cached-smile-normal", "ncnl-cache-quality-low"],
     ["nl-cached-smile-normal", "ncnl-cache-quality-hd"],
@@ -451,22 +454,19 @@ function createWatchPage(thumbnailWidth) {
       return selector === itemSelector ? [item] : [];
     },
   };
-  const NicoCache_nl = {
-    get(url, callback) {
-      requests.push(url);
-      callback({
-        status: 200,
-        responseText: JSON.stringify({
-          sm1: videoInfo(),
-        }),
-      });
-    },
-  };
+  const NicoCache_nl = {};
   const window = {NicoCache_nl};
   window.window = window;
   const context = vm.createContext({
     console,
     document,
+    fetch: async (url, init) => {
+      requests.push({url, init});
+      return {
+        ok: true,
+        json: async () => ({sm1: videoInfo()}),
+      };
+    },
     MutationObserver: FakeMutationObserver,
     NicoCache_nl,
     Node: {ELEMENT_NODE: 1, DOCUMENT_NODE: 9},
@@ -488,7 +488,9 @@ test("視聴ページの関連動画もサムネイル幅に応じてアイコ�
   const page = createWatchPage(160);
   await flushAsyncWork();
 
-  assert.deepEqual(page.requests, ["/cache/info/v3?sm1"]);
+  assert.equal(page.requests[0].url,
+    "https://nicocachenl.test/api/v1/cache-entry-queries");
+  assert.deepEqual(JSON.parse(page.requests[0].init.body).videoIds, ["sm1"]);
   const icon = page.item.querySelector(":scope .cacheIcon");
   assert.equal(icon.classList.contains("ncnl-cache-quality-fhd"), true);
   assert.equal(icon.classList.contains("ncnl-cache-icon--compact"), false);

@@ -62,7 +62,8 @@ Uninstall.exe
 !/local/15_cached_link_color.js
 !/local/20_watchpage.js
 !/local/ncnl_cache_display.js
-!/local/list.js.default
+!/local/nicocache-web/
+!/local/nicocache-web/**
 !/local/mime.types.default
 !/local/nl_cacheIcon.css
 !/local/nllib.js

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NicoCache_nl</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/">NicoCache_nl</a>
+      <nav aria-label="メインナビゲーション">
+        <a href="/" data-i18n="overview">概要</a>
+        <a href="/cache" data-i18n="cache">キャッシュ</a>
+        <a href="/health" data-i18n="health">ヘルス</a>
+        <a href="/diagnostics" data-i18n="diagnostics">診断</a>
+        <a href="/diagnostics/threads" data-i18n="threads">スレッド</a>
+      </nav>
+    </header>
+    <main id="app" tabindex="-1" aria-live="polite"></main>
+    <template id="loading-template">
+      <section class="panel"><p data-i18n="loading">読み込み中…</p></section>
+    </template>
+    <script type="module" src="/assets/app.js"></script>
+  </body>
+</html>
