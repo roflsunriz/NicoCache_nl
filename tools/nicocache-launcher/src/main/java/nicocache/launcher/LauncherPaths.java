@@ -231,6 +231,14 @@ final class LauncherPaths {
         return dataRoot.resolve("data/nicocache-diagnostics-status.properties");
     }
 
+    Path getLauncherControlFile() {
+        return dataRoot.resolve("data/nicocache-launcher-control.properties");
+    }
+
+    Path getLauncherExitRequestFile() {
+        return dataRoot.resolve("data/nicocache-launcher-exit.request");
+    }
+
     Path getTaskStore() {
         return dataRoot.resolve("data/launcher-tasks.properties");
     }

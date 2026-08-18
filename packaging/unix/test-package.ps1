@@ -69,7 +69,9 @@ foreach ($legacy in @('app', 'lib/app', 'lib/runtime', 'runtime', 'Contents')) {
 $java = Join-Path $applicationRoot 'jre/bin/java'
 $launcherJar = Join-Path $applicationRoot 'NicoCacheLauncher.jar'
 $help = @(& $java '-jar' $launcherJar '--help' 2>&1)
-if ($LASTEXITCODE -ne 0 -or -not (($help -join "`n").Contains('--tray'))) {
+if ($LASTEXITCODE -ne 0 -or
+        -not (($help -join "`n").Contains('--tray')) -or
+        -not (($help -join "`n").Contains('--launcher-only-stop'))) {
     throw "同梱JREでNicoCacheLauncher.jarを起動できません: $help"
 }
 $diagnosticsHelp = @(& $java '-jar' (

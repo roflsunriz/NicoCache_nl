@@ -448,6 +448,7 @@ try {
     if ($LASTEXITCODE -ne 0 -or
             -not (($helpOutput -join "`n").Contains('--tray')) -or
             -not (($helpOutput -join "`n").Contains('--minimized')) -or
+            -not (($helpOutput -join "`n").Contains('--launcher-only-stop')) -or
             -not (($helpOutput -join "`n").Contains(
                 'core and diagnostics stop together; resident launcher continues'))) {
         throw "Windowsランチャーの表示モードCLIが不正です: $helpOutput"
@@ -493,6 +494,41 @@ try {
     $diagnosticsProcess = Wait-DiagnosticsProcess
     $residentLauncherId = $guiProcess.Id
     $residentDiagnosticsId = $diagnosticsProcess.Id
+
+    $launcherOnlyOutput = @(& $launcherPath '-jar' $launcherJarPath `
+        '--headless' '--launcher-only-stop' 2>&1)
+    if ($LASTEXITCODE -ne 0 -or
+            -not (($launcherOnlyOutput -join "`n").Contains(
+                'core and diagnostics unchanged'))) {
+        throw "ランチャー単独終了CLIに失敗しました: $launcherOnlyOutput"
+    }
+    $guiProcess.WaitForExit(10000) | Out-Null
+    $guiProcess.Refresh()
+    if (-not $guiProcess.HasExited) {
+        throw '--launcher-only-stop後も常駐ランチャーが動作しています'
+    }
+    if ($coreProcess.HasExited -or $diagnosticsProcess.HasExited) {
+        throw '--launcher-only-stopが本体または診断アプリを終了しました'
+    }
+    Write-Output 'PASS CLIで常駐ランチャーだけを終了し本体と診断アプリを維持'
+
+    $guiProcess.Dispose()
+    $guiProcess = Start-Process -FilePath $launcherPath `
+        -ArgumentList @('-jar', $launcherJarPath, '--tray') `
+        -WorkingDirectory $appImage `
+        -WindowStyle Hidden `
+        -PassThru
+    $launcherControlPath = Join-Path $dataRoot `
+        'data\nicocache-launcher-control.properties'
+    $launcherDeadline = [DateTime]::UtcNow.AddSeconds(10)
+    while (-not (Test-Path -LiteralPath $launcherControlPath -PathType Leaf) -and
+            [DateTime]::UtcNow -lt $launcherDeadline) {
+        Start-Sleep -Milliseconds 100
+    }
+    if (-not (Test-Path -LiteralPath $launcherControlPath -PathType Leaf)) {
+        throw '常駐ランチャー再起動後に制御情報がありません'
+    }
+    $residentLauncherId = $guiProcess.Id
 
     Start-Sleep -Milliseconds 2500
     $existingIncidentReports = @(Get-ChildItem -LiteralPath $incidentRoot `
@@ -615,7 +651,13 @@ try {
     Write-Output 'PASS 本体停止後も既存のランチャーだけが常駐'
     Write-Output 'PASS 計画停止は新しい障害レポートを生成しない'
 
-    Stop-Process -Id $guiProcess.Id -Force
+    $launcherExitOutput = @(& $launcherPath '-jar' $launcherJarPath `
+        '--headless' '--launcher-only-stop' 2>&1)
+    if ($LASTEXITCODE -ne 0 -or
+            -not (($launcherExitOutput -join "`n").Contains(
+                'NicoCacheLauncher stopped'))) {
+        throw "停止後のランチャー単独終了に失敗しました: $launcherExitOutput"
+    }
     $guiProcess.WaitForExit(10000) | Out-Null
     Write-Output 'PASS 引数なしのGUI起動では本体を暗黙起動しない'
     Write-Output 'PASS 本体の起動と正常終了に診断アプリが同期'

@@ -32,6 +32,12 @@ public final class LauncherOptionsTest {
         assertFalse(asynchronous.shouldStartCore(),
                 "non-GUI start must use its action instead of GUI state");
 
+        LauncherOptions launcherOnlyStop = LauncherOptions.parse(
+                new String[] { "--headless", "--launcher-only-stop" });
+        assertEquals(LauncherOptions.Action.LAUNCHER_ONLY_STOP,
+                launcherOnlyStop.getAction(),
+                "launcher-only stop action");
+
         assertRejected(new String[] { "--tray", "--minimized" },
                 "conflicting window modes");
         assertRejected(new String[] { "--headless", "--tray" },
@@ -40,6 +46,8 @@ public final class LauncherOptionsTest {
                 "window mode with another action");
         assertRejected(new String[] { "--start", "--status" },
                 "multiple core actions");
+        assertRejected(new String[] { "--launcher-only-stop", "--stop" },
+                "launcher-only and core stop conflict");
         System.out.println("Launcher option tests passed");
     }
 

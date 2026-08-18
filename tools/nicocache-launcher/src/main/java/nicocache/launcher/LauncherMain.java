@@ -2,6 +2,7 @@ package nicocache.launcher;
 
 import java.awt.GraphicsEnvironment;
 import java.nio.file.Files;
+import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
@@ -98,6 +99,11 @@ public final class LauncherMain {
             System.out.println("NicoCache_nl and diagnostics force-stop "
                     + "completed; resident launcher unchanged");
             return 0;
+        case LAUNCHER_ONLY_STOP:
+            LauncherControl.requestExit(paths, Duration.ofSeconds(15));
+            System.out.println("NicoCacheLauncher stopped; "
+                    + "core and diagnostics unchanged");
+            return 0;
         case STATUS:
             printStatus(paths);
             return 0;
@@ -186,6 +192,9 @@ public final class LauncherMain {
         System.out.println("  --start / --stop / --force-stop / --status");
         System.out.println("    core and diagnostics stop together; "
                 + "resident launcher continues");
+        System.out.println("  --launcher-only-stop");
+        System.out.println("    resident launcher exits; "
+                + "core and diagnostics continue");
         System.out.println("  --tray [--start]  タスクトレイで起動");
         System.out.println("  --minimized [--start]  最小化して起動");
         System.out.println("  --check-data-root  ユーザーデータルートを診断");

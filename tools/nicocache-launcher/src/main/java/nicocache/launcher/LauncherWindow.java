@@ -39,6 +39,7 @@ final class LauncherWindow {
     private final LauncherPaths paths;
     private final CoreProcess core;
     private final LauncherLifecycle lifecycle;
+    private final LauncherControl launcherControl;
     private final TaskScheduler scheduler;
     private final ResourceBundle messages;
     private final JFrame frame = new JFrame();
@@ -51,9 +52,11 @@ final class LauncherWindow {
     private TrayIcon trayIcon;
     private Timer statusTimer;
 
-    LauncherWindow(LauncherPaths paths, ResourceBundle messages) {
+    LauncherWindow(LauncherPaths paths, ResourceBundle messages)
+            throws IOException {
         this.paths = paths;
         this.core = new CoreProcess(paths);
+        this.launcherControl = LauncherControl.register(paths);
         this.lifecycle = new LauncherLifecycle(core::gracefulStop,
                 core::forceStop, this::closeLauncher);
         this.scheduler = new TaskScheduler(paths);
@@ -62,7 +65,18 @@ final class LauncherWindow {
         createTray();
         refreshDataRoot();
         refreshTasks();
-        statusTimer = new Timer(1000, event -> refreshStatus());
+        statusTimer = new Timer(1000, event -> {
+            try {
+                if (launcherControl.consumeExitRequest()) {
+                    closeLauncher();
+                } else {
+                    refreshStatus();
+                }
+            } catch (IOException error) {
+                statusTimer.stop();
+                showError(error);
+            }
+        });
         statusTimer.start();
     }
 
@@ -444,6 +458,7 @@ final class LauncherWindow {
             SystemTray.getSystemTray().remove(trayIcon);
             trayIcon = null;
         }
+        launcherControl.close();
         frame.dispose();
     }
 

@@ -17,6 +17,7 @@ final class LauncherOptions {
         START,
         STOP,
         FORCE_STOP,
+        LAUNCHER_ONLY_STOP,
         STATUS,
         CHECK_DATA_ROOT,
         TASK_LIST,
@@ -88,6 +89,8 @@ final class LauncherOptions {
                 selected = select(selected, Action.STOP);
             } else if ("--force-stop".equals(arg)) {
                 selected = select(selected, Action.FORCE_STOP);
+            } else if ("--launcher-only-stop".equals(arg)) {
+                selected = select(selected, Action.LAUNCHER_ONLY_STOP);
             } else if ("--status".equals(arg)) {
                 selected = select(selected, Action.STATUS);
             } else if ("--check-data-root".equals(arg)
