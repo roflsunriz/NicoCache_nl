@@ -63,7 +63,8 @@ GPAC/MP4Boxを管理できます。本体更新では配布物のSHA-256を検�
 - 利用者データフォルダー、HTTPS証明書、`proxy.pac`、権限の診断
 
 ランチャーのウィンドウを閉じるとタスクトレイへ格納されます。「ランチャーのみ終了」は
-ランチャーだけを終了し、本体と診断アプリは停止しません。
+ランチャーだけを終了し、本体と診断アプリは停止しません。CLIでは
+`--launcher-only-stop`で同じ操作を安全に実行できます。
 
 画面のない環境では`NicoCacheLauncher.jar`を次のように使用できます。
 
@@ -71,6 +72,7 @@ GPAC/MP4Boxを管理できます。本体更新では配布物のSHA-256を検�
 java -jar NicoCacheLauncher.jar --headless --start
 java -jar NicoCacheLauncher.jar --headless --status
 java -jar NicoCacheLauncher.jar --headless --stop
+java -jar NicoCacheLauncher.jar --headless --launcher-only-stop
 java -jar NicoCacheLauncher.jar --headless --check-data-root
 ```
 

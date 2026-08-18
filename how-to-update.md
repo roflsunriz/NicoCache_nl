@@ -68,6 +68,7 @@ GUIを使わずに本体を常駐起動する場合は、起動管理アプリ�
 java -jar .\NicoCacheLauncher.jar --headless --start
 java -jar .\NicoCacheLauncher.jar --headless --status
 java -jar .\NicoCacheLauncher.jar --headless --stop
+java -jar .\NicoCacheLauncher.jar --headless --launcher-only-stop
 ```
 
 GUI、タスクトレイ、ヘッドレスCLI、直JAR、自動起動のいずれから本体を起動した場合も、
@@ -79,6 +80,8 @@ GUI、タスクトレイ、ヘッドレスCLI、直JAR、自動起動のいず�
 NicoCache_nl本体と診断アプリを揃って終了し、既存の常駐ランチャーだけを残す。本体が
 クラッシュまたは外部から異常終了した場合は診断アプリを残し、障害採取を継続する。
 「ランチャーのみ終了」は本体と診断アプリを残したままランチャーだけを終了する。
+CLIから同じ操作を行う場合は`--launcher-only-stop`を使用する。利用者データ内の
+ランダムトークン付き制御情報を照合し、別プロセスのJavaを終了対象にしない。
 Windowsアプリイメージ試験では、ランチャー単独で診断アプリを起動しないこと、正常停止で
 本体PIDと診断PIDが終了すること、ランチャーPIDだけが生存することまで検証する。
 
@@ -172,6 +175,8 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 専用管理サイト`https://nicocachenl.test/`を初めて含む版へ更新すると、本体は既存の
 `proxy.pac`へ専用ホスト経路を追加し、変更前を`proxy.pac.pre-rest-api.bak`へ一度だけ
 保存する。独自PACで`FindProxyForURL`を使用していない場合は自動変更せず警告する。
+既存PACがUTF-8、BOM付きUTF-16、Windows-31Jの場合は、元の文字コード、BOM、改行を
+維持して更新する。判定できない文字コードでは元ファイルを変更せず警告する。
 `certificate-targets.txt`へ`nicocachenl.test`が追加された版では、ランチャーの
 データルート診断・修復からサイト証明書を再生成し、`certs/site.targets`が専用ホストを
 含むことを確認する。問題時はPACバックアップを戻し、旧証明書を退避して再生成する。

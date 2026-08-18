@@ -6,6 +6,18 @@
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-08-18
+
+### Added
+
+- 本体と診断アプリを稼働させたまま常駐ランチャーだけを安全に終了できる
+  `NicoCacheLauncher.jar --headless --launcher-only-stop`を追加した。
+
+### Fixed
+
+- Windows-31JなどUTF-8以外で保存された既存`proxy.pac`でも専用管理ホスト移行が
+  `MalformedInputException`で停止しないよう、文字コード・BOM・改行を維持して更新するよう修正した。
+
 ## [1.5.0] - 2026-08-18
 
 ### Added
