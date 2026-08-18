@@ -11,6 +11,7 @@ import java.net.Socket;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -58,6 +59,7 @@ import dareka.processor.util.LocalFlvTemplate;
 public final class FunctionalTestMain {
     private static final Duration START_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration STOP_TIMEOUT = Duration.ofSeconds(20);
+    private static final Charset PAC_CHARSET = Charset.forName("windows-31j");
     private static final List<String> FAILURES = new ArrayList<>();
     private static int executedTests;
 
@@ -72,6 +74,7 @@ public final class FunctionalTestMain {
     private Process nicocache;
     private int upstreamPort;
     private int nicocachePort;
+    private byte[] originalProxyPac;
     private final Map<String, AtomicInteger> upstreamRequests = new ConcurrentHashMap<>();
 
     private FunctionalTestMain(Path repository, Path sandbox, Path classes,
@@ -217,9 +220,10 @@ public final class FunctionalTestMain {
                 "special-local-content", StandardCharsets.UTF_8);
         Files.writeString(sandbox.resolve("local/raw[brackets].txt"),
                 "raw-bracket-content", StandardCharsets.UTF_8);
-        Files.writeString(sandbox.resolve("proxy.pac"),
-                "function FindProxyForURL(url, host) {\n  return 'DIRECT';\n}\n",
-                StandardCharsets.UTF_8);
+        originalProxyPac = ("function FindProxyForURL(url, host) {\r\n"
+                + "  // 既存の日本語PAC\r\n"
+                + "  return 'DIRECT';\r\n}\r\n").getBytes(PAC_CHARSET);
+        Files.write(sandbox.resolve("proxy.pac"), originalProxyPac);
         Files.writeString(application.resolve("local/system-only.txt"),
                 "system-local-content", StandardCharsets.UTF_8);
         Files.writeString(application.resolve("local/overlay.txt"),
@@ -1596,10 +1600,15 @@ public final class FunctionalTestMain {
     }
 
     private void testNicoCacheWebApiContract() throws Exception {
-        assertFileContains(sandbox.resolve("proxy.pac"), "nicocachenl.test");
-        assertTrue(Files.isRegularFile(
-                sandbox.resolve("proxy.pac.pre-rest-api.bak")),
+        assertContains(new String(Files.readAllBytes(
+                sandbox.resolve("proxy.pac")), PAC_CHARSET),
+                "nicocachenl.test", "Windows-31J PAC migration");
+        Path proxyBackup = sandbox.resolve("proxy.pac.pre-rest-api.bak");
+        assertTrue(Files.isRegularFile(proxyBackup),
                 "proxy PAC migration backup");
+        assertTrue(Arrays.equals(originalProxyPac,
+                Files.readAllBytes(proxyBackup)),
+                "proxy PAC backup must preserve original bytes");
         Response page = request(nicoCacheWebRequest("GET", "/", "", ""));
         assertEquals(200, page.status, "management page status");
         assertContains(page.header("content-type"), "text/html",

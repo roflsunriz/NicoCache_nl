@@ -10,6 +10,7 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -52,6 +53,7 @@ public final class FirstRunSetupTest {
         Files.createDirectories(sandbox);
         Files.createDirectories(previewDirectory);
         testPathResolution();
+        testProxyPacEncodingMigration();
         testSystemAssetsRemainSeparated();
         testSeparatedSetupFiles();
         testRequirementDetection();
@@ -64,7 +66,156 @@ public final class FirstRunSetupTest {
         testCertificateTargets();
         testLocalizedKeysMatch();
         testWizardControlsAndRender();
-        System.out.println("First-run setup tests passed: 13");
+        System.out.println("First-run setup tests passed: 14");
+    }
+
+    private void testProxyPacEncodingMigration() throws Exception {
+        String oldDataRoot = System.getProperty(
+                NicoCachePaths.USER_DATA_ROOT_PROPERTY);
+        String oldListenPort = System.getProperty("listenPort");
+        try {
+            System.setProperty("listenPort", "18080");
+            verifyProxyPacMigration("utf8-lf",
+                    StandardCharsets.UTF_8, new byte[0], "\n");
+            verifyProxyPacMigration("utf8-bom-crlf",
+                    StandardCharsets.UTF_8,
+                    new byte[] {(byte) 0xef, (byte) 0xbb, (byte) 0xbf},
+                    "\r\n");
+            verifyProxyPacMigration("windows-31j-crlf",
+                    Charset.forName("windows-31j"), new byte[0], "\r\n");
+            verifyProxyPacMigration("windows-31j-cr",
+                    Charset.forName("windows-31j"), new byte[0], "\r");
+            verifyProxyPacMigration("utf16le-bom-crlf",
+                    StandardCharsets.UTF_16LE,
+                    new byte[] {(byte) 0xff, (byte) 0xfe}, "\r\n");
+            verifyProxyPacMigration("utf16be-bom-lf",
+                    StandardCharsets.UTF_16BE,
+                    new byte[] {(byte) 0xfe, (byte) 0xff}, "\n");
+            verifyUnknownProxyPacEncoding();
+        } finally {
+            restoreProperty(NicoCachePaths.USER_DATA_ROOT_PROPERTY,
+                    oldDataRoot);
+            restoreProperty("listenPort", oldListenPort);
+        }
+        System.out.println("PASS proxy PAC encoding-preserving migration");
+    }
+
+    private void verifyProxyPacMigration(String name, Charset charset,
+            byte[] bom, String newline) throws Exception {
+        Path directory = freshSandbox("proxy-pac/" + name);
+        System.setProperty(NicoCachePaths.USER_DATA_ROOT_PROPERTY,
+                directory.toString());
+        Path pac = directory.resolve("proxy.pac");
+        String originalText = "function FindProxyForURL(url, host) {"
+                + newline + "  // 既存の日本語コメント"
+                + newline + "  return 'DIRECT';"
+                + newline + "}" + newline;
+        byte[] body = originalText.getBytes(charset);
+        byte[] original = new byte[bom.length + body.length];
+        System.arraycopy(bom, 0, original, 0, bom.length);
+        System.arraycopy(body, 0, original, bom.length, body.length);
+        Files.write(pac, original);
+
+        ProxyPacUpdater.update();
+
+        Path backup = directory.resolve("proxy.pac.pre-rest-api.bak");
+        assertTrue(Files.isRegularFile(backup),
+                name + " migration backup");
+        assertByteArrayEquals(original, Files.readAllBytes(backup),
+                name + " backup must preserve original bytes");
+        byte[] updatedBytes = Files.readAllBytes(pac);
+        String route = newline
+                + "  // NicoCache_nl management site and REST API." + newline
+                + "  if (host.toLowerCase() === 'nicocachenl.test') {" + newline
+                + "    return 'PROXY 127.0.0.1:18080';" + newline
+                + "  };" + newline;
+        byte[] inserted = route.getBytes(charset);
+        int insertedAt = byteIndexOf(updatedBytes, inserted);
+        assertTrue(insertedAt >= 0, name + " inserted route bytes");
+        byte[] withoutRoute = new byte[updatedBytes.length - inserted.length];
+        System.arraycopy(updatedBytes, 0, withoutRoute, 0, insertedAt);
+        System.arraycopy(updatedBytes, insertedAt + inserted.length,
+                withoutRoute, insertedAt,
+                updatedBytes.length - insertedAt - inserted.length);
+        assertByteArrayEquals(original, withoutRoute,
+                name + " original bytes outside route must not change");
+        assertEquals(bom.length, bomLength(updatedBytes),
+                name + " BOM must be preserved");
+        String updated = new String(updatedBytes, bom.length,
+                updatedBytes.length - bom.length, charset);
+        assertContains(updated, "既存の日本語コメント",
+                name + " existing text");
+        assertContains(updated, "host.toLowerCase() === 'nicocachenl.test'",
+                name + " dedicated host route");
+        assertContains(updated, "PROXY 127.0.0.1:18080",
+                name + " configured proxy port");
+        if ("\r\n".equals(newline)) {
+            assertFalse(updated.replace("\r\n", "").contains("\n"),
+                    name + " must not introduce LF-only lines");
+        } else if ("\r".equals(newline)) {
+            assertFalse(updated.contains("\n"),
+                    name + " must not introduce LF lines");
+        }
+        assertFalse(Files.exists(directory.resolve(
+                "proxy.pac.rest-api.part")),
+                name + " temporary file must be removed");
+
+        ProxyPacUpdater.update();
+        assertByteArrayEquals(updatedBytes, Files.readAllBytes(pac),
+                name + " migration must be idempotent");
+        assertByteArrayEquals(original, Files.readAllBytes(backup),
+                name + " backup must not be overwritten");
+    }
+
+    private void verifyUnknownProxyPacEncoding() throws Exception {
+        Path directory = freshSandbox("proxy-pac/unknown");
+        System.setProperty(NicoCachePaths.USER_DATA_ROOT_PROPERTY,
+                directory.toString());
+        Path pac = directory.resolve("proxy.pac");
+        byte[] invalid = {(byte) 0x81};
+        Files.write(pac, invalid);
+
+        ProxyPacUpdater.update();
+
+        assertByteArrayEquals(invalid, Files.readAllBytes(pac),
+                "unknown encoding PAC must remain unchanged");
+        assertFalse(Files.exists(directory.resolve(
+                "proxy.pac.pre-rest-api.bak")),
+                "unknown encoding PAC must not create a backup");
+        assertFalse(Files.exists(directory.resolve(
+                "proxy.pac.rest-api.part")),
+                "unknown encoding PAC must not leave a temporary file");
+    }
+
+    private static int bomLength(byte[] bytes) {
+        if (bytes.length >= 3 && bytes[0] == (byte) 0xef
+                && bytes[1] == (byte) 0xbb
+                && bytes[2] == (byte) 0xbf) {
+            return 3;
+        }
+        if (bytes.length >= 2
+                && (bytes[0] == (byte) 0xff && bytes[1] == (byte) 0xfe
+                || bytes[0] == (byte) 0xfe && bytes[1] == (byte) 0xff)) {
+            return 2;
+        }
+        return 0;
+    }
+
+    private static int byteIndexOf(byte[] haystack, byte[] needle) {
+        for (int index = 0; index <= haystack.length - needle.length;
+                index++) {
+            boolean matches = true;
+            for (int offset = 0; offset < needle.length; offset++) {
+                if (haystack[index + offset] != needle[offset]) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
+                return index;
+            }
+        }
+        return -1;
     }
 
     private void testPathResolution() throws Exception {
@@ -894,6 +1045,14 @@ public final class FirstRunSetupTest {
         if (!java.util.Objects.equals(expected, actual)) {
             throw new AssertionError(message + ": expected=" + expected
                     + ", actual=" + actual);
+        }
+    }
+
+    private static void assertByteArrayEquals(byte[] expected, byte[] actual,
+            String message) {
+        if (!java.util.Arrays.equals(expected, actual)) {
+            throw new AssertionError(message + ": expectedLength="
+                    + expected.length + ", actualLength=" + actual.length);
         }
     }
 
