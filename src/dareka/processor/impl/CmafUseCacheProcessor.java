@@ -81,6 +81,9 @@ public class CmafUseCacheProcessor implements Processor {
         }
         Resource resource = responseFile(cache, normalizeSubpath(subpath),
                 requestHeader, browser);
+        if (resource != null) {
+            resource.setResponseHeader("Cache-Control", "no-store");
+        }
         return resource == null ? StringResource.getNotFound() : resource;
     }
 

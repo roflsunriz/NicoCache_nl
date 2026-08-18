@@ -512,6 +512,7 @@ public class ConnectionManager implements Runnable {
         if (!isAllowedNicoCacheWebOrigin(origin)) {
             return;
         }
+        resource.setResponseHeader("Access-Control-Allow-Credentials", "true");
         resource.setResponseHeader("Access-Control-Allow-Origin", origin);
         resource.setResponseHeader("Vary", "Origin");
     }

@@ -1347,6 +1347,9 @@ public final class FunctionalTestMain {
         assertContains(cachedVideoPlaylist.bodyText(),
                 "https://nicocachenl.test/media/v1/playback-sessions/",
                 "cached CMAF dedicated segment URL");
+        assertContains(cachedVideoPlaylist.bodyText(),
+                "?nicocachenl_media_version=2",
+                "cached CMAF segment URL cache version");
         Response sessionPlaylist = request(nicoCacheWebRequest("GET",
                 "/media/v1/playback-sessions/" + cachedVideoKey
                 + "/files/video/01.cmfv",
@@ -1355,6 +1358,11 @@ public final class FunctionalTestMain {
                 "CMAF playback session segment status");
         assertEquals("video-segment", sessionPlaylist.bodyText(),
                 "CMAF playback session segment body");
+        assertEquals("true",
+                sessionPlaylist.header("access-control-allow-credentials"),
+                "CMAF playback session credentials CORS");
+        assertEquals("no-store", sessionPlaylist.header("cache-control"),
+                "CMAF playback session browser cache policy");
 
         stopUpstream();
         String offlineBase = cacheEntryMediaBase("sm900010[720p,128].hls");
@@ -1703,6 +1711,9 @@ public final class FunctionalTestMain {
         assertEquals("https://www.nicovideo.jp",
                 hlsSegment.header("access-control-allow-origin"),
                 "dedicated HLS media CORS origin");
+        assertEquals("true",
+                hlsSegment.header("access-control-allow-credentials"),
+                "dedicated HLS media credentials CORS");
         Response hlsSegmentHead = request(nicoCacheWebRequest(
                 "HEAD", hlsMediaBase + "segment.ts", "", ""));
         assertEquals(200, hlsSegmentHead.status,

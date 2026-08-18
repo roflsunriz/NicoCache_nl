@@ -15,6 +15,8 @@ import dareka.processor.StringResource;
 
 /** 専用ホストの内部メディア配信と旧経路の遮断を担当するProcessor。 */
 public class CacheDirProcessor implements Processor {
+    private static final String PLAYBACK_MEDIA_VERSION =
+            "nicocachenl_media_version=2";
     private static final String[] SUPPORTED_METHODS = { null };
     private static final Pattern CACHE_DIR_PATTERN = Pattern.compile(
             "^(?:https?://" + Pattern.quote(NicoCacheWebProcessor.HOST)
@@ -90,9 +92,11 @@ public class CacheDirProcessor implements Processor {
     }
 
     static String playbackSessionFileUrl(String sessionId, String relativePath) {
+        String separator = relativePath.contains("?") ? "&" : "?";
         return "https://" + NicoCacheWebProcessor.HOST
                 + "/media/v1/playback-sessions/" + sessionId
-                + "/files/" + relativePath;
+                + "/files/" + relativePath + separator
+                + PLAYBACK_MEDIA_VERSION;
     }
 
     private static String decodePathSegment(String value) {
