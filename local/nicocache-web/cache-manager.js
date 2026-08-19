@@ -350,6 +350,7 @@ export async function renderCacheManager({ app, fetchJson, t, escapeHtml, format
             <div class="cache-action-row secondary-actions">
               <a class="button${entry.temporary ? " disabled" : ""}" ${entry.temporary ? "aria-disabled=\"true\"" : `href="/api/v1/videos/${encodeURIComponent(entry.baseId)}/exports/video"`}>${t("exportVideo")}</a>
               <a class="button${entry.temporary ? " disabled" : ""}" ${entry.temporary ? "aria-disabled=\"true\"" : `href="/api/v1/videos/${encodeURIComponent(entry.baseId)}/exports/audio"`}>${t("exportAudio")}</a>
+              <a class="button" href="/api/v1/videos/${encodeURIComponent(entry.baseId)}/exports/comments">${t("exportComments")}</a>
               <button class="danger" type="button" data-action="delete">${t("delete")}</button>
             </div>
           </div>

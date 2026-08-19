@@ -128,7 +128,7 @@ test("管理画面エントリーがキャッシュ管理モジュールを読�
   assert.match(appSource, /renderCacheManager/);
 });
 
-test("カード操作は常時2段で動画・音声保存と削除を2段目へ並べる", () => {
+test("カード操作は常時2段で動画・音声・コメント保存と削除を2段目へ並べる", () => {
   assert.doesNotMatch(moduleSource, /<details|t\("more"\)|card-menu/);
   assert.match(
     moduleSource,
@@ -139,6 +139,7 @@ test("カード操作は常時2段で動画・音声保存と削除を2段目へ
   )?.[1] ?? "";
   assert.match(secondaryActions, /exports\/video/);
   assert.match(secondaryActions, /exports\/audio/);
+  assert.match(secondaryActions, /exports\/comments/);
   assert.match(secondaryActions, /data-action="delete"/);
 
   const styles = fs.readFileSync(
@@ -146,5 +147,5 @@ test("カード操作は常時2段で動画・音声保存と削除を2段目へ
     "utf8",
   );
   assert.match(styles, /\.primary-actions \{ grid-template-columns: repeat\(2,/);
-  assert.match(styles, /\.secondary-actions \{ grid-template-columns: repeat\(3,/);
+  assert.match(styles, /\.secondary-actions \{ grid-template-columns: repeat\(4,/);
 });
