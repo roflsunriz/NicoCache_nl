@@ -1,13 +1,14 @@
 package dareka;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
+
+import dareka.internal.TextFileCodec;
 
 
 /**
@@ -95,22 +96,25 @@ final class NicoCachePaths {
             return null;
         }
         Properties properties = new Properties();
-        try (FileInputStream input = new FileInputStream(config)) {
-            properties.load(input);
-            String raw = readRawDataRoot(config.toPath());
+        try {
+            String text = TextFileCodec.decode(Files.readAllBytes(
+                    config.toPath()), NicoCachePaths::isConfigurationText)
+                    .getText();
+            properties.load(new StringReader(text));
+            String raw = readRawDataRoot(text);
             return raw == null
                     ? properties.getProperty(USER_DATA_ROOT_KEY)
                     : raw;
         } catch (IOException error) {
             throw new IllegalStateException(
-                    "設定ファイルを読み取れません: " + config,
+                    "設定ファイルを安全に読み取れません。UTF-8で保存し直して"
+                            + "ください: " + config,
                     error);
         }
     }
 
-    private static String readRawDataRoot(Path config) throws IOException {
-        for (String line : Files.readAllLines(config,
-                StandardCharsets.ISO_8859_1)) {
+    private static String readRawDataRoot(String text) {
+        for (String line : text.split("\\R", -1)) {
             String trimmed = line.trim();
             if (trimmed.isEmpty() || trimmed.startsWith("#")
                     || trimmed.startsWith("!")) {
@@ -133,6 +137,14 @@ final class NicoCachePaths {
             return null;
         }
         return null;
+    }
+
+    static boolean isConfigurationText(String text) {
+        if (text.startsWith("# NicoCache_nl 設定ファイル")) {
+            return true;
+        }
+        return text.lines().anyMatch(line -> line.matches(
+                "\\s*[A-Za-z0-9_.-]+\\s*[=:].*"));
     }
 
     static void publishDataRoot(Path root) {

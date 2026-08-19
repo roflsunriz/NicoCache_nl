@@ -3,9 +3,10 @@ package dareka;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.HashSet;
 import java.util.regex.Pattern;
@@ -143,8 +144,8 @@ public class TlsEndPoint {
         if (!SITE_TARGETS_FILE.exists()) {
             return false;
         }
-        try (FileReader fr = new FileReader(SITE_TARGETS_FILE);
-                BufferedReader br = new BufferedReader(fr)) {
+        try (BufferedReader br = Files.newBufferedReader(
+                SITE_TARGETS_FILE.toPath(), StandardCharsets.UTF_8)) {
             String line;
             while ((line = br.readLine()) != null) {
                 if (line.length() == 0) continue;

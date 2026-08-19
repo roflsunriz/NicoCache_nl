@@ -26,8 +26,9 @@ public final class DataRootInspectorTest {
             testMitmCertificateRequirements(work);
             testMitmTargetListIsAccepted(work);
             testMitmTargetMismatch(work);
+            testTextEncodingMigrationReport(work);
             testLegacyLayoutIsReported(work);
-            System.out.println("Data-root inspection tests passed: 7");
+            System.out.println("Data-root inspection tests passed: 8");
         } finally {
             deleteTree(work);
         }
@@ -100,6 +101,9 @@ public final class DataRootInspectorTest {
         assertEquals(DataRootInspection.ItemState.OK,
                 item(inspection, "proxy-pac").getState(),
                 "proxy PAC");
+        assertEquals(DataRootInspection.ItemState.NOT_APPLICABLE,
+                item(inspection, "text-encoding-migration").getState(),
+                "text migration waits for first core start");
         assertEquals(0, inspection.getExitCode(),
                 "complete root exit code");
         for (Locale locale : List.of(Locale.ENGLISH, Locale.JAPANESE)) {
@@ -234,6 +238,54 @@ public final class DataRootInspectorTest {
         assertEquals(DataRootInspection.ItemState.BLOCKED,
                 item(inspection, "site-targets").getState(),
                 "MitM target mismatch");
+        String details = DataRootInspectionFormatter.details(inspection,
+                messages(Locale.JAPANESE));
+        assertTrue(details.contains("サイト証明書を再生成"),
+                "mismatch guidance must name the site certificate");
+        assertTrue(details.contains("ca.cerの再登録は不要"),
+                "mismatch guidance must preserve the trusted CA");
+    }
+
+    private static void testTextEncodingMigrationReport(Path work)
+            throws Exception {
+        Path application = createApplication(work.resolve("encoding-app"),
+                false, true);
+        Path data = work.resolve("encoding-data");
+        createBaseDirectories(data);
+        Files.writeString(data.resolve("proxy.pac"), "DIRECT",
+                StandardCharsets.US_ASCII);
+        writeSetupState(data, "complete");
+        Path report = data.resolve(
+                "data/text-encoding-migration-v1.properties");
+
+        Files.writeString(report, "version=1\nissues=0\n",
+                StandardCharsets.UTF_8);
+        DataRootInspection complete = DataRootInspector.inspect(application,
+                data);
+        assertEquals(DataRootInspection.ItemState.OK,
+                item(complete, "text-encoding-migration").getState(),
+                "successful text migration report");
+
+        Files.writeString(report,
+                "version=1\nissues=1\nissue.1.path=proxy.pac\n",
+                StandardCharsets.UTF_8);
+        DataRootInspection issues = DataRootInspector.inspect(application,
+                data);
+        assertEquals(DataRootInspection.ItemState.ATTENTION,
+                item(issues, "text-encoding-migration").getState(),
+                "text migration issue report");
+        String details = DataRootInspectionFormatter.details(issues,
+                messages(Locale.JAPANESE));
+        assertTrue(details.contains("元ファイルは変更されていません"),
+                "issue guidance must state that the original is preserved");
+
+        Files.writeString(report, "version=1\nissues=invalid\n",
+                StandardCharsets.UTF_8);
+        DataRootInspection malformed = DataRootInspector.inspect(application,
+                data);
+        assertEquals(DataRootInspection.ItemState.ERROR,
+                item(malformed, "text-encoding-migration").getState(),
+                "malformed text migration report");
     }
 
     private static Path createApplication(Path application,

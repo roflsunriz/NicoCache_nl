@@ -24,7 +24,7 @@ public class Main {
     // "NicoCache_nl+150304mod+231111mod (eR) (based on NicoCache v0.45)"
 
     // public so that external tools can read.
-    public static final String VER_STRING = "NicoCache_nl version 2026-08-18 (v1.5.1)";
+    public static final String VER_STRING = "NicoCache_nl version 2026-08-19 (v1.6.0)";
 
     // accessor for avoiding static link
     public static String getVersion() {
@@ -158,6 +158,7 @@ public class Main {
             }
         }
 
+        UserTextEncodingMigrator.migrate(configFile.toPath());
         Config config = configure(configFile);
 
         // ログ表示重複排除設定

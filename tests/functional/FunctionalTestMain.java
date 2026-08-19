@@ -1609,14 +1609,34 @@ public final class FunctionalTestMain {
 
     private void testNicoCacheWebApiContract() throws Exception {
         assertContains(new String(Files.readAllBytes(
-                sandbox.resolve("proxy.pac")), PAC_CHARSET),
-                "nicocachenl.test", "Windows-31J PAC migration");
+                sandbox.resolve("proxy.pac")), StandardCharsets.UTF_8),
+                "nicocachenl.test", "canonical UTF-8 PAC migration");
         Path proxyBackup = sandbox.resolve("proxy.pac.pre-rest-api.bak");
         assertTrue(Files.isRegularFile(proxyBackup),
                 "proxy PAC migration backup");
+        Properties migration = new Properties();
+        try (var reader = Files.newBufferedReader(sandbox.resolve(
+                "data/text-encoding-migration-v1.properties"),
+                StandardCharsets.UTF_8)) {
+            migration.load(reader);
+        }
+        Path originalBackup = null;
+        int converted = Integer.parseInt(migration.getProperty(
+                "converted", "0"));
+        for (int index = 1; index <= converted; index++) {
+            if ("proxy.pac".equals(migration.getProperty(
+                    "converted." + index + ".path"))) {
+                originalBackup = sandbox.resolve("data").resolve(
+                        migration.getProperty("converted." + index
+                                + ".backup"));
+                break;
+            }
+        }
+        assertTrue(originalBackup != null && Files.isRegularFile(
+                originalBackup), "central proxy PAC migration backup");
         assertTrue(Arrays.equals(originalProxyPac,
-                Files.readAllBytes(proxyBackup)),
-                "proxy PAC backup must preserve original bytes");
+                Files.readAllBytes(originalBackup)),
+                "central PAC backup must preserve original bytes");
         Response page = request(nicoCacheWebRequest("GET", "/", "", ""));
         assertEquals(200, page.status, "management page status");
         assertContains(page.header("content-type"), "text/html",

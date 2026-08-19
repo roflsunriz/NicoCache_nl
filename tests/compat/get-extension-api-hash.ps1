@@ -11,7 +11,9 @@ $jarTool = (Get-Command jar -ErrorAction Stop).Source
 $javapTool = (Get-Command javap -ErrorAction Stop).Source
 
 $classNames = & $jarTool tf $resolvedJar |
-    Where-Object { $_ -like "dareka/*.class" -and $_ -notlike "*module-info.class" } |
+    Where-Object { $_ -like "dareka/*.class" -and
+        $_ -notlike "dareka/internal/*" -and
+        $_ -notlike "*module-info.class" } |
     ForEach-Object { ($_ -replace "/", ".") -replace "\.class$", "" } |
     Sort-Object -Unique
 

@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import dareka.internal.TextFileCodec;
+
 
 /**
  * [nl] ファイル処理関係のユーティリティクラス。
@@ -224,7 +226,7 @@ public class FileUtil {
      * ファイルの文字セットを判別して{@link java.io.InputStreamReader}を生成して返す。
      * 文字セットを判別するために、日本語文字を含んだ開始文字列を指定する必要がある。
      * <br>
-     * 以下のいずれかの場合はデフォルト文字セットで{@link java.io.InputStreamReader}を生成する。
+     * {@code startline}がnullの場合はUTF-8で読み取る。
      * <ul>
      * <li>開始文字列で始まっていない
      * <li>開始文字列に日本語文字が含まれていない
@@ -251,14 +253,14 @@ public class FileUtil {
                 throw e;
             }
         }
-        return new InputStreamReader(in);
+        return new InputStreamReader(in, StandardCharsets.UTF_8);
     }
 
     /**
      * ファイルの文字セットを判別して{@link java.io.OutputStreamWriter}を生成して返す。
      * 文字セットの判別条件は{@link #getInputStreamReader(File, String)}を参照のこと。
      * ファイルが存在する場合はappendモードでファイルをオープンします。
-     * ファイルが存在しない場合はデフォルト文字セットでファイルを作成します。
+     * ファイルが存在しない場合はUTF-8でファイルを作成します。
      *
      * @param file 対象のファイル
      * @param startline 文字セットのテストに使う開始文字列
@@ -272,7 +274,8 @@ public class FileUtil {
             throw new IllegalArgumentException("file must not be null");
         }
         if (!file.exists() || startline == null) {
-            return new OutputStreamWriter(new FileOutputStream(file));
+            return new OutputStreamWriter(new FileOutputStream(file),
+                    StandardCharsets.UTF_8);
         }
         Info info;
         BufferedInputStream in = new BufferedInputStream(new FileInputStream(file));
@@ -394,24 +397,11 @@ public class FileUtil {
         in.mark(testBuf.length);
         in.read(testBuf);
         in.reset();
-        String s = getCharsetNameFromBOM(testBuf, in);
-        if (s != null) {
-            info.charset = Charset.forName(s);
-        } else if (info.startline != null) {
-            // 1文字4バイト未満で判定
-            int testSize = info.startline.length() * 4;
-            if (testSize > testBuf.length) {
-                testSize = testBuf.length;
-            }
-            for (Charset c : SUPPORTED_CHARSET) {
-                s = new String(testBuf, 0, testSize, c.name()); // JDK1.1
-                if (s.startsWith(info.startline)) {
-                    info.charset = c; break;
-                }
-            }
-        }
-        if (info.charset == null) {
-            info.charset = Charset.defaultCharset();
+        TextFileCodec.PrefixDetection detected = TextFileCodec.detectPrefix(
+                testBuf, info.startline, Charset.defaultCharset());
+        info.charset = detected.getCharset();
+        if (detected.getBomLength() > 0) {
+            in.skip(detected.getBomLength());
         }
         info.line_separator = guessLineSeparator(testBuf);
 
@@ -436,32 +426,6 @@ public class FileUtil {
             }
         }
         return info;
-    }
-
-    private static final Charset[] SUPPORTED_CHARSET = {
-            Charset.forName("MS932"),
-            Charset.forName("UTF-8"),
-            Charset.forName("UTF-16BE"),
-            Charset.forName("UTF-16LE"),
-            Charset.forName("EUC-JP")
-    };
-
-    private static String getCharsetNameFromBOM(
-            byte[] buf, BufferedInputStream in) throws IOException {
-        if (buf.length < 3) {
-            return null;
-        }
-        if (buf[0] == (byte)0xEF && buf[1] == (byte)0xBB && buf[2] == (byte)0xBF) {
-            if (in != null) in.skip(3);
-            return "UTF-8";
-        } else if (buf[0] == (byte)0xFE && buf[1] == (byte)0xFF) {
-            if (in != null) in.skip(2);
-            return "UTF-16BE";
-        } else if (buf[0] == (byte)0xFF && buf[1] == (byte)0xFE) {
-            if (in != null) in.skip(2);
-            return "UTF-16LE";
-        }
-        return null;
     }
 
     public static String guessLineSeparator(byte[] testBuf) {

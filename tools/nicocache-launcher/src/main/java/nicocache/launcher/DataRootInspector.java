@@ -38,6 +38,7 @@ final class DataRootInspector {
         addTlsClientStoreCheck(items, application, data);
         addMitmChecks(items, application, data, effectiveConfig);
         addProxyCheck(items, data);
+        addTextEncodingMigrationCheck(items, data);
         addGuiPropertiesCheck(items, data);
         addLegacyLayoutCheck(items, application, data);
 
@@ -551,6 +552,39 @@ final class DataRootInspector {
         Path proxy = resolve(data, "proxy.pac");
         addRegularFileCheck(items, "proxy-pac",
                 DataRootInspection.Severity.REQUIRED, proxy, "proxy");
+    }
+
+    private static void addTextEncodingMigrationCheck(
+            List<DataRootInspection.Item> items, Path data) {
+        Path report = resolve(data,
+                "data/text-encoding-migration-v1.properties");
+        if (report == null || !Files.isRegularFile(report)) {
+            add(items, "text-encoding-migration",
+                    DataRootInspection.Severity.INFORMATIONAL,
+                    DataRootInspection.ItemState.NOT_APPLICABLE,
+                    report, null, "text-encoding.not-run");
+            return;
+        }
+        Properties properties = new Properties();
+        try (var reader = Files.newBufferedReader(report,
+                StandardCharsets.UTF_8)) {
+            properties.load(reader);
+            int issues = Integer.parseInt(properties.getProperty(
+                    "issues", "0"));
+            add(items, "text-encoding-migration",
+                    issues > 0 ? DataRootInspection.Severity.RECOMMENDED
+                            : DataRootInspection.Severity.INFORMATIONAL,
+                    issues > 0 ? DataRootInspection.ItemState.ATTENTION
+                            : DataRootInspection.ItemState.OK,
+                    report, null, issues > 0
+                            ? "text-encoding.issues"
+                            : "text-encoding.complete");
+        } catch (IOException | NumberFormatException error) {
+            add(items, "text-encoding-migration",
+                    DataRootInspection.Severity.RECOMMENDED,
+                    DataRootInspection.ItemState.ERROR,
+                    report, null, "text-encoding.report-error");
+        }
     }
 
     private static void addGuiPropertiesCheck(

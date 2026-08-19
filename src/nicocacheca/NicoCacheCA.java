@@ -4,7 +4,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.math.BigInteger;
@@ -284,7 +283,8 @@ public class NicoCacheCA {
         }
 
         try (FileOutputStream fos = new FileOutputStream(toPem);
-             OutputStreamWriter osw = new OutputStreamWriter(fos);
+             OutputStreamWriter osw = new OutputStreamWriter(fos,
+                     StandardCharsets.UTF_8);
              PemWriter pw = new PemWriter(osw)) {
             PemObject po = new PemObject("CERTIFICATE", certbin);
             pw.writeObject(po);
@@ -337,8 +337,8 @@ public class NicoCacheCA {
     }
 
     static boolean writeSiteTargetsFile(String[] domains) {
-        try (FileWriter fw = new FileWriter(SITE_TARGETS_FILE);
-                BufferedWriter bw = new BufferedWriter(fw)) {
+        try (BufferedWriter bw = Files.newBufferedWriter(
+                SITE_TARGETS_FILE.toPath(), StandardCharsets.UTF_8)) {
             for (String domain : domains) {
                 bw.write(domain);
                 bw.newLine();

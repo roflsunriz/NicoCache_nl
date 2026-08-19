@@ -53,6 +53,8 @@ public final class FirstRunSetupTest {
         Files.createDirectories(sandbox);
         Files.createDirectories(previewDirectory);
         testPathResolution();
+        UserTextEncodingMigratorTest.run(
+                sandbox.resolve("managed-text-migration"));
         testProxyPacEncodingMigration();
         testSystemAssetsRemainSeparated();
         testSeparatedSetupFiles();
@@ -66,7 +68,7 @@ public final class FirstRunSetupTest {
         testCertificateTargets();
         testLocalizedKeysMatch();
         testWizardControlsAndRender();
-        System.out.println("First-run setup tests passed: 14");
+        System.out.println("First-run setup tests passed: 15");
     }
 
     private void testProxyPacEncodingMigration() throws Exception {
@@ -97,7 +99,7 @@ public final class FirstRunSetupTest {
                     oldDataRoot);
             restoreProperty("listenPort", oldListenPort);
         }
-        System.out.println("PASS proxy PAC encoding-preserving migration");
+        System.out.println("PASS proxy PAC canonical UTF-8 migration");
     }
 
     private void verifyProxyPacMigration(String name, Charset charset,
@@ -124,25 +126,15 @@ public final class FirstRunSetupTest {
         assertByteArrayEquals(original, Files.readAllBytes(backup),
                 name + " backup must preserve original bytes");
         byte[] updatedBytes = Files.readAllBytes(pac);
-        String route = newline
-                + "  // NicoCache_nl management site and REST API." + newline
-                + "  if (host.toLowerCase() === 'nicocachenl.test') {" + newline
-                + "    return 'PROXY 127.0.0.1:18080';" + newline
-                + "  };" + newline;
-        byte[] inserted = route.getBytes(charset);
-        int insertedAt = byteIndexOf(updatedBytes, inserted);
-        assertTrue(insertedAt >= 0, name + " inserted route bytes");
-        byte[] withoutRoute = new byte[updatedBytes.length - inserted.length];
-        System.arraycopy(updatedBytes, 0, withoutRoute, 0, insertedAt);
-        System.arraycopy(updatedBytes, insertedAt + inserted.length,
-                withoutRoute, insertedAt,
-                updatedBytes.length - insertedAt - inserted.length);
-        assertByteArrayEquals(original, withoutRoute,
-                name + " original bytes outside route must not change");
-        assertEquals(bom.length, bomLength(updatedBytes),
-                name + " BOM must be preserved");
-        String updated = new String(updatedBytes, bom.length,
-                updatedBytes.length - bom.length, charset);
+        String updated = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(updatedBytes)).toString();
+        assertEquals(0, bomLength(updatedBytes),
+                name + " UTF-8 BOM must be removed");
+        assertByteArrayEquals(updatedBytes,
+                updated.getBytes(StandardCharsets.UTF_8),
+                name + " must be canonical UTF-8");
         assertContains(updated, "既存の日本語コメント",
                 name + " existing text");
         assertContains(updated, "host.toLowerCase() === 'nicocachenl.test'",
@@ -201,23 +193,6 @@ public final class FirstRunSetupTest {
         return 0;
     }
 
-    private static int byteIndexOf(byte[] haystack, byte[] needle) {
-        for (int index = 0; index <= haystack.length - needle.length;
-                index++) {
-            boolean matches = true;
-            for (int offset = 0; offset < needle.length; offset++) {
-                if (haystack[index + offset] != needle[offset]) {
-                    matches = false;
-                    break;
-                }
-            }
-            if (matches) {
-                return index;
-            }
-        }
-        return -1;
-    }
-
     private void testPathResolution() throws Exception {
         Path app = freshSandbox("paths/application");
         Path data = freshSandbox("paths/data");
@@ -262,6 +237,19 @@ public final class FirstRunSetupTest {
                     data.resolve("cvcache"),
                     NicoCachePaths.convertedCacheDirectory().toPath(),
                     "default converted cache path must use data root");
+
+            Path legacyJapaneseRoot = sandbox.resolve("paths/旧利用者データ");
+            Files.write(
+                    app.resolve("config.properties"),
+                    ("# 旧Windows設定\r\nuserDataRoot="
+                            + legacyJapaneseRoot + "\r\n")
+                            .getBytes(Charset.forName("windows-31j")));
+            assertEquals(legacyJapaneseRoot, NicoCachePaths.dataRoot(),
+                    "legacy encoded Japanese data root must resolve before migration");
+            Files.writeString(
+                    app.resolve("config.properties"),
+                    "userDataRoot=" + data + System.lineSeparator(),
+                    StandardCharsets.UTF_8);
             assertEquals(
                     app.resolve("defaults"),
                     NicoCachePaths.applicationPath("defaults"),
