@@ -1,3 +1,5 @@
+import { renderCacheManager } from "/assets/cache-manager.js";
+
 const API = "/api/v1";
 const app = document.querySelector("#app");
 
@@ -12,6 +14,23 @@ const messages = {
     captureHelp: "ボタンを押したときだけ完全なスレッドダンプを作成します。",
     videoDetails: "動画キャッシュ", exportVideo: "動画保存", exportAudio: "音声保存",
     exportComments: "コメント保存", apiError: "APIの読み込みに失敗しました",
+    cacheManagerLead: "保存済み・取得中キャッシュを検索して管理します。",
+    cacheControls: "キャッシュの検索・絞り込み・並び替え", search: "検索",
+    searchPlaceholder: "動画ID・タイトル・保存先で検索", state: "状態", all: "すべて",
+    unavailable: "利用不可", quality: "画質", lowQuality: "低画質", unknown: "不明",
+    sort: "並び替え", title: "タイトル", availability: "公開状態", size: "サイズ",
+    updated: "更新日時", ascending: "昇順", descending: "降順", reset: "リセット",
+    checkAvailability: "公開状態を確認", deleteTemporary: "一時キャッシュを一括削除",
+    loadMore: "さらに表示", close: "閉じる", items: "件", downloading: "取得中",
+    play: "再生", details: "詳細", more: "その他", folder: "保存先", author: "投稿者",
+    duration: "再生時間", views: "再生数", comments: "コメント数", mylists: "マイリスト数",
+    confirmDelete: "このキャッシュを削除しますか？", deleting: "削除中…",
+    deleteScheduled: "取得終了後の削除を予約しました。", deleteComplete: "削除処理が完了しました。",
+    confirmAvailability: "動画情報APIで公開状態を確認しますか？", checkingAvailability: "公開状態を確認中…",
+    availabilityComplete: "公開状態の確認が完了しました。", success: "成功", failed: "失敗",
+    noTemporary: "削除対象の一時キャッシュはありません。",
+    confirmDeleteTemporary: "一時キャッシュを動画単位で一括削除しますか？",
+    deleted: "削除", scheduled: "削除予約", notFound: "対象なし",
   },
   en: {
     overview: "Overview", cache: "Cache", health: "Health", diagnostics: "Diagnostics",
@@ -22,6 +41,23 @@ const messages = {
     capture: "Capture thread dump", captureHelp: "A full thread dump is created only on request.",
     videoDetails: "Video cache", exportVideo: "Save video", exportAudio: "Save audio",
     exportComments: "Save comments", apiError: "Failed to load the API",
+    cacheManagerLead: "Search and manage completed and in-progress cache entries.",
+    cacheControls: "Cache search, filters, and sorting", search: "Search",
+    searchPlaceholder: "Search by video ID, title, or folder", state: "State", all: "All",
+    unavailable: "Unavailable", quality: "Quality", lowQuality: "Low quality", unknown: "Unknown",
+    sort: "Sort", title: "Title", availability: "Availability", size: "Size",
+    updated: "Updated", ascending: "Ascending", descending: "Descending", reset: "Reset",
+    checkAvailability: "Check availability", deleteTemporary: "Delete temporary cache",
+    loadMore: "Show more", close: "Close", items: "items", downloading: "Downloading",
+    play: "Play", details: "Details", more: "More", folder: "Folder", author: "Author",
+    duration: "Duration", views: "Views", comments: "Comments", mylists: "My lists",
+    confirmDelete: "Delete this cache entry?", deleting: "Deleting…",
+    deleteScheduled: "Deletion was scheduled after the download finishes.", deleteComplete: "Deletion finished.",
+    confirmAvailability: "Check availability with the video information API?", checkingAvailability: "Checking availability…",
+    availabilityComplete: "Availability check finished.", success: "Succeeded", failed: "Failed",
+    noTemporary: "There are no temporary cache entries to delete.",
+    confirmDeleteTemporary: "Delete temporary cache entries by video?",
+    deleted: "Deleted", scheduled: "Scheduled", notFound: "Not found",
   },
 };
 const language = navigator.language?.toLowerCase().startsWith("ja") ? "ja" : "en";
@@ -113,26 +149,9 @@ const renderThreads = () => {
   });
 };
 
-const cacheRows = (entries, state) => Object.entries(entries ?? {}).map(([cacheId, raw]) => {
-  const value = Array.isArray(raw) ? raw : [];
-  const title = value[0] ?? cacheId;
-  const size = value[2] ?? 0;
-  return `<tr><td><code>${escapeHtml(cacheId)}</code></td><td>${escapeHtml(title)}</td><td>${escapeHtml(state)}</td><td>${formatBytes(size)}</td><td><button class="danger" data-delete-id="${escapeHtml(cacheId)}" data-temporary="${state === "temporary"}">${t("delete")}</button></td></tr>`;
-}).join("");
-const renderCache = async () => {
-  const data = await fetchJson("/cache-entries");
-  const rows = cacheRows(data.complete, "complete") + cacheRows(data.temporary, "temporary");
-  app.innerHTML = `<h1>${t("cacheEntries")}</h1><div class="actions"><button id="refresh">${t("refresh")}</button></div>
-    <div class="table-wrap"><table><thead><tr><th>ID</th><th>Title</th><th>State</th><th>Size</th><th>${t("actions")}</th></tr></thead><tbody>${rows || `<tr><td colspan="5">${t("noEntries")}</td></tr>`}</tbody></table></div>`;
-  document.querySelector("#refresh").addEventListener("click", () => renderCache().catch(showError));
-  document.querySelectorAll("[data-delete-id]").forEach((button) => button.addEventListener("click", async () => {
-    if (!confirm(`${t("delete")}: ${button.dataset.deleteId}`)) return;
-    button.disabled = true;
-    const collection = button.dataset.temporary === "true" ? "temporary-cache-entries" : "cache-entries";
-    try { await fetchJson(`/${collection}/${encodeURIComponent(button.dataset.deleteId)}`, { method: "DELETE" }); await renderCache(); }
-    catch (error) { showError(error); }
-  }));
-};
+const renderCache = () => renderCacheManager({
+  app, fetchJson, t, escapeHtml, formatBytes,
+});
 const renderVideo = async (videoId) => {
   const data = await fetchJson(`/videos/${encodeURIComponent(videoId)}/cache-entries`);
   app.innerHTML = `<h1>${t("videoDetails")}: ${escapeHtml(videoId)}</h1><div class="actions">

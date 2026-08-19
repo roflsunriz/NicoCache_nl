@@ -19,6 +19,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import dareka.Main;
+import dareka.common.Logger;
 import dareka.common.json.Json;
 import dareka.common.json.JsonArray;
 import dareka.common.json.JsonObject;
@@ -41,7 +42,7 @@ public final class NicoCacheWebProcessor implements Processor {
     private static final Pattern URL_PATTERN = Pattern.compile(
             "^https?://" + Pattern.quote(HOST) + "(?:/|$)");
     private static final Pattern VIDEO_ROUTE = Pattern.compile(
-            "^/api/v1/videos/([a-z]{2}[0-9]+)/(cache-entries|temporary-cache-entries|hls-cache-entries|media|exports/(video|audio|comments))$");
+            "^/api/v1/videos/([a-z]{2}[0-9]+)/(cache-entries|temporary-cache-entries|hls-cache-entries|metadata|media|exports/(video|audio|comments))$");
     private static final Pattern ENTRY_ROUTE = Pattern.compile(
             "^/api/v1/(temporary-)?cache-entries/(.+)$");
     private static final Pattern SNAPSHOT_ROUTE = Pattern.compile(
@@ -99,6 +100,8 @@ public final class NicoCacheWebProcessor implements Processor {
         String localPath;
         if ("/assets/app.js".equals(path)) {
             localPath = "nicocache-web/app.js";
+        } else if ("/assets/cache-manager.js".equals(path)) {
+            localPath = "nicocache-web/cache-manager.js";
         } else if ("/assets/styles.css".equals(path)) {
             localPath = "nicocache-web/styles.css";
         } else if ("/".equals(path) || "/cache".equals(path)
@@ -286,6 +289,18 @@ public final class NicoCacheWebProcessor implements Processor {
             Cache.HlsDeletionResult result = Cache.removeHlsAll(videoId);
             return scopedDeletionResult(videoId, result,
                     Cache.isHlsDeletionPending(videoId));
+        }
+        if ("metadata".equals(action)) {
+            if (!request.isGetMethod()) {
+                return methodNotAllowed("GET");
+            }
+            try {
+                return json(200, "OK", NicoVideoMetadata.fetch(videoId).toJson());
+            } catch (IOException error) {
+                Logger.error(error);
+                return error(502, "Bad Gateway", "video_metadata_upstream_failed",
+                        "動画情報の取得に失敗しました");
+            }
         }
         if ("media".equals(action)) {
             if (!request.isGetMethod() && !request.isHeadMethod()) {

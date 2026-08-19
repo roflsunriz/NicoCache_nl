@@ -3,7 +3,7 @@
 ## ローカル配信ブラウザスクリプト
 
 Node.js 20以降の組み込みテストランナーで、`local/`から配信するJavaScriptの
-ブラウザーAPI呼出規約、動画切替処理、既定キャッシュ一覧、キャッシュ品質の
+ブラウザーAPI呼出規約、動画切替処理、管理サイトのキャッシュ正規化・検索・絞り込み・並び替え、キャッシュ品質の
 リンク色・アイコン表示を検証する。
 
 ```powershell
@@ -69,7 +69,7 @@ HTTP サーバーを利用する。
   暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生と、
   アニメ公式動画で使われる `hlsext` 経路、署名更新前後で同名セグメントが続く
   `shlsbid` 経路の鍵・IV世代分離
-- `nicocachenl.test`のREST情報取得、検索、`/media/v1`配信、Range、DELETE、診断、CORS、構造化エラーと、
+- `nicocachenl.test`のREST情報取得、動画メタデータ、検索、管理画面資産、`/media/v1`配信、Range、DELETE、診断、CORS、構造化エラーと、
   旧管理APIが404になり副作用を起こさないこと
 - 単一 MP4・FLV・SWF、旧 DMC MP4・HLS の検索、配信、削除
 - Extension と Extension2 のロード、および Processor、stopper Processor、

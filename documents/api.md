@@ -13,7 +13,7 @@ https://nicocachenl.test/
 | パス | 内容 |
 | --- | --- |
 | `/` | 稼働状態とランタイム概要 |
-| `/cache` | 完成・一時キャッシュの一覧と削除 |
+| `/cache` | 完成・一時キャッシュの検索、絞り込み、並び替え、詳細確認、再生、保存、個別・一括削除 |
 | `/health` | livenessとreadiness |
 | `/diagnostics` | JVM、メモリー、スレッド、デッドロック概要 |
 | `/diagnostics/threads` | 利用者操作による完全スレッドダンプ採取・表示 |
@@ -33,6 +33,7 @@ https://nicocachenl.test/
 | メソッドとパス | 内容 |
 | --- | --- |
 | `GET /api/v1/videos/<動画ID>/cache-entries` | 動画単位のCMAF/Domandキャッシュ情報 |
+| `GET /api/v1/videos/<動画ID>/metadata` | 公開動画情報と公開状態。利用不可も200で状態を返す |
 | `POST /api/v1/cache-entry-queries` | 最大256動画の一括照会。本文は `{"videoIds":["sm9"]}` |
 | `GET /api/v1/cache-entries` | 完成・一時キャッシュ一覧 |
 | `GET /api/v1/cache-entries?state=complete` | 完成キャッシュ一覧 |
@@ -42,6 +43,11 @@ https://nicocachenl.test/
 | `GET /api/v1/cache-directories` | キャッシュ保存先一覧 |
 
 単一動画の応答は`videoId`、`preferred`、`cacheIds`、`cachings`、`completes`、`caches`を持つ。各キャッシュは`complete`、`caching`、`videoMode`、`audioBitrate`、サイズ、タイトル、保存先情報を返す。
+
+動画メタデータは`availabilityStatus`を必ず持つ。公開中は`available`とタイトル、サムネイル、
+投稿者、長さ、再生・コメント・マイリスト数、タグを返す。削除・非公開など上流APIが
+構造化した利用不可を返した場合は`deleted`、`private`、`unavailable`のいずれかを200で返す。
+通信失敗や解析不能は502と共通エラー形式を返す。
 
 ## 再生とエクスポート
 

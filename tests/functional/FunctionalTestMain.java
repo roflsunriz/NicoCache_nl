@@ -208,7 +208,8 @@ public final class FunctionalTestMain {
 
         copy(repository.resolve("local/mime.types.default"),
                 application.resolve("local/mime.types.default"));
-        for (String asset : List.of("index.html", "app.js", "styles.css")) {
+        for (String asset : List.of(
+                "index.html", "app.js", "cache-manager.js", "styles.css")) {
             copy(repository.resolve("local/nicocache-web").resolve(asset),
                     application.resolve("local/nicocache-web").resolve(asset));
         }
@@ -511,6 +512,41 @@ public final class FunctionalTestMain {
                 exchange.getResponseBody().write(body);
                 return;
             }
+            if ("/api/getthumbinfo/sm900003".equals(path)) {
+                byte[] body = ("<nicovideo_thumb_response status=\"ok\"><thumb>"
+                        + "<video_id>sm900003</video_id>"
+                        + "<title>API &amp; Metadata</title>"
+                        + "<description>Functional metadata</description>"
+                        + "<thumbnail_url>https://example.invalid/sm900003.jpg</thumbnail_url>"
+                        + "<first_retrieve>2026-08-19T12:34:56+09:00</first_retrieve>"
+                        + "<length>3:21</length><view_counter>1234</view_counter>"
+                        + "<comment_num>56</comment_num><mylist_counter>78</mylist_counter>"
+                        + "<user_nickname>Functional User</user_nickname>"
+                        + "<tags><tag>Java</tag><tag>Cache</tag></tags>"
+                        + "</thumb></nicovideo_thumb_response>")
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/xml; charset=utf-8");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/api/getthumbinfo/sm900008".equals(path)) {
+                byte[] body = ("<nicovideo_thumb_response status=\"fail\"><error>"
+                        + "<code>DELETED</code><description>deleted</description>"
+                        + "</error></nicovideo_thumb_response>")
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/xml; charset=utf-8");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/api/getthumbinfo/sm900009".equals(path)) {
+                byte[] body = "<broken>".getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/xml; charset=utf-8");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
             if ("/api/getthumbinfo/9000100001".equals(path)) {
                 byte[] body = ("<nicovideo_thumb_response status=\"ok\"><thumb>"
                         + "<video_id>sm900010</video_id><title>Functional CMAF</title>"
@@ -726,6 +762,8 @@ public final class FunctionalTestMain {
                 "listenPort=" + nicocachePort,
                 "proxyHost=127.0.0.1",
                 "proxyPort=" + upstreamPort,
+                "videoMetadataEndpoint=http://127.0.0.1:" + upstreamPort
+                        + "/api/getthumbinfo/",
                 "allowFrom=local",
                 "readTimeout=5000",
                 "cacheFolder=cache",
@@ -1382,6 +1420,7 @@ public final class FunctionalTestMain {
         assertEquals("audio-segment", offlineAudio.bodyText(), "offline CMAF audio segment");
         assertContains(completed.getFileName().toString(), "sm900010",
                 "completed CMAF cache directory");
+        startUpstream(upstreamPort);
     }
 
     private void testHlsextEncryptedCmafFlow() throws Exception {
@@ -1644,6 +1683,15 @@ public final class FunctionalTestMain {
         assertContains(page.bodyText(), "NicoCache_nl",
                 "management page body");
 
+        Response cacheManagerAsset = request(nicoCacheWebRequest(
+                "GET", "/assets/cache-manager.js", "", ""));
+        assertEquals(200, cacheManagerAsset.status,
+                "cache manager asset status");
+        assertContains(cacheManagerAsset.header("content-type"), "javascript",
+                "cache manager asset content type");
+        assertContains(cacheManagerAsset.bodyText(), "renderCacheManager",
+                "cache manager asset body");
+
         Response live = request(nicoCacheWebRequest(
                 "GET", "/api/v1/health/live", "", ""));
         assertEquals(200, live.status, "REST liveness status");
@@ -1681,6 +1729,42 @@ public final class FunctionalTestMain {
                 "REST cache entry video id");
         assertContains(cacheInfo.bodyText(), "\"videoMode\":\"720p\"",
                 "REST cache entry mode");
+
+        Response metadata = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900003/metadata", "", ""));
+        assertEquals(200, metadata.status, "REST video metadata status");
+        assertContains(metadata.bodyText(), "\"availabilityStatus\":\"available\"",
+                "REST video metadata availability");
+        assertContains(metadata.bodyText(), "API & Metadata",
+                "REST video metadata title");
+        assertContains(metadata.bodyText(), "\"viewCount\":1234",
+                "REST video metadata counters");
+        assertContains(metadata.bodyText(), "\"Java\"",
+                "REST video metadata tags");
+
+        Response deletedMetadata = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900008/metadata", "", ""));
+        assertEquals(200, deletedMetadata.status,
+                "REST unavailable video metadata status");
+        assertContains(deletedMetadata.bodyText(),
+                "\"availabilityStatus\":\"deleted\"",
+                "REST unavailable video classification");
+
+        Response invalidMetadata = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900009/metadata", "", ""));
+        assertEquals(502, invalidMetadata.status,
+                "REST invalid video metadata status");
+        assertContains(invalidMetadata.bodyText(),
+                "\"code\":\"video_metadata_upstream_failed\"",
+                "REST invalid video metadata error contract");
+
+        Response metadataWrongMethod = request(nicoCacheWebRequest("POST",
+                "/api/v1/videos/sm900003/metadata", "{}",
+                "Content-Type: application/json\r\n"));
+        assertEquals(405, metadataWrongMethod.status,
+                "REST video metadata method validation");
+        assertContains(metadataWrongMethod.header("allow"), "GET",
+                "REST video metadata Allow response header");
 
         Response batch = request(nicoCacheWebRequest("POST",
                 "/api/v1/cache-entry-queries",
