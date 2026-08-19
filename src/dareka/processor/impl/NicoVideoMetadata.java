@@ -43,6 +43,10 @@ final class NicoVideoMetadata {
         }
 
         URLResource resource = new URLResource(endpoint + videoId);
+        // 明示されたメタデータfixture／代替APIはそのURLへ直接接続する。
+        // グローバル上流プロキシーが同じfixtureを指すテスト環境で、
+        // fixture自身をプロキシーとして再経由するとUnix系JDKの接続が滞留する。
+        resource.setProxy("", 0);
         resource.setFollowRedirects(true);
         HttpResponseHeader response = resource.getResponseHeader(null, null);
         if (response == null || response.getStatusCode() != 200) {
