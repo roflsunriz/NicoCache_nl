@@ -57,10 +57,6 @@ class CacheStats {
         this.size = size;
         this.timestamp = timestamp;
     }
-    public CacheStats(File cacheFile) {
-        this.size = cacheFile.length();
-        this.timestamp = cacheFile.lastModified() / 1000L;
-    }
 }
 
 class XmlInfo {
@@ -1994,7 +1990,8 @@ public class CacheManager {
         // 完成済みキャッシュの結果はキャッシュしてみる
         CacheStats stat = statCache.get(video);
         if (stat == null) {
-            stat = new CacheStats(cacheFile);
+            stat = new CacheStats(Cache.getFileSizeRecursively(cacheFile),
+                    cacheFile.lastModified() / 1000L);
             statCache.put(video, stat);
         }
         String name = cacheFile.getName();
@@ -2059,7 +2056,7 @@ public class CacheManager {
                 boolean nowDL = getDLFlag(k);
                 String fn = kFile.getName().substring(6);
                 long lastmod = kFile.lastModified() / 1000;
-                long nowSize = kFile.length();
+                long nowSize = Cache.getFileSizeRecursively(kFile);
                 long realSize = 0;
                 if (nowDL) {
                     Object ret = video2DLFinalSize.get(k);
@@ -2068,7 +2065,9 @@ public class CacheManager {
                     } else {
                         realSize = (long)ret;
                     };
-                    nowSize = getDLSize(k);
+                    if (!k.isDir()) {
+                        nowSize = getDLSize(k);
+                    }
                 }
                 String title = getTitleFromFilename(fn);
 
@@ -2448,7 +2447,7 @@ public class CacheManager {
             size = entry.size;
             lastmod = entry.timestamp;
         } else {
-            size = file.length();
+            size = Cache.getFileSizeRecursively(file);
             lastmod = file.lastModified() / 1000;
             entry = new CacheStats(size, lastmod);
             if (!isTempFile) {

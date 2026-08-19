@@ -962,22 +962,23 @@ public class Cache extends CacheManager {
     }
 
     public long length() {
-        if (video.isDir()) {
-            return getDirectoryFilesizeRecursively(getCacheFile());
-        }
-        return getCacheFile().length();
+        return getFileSizeRecursively(getCacheFile());
     }
 
-    private static long getDirectoryFilesizeRecursively(File dir) {
-        File[] files = dir.listFiles();
-        if (files == null)
+    static long getFileSizeRecursively(File file) {
+        if (file == null || !file.exists()) {
             return 0;
+        }
+        if (!file.isDirectory()) {
+            return file.length();
+        }
+        File[] files = file.listFiles();
+        if (files == null) {
+            return 0;
+        }
         long result = 0;
-        for (File file : files) {
-            if (file.isDirectory())
-                result += getDirectoryFilesizeRecursively(file);
-            else
-                result += file.length();
+        for (File child : files) {
+            result += getFileSizeRecursively(child);
         }
         return result;
     }

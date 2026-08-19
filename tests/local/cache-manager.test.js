@@ -14,7 +14,7 @@ const moduleUrl = `data:text/javascript;base64,${Buffer.from(moduleSource).toStr
 const cacheManagerPromise = import(moduleUrl);
 
 test("完成・一時キャッシュの異なる配列契約を正規化する", async () => {
-  const {normalizeCacheResponse} = await cacheManagerPromise;
+  const {formatStorageLocation, normalizeCacheResponse} = await cacheManagerPromise;
   const entries = normalizeCacheResponse({
     complete: {
       "sm20[1080p,192].hls": ["完成動画", "series", 4096, 100],
@@ -52,6 +52,20 @@ test("完成・一時キャッシュの異なる配列契約を正規化する",
     "一時を優先");
   assert.equal(entries.find((entry) => entry.cacheId === "sm30.mp4").quality,
     "unknown");
+  assert.equal(
+    formatStorageLocation(
+      entries.find((entry) => entry.cacheId === "sm30.mp4"),
+      "キャッシュルート",
+    ),
+    "キャッシュルート",
+  );
+  assert.equal(
+    formatStorageLocation(
+      entries.find((entry) => entry.cacheId.startsWith("sm20")),
+      "キャッシュルート",
+    ),
+    "キャッシュルート",
+  );
 });
 
 test("IDとタイトルの複数語検索、状態・画質フィルターを同時適用する", async () => {
@@ -112,4 +126,18 @@ test("管理画面エントリーがキャッシュ管理モジュールを読�
   );
   assert.match(appSource, /from "\/assets\/cache-manager\.js"/);
   assert.match(appSource, /renderCacheManager/);
+});
+
+test("その他メニューはカード内で全幅展開される", () => {
+  const styles = fs.readFileSync(
+    path.join(repositoryRoot, "local", "nicocache-web", "styles.css"),
+    "utf8",
+  );
+  assert.match(
+    styles,
+    /\.cache-card-actions details \{ flex: 1 1 100%; min-width: 0; \}/,
+  );
+  assert.match(styles, /\.card-menu \{[\s\S]*?width: 100%;[\s\S]*?min-width: 0;/);
+  const cardMenuRule = styles.match(/\.card-menu \{([\s\S]*?)\}/)?.[1] ?? "";
+  assert.doesNotMatch(cardMenuRule, /position:\s*absolute/);
 });

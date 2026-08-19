@@ -171,7 +171,7 @@ pre {
 .cache-download-progress { display: flex; align-items: center; gap: .5rem; }
 .cache-download-progress progress { width: 100%; accent-color: var(--accent); }
 .cache-card-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: .45rem; }
-.cache-card-actions details { position: relative; }
+.cache-card-actions details { flex: 1 1 100%; min-width: 0; }
 .cache-card-actions summary {
   border: 1px solid #475569;
   border-radius: .6rem;
@@ -183,19 +183,15 @@ pre {
 }
 .cache-card-actions summary::-webkit-details-marker { display: none; }
 .card-menu {
-  position: absolute;
-  right: 0;
-  z-index: 5;
   display: grid;
   gap: .35rem;
-  width: max-content;
-  min-width: 11rem;
+  width: 100%;
+  min-width: 0;
   margin-top: .35rem;
   padding: .45rem;
   border: 1px solid var(--line);
   border-radius: .65rem;
   background: var(--surface-strong);
-  box-shadow: 0 .8rem 2rem #0008;
 }
 .card-menu .button, .card-menu button { text-align: left; }
 .button.disabled { opacity: .45; pointer-events: none; }
@@ -226,7 +222,6 @@ pre {
   .control-buttons { grid-column: auto; }
   .control-buttons > * { flex: 1 1 10rem; }
   .cache-summary { align-items: flex-start; flex-direction: column; padding: .7rem 0; }
-  .card-menu { left: 0; right: auto; max-width: calc(100vw - 3rem); }
 }
 @media (min-width: 561px) and (max-width: 900px) {
   .cache-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }

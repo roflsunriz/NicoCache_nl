@@ -1730,6 +1730,19 @@ public final class FunctionalTestMain {
         assertContains(cacheInfo.bodyText(), "\"videoMode\":\"720p\"",
                 "REST cache entry mode");
 
+        Response cacheEntries = request(nicoCacheWebRequest("GET",
+                "/api/v1/cache-entries", "", ""));
+        long hlsDirectorySize = Files.size(sandbox.resolve(
+                "cache/sm900003[720p,128]_Functional.hls/master.m3u8"))
+                + Files.size(sandbox.resolve(
+                        "cache/sm900003[720p,128]_Functional.hls/segment.ts"));
+        assertEquals(200, cacheEntries.status,
+                "REST cache list status");
+        assertContains(cacheEntries.bodyText(),
+                "\"sm900003[720p,128].hls\":[\"Functional\", \"\", "
+                        + hlsDirectorySize + ",",
+                "REST cache list recursively sized HLS directory");
+
         Response metadata = request(nicoCacheWebRequest("GET",
                 "/api/v1/videos/sm900003/metadata", "", ""));
         assertEquals(200, metadata.status, "REST video metadata status");

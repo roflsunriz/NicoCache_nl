@@ -58,6 +58,11 @@ export const normalizeCacheResponse = (payload) => {
   return [...merged.values()];
 };
 
+export const formatStorageLocation = (entry, cacheRootLabel) =>
+  typeof entry?.subFolder === "string" && entry.subFolder.trim()
+    ? entry.subFolder
+    : cacheRootLabel;
+
 const idParts = (entry) => {
   const prefix = entry.baseId.slice(0, 2).toLowerCase();
   const priority = { nm: 1, sm: 2, so: 3 }[prefix] ?? 4;
@@ -334,6 +339,7 @@ export async function renderCacheManager({ app, fetchJson, t, escapeHtml, format
           <h2 title="${escapeHtml(entry.title)}">${escapeHtml(entry.title)}</h2>
           <code>${escapeHtml(entry.cacheId)}</code>
           <dl><div><dt>${t("size")}</dt><dd>${formatBytes(entry.size)}</dd></div>
+            <div><dt>${t("folder")}</dt><dd>${escapeHtml(formatStorageLocation(entry, t("cacheRoot")))}</dd></div>
             <div><dt>${t("updated")}</dt><dd>${escapeHtml(formatDate(entry.updatedAt))}</dd></div></dl>
           ${percent === null ? "" : `<div class="cache-download-progress"><progress max="100" value="${percent}"></progress><span>${percent}%</span></div>`}
           <div class="cache-card-actions">
@@ -404,7 +410,7 @@ export async function renderCacheManager({ app, fetchJson, t, escapeHtml, format
         <div><dt>${t("availability")}</dt><dd>${escapeHtml(metadata.availabilityStatus || t("unknown"))}</dd></div>
         <div><dt>${t("quality")}</dt><dd>${escapeHtml(entry.quality)}</dd></div>
         <div><dt>${t("size")}</dt><dd>${formatBytes(entry.size)}</dd></div>
-        <div><dt>${t("folder")}</dt><dd>${escapeHtml(entry.subFolder || "—")}</dd></div>
+        <div><dt>${t("folder")}</dt><dd>${escapeHtml(formatStorageLocation(entry, t("cacheRoot")))}</dd></div>
         <div><dt>${t("author")}</dt><dd>${escapeHtml(metadata.author || "—")}</dd></div>
         <div><dt>${t("duration")}</dt><dd>${escapeHtml(metadata.duration || "—")}</dd></div>
         <div><dt>${t("views")}</dt><dd>${asFiniteNumber(metadata.viewCount).toLocaleString()}</dd></div>
