@@ -128,6 +128,16 @@ test("管理画面エントリーがキャッシュ管理モジュールを読�
   assert.match(appSource, /renderCacheManager/);
 });
 
+test("再生ボタンは完成・一時キャッシュともニコニコ動画の視聴ページを開く", async () => {
+  const {getWatchPageUrl} = await cacheManagerPromise;
+  assert.equal(getWatchPageUrl("sm9"), "https://www.nicovideo.jp/watch/sm9");
+  assert.doesNotMatch(moduleSource, /href="\/api\/v1\/videos\/[^\"]*\/media"/);
+  assert.match(
+    moduleSource,
+    /href="\$\{escapeHtml\(getWatchPageUrl\(entry\.baseId\)\)\}" target="_blank" rel="noopener noreferrer"/,
+  );
+});
+
 test("カード操作は常時2段で動画・音声・コメント保存と削除を2段目へ並べる", () => {
   assert.doesNotMatch(moduleSource, /<details|t\("more"\)|card-menu/);
   assert.match(

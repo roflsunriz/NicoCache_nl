@@ -12,6 +12,9 @@ const asFiniteNumber = (value, fallback = 0) => {
 export const getBaseVideoId = (cacheId) =>
   String(cacheId).match(/^([a-z]{2}\d+)/i)?.[1]?.toLowerCase() ?? String(cacheId);
 
+export const getWatchPageUrl = (videoId) =>
+  `https://www.nicovideo.jp/watch/${encodeURIComponent(String(videoId))}`;
+
 export const parseCacheQuality = (cacheId) => {
   const value = String(cacheId);
   const match = value.match(/\[(\d+)p(?:-[^,\]]+)?(?:,(\d+))?\]/i);
@@ -344,7 +347,7 @@ export async function renderCacheManager({ app, fetchJson, t, escapeHtml, format
           ${percent === null ? "" : `<div class="cache-download-progress"><progress max="100" value="${percent}"></progress><span>${percent}%</span></div>`}
           <div class="cache-card-actions">
             <div class="cache-action-row primary-actions">
-              <a class="button${entry.temporary ? " disabled" : ""}" ${entry.temporary ? "aria-disabled=\"true\"" : `href="/api/v1/videos/${encodeURIComponent(entry.baseId)}/media" target="_blank" rel="noopener"`}>${t("play")}</a>
+              <a class="button" href="${escapeHtml(getWatchPageUrl(entry.baseId))}" target="_blank" rel="noopener noreferrer">${t("play")}</a>
               <button type="button" data-action="details">${t("details")}</button>
             </div>
             <div class="cache-action-row secondary-actions">
