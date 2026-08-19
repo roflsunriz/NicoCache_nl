@@ -128,16 +128,23 @@ test("管理画面エントリーがキャッシュ管理モジュールを読�
   assert.match(appSource, /renderCacheManager/);
 });
 
-test("その他メニューはカード内で全幅展開される", () => {
+test("カード操作は常時2段で動画・音声保存と削除を2段目へ並べる", () => {
+  assert.doesNotMatch(moduleSource, /<details|t\("more"\)|card-menu/);
+  assert.match(
+    moduleSource,
+    /<div class="cache-action-row primary-actions">[\s\S]*?<\/div>\s*<div class="cache-action-row secondary-actions">/,
+  );
+  const secondaryActions = moduleSource.match(
+    /<div class="cache-action-row secondary-actions">([\s\S]*?)<\/div>/,
+  )?.[1] ?? "";
+  assert.match(secondaryActions, /exports\/video/);
+  assert.match(secondaryActions, /exports\/audio/);
+  assert.match(secondaryActions, /data-action="delete"/);
+
   const styles = fs.readFileSync(
     path.join(repositoryRoot, "local", "nicocache-web", "styles.css"),
     "utf8",
   );
-  assert.match(
-    styles,
-    /\.cache-card-actions details \{ flex: 1 1 100%; min-width: 0; \}/,
-  );
-  assert.match(styles, /\.card-menu \{[\s\S]*?width: 100%;[\s\S]*?min-width: 0;/);
-  const cardMenuRule = styles.match(/\.card-menu \{([\s\S]*?)\}/)?.[1] ?? "";
-  assert.doesNotMatch(cardMenuRule, /position:\s*absolute/);
+  assert.match(styles, /\.primary-actions \{ grid-template-columns: repeat\(2,/);
+  assert.match(styles, /\.secondary-actions \{ grid-template-columns: repeat\(3,/);
 });

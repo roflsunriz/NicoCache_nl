@@ -343,13 +343,15 @@ export async function renderCacheManager({ app, fetchJson, t, escapeHtml, format
             <div><dt>${t("updated")}</dt><dd>${escapeHtml(formatDate(entry.updatedAt))}</dd></div></dl>
           ${percent === null ? "" : `<div class="cache-download-progress"><progress max="100" value="${percent}"></progress><span>${percent}%</span></div>`}
           <div class="cache-card-actions">
-            <a class="button${entry.temporary ? " disabled" : ""}" ${entry.temporary ? "aria-disabled=\"true\"" : `href="/api/v1/videos/${encodeURIComponent(entry.baseId)}/media" target="_blank" rel="noopener"`}>${t("play")}</a>
-            <button type="button" data-action="details">${t("details")}</button>
-            <details><summary>${t("more")}</summary><div class="card-menu">
+            <div class="cache-action-row primary-actions">
+              <a class="button${entry.temporary ? " disabled" : ""}" ${entry.temporary ? "aria-disabled=\"true\"" : `href="/api/v1/videos/${encodeURIComponent(entry.baseId)}/media" target="_blank" rel="noopener"`}>${t("play")}</a>
+              <button type="button" data-action="details">${t("details")}</button>
+            </div>
+            <div class="cache-action-row secondary-actions">
               <a class="button${entry.temporary ? " disabled" : ""}" ${entry.temporary ? "aria-disabled=\"true\"" : `href="/api/v1/videos/${encodeURIComponent(entry.baseId)}/exports/video"`}>${t("exportVideo")}</a>
               <a class="button${entry.temporary ? " disabled" : ""}" ${entry.temporary ? "aria-disabled=\"true\"" : `href="/api/v1/videos/${encodeURIComponent(entry.baseId)}/exports/audio"`}>${t("exportAudio")}</a>
               <button class="danger" type="button" data-action="delete">${t("delete")}</button>
-            </div></details>
+            </div>
           </div>
         </div>
       </article>`;
