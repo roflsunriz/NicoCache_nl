@@ -34,6 +34,20 @@ HTTP/HTTPSプロキシー兼キャッシュサーバーです。
 変更する項目だけを`config.properties`へ記述します。利用者が追加する`local/`、`nlFilters/`、
 Extensionと、キャッシュ、証明書、個人設定は利用者データフォルダーへ置きます。
 
+## v1.6.0へ更新する場合
+
+初回起動時に、`config.properties`、`proxy.pac`、利用者側の`nlFilters/`、`list/`、
+`local/`、`data/cors/`にある認識可能なテキストをUTF-8（BOMなし）へ自動変換します。
+変換前のバイト列は利用者データの`data/text-encoding-backups/v1/`へ保存され、結果は
+`data/text-encoding-migration-v1.properties`とランチャーの「データルート診断」で確認できます。
+判定できないファイルや形式を確認できないファイルは変更されません。診断に表示された
+ファイルだけをテキストエディターでUTF-8として保存し直してください。
+
+証明書は全利用者が作り直す必要はありません。ランチャー診断で`site.targets`の対象不足が
+表示された場合だけ、現在の`certificate-targets.txt`からSITE証明書を再生成します。
+既存の`certs/ca.jks`を再利用するため、通常は`ca.cer`をOSやFirefoxへ登録し直す必要は
+ありません。CA自体を削除・再生成した場合だけ、新しい`ca.cer`を信頼登録し直します。
+
 ## 独立アップデーター
 
 `NicoCache_nl Updater`は、本体と外部依存関係を更新する自己完結アプリです。

@@ -21,6 +21,8 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
 - 現行ニコニコ動画向けに必須となる HTTPS MitM の `enableMitm=true`、
   `certs/site.jks`、`certs/site.targets`、`mitmHostPort` の一致、`certs/ca.cer` の有無
 - 現行ニコニコ動画の対象通信をプロキシーへ送るために必須となる `proxy.pac`
+- `data/text-encoding-migration-v1.properties`に記録された、利用者テキストの
+  UTF-8正規化結果と手動対応が必要なファイル
 - 旧来のアプリケーションルートを移したことを示す `config.ini`、
   `config.properties`、`NicoCache_nl.jar` の混在
 
@@ -37,6 +39,14 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
 診断はファイルを作成・移動・削除しません。既存ユーザーの移行では、診断詳細に表示された
 不足項目を確認してから移行してください。
 
+本体は起動時に、アプリケーション側の設定ファイルと、利用者側の`proxy.pac`、
+`nlFilters/`、`list/`、`local/`、`data/cors/`にある認識可能なテキストを
+UTF-8（BOMなし）へ正規化します。変換前の内容は
+`data/text-encoding-backups/v1/`へバイト単位で保存します。シンボリックリンクは追跡せず、
+文字コード候補が複数あるファイル、形式を確認できないファイル、16 MiBを超えるファイルは
+変更しません。診断が「要確認」の場合は、レポートの`issue.N.path`だけをUTF-8で
+保存し直してください。
+
 ## 既存ユーザーの移行手順
 
 1. 起動管理アプリから本体をグレイスフル停止します。
@@ -52,7 +62,8 @@ NicoCache_nl のパッケージ版は、アプリケーション側とユーザ�
    になるまで本体を再起動しません。証明書を作り直すときは、アプリケーション側の
    `certificate-targets.txt` を入力に `NicoCacheCA.jar` を実行します。対象ドメインはJava
    ソースへ埋め込まず、この一覧から読み込みます。
-6. `certs/ca.cer` をFirefoxまたはOSの信頼済み証明書ストアへ登録し、`proxy.pac`を
+   対象不足だけを直す再生成では既存`ca.jks`が使われるため、`ca.cer`の再登録は不要です。
+6. CAを新規作成した場合だけ`certs/ca.cer`をFirefoxまたはOSの信頼済み証明書ストアへ登録し、`proxy.pac`を
    ユーザーデータルート直下に用意してから診断を再実行します。「完全」になったら本体を
    起動し、ブラウザーは起動管理APIのポートではなく`proxy.pac`（NicoCache_nlの
    `listenPort`、既定値 `8080`）を使用します。

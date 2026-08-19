@@ -173,13 +173,14 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 `enableMitM=true`のまま`site.jks`がない状態で起動しない。
 
 専用管理サイト`https://nicocachenl.test/`を初めて含む版へ更新すると、本体は既存の
-`proxy.pac`へ専用ホスト経路を追加し、変更前を`proxy.pac.pre-rest-api.bak`へ一度だけ
-保存する。独自PACで`FindProxyForURL`を使用していない場合は自動変更せず警告する。
-既存PACがUTF-8、BOM付きUTF-16、Windows-31Jの場合は、元の文字コード、BOM、改行を
-維持して更新する。判定できない文字コードでは元ファイルを変更せず警告する。
+`proxy.pac`を含む認識可能な利用者テキストをUTF-8（BOMなし）へ正規化してから専用ホスト
+経路を追加する。変換前は`data/text-encoding-backups/v1/`へハッシュ付きで保存し、結果を
+`data/text-encoding-migration-v1.properties`へ記録する。判定不能、候補が複数、形式不一致、
+16 MiB超過、シンボリックリンクは変更せず、ランチャーのデータルート診断で案内する。
 `certificate-targets.txt`へ`nicocachenl.test`が追加された版では、ランチャーの
-データルート診断・修復からサイト証明書を再生成し、`certs/site.targets`が専用ホストを
-含むことを確認する。問題時はPACバックアップを戻し、旧証明書を退避して再生成する。
+データルート診断で`certs/site.targets`が専用ホストを含むことを確認する。不足時だけSITE
+証明書を再生成する。既存`ca.jks`を使うため`ca.cer`の再登録は不要で、CA自体を再生成した
+場合だけOSとブラウザーへ信頼登録し直す。
 
 ビルドスクリプトはルートの5つのJARを更新するため、必要な検証が終わったら
 `git status --short --branch` で生成物や無関係な差分が混入していないことを確認する。
