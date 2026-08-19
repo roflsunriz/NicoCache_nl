@@ -61,9 +61,10 @@ HTTP サーバーを利用する。
 - `DEBUG` 仮想ホストのスレッドダンプAPIと、利用者データルートへの
   UTF-8ファイル出力
 - サムネイルの上流取得・ファイル保存・再利用
-- nvcomment 応答の動画別 JSON 保存と、視聴ページの現行`comment.nvComment`情報から
-  専用ホストの`/api/v1/videos/<動画ID>/exports/comments`が正しいPOST本文・MIME・
-  ファイル名で取得する経路
+- nvcomment 応答の動画別 JSON 保存と、未視聴の動画でも専用ホストの
+  `/api/v1/videos/<動画ID>/exports/comments`がHTTPSで観測した認証Cookieを期限付きで
+  視聴ページ取得へ引き継ぎ、現行`comment.nvComment`情報から正しいPOST本文・MIME・
+  ファイル名でコメントJSONを返す経路
   （外部TLS接続を避けるため、ローカルHTTP fixtureを利用する）
 - DOMAND/CMAF の access-rights、master/sub playlist、AES key、初期化 chunk、
   暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生と、

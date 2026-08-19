@@ -2,7 +2,6 @@ package dareka.processor.impl;
 
 import java.io.IOException;
 
-import dareka.common.Logger;
 import dareka.common.json.JsonObject;
 import dareka.common.json.JsonString;
 import dareka.processor.HttpRequestHeader;
@@ -13,28 +12,33 @@ final class NvCommentDownloader {
     private NvCommentDownloader() {
     }
 
-    static URLResource getResource(String videoId, WatchVars watchVars,
-            HttpRequestHeader requestHeader) throws IOException {
+    static boolean hasContext(WatchVars watchVars) {
         if (watchVars == null || watchVars.getType() != WatchVars.Type.Html5) {
-            return null;
+            return false;
         }
         JsonObject json = watchVars.getJsonObject();
         JsonObject nvComment = json == null
                 ? null : json.getObject("comment", "nvComment");
         if (nvComment == null) {
-            Logger.warning("comment.nvComment not found: " + videoId);
+            return false;
+        }
+        String serverUrl = nvComment.getString("server");
+        String threadKey = nvComment.getString("threadKey");
+        return serverUrl != null && !serverUrl.isEmpty()
+                && threadKey != null && !threadKey.isEmpty()
+                && nvComment.getObject("params") != null;
+    }
+
+    static URLResource getResource(String videoId, WatchVars watchVars,
+            HttpRequestHeader requestHeader) throws IOException {
+        if (!hasContext(watchVars)) {
             return null;
         }
-
+        JsonObject nvComment = watchVars.getJsonObject()
+                .getObject("comment", "nvComment");
         String serverUrl = nvComment.getString("server");
         String threadKey = nvComment.getString("threadKey");
         JsonObject params = nvComment.getObject("params");
-        if (serverUrl == null || serverUrl.isEmpty()
-                || threadKey == null || threadKey.isEmpty() || params == null) {
-            Logger.warning("nvcomment download parameters not found: " + videoId);
-            return null;
-        }
-
         JsonObject requestJson = new JsonObject()
                 .put("params", params)
                 .put("threadKey", new JsonString(threadKey))

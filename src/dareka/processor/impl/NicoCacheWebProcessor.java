@@ -337,10 +337,24 @@ public final class NicoCacheWebProcessor implements Processor {
     private Resource export(HttpRequestHeader request, String videoId,
             String kind) throws IOException {
         if ("comments".equals(kind)) {
-            WatchVars watchVars = WatchVars.get(videoId);
-            if (watchVars == null) {
-                return error(409, "Conflict", "watch_context_required",
-                        "視聴ページを再読み込みしてから再試行してください");
+            WatchVars cachedWatchVars = WatchVars.get(videoId);
+            WatchVars watchVars;
+            try {
+                watchVars = NicoWatchPageFetcher.fetch(videoId,
+                        request.getMessageHeader("User-Agent"));
+            } catch (IOException error) {
+                if (!NvCommentDownloader.hasContext(cachedWatchVars)) {
+                    return error(502, "Bad Gateway", "comment_watch_page_failed",
+                            "視聴ページからコメント取得情報を取得できませんでした");
+                }
+                watchVars = cachedWatchVars;
+            }
+            if (!NvCommentDownloader.hasContext(watchVars)) {
+                watchVars = cachedWatchVars;
+            }
+            if (!NvCommentDownloader.hasContext(watchVars)) {
+                return error(409, "Conflict", "comment_context_unavailable",
+                        "この動画のコメント取得情報を利用できません");
             }
             try {
                 Resource resource = NvCommentDownloader.getResource(

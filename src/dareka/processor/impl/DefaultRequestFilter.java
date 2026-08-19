@@ -12,6 +12,10 @@ import dareka.processor.HttpRequestHeader;
 public class DefaultRequestFilter implements RequestFilter {
     @Override
     public int onRequest(HttpRequestHeader requestHeader) throws IOException {
+        // コメント書き出し時に、同じ利用者の権限で視聴ページを取得する。
+        // Cookieは公式HTTPSホストへの要求からだけ取得し、メモリ外へ保存しない。
+        NicoSessionCookieStore.capture(requestHeader);
+
         // Refererを直す
         String referer = requestHeader.getMessageHeader("Referer");
         if (referer != null) {

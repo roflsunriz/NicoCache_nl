@@ -512,6 +512,78 @@ public final class FunctionalTestMain {
                 exchange.getResponseBody().write(body);
                 return;
             }
+            if ("/nvcomment-export-fixture/v1/threads".equals(path)) {
+                String requestBody = new String(
+                        readAll(exchange.getRequestBody()), StandardCharsets.UTF_8);
+                boolean valid = "POST".equals(exchange.getRequestMethod())
+                        && "text/plain;charset=UTF-8".equals(
+                                exchange.getRequestHeaders().getFirst("Content-Type"))
+                        && requestBody.contains(
+                                "\"threadKey\":\"functional-export-thread-key\"")
+                        && requestBody.contains("\"id\":\"9000130001\"")
+                        && requestBody.contains("\"language\":\"ja-jp\"");
+                byte[] body = (valid
+                        ? "{\"comments\":[{\"body\":\"self-contained-comment-download\"}]}"
+                        : "{\"error\":\"invalid export nvcomment request\"}")
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(valid ? 200 : 400, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/comment-watch-page/sm900013".equals(path)) {
+                String cookie = exchange.getRequestHeaders().getFirst("Cookie");
+                if (cookie == null
+                        || !cookie.contains("user_session=functional-session")) {
+                    byte[] body = "login cookie required"
+                            .getBytes(StandardCharsets.UTF_8);
+                    exchange.sendResponseHeaders(401, body.length);
+                    exchange.getResponseBody().write(body);
+                    return;
+                }
+                String response = "{\"data\":{\"response\":{"
+                        + "\"video\":{\"id\":\"sm900013\",\"title\":\"Comment Export\","
+                        + "\"duration\":1,\"isDeleted\":false},"
+                        + "\"comment\":{\"nvComment\":{"
+                        + "\"threadKey\":\"functional-export-thread-key\","
+                        + "\"server\":\"http://127.0.0.1:" + upstreamPort
+                        + "/nvcomment-export-fixture\",\"params\":{\"targets\":[{"
+                        + "\"id\":\"9000130001\",\"fork\":\"main\"}],"
+                        + "\"language\":\"ja-jp\"}}},\"media\":{\"domand\":{"
+                        + "\"videos\":[],\"audios\":[]}},\"system\":{"
+                        + "\"isPeakTime\":false},\"viewer\":{\"isPremium\":true}}}}";
+                String html = "<!doctype html><meta name=\"server-response\" content=\""
+                        + response.replace("&", "&amp;").replace("\"", "&quot;")
+                        + "\">";
+                byte[] body = html.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/comment-watch-page/sm900030".equals(path)) {
+                byte[] body = "temporary watch failure"
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(503, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/comment-watch-page/sm900031".equals(path)) {
+                String response = "{\"data\":{\"response\":{"
+                        + "\"video\":{\"id\":\"sm900031\",\"title\":\"No Comments\","
+                        + "\"duration\":1,\"isDeleted\":false},"
+                        + "\"media\":{\"domand\":{\"videos\":[],\"audios\":[]}},"
+                        + "\"system\":{\"isPeakTime\":false},"
+                        + "\"viewer\":{\"isPremium\":true}}}}";
+                String html = "<!doctype html><meta name=\"server-response\" content=\""
+                        + response.replace("&", "&amp;").replace("\"", "&quot;")
+                        + "\">";
+                byte[] body = html.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
             if ("/api/getthumbinfo/sm900003".equals(path)) {
                 byte[] body = ("<nicovideo_thumb_response status=\"ok\"><thumb>"
                         + "<video_id>sm900003</video_id>"
@@ -764,6 +836,8 @@ public final class FunctionalTestMain {
                 "proxyPort=" + upstreamPort,
                 "videoMetadataEndpoint=http://127.0.0.1:" + upstreamPort
                         + "/api/getthumbinfo/",
+                "commentWatchPageEndpoint=http://127.0.0.1:" + upstreamPort
+                        + "/comment-watch-page/",
                 "allowFrom=local",
                 "readTimeout=5000",
                 "cacheFolder=cache",
@@ -1053,7 +1127,9 @@ public final class FunctionalTestMain {
                 tls.setUseClientMode(true);
                 tls.startHandshake();
                 tls.getOutputStream().write(("GET /local/fixture.txt HTTP/1.1\r\n"
-                        + "Host: www.nicovideo.jp\r\nConnection: close\r\n\r\n")
+                        + "Host: www.nicovideo.jp\r\n"
+                        + "Cookie: user_session=functional-session; preference=on\r\n"
+                        + "Connection: close\r\n\r\n")
                         .getBytes(StandardCharsets.ISO_8859_1));
                 tls.getOutputStream().flush();
                 Response response = Response.parse(readHttpResponse(tls.getInputStream(), false));
@@ -1306,6 +1382,34 @@ public final class FunctionalTestMain {
     }
 
     private void testCommentSaving() throws Exception {
+        Response selfContained = request(nicoCacheWebRequest(
+                "GET", "/api/v1/videos/sm900013/exports/comments", "", ""));
+        assertEquals(200, selfContained.status,
+                "self-contained nvcomment download status: "
+                        + selfContained.bodyText());
+        assertEquals("attachment; filename=\"sm900013.comments.json\"",
+                selfContained.header("content-disposition"),
+                "self-contained nvcomment download filename");
+        assertContains(selfContained.bodyText(),
+                "self-contained-comment-download",
+                "self-contained nvcomment download body");
+        assertEquals(1, upstreamRequestCount("/comment-watch-page/sm900013"),
+                "comment export must fetch the watch page itself");
+
+        Response watchFailure = request(nicoCacheWebRequest(
+                "GET", "/api/v1/videos/sm900030/exports/comments", "", ""));
+        assertEquals(502, watchFailure.status,
+                "comment watch page upstream failure status");
+        assertContains(watchFailure.bodyText(), "comment_watch_page_failed",
+                "comment watch page upstream failure code");
+
+        Response unavailable = request(nicoCacheWebRequest(
+                "GET", "/api/v1/videos/sm900031/exports/comments", "", ""));
+        assertEquals(409, unavailable.status,
+                "comment context unavailable status");
+        assertContains(unavailable.bodyText(), "comment_context_unavailable",
+                "comment context unavailable code");
+
         Response watch = request("GET http://www.nicovideo.jp/watch/9000100001 HTTP/1.1\r\n"
                 + "Host: www.nicovideo.jp\r\nConnection: close\r\n\r\n");
         assertEquals(200, watch.status, "thread-to-video mapping watch status");
