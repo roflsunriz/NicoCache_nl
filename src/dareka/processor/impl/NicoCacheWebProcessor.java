@@ -191,7 +191,8 @@ public final class NicoCacheWebProcessor implements Processor {
             return processCacheEntries(request);
         }
         if ("/api/v1/cache-directories".equals(path)) {
-            return requireGet(request, json(200, "OK", Cache.getDirListAsJson()));
+            return requireGet(request, json(200, "OK",
+                    Cache.getDirListAsJson(false)));
         }
         if (LOCAL_FILES_ROUTE.equals(path)
                 || path.startsWith(LOCAL_FILES_ROUTE + "/")) {
@@ -265,17 +266,25 @@ public final class NicoCacheWebProcessor implements Processor {
     }
 
     private Resource processCacheEntries(HttpRequestHeader request) {
-        String query = request.getParameter("query");
-        String state = request.getParameter("state");
+        String query;
+        String state;
+        String order;
+        String mode;
+        try {
+            query = getQueryParameter(request, "query");
+            state = getQueryParameter(request, "state");
+            order = getQueryParameter(request, "order");
+            mode = getQueryParameter(request, "mode");
+        } catch (IllegalArgumentException error) {
+            return error(400, "Bad Request", "invalid_query",
+                    "クエリーパラメーターが不正です");
+        }
         if (query != null && !query.isBlank()) {
-            String decoded = URLDecoder.decode(query, StandardCharsets.UTF_8);
-            boolean descending = "desc".equalsIgnoreCase(
-                    request.getParameter("order"));
-            boolean regex = "regex".equalsIgnoreCase(
-                    request.getParameter("mode"));
+            boolean descending = "desc".equalsIgnoreCase(order);
+            boolean regex = "regex".equalsIgnoreCase(mode);
             StringBuilder output = new StringBuilder("{\n");
             for (VideoDescriptor video : SearchRewriter.searchVideo(
-                    decoded, regex, descending).keySet()) {
+                    query, regex, descending).keySet()) {
                 if (Cache.writeJSON(video, output)) {
                     output.append(",\n");
                 }
@@ -284,14 +293,36 @@ public final class NicoCacheWebProcessor implements Processor {
             return json(200, "OK", output.toString());
         }
         if ("complete".equalsIgnoreCase(state)) {
-            return json(200, "OK", Cache.getCacheListAsJson());
+            return json(200, "OK", Cache.getCacheListAsJson(false));
         }
         if ("temporary".equalsIgnoreCase(state)) {
-            return json(200, "OK", Cache.getTempListAsJson());
+            return json(200, "OK", Cache.getTempListAsJson(false));
         }
         return json(200, "OK", "{\"complete\":"
-                + Cache.getCacheListAsJson() + ",\"temporary\":"
-                + Cache.getTempListAsJson() + "}");
+                + Cache.getCacheListAsJson(false) + ",\"temporary\":"
+                + Cache.getTempListAsJson(false) + "}");
+    }
+
+    private static String getQueryParameter(HttpRequestHeader request,
+            String expectedName) {
+        String query = request.getQuery();
+        if (query == null || query.isEmpty()) {
+            return null;
+        }
+        for (String parameter : query.split("&", -1)) {
+            int separator = parameter.indexOf('=');
+            String encodedName = separator < 0
+                    ? parameter : parameter.substring(0, separator);
+            String name = URLDecoder.decode(encodedName,
+                    StandardCharsets.UTF_8);
+            if (!expectedName.equals(name)) {
+                continue;
+            }
+            String encodedValue = separator < 0
+                    ? "" : parameter.substring(separator + 1);
+            return URLDecoder.decode(encodedValue, StandardCharsets.UTF_8);
+        }
+        return null;
     }
 
     private Resource processVideoRoute(HttpRequestHeader request,

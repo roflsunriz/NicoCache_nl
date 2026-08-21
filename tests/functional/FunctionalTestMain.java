@@ -2024,6 +2024,16 @@ public final class FunctionalTestMain {
         assertEquals(200, search.status, "REST cache search status");
         assertContains(search.bodyText(), "sm900006",
                 "REST cache search body");
+        assertFalse(search.bodyText().contains("sm900001"),
+                "REST cache search excludes non-matching entries");
+
+        Response invalidSearch = request(nicoCacheWebRequest("GET",
+                "/api/v1/cache-entries?query=%ZZ", "", ""));
+        assertEquals(400, invalidSearch.status,
+                "REST invalid search encoding status");
+        assertContains(invalidSearch.bodyText(),
+                "\"code\":\"invalid_query\"",
+                "REST invalid search encoding contract");
 
         Response media = request(nicoCacheWebRequest("GET",
                 "/api/v1/videos/sm900001/media", "", ""));
