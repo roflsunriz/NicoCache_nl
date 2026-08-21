@@ -47,7 +47,10 @@ import com.sun.net.httpserver.HttpServer;
 import dareka.common.LRUMap;
 import dareka.common.HttpIOException;
 import dareka.common.json.Json;
+import dareka.common.json.JsonArray;
+import dareka.common.json.JsonNumber;
 import dareka.common.json.JsonObject;
+import dareka.common.json.JsonValue;
 import dareka.processor.URLResource;
 import dareka.processor.URLResourceCache;
 import dareka.processor.impl.Cache;
@@ -221,6 +224,9 @@ public final class FunctionalTestMain {
                 "special-local-content", StandardCharsets.UTF_8);
         Files.writeString(sandbox.resolve("local/raw[brackets].txt"),
                 "raw-bracket-content", StandardCharsets.UTF_8);
+        Files.createDirectories(sandbox.resolve("local/日本語 フォルダー"));
+        Files.writeString(sandbox.resolve("local/日本語 フォルダー/script file.js"),
+                "console.log('local browser');", StandardCharsets.UTF_8);
         originalProxyPac = ("function FindProxyForURL(url, host) {\r\n"
                 + "  // 既存の日本語PAC\r\n"
                 + "  return 'DIRECT';\r\n}\r\n").getBytes(PAC_CHARSET);
@@ -1795,6 +1801,126 @@ public final class FunctionalTestMain {
                 "cache manager asset content type");
         assertContains(cacheManagerAsset.bodyText(), "renderCacheManager",
                 "cache manager asset body");
+
+        Response localPage = request(nicoCacheWebRequest(
+                "GET", "/local/nicocache-web", "", ""));
+        assertEquals(200, localPage.status, "local file viewer page status");
+        assertContains(localPage.bodyText(), "data-i18n=\"localFiles\"",
+                "local file viewer navigation");
+
+        Response localFiles = request(nicoCacheWebRequest(
+                "GET", "/api/v1/local-files", "", ""
+                + "Origin: https://www.nicovideo.jp\r\n"));
+        assertEquals(200, localFiles.status, "local files API status");
+        assertContains(localFiles.header("content-type"), "application/json",
+                "local files API content type");
+        assertEquals("https://www.nicovideo.jp",
+                localFiles.header("access-control-allow-origin"),
+                "local files API CORS origin");
+        JsonObject localListing = Json.parseObject(localFiles.bodyText());
+        assertTrue(localListing != null, "local files API JSON object");
+        assertEquals("", localListing.getString("path"),
+                "local files API root path");
+        assertTrue(localListing.get("parentPath").isNull(),
+                "local files API root parent");
+        JsonArray localEntries = localListing.getArray("entries");
+        assertTrue(localEntries != null, "local files API entries");
+        JsonObject overlayEntry = null;
+        JsonObject viewerDirectory = null;
+        int overlayCount = 0;
+        for (JsonValue value : localEntries.getList()) {
+            if (!(value instanceof JsonObject)) {
+                continue;
+            }
+            JsonObject entry = (JsonObject) value;
+            if ("overlay.txt".equals(entry.getString("name"))) {
+                overlayEntry = entry;
+                overlayCount++;
+            }
+            if ("nicocache-web".equals(entry.getString("name"))) {
+                viewerDirectory = entry;
+            }
+        }
+        assertEquals(1, overlayCount,
+                "local files API merges duplicate overlay entry");
+        assertTrue(overlayEntry != null, "local files API user overlay entry");
+        assertEquals("user", overlayEntry.getString("source"),
+                "local files API prefers user overlay");
+        assertEquals(Files.size(sandbox.resolve("local/overlay.txt")),
+                ((JsonNumber) overlayEntry.get("size")).getLong(),
+                "local files API reports effective file size");
+        assertEquals("text/plain", overlayEntry.getString("mediaType"),
+                "local files API MIME type");
+        assertContains(overlayEntry.getString("createdAt"), "T",
+                "local files API creation time");
+        assertContains(overlayEntry.getString("modifiedAt"), "T",
+                "local files API modification time");
+        assertContains(overlayEntry.getString("url"),
+                "/local/overlay.txt", "local files API served URL");
+        assertTrue(viewerDirectory != null,
+                "local files API bundled directory entry");
+        assertEquals("directory", viewerDirectory.getString("kind"),
+                "local files API directory kind");
+        assertTrue(viewerDirectory.get("size").isNull(),
+                "local files API directory size");
+
+        String encodedLocalDirectory = URLEncoder.encode(
+                "日本語 フォルダー", StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        Response nestedLocalFiles = request(nicoCacheWebRequest(
+                "GET", "/api/v1/local-files/" + encodedLocalDirectory,
+                "", ""));
+        assertEquals(200, nestedLocalFiles.status,
+                "nested local files API status");
+        assertContains(nestedLocalFiles.bodyText(),
+                "\"name\":\"script file.js\"",
+                "nested local files API entry");
+        JsonObject nestedListing = Json.parseObject(
+                nestedLocalFiles.bodyText());
+        JsonObject scriptEntry = nestedListing == null
+                ? null : nestedListing.getObject("entries", 0);
+        assertTrue(scriptEntry != null,
+                "nested local files API JSON entry");
+        assertEquals("application/x-javascript",
+                scriptEntry.getString("mediaType"),
+                "nested local files API MIME type");
+
+        Response linkedLocalFiles = request(nicoCacheWebRequest(
+                "GET", "/api/v1/local-files/features", "", ""));
+        assertEquals(200, linkedLocalFiles.status,
+                "linked local directory API status");
+        assertContains(linkedLocalFiles.bodyText(), "linked.txt",
+                "linked local directory API entry");
+
+        Response invalidLocalTraversal = request(nicoCacheWebRequest(
+                "GET", "/api/v1/local-files/%2e%2e", "", ""));
+        assertEquals(400, invalidLocalTraversal.status,
+                "local files API traversal rejection");
+        assertContains(invalidLocalTraversal.bodyText(),
+                "\"code\":\"invalid_local_path\"",
+                "local files API traversal error contract");
+        Response invalidLocalSeparator = request(nicoCacheWebRequest(
+                "GET", "/api/v1/local-files/features%2Flinked.txt", "", ""));
+        assertEquals(400, invalidLocalSeparator.status,
+                "local files API encoded separator rejection");
+        Response localFileAsDirectory = request(nicoCacheWebRequest(
+                "GET", "/api/v1/local-files/fixture.txt", "", ""));
+        assertEquals(400, localFileAsDirectory.status,
+                "local files API file path rejection");
+        assertContains(localFileAsDirectory.bodyText(),
+                "\"code\":\"local_path_not_directory\"",
+                "local files API file path error contract");
+        Response missingLocalDirectory = request(nicoCacheWebRequest(
+                "GET", "/api/v1/local-files/missing", "", ""));
+        assertEquals(404, missingLocalDirectory.status,
+                "local files API missing directory status");
+        Response localFilesWrongMethod = request(nicoCacheWebRequest(
+                "POST", "/api/v1/local-files", "{}",
+                "Content-Type: application/json\r\n"));
+        assertEquals(405, localFilesWrongMethod.status,
+                "local files API method validation");
+        assertEquals("GET", localFilesWrongMethod.header("allow"),
+                "local files API Allow header");
 
         Response live = request(nicoCacheWebRequest(
                 "GET", "/api/v1/health/live", "", ""));

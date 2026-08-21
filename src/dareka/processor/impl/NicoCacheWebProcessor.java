@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.net.Socket;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AccessDeniedException;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryUsage;
 import java.lang.management.RuntimeMXBean;
@@ -39,6 +42,7 @@ import dareka.processor.util.Hls2SingleConverter;
 public final class NicoCacheWebProcessor implements Processor {
     public static final String HOST = "nicocachenl.test";
     private static final String API_PREFIX = "/api/v1";
+    private static final String LOCAL_FILES_ROUTE = "/api/v1/local-files";
     private static final Pattern URL_PATTERN = Pattern.compile(
             "^https?://" + Pattern.quote(HOST) + "(?:/|$)");
     private static final Pattern VIDEO_ROUTE = Pattern.compile(
@@ -105,6 +109,7 @@ public final class NicoCacheWebProcessor implements Processor {
         } else if ("/assets/styles.css".equals(path)) {
             localPath = "nicocache-web/styles.css";
         } else if ("/".equals(path) || "/cache".equals(path)
+                || "/local".equals(path) || path.startsWith("/local/")
                 || "/health".equals(path) || "/diagnostics".equals(path)
                 || "/diagnostics/threads".equals(path)
                 || path.matches("/videos/[a-z]{2}[0-9]+")) {
@@ -187,6 +192,34 @@ public final class NicoCacheWebProcessor implements Processor {
         }
         if ("/api/v1/cache-directories".equals(path)) {
             return requireGet(request, json(200, "OK", Cache.getDirListAsJson()));
+        }
+        if (LOCAL_FILES_ROUTE.equals(path)
+                || path.startsWith(LOCAL_FILES_ROUTE + "/")) {
+            if (!request.isGetMethod()) {
+                return methodNotAllowed("GET");
+            }
+            try {
+                String relativePath = path.substring(LOCAL_FILES_ROUTE.length());
+                return json(200, "OK",
+                        LocalFileBrowser.list(relativePath).toJson());
+            } catch (IllegalArgumentException error) {
+                return error(400, "Bad Request", "invalid_local_path",
+                        "localファイルのパスが不正です");
+            } catch (NotDirectoryException error) {
+                return error(400, "Bad Request", "local_path_not_directory",
+                        "指定したlocalパスはフォルダーではありません");
+            } catch (NoSuchFileException error) {
+                return error(404, "Not Found", "local_directory_not_found",
+                        "localフォルダーが見つかりません");
+            } catch (AccessDeniedException error) {
+                return error(403, "Forbidden", "local_directory_unreadable",
+                        "localフォルダーを読み取れません");
+            } catch (IOException error) {
+                Logger.error(error);
+                return error(500, "Internal Server Error",
+                        "local_directory_read_failed",
+                        "localフォルダーの一覧を取得できませんでした");
+            }
         }
 
         Matcher videoRoute = VIDEO_ROUTE.matcher(path);

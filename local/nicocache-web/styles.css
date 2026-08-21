@@ -73,6 +73,15 @@ pre {
   overflow-wrap: anywhere;
 }
 .error-box { border-color: #9f1239; background: #3f1420; }
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  margin: 0 0 1rem;
+}
+.breadcrumbs a { overflow-wrap: anywhere; }
+.local-files-table { min-width: 56rem; }
+.local-files-table td:first-child { font-weight: 650; }
 .cache-heading {
   display: flex;
   align-items: flex-start;

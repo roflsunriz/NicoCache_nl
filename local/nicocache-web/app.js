@@ -6,6 +6,10 @@ const app = document.querySelector("#app");
 const messages = {
   ja: {
     overview: "概要", cache: "キャッシュ", health: "ヘルス", diagnostics: "診断",
+    localFiles: "localファイル", localFilesLead: "ブラウザーへ配信できるファイルをフォルダーごとに表示します。",
+    name: "名前", created: "作成日時", type: "種類", directory: "フォルダー",
+    file: "ファイル", other: "その他", emptyDirectory: "このフォルダーは空です。",
+    parentDirectory: "親フォルダー", source: "提供元", userSource: "利用者", applicationSource: "標準",
     threads: "スレッド", loading: "読み込み中…", ready: "利用可能",
     runtime: "ランタイム", memory: "ヒープ使用量", uptime: "稼働時間",
     threadCount: "スレッド数", deadlocks: "デッドロック", cacheEntries: "キャッシュ一覧",
@@ -35,6 +39,10 @@ const messages = {
   },
   en: {
     overview: "Overview", cache: "Cache", health: "Health", diagnostics: "Diagnostics",
+    localFiles: "Local files", localFilesLead: "Browse the files available to web pages through the local directory.",
+    name: "Name", created: "Created", type: "Type", directory: "Folder",
+    file: "File", other: "Other", emptyDirectory: "This folder is empty.",
+    parentDirectory: "Parent folder", source: "Source", userSource: "User", applicationSource: "Bundled",
     threads: "Threads", loading: "Loading…", ready: "Ready", runtime: "Runtime",
     memory: "Heap used", uptime: "Uptime", threadCount: "Threads", deadlocks: "Deadlocks",
     cacheEntries: "Cache entries", refresh: "Refresh", complete: "Complete",
@@ -88,6 +96,13 @@ const formatDuration = (milliseconds) => {
   const minutes = Math.floor((seconds % 3600) / 60);
   return `${days}d ${hours}h ${minutes}m`;
 };
+const formatDate = (value) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+};
+const encodePath = (value) => String(value).split("/").filter(Boolean)
+  .map((segment) => encodeURIComponent(segment)).join("/");
 
 const fetchJson = async (path, init) => {
   const response = await fetch(`${API}${path}`, { cache: "no-store", ...init });
@@ -154,6 +169,37 @@ const renderThreads = () => {
 const renderCache = () => renderCacheManager({
   app, fetchJson, t, escapeHtml, formatBytes,
 });
+const localBreadcrumbs = (path) => {
+  const segments = String(path).split("/").filter(Boolean);
+  const links = [`<a href="/local">local</a>`];
+  segments.forEach((segment, index) => {
+    const partial = encodePath(segments.slice(0, index + 1).join("/"));
+    links.push(`<a href="/local/${partial}">${escapeHtml(segment)}</a>`);
+  });
+  return links.join('<span aria-hidden="true">/</span>');
+};
+const renderLocalFiles = async () => {
+  const suffix = location.pathname.slice("/local".length);
+  const data = await fetchJson(`/local-files${suffix}`);
+  const rows = data.entries.map((entry) => {
+    const isDirectory = entry.kind === "directory";
+    const name = isDirectory
+      ? `<a href="/local/${encodePath(entry.path)}">${escapeHtml(entry.name)}/</a>`
+      : `<a href="${escapeHtml(entry.url)}">${escapeHtml(entry.name)}</a>`;
+    const type = isDirectory ? t("directory") : (entry.mediaType || t(entry.kind));
+    const source = entry.source === "user" ? t("userSource") : t("applicationSource");
+    return `<tr><td>${name}</td><td>${escapeHtml(formatDate(entry.createdAt))}</td>
+      <td>${escapeHtml(formatDate(entry.modifiedAt))}</td><td>${isDirectory ? "—" : escapeHtml(formatBytes(entry.size))}</td>
+      <td>${escapeHtml(type)}</td><td>${escapeHtml(source)}</td></tr>`;
+  }).join("");
+  const parent = data.parentPath === null ? "" : `<p><a href="/local${data.parentPath ? `/${encodePath(data.parentPath)}` : ""}">↑ ${escapeHtml(t("parentDirectory"))}</a></p>`;
+  app.innerHTML = `<h1>${escapeHtml(t("localFiles"))}</h1><p class="lead">${escapeHtml(t("localFilesLead"))}</p>
+    <nav class="breadcrumbs" aria-label="Breadcrumb">${localBreadcrumbs(data.path)}</nav>${parent}
+    <div class="table-wrap"><table class="local-files-table"><thead><tr><th>${escapeHtml(t("name"))}</th>
+      <th>${escapeHtml(t("created"))}</th><th>${escapeHtml(t("updated"))}</th><th>${escapeHtml(t("size"))}</th>
+      <th>${escapeHtml(t("type"))}</th><th>${escapeHtml(t("source"))}</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6" class="empty-state">${escapeHtml(t("emptyDirectory"))}</td></tr>`}</tbody></table></div>`;
+};
 const renderVideo = async (videoId) => {
   const data = await fetchJson(`/videos/${encodeURIComponent(videoId)}/cache-entries`);
   app.innerHTML = `<h1>${t("videoDetails")}: ${escapeHtml(videoId)}</h1><div class="actions">
@@ -167,6 +213,7 @@ const route = async () => {
   setCurrentNav();
   app.innerHTML = document.querySelector("#loading-template").innerHTML;
   if (location.pathname === "/cache") return renderCache();
+  if (location.pathname === "/local" || location.pathname.startsWith("/local/")) return renderLocalFiles();
   if (location.pathname === "/health") return renderHealth();
   if (location.pathname === "/diagnostics") return renderDiagnostics();
   if (location.pathname === "/diagnostics/threads") return renderThreads();

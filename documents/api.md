@@ -14,6 +14,7 @@ https://nicocachenl.test/
 | --- | --- |
 | `/` | 稼働状態とランタイム概要 |
 | `/cache` | 完成・一時キャッシュの検索、絞り込み、並び替え、詳細確認、ニコニコ視聴ページ表示、保存、個別・一括削除 |
+| `/local` | `local/`で配信するフォルダーとファイルの一覧、作成・更新日時、サイズ、種類 |
 | `/health` | livenessとreadiness |
 | `/diagnostics` | JVM、メモリー、スレッド、デッドロック概要 |
 | `/diagnostics/threads` | 利用者操作による完全スレッドダンプ採取・表示 |
@@ -27,6 +28,24 @@ https://nicocachenl.test/
 - エラー本文は `{"error":{"code":"...","message":"..."}}`。
 - 動画IDは `[a-z]{2}[0-9]+`。キャッシュIDをパスへ含める場合は1セグメントとしてUTF-8パーセントエンコードする。
 - GETは削除、設定変更、診断採取を行わない。
+- BearerトークンなどのAPI認証は不要だが、接続元はループバックに限定する。許可済みの`nicovideo.jp`オリジンからはCORSでGETできる。
+
+## localファイル
+
+| メソッドとパス | 内容 |
+| --- | --- |
+| `GET /api/v1/local-files` | 利用者側と標準側をマージした`local/`直下の一覧 |
+| `GET /api/v1/local-files/<相対パス>` | 指定した`local/`フォルダーの一覧。各セグメントをUTF-8パーセントエンコードする |
+
+応答は現在の`path`、ルートでは`null`になる`parentPath`、`entries`を持つ。各項目は
+`name`、`path`、`kind`（`directory`、`file`、`other`）、バイト単位の`size`、
+ISO 8601形式の`createdAt`と`modifiedAt`、`mediaType`、実際の配信URLである`url`、
+`source`（`user`または`application`）、`symbolicLink`を返す。フォルダーの`size`と
+`mediaType`は`null`になる。
+
+一覧は通常の`/local/`配信と同様に利用者データ側を優先し、同名フォルダーは標準側と
+マージする。同名ファイルは1件だけ返す。`.`、`..`、空セグメント、パーセントエンコード
+された区切り文字を含むパスは400で拒否し、`local/`の外は列挙しない。
 
 ## キャッシュ情報
 
