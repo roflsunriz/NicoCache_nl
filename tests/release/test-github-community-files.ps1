@@ -72,7 +72,7 @@ foreach ($required in @(
         'permissions: {}'
         'contents: read'
         'pull-requests: write'
-        'actions/labeler@634933edcd8ababfe52f92936142cc22ac488b1b # v6.0.1'
+        'actions/labeler@b8dd2d9be0f68b860e7dae5dae7d772984eacd6d # v6.2.0'
         'sync-labels: true'
         'PRタイトルは type(scope): 要約 形式にしてください。'
     )) {
