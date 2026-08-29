@@ -262,6 +262,38 @@
     trigger?.dispatchEvent(new MouseEvent("click", {bubbles: true, detail: 1}));
     check(trigger?.getAttribute("aria-expanded") === "false", "再クリックでメニューが閉じません");
 
+    const fullscreenDescriptor = Object.getOwnPropertyDescriptor(document, "fullscreenElement");
+    try {
+      Object.defineProperty(document, "fullscreenElement", {
+        configurable: true,
+        value: document.documentElement
+      });
+      menu.dispatchEvent(new MouseEvent("mouseenter"));
+      document.dispatchEvent(new Event("fullscreenchange"));
+      await wait(0);
+      check(getComputedStyle(menu).display === "none", "全画面表示中もメニューが表示されています");
+      check(menu.getAttribute("aria-hidden") === "true", "全画面表示中のメニューが支援技術から隠れていません");
+      check(trigger?.getAttribute("aria-expanded") === "false", "全画面移行時にメニューが閉じません");
+      check(!account()?.hasAttribute("data-ncnl-account-space"),
+        "全画面表示中もアカウント項目の横幅を確保しています");
+    } finally {
+      if (fullscreenDescriptor) {
+        Object.defineProperty(document, "fullscreenElement", fullscreenDescriptor);
+      } else {
+        delete document.fullscreenElement;
+      }
+    }
+    document.dispatchEvent(new Event("fullscreenchange"));
+    await wait(40);
+    menu = document.querySelector("#ncnl_common_header_menu");
+    trigger = menu?.querySelector(".ncnl-common-header-trigger");
+    popover = menu?.querySelector(".ncnl-common-header-popover");
+    check(getComputedStyle(menu).display === "flex", "全画面解除後にメニューが再表示されません");
+    check(menu?.getAttribute("aria-hidden") === null,
+      "全画面解除後もメニューが支援技術から隠れています");
+    check(isVisuallyBetween(menu, notification(), account()),
+      "全画面解除後に通知とアカウントメニューの間へ復帰しません");
+
     let confirms = 0;
     let mutationRequests = 0;
     const originalConfirm = window.confirm;

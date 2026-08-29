@@ -97,15 +97,22 @@ class FakeElement {
 
 function createPage() {
   const elements = new Map();
+  const documentListeners = new Map();
   const document = {
     elements,
+    fullscreenElement: null,
     createElement(tagName) {
       return new FakeElement(tagName, document);
     },
     getElementById(id) {
       return elements.get(id) || null;
     },
-    addEventListener() {},
+    addEventListener(type, listener) {
+      documentListeners.set(type, listener);
+    },
+    dispatchEvent(event) {
+      documentListeners.get(event.type)?.(event);
+    },
   };
   document.documentElement = document.createElement("html");
   document.head = document.createElement("head");
@@ -207,4 +214,30 @@ test("watchページのNicoCacheメニューをREST APIへ接続しSPA動画切�
       "https://nicocachenl.test/api/v1/videos/sm10/exports/audio",
     ],
   );
+});
+
+test("全画面表示中はNicoCacheメニューを閉じて非表示状態にし解除時に復帰する", () => {
+  const page = createPage();
+  const container = page.document.getElementById("ncnl_common_header_menu");
+  const trigger = container.querySelector(".ncnl-common-header-trigger");
+  const popover = container.querySelector(".ncnl-common-header-popover");
+  const style = page.document.getElementById("ncnl_common_header_menu_style");
+
+  container.listeners.get("mouseenter")();
+  assert.equal(trigger.getAttribute("aria-expanded"), "true");
+
+  page.document.fullscreenElement = page.document.documentElement;
+  page.document.dispatchEvent({type: "fullscreenchange"});
+  assert.equal(container.getAttribute("data-ncnl-fullscreen"), "true");
+  assert.equal(container.getAttribute("aria-hidden"), "true");
+  assert.equal(trigger.getAttribute("aria-expanded"), "false");
+  assert.equal(popover.getAttribute("aria-hidden"), "true");
+  assert.match(style.textContent,
+    /#ncnl_common_header_menu\[data-ncnl-fullscreen=true\]\{display:none;\}/);
+
+  page.document.fullscreenElement = null;
+  page.document.dispatchEvent({type: "fullscreenchange"});
+  assert.equal(container.getAttribute("data-ncnl-fullscreen"), null);
+  assert.equal(container.getAttribute("aria-hidden"), null);
+  assert.equal(container.parentElement.id, "CommonHeader");
 });

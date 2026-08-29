@@ -61,7 +61,7 @@ Chrome または Edge の headless モードでプレビューを実行し、結
 
 標準出力は `result.json` と同じ1行JSONです。出力先には `final.html`、`screenshot.png`、`console.json`、変換トレースを含む `render.json` も保存します。終了コードは成功 `0`、構文・コンソール・ブラウザー結果の失敗 `1`、引数エラー `2`、ブラウザー未検出など実行基盤の失敗 `3` です。
 
-主なオプションは `--fixture watch|search|anime`、`--cache-state NONE|NORMAL|ECONOMY|DMC|DMC_ECONOMY`、`--reencoded true|false|null`、`--reencoded-bitrate N`、`--spa-add N`、`--popthumb-probe`、`--cache-menu-probe`、`--viewport 1280x900`、`--file <filter>`、`--no-filters`、`--browser <path>`、`--timeout <seconds>` です。`DMC`と`DMC_ECONOMY`は本体DSLの互換状態名を維持しつつ、`/cache/info/v3`モックではそれぞれ現行Domand/CMAFの`1080p・192kbps`と、既存`low`名互換の`360p-lowest・64kbps`を返します。`--popthumb-probe` は同一動画の再ホバー、別動画、短時間で離脱したホバーを実行し、iframe生成数、DOM再利用、12件のLRU上限を検証します。`--cache-menu-probe` は視聴ページのNicoCacheメニューについて、公式ヘッダー内の配置、ホバー・フォーカス・クリック・キーボード操作、SPA動画切替、ヘッダー再描画への追従を検証します。`--output-dir` を省略した場合は `.cache/nlfilter-lab/headless/<fixture>-<cache-state>/` を使います。
+主なオプションは `--fixture watch|search|anime`、`--cache-state NONE|NORMAL|ECONOMY|DMC|DMC_ECONOMY`、`--reencoded true|false|null`、`--reencoded-bitrate N`、`--spa-add N`、`--popthumb-probe`、`--cache-menu-probe`、`--viewport 1280x900`、`--file <filter>`、`--no-filters`、`--browser <path>`、`--timeout <seconds>` です。`DMC`と`DMC_ECONOMY`は本体DSLの互換状態名を維持しつつ、`/cache/info/v3`モックではそれぞれ現行Domand/CMAFの`1080p・192kbps`と、既存`low`名互換の`360p-lowest・64kbps`を返します。`--popthumb-probe` は同一動画の再ホバー、別動画、短時間で離脱したホバーを実行し、iframe生成数、DOM再利用、12件のLRU上限を検証します。`--cache-menu-probe` は視聴ページのNicoCacheメニューについて、公式ヘッダー内の配置、ホバー・フォーカス・クリック・キーボード操作、全画面中の非表示と解除後の復帰、SPA動画切替、ヘッダー再描画への追従を検証します。`--output-dir` を省略した場合は `.cache/nlfilter-lab/headless/<fixture>-<cache-state>/` を使います。
 
 ## 自動テスト
 

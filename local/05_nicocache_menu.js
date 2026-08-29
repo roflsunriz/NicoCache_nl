@@ -1,4 +1,4 @@
-// - 2024-09-06, 2026-08-11, 2026-08-14.
+// - 2024-09-06, 2026-08-11, 2026-08-14, 2026-08-29.
 // - 現行watchページの公式コモンヘッダーにNicoCache専用メニューを追加する.
 // - CommonHeaderの生成クラスには依存せず、意味のあるルートと公式リンクから挿入先を求める.
 
@@ -38,6 +38,7 @@
         "flex:0 0 auto;align-items:center;color:#fff;font:400 12px/36px Avenir,Lato,-apple-system," +
         "BlinkMacSystemFont,Helvetica Neue,Hiragino Kaku Gothic ProN,Meiryo,sans-serif;" +
       "}" +
+      "#" + containerId + "[data-ncnl-fullscreen=true]{display:none;}" +
       "#" + containerId + " .ncnl-common-header-trigger{" +
         "all:unset;box-sizing:border-box;display:flex;height:36px;align-items:center;gap:5px;" +
         "padding:0 2px;color:#fff;white-space:nowrap;cursor:pointer;" +
@@ -246,6 +247,10 @@
   };
 
   var positionAccountMenu = function(container) {
+    if (container.getAttribute("data-ncnl-fullscreen") === "true") {
+      releaseAccountSpace();
+      return;
+    }
     if (!mountedAccountItem || !mountedAccountItem.isConnected
         || container.getAttribute("data-ncnl-mounted") !== "account") return;
     var width = Math.ceil(container.getBoundingClientRect().width);
@@ -301,6 +306,19 @@
     container.setAttribute("data-ncnl-open", open ? "true" : "false");
     trigger.setAttribute("aria-expanded", open ? "true" : "false");
     popover.setAttribute("aria-hidden", open ? "false" : "true");
+  };
+
+  var synchronizeFullscreenState = function(container) {
+    var fullscreen = Boolean(document.fullscreenElement);
+    if (fullscreen) {
+      container.setAttribute("data-ncnl-fullscreen", "true");
+      container.setAttribute("aria-hidden", "true");
+      setMenuOpen(container, false);
+    } else {
+      container.removeAttribute("data-ncnl-fullscreen");
+      container.removeAttribute("aria-hidden");
+    }
+    return fullscreen;
   };
 
   var createMenu = function() {
@@ -439,8 +457,15 @@
     if (!commonHeader) return false;
     var placement = findPlacement(commonHeader);
     var container = document.getElementById(containerId) || createMenu();
+    var fullscreen = synchronizeFullscreenState(container);
     if (placement && placement.mounted === "account") {
-      mountAccountMenu(container, placement.reference);
+      if (fullscreen) {
+        container.setAttribute("data-ncnl-mounted", "account");
+        if (container.parentElement !== document.body) document.body.appendChild(container);
+        clearAccountMenuPosition(container);
+      } else {
+        mountAccountMenu(container, placement.reference);
+      }
     } else if (placement) {
       clearAccountMenuPosition(container);
       placement.parent.insertBefore(container, placement.reference);
@@ -472,5 +497,10 @@
   });
   window.addEventListener("resize", scheduleAccountMenuPosition);
   window.addEventListener("scroll", scheduleAccountMenuPosition, true);
+  document.addEventListener("fullscreenchange", function() {
+    var container = document.getElementById(containerId);
+    if (container) synchronizeFullscreenState(container);
+    initialize();
+  });
   initialize();
 })();
