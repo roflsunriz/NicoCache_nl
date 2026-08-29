@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-08-29
+
 ### Fixed
 
 - 動画を全画面表示した際に視聴領域へ重ならないよう、CommonHeaderへ追加するNicoCacheメニューを
