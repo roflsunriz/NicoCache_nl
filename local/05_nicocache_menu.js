@@ -1,11 +1,12 @@
-// - 2024-09-06, 2026-08-11, 2026-08-14, 2026-08-29.
-// - 現行watchページの公式コモンヘッダーにNicoCache専用メニューを追加する.
+// - 2024-09-06, 2026-08-11, 2026-08-14, 2026-08-29, 2026-08-30.
+// - 現行ページの公式コモンヘッダーにNicoCache専用メニューを追加する.
 // - CommonHeaderの生成クラスには依存せず、意味のあるルートと公式リンクから挿入先を求める.
 
 (function() {
   "use strict";
 
-  if (window.__ncnlWatchCacheActionsInitialized) return;
+  if (window.__ncnlCommonHeaderMenuInitialized) return;
+  window.__ncnlCommonHeaderMenuInitialized = true;
   window.__ncnlWatchCacheActionsInitialized = true;
 
   var containerId = "ncnl_common_header_menu";
@@ -20,6 +21,7 @@
   var getVideoId = function() {
     var match = window.location.pathname.match(/^\/watch\/([a-z]{2}\d+)(?:\/|$)/i);
     if (match) return match[1];
+    if (!/^\/watch(?:\/|$)/.test(window.location.pathname)) return null;
     if (window.NicoCache_nl && NicoCache_nl.watch
         && typeof NicoCache_nl.watch.getVideoID === "function") {
       return NicoCache_nl.watch.getVideoID();
@@ -77,6 +79,7 @@
         "display:grid;grid-template-columns:repeat(2,minmax(0,1fr));background:#fff;" +
         "border-top:1px solid #e5e5e5;border-left:1px solid #e5e5e5;" +
       "}" +
+      "#" + containerId + " .ncnl-common-header-actions[hidden]{display:none;}" +
       "#" + containerId + " .ncnl-common-header-item{" +
         "box-sizing:border-box;display:flex;width:100%;height:40px;margin:0;padding:0 12px;" +
         "align-items:center;justify-content:space-between;border:0;border-right:1px solid #e5e5e5;" +
@@ -120,14 +123,26 @@
   };
 
   var synchronizeLinks = function(videoId) {
-    videoId = videoId || getVideoId();
+    videoId = typeof videoId === "string" && videoId ? videoId : getVideoId();
     var container = document.getElementById(containerId);
-    if (!videoId || !container) return;
+    if (!container) return;
+    var actions = container.querySelector(".ncnl-common-header-actions");
+    var links = container.querySelectorAll("a[data-ncnl-action]");
+    if (!videoId) {
+      currentVideoId = null;
+      container.removeAttribute("data-ncnl-video-id");
+      if (actions) actions.hidden = true;
+      links.forEach(function(link) {
+        if (typeof link._ncnlSuffix === "string") link.removeAttribute("href");
+      });
+      return;
+    }
+    if (actions) actions.hidden = false;
     if (videoId === currentVideoId
         && container.getAttribute("data-ncnl-video-id") === videoId) return;
     currentVideoId = videoId;
     container.setAttribute("data-ncnl-video-id", videoId);
-    container.querySelectorAll("a[data-ncnl-action]").forEach(function(link) {
+    links.forEach(function(link) {
       if (typeof link._ncnlSuffix === "string") {
         link.href = "https://nicocachenl.test/api/v1/videos/"
           + encodeURIComponent(videoId) + link._ncnlSuffix;
@@ -175,7 +190,25 @@
         // 不正なhrefは公式アカウント項目ではないため無視する.
       }
     }
-    return bestItem;
+    if (bestItem) return bestItem;
+
+    // 非ログイン時は会員登録項目の直後がアカウントプレースホルダーになる.
+    // 表示文言や生成クラスではなく、登録URLと実測した兄弟関係から求める.
+    for (var j = 0; j < anchors.length; j++) {
+      try {
+        var registerUrl = new URL(anchors[j].href, window.location.href);
+        if (registerUrl.hostname !== "account.nicovideo.jp"
+            || !/^\/register(?:\/|$)/.test(registerUrl.pathname)) continue;
+        var registerItem = anchors[j].parentElement;
+        var placeholderItem = registerItem && registerItem.nextElementSibling;
+        if (placeholderItem && placeholderItem.parentElement === registerItem.parentElement) {
+          return placeholderItem;
+        }
+      } catch (error) {
+        // 不正なhrefは公式会員登録項目ではないため無視する.
+      }
+    }
+    return null;
   };
 
   var findInsertionReference = function(navigation) {
@@ -456,6 +489,14 @@
     var commonHeader = document.getElementById("CommonHeader");
     if (!commonHeader) return false;
     var placement = findPlacement(commonHeader);
+    if (!placement) {
+      var existingContainer = document.getElementById(containerId);
+      if (existingContainer) {
+        clearAccountMenuPosition(existingContainer);
+        existingContainer.removeAttribute("data-ncnl-mounted");
+      }
+      return false;
+    }
     var container = document.getElementById(containerId) || createMenu();
     var fullscreen = synchronizeFullscreenState(container);
     if (placement && placement.mounted === "account") {
@@ -466,14 +507,10 @@
       } else {
         mountAccountMenu(container, placement.reference);
       }
-    } else if (placement) {
+    } else {
       clearAccountMenuPosition(container);
       placement.parent.insertBefore(container, placement.reference);
       container.setAttribute("data-ncnl-mounted", placement.mounted);
-    } else {
-      clearAccountMenuPosition(container);
-      container.removeAttribute("data-ncnl-mounted");
-      if (container.parentElement !== commonHeader) commonHeader.appendChild(container);
     }
     synchronizeLinks();
     ensureWatchListener();
@@ -485,6 +522,7 @@
     var container = document.getElementById(containerId);
     var placement = commonHeader && findPlacement(commonHeader);
     ensureWatchListener();
+    synchronizeLinks();
     if (!isPlacementCurrent(container, placement)) initialize();
     else if (placement && placement.mounted === "account") scheduleAccountMenuPosition();
   });

@@ -16,7 +16,7 @@ if (<freeSpace> < 3) alert("キャッシュフォルダの空き容量が3GBを�
 
 [Replace]
 Name = NicoCacheヘッダーメニューを追加
-URL = www\.nicovideo\.jp/watch/
+URL = www\.nicovideo\.jp/
 ContentType = text/html
 Match<
 (?=<!--nicocachenl-head-->)
