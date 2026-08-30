@@ -6,8 +6,14 @@
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-08-31
+
 ### Fixed
 
+- `proxy_sample.pac`を読みやすい配列・ループ構造へ整理し、filter-matomeのdestroy-adsが扱う
+  広告ホスト、サブドメイン、パス限定通信を全件NicoCache_nlへ送るよう更新した。HTTP(S)以外や
+  対象外パスは従来どおり直接接続し、全ルールの正負判定をPAC実行テストで検証する。本体から
+  既に廃止されたPATCH回避策に合わせ、`live2.nicovideo.jp`だけを直接接続する旧規則も削除した。
 - CommonHeaderの通知とアカウント間に空白だけが残る問題や、固定メニューが公式操作へ重なる問題を
   防ぐため、公式アカウント要素の`margin-left`を書き換える余白予約と画面上の固定配置を廃止した。
   公式ルート生成後の右側flex列へ`通知群 → NicoCache → filter-matome → アカウント`の順で直接参加させ、
