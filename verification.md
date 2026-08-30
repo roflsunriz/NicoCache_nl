@@ -79,7 +79,9 @@ Nアニメ、ブロマガ、コモンズ、NicoFT、ニコニコQ、ニコニ貢
 8. CommonHeaderの再描画、SPA遷移、戻る・進む、画面幅変更後も重複や古い動画IDが残らない。
 9. 480px、800pxなどCommonHeaderの最小幅より狭い表示でも、両メニューがビューポート内に収まる。
 10. 公式アカウント項目に`data-ncnl-account-space`などの旧予約属性やインライン`margin-left`が
-    残らず、共有固定ホストの右端がアカウント項目の左端と一致する。
+    残らず、公式右側flex列で通知群、NicoCache、filter-matome、アカウントが隣接し重ならない。
+11. 空の`#CommonHeader`と別ホストの`.nico-CommonHeaderRoot`が併存しても公式ルートを優先し、
+    scriptタグだけの状態で終了しない。
 
 ### 2026-08-31の実測根拠
 

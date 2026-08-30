@@ -292,7 +292,8 @@ test("watchページのNicoCacheメニューをREST APIへ接続しSPA動画切�
   const page = createPage();
   const container = page.document.getElementById("ncnl_common_header_menu");
   assert.ok(container);
-  assert.equal(container.parentElement.id, "ncnl_common_header_account_host");
+  assert.equal(container.parentElement, page.header.accountItem.parentElement);
+  assert.equal(container.nextElementSibling, page.header.accountItem);
   assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
   assert.equal(container.children[0].textContent, "NicoCache");
 
@@ -363,7 +364,7 @@ test("全画面表示中はNicoCacheメニューを閉じて非表示状態に�
   page.document.dispatchEvent({type: "fullscreenchange"});
   assert.equal(container.getAttribute("data-ncnl-fullscreen"), null);
   assert.equal(container.getAttribute("aria-hidden"), null);
-  assert.equal(container.parentElement.id, "ncnl_common_header_account_host");
+  assert.equal(container.parentElement, page.header.accountItem.parentElement);
 });
 
 test("非ログイン時は会員登録とアカウントプレースホルダーの間へ配置する", () => {
@@ -373,9 +374,10 @@ test("非ログイン時は会員登録とアカウントプレースホルダ�
   const menuRect = container.getBoundingClientRect();
   const accountRect = page.header.accountItem.getBoundingClientRect();
 
-  assert.equal(container.parentElement.id, "ncnl_common_header_account_host");
+  assert.equal(container.parentElement, page.header.accountItem.parentElement);
   assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
-  assert.equal(page.header.registerItem.nextElementSibling, page.header.accountItem);
+  assert.equal(page.header.registerItem.nextElementSibling, container);
+  assert.equal(container.nextElementSibling, page.header.accountItem);
   assert.ok(menuRect.right <= accountRect.left);
   assert.equal(page.header.accountItem.getAttribute("data-ncnl-account-space"), null);
   assert.equal(page.header.accountItem.style.marginLeft, "");
@@ -386,7 +388,7 @@ test("非ログイン時は会員登録とアカウントプレースホルダ�
 test("ログイン時も公式myリンクのアカウント項目直前へ配置する", () => {
   const page = createPage({pathname: "/", headerMode: "logged-in"});
   const container = page.document.getElementById("ncnl_common_header_menu");
-  assert.equal(container.parentElement.id, "ncnl_common_header_account_host");
+  assert.equal(container.parentElement, page.header.accountItem.parentElement);
   assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
   assert.equal(page.header.accountItem.getAttribute("data-ncnl-account-space"), null);
   assert.equal(page.header.accountItem.style.marginLeft, "");
@@ -417,6 +419,19 @@ test("CommonHeaderのホストIDが異なっても公式ルートから配置す
   const page = createPage();
   page.commonHeader.id = "common-header";
   page.document.elements.delete("CommonHeader");
+  page.flushMutations();
+
+  const container = page.document.getElementById("ncnl_common_header_menu");
+  assert.ok(container);
+  assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
+});
+
+test("空のCommonHeader IDが併存しても別ホストの公式ルートを優先する", () => {
+  const page = createPage({headerMode: "pending"});
+  const alternateHost = page.document.createElement("div");
+  alternateHost.id = "common-header";
+  page.document.body.appendChild(alternateHost);
+  populateHeader(page.document, alternateHost, "logged-in");
   page.flushMutations();
 
   const container = page.document.getElementById("ncnl_common_header_menu");

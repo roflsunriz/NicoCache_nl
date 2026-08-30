@@ -11,7 +11,6 @@
 
   var containerId = "ncnl_common_header_menu";
   var legacyHostId = "ncnl_common_header_extension_host";
-  var accountHostId = "ncnl_common_header_account_host";
   var currentVideoId = null;
   var watchListenerInitialized = false;
   var mountedAccountItem = null;
@@ -56,7 +55,8 @@
         "outline:2px solid #fff;outline-offset:-2px;" +
       "}" +
       "#" + containerId + " .ncnl-common-header-popover{" +
-        "position:absolute;top:36px;left:0;z-index:100000;box-sizing:border-box;width:329px;" +
+        "position:absolute;top:36px;left:0;z-index:100000;box-sizing:border-box;" +
+        "width:min(329px,calc(100vw - 16px));" +
         "visibility:hidden;opacity:0;pointer-events:none;background:#f4f4f4;" +
         "box-shadow:0 2px 8px rgba(0,0,0,.2);transition:none;" +
       "}" +
@@ -155,8 +155,8 @@
   };
 
   var findCommonHeader = function() {
-    return document.getElementById("CommonHeader")
-      || document.querySelector(".nico-CommonHeaderRoot")
+    return document.querySelector(".nico-CommonHeaderRoot")
+      || document.getElementById("CommonHeader")
       || (/(?:^|\.)nicoft\.io$/.test(window.location.hostname)
         || window.location.hostname === "www.beta.hiroba.nicovideo.jp"
         ? document.body : null);
@@ -215,6 +215,10 @@
             || !/^\/register(?:\/|$)/.test(registerUrl.pathname)) continue;
         var registerItem = anchors[j].parentElement;
         var placeholderItem = registerItem && registerItem.nextElementSibling;
+        while (placeholderItem && (placeholderItem.id === containerId
+            || placeholderItem.id === "filter-matome-api-status-menu")) {
+          placeholderItem = placeholderItem.nextElementSibling;
+        }
         if (placeholderItem && placeholderItem.parentElement === registerItem.parentElement) {
           return placeholderItem;
         }
@@ -353,17 +357,6 @@
     mountedAccountItem = null;
   };
 
-  var ensureAccountHost = function() {
-    var host = document.getElementById(accountHostId);
-    if (!host) {
-      host = document.createElement("div");
-      host.id = accountHostId;
-      host.style.cssText = "position:fixed;top:0;right:0;z-index:101001;display:flex;height:36px;";
-      document.body.appendChild(host);
-    }
-    return host;
-  };
-
   var positionAccountMenu = function(container) {
     if (container.getAttribute("data-ncnl-fullscreen") === "true") {
       releaseAccountSpace();
@@ -371,19 +364,19 @@
     }
     if (!mountedAccountItem || !mountedAccountItem.isConnected
         || container.getAttribute("data-ncnl-mounted") !== "account") return;
-    var host = document.getElementById(accountHostId);
-    if (!host) return;
-    var accountRect = mountedAccountItem.getBoundingClientRect();
-    var viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
-    var accountLeft = viewportWidth > 0
-      ? Math.min(Math.max(0, accountRect.left), viewportWidth) : Math.max(0, accountRect.left);
-    host.style.right = Math.round(Math.max(0, viewportWidth - accountLeft)) + "px";
-    host.style.top = Math.round(accountRect.top) + "px";
     var containerRect = container.getBoundingClientRect();
+    var viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
     var popover = container.querySelector(".ncnl-common-header-popover");
     var popoverWidth = popover ? Math.ceil(popover.getBoundingClientRect().width) : 0;
-    container.setAttribute("data-ncnl-popover-align",
-      popoverWidth > 0 && containerRect.right - popoverWidth < 0 ? "left" : "right");
+    if (popover && popoverWidth > 0 && viewportWidth > 0) {
+      var left = Math.min(Math.max(8, containerRect.left),
+        Math.max(8, viewportWidth - popoverWidth - 8));
+      popover.style.position = "fixed";
+      popover.style.left = Math.round(left) + "px";
+      popover.style.right = "auto";
+      popover.style.top = Math.round(containerRect.bottom) + "px";
+      container.setAttribute("data-ncnl-popover-align", "left");
+    }
   };
 
   var scheduleAccountMenuPosition = function() {
@@ -399,10 +392,13 @@
     if (mountedAccountItem !== accountItem) releaseAccountSpace();
     mountedAccountItem = accountItem;
     clearLegacyAccountSpace(accountItem);
-    var host = ensureAccountHost();
+    var parent = accountItem.parentElement;
+    if (!parent) return;
     var filterMenu = document.getElementById("filter-matome-api-status-menu");
-    if (filterMenu && filterMenu.parentElement === host) host.insertBefore(container, filterMenu);
-    else if (container.parentElement !== host) host.insertBefore(container, host.firstChild);
+    parent.insertBefore(container, accountItem);
+    if (filterMenu && filterMenu !== container) parent.insertBefore(filterMenu, accountItem);
+    var oldHost = document.getElementById("ncnl_common_header_account_host");
+    if (oldHost && oldHost.children.length === 0) oldHost.remove();
     container.setAttribute("data-ncnl-mounted", "account");
     container.style.removeProperty("left");
     container.style.removeProperty("top");
@@ -414,13 +410,24 @@
     container.removeAttribute("data-ncnl-popover-align");
     container.style.removeProperty("left");
     container.style.removeProperty("top");
+    var popover = container.querySelector(".ncnl-common-header-popover");
+    if (popover) {
+      popover.style.removeProperty("position");
+      popover.style.removeProperty("left");
+      popover.style.removeProperty("right");
+      popover.style.removeProperty("top");
+    }
   };
 
   var isPlacementCurrent = function(container, placement) {
     if (!container || !placement
         || container.getAttribute("data-ncnl-mounted") !== placement.mounted) return false;
     if (placement.mounted === "account") {
-      return container.parentElement && container.parentElement.id === accountHostId
+      var filterMenu = document.getElementById("filter-matome-api-status-menu");
+      var next = filterMenu && filterMenu.parentElement === placement.parent
+        ? filterMenu : placement.reference;
+      return container.parentElement === placement.parent
+        && container.nextElementSibling === next
         && mountedAccountItem === placement.reference;
     }
     return container.parentElement === placement.parent
