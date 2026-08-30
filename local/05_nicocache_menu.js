@@ -291,6 +291,11 @@
     reserveAccountSpace(mountedAccountItem, width);
     var accountRect = mountedAccountItem.getBoundingClientRect();
     var left = Math.max(0, accountRect.left - width);
+    var viewportWidth = Math.max(window.innerWidth || 0,
+      document.documentElement.clientWidth || 0);
+    if (viewportWidth > 0) {
+      left = Math.min(left, Math.max(0, viewportWidth - width));
+    }
     var popover = container.querySelector(".ncnl-common-header-popover");
     var popoverWidth = popover ? Math.ceil(popover.getBoundingClientRect().width) : 0;
     container.setAttribute("data-ncnl-popover-align",

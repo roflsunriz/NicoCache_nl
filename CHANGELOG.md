@@ -9,7 +9,8 @@
 ### Fixed
 
 - ページによってCommonHeaderへNicoCacheメニューが挿入されない問題を解消するため、同時に読み込まれる
-  filter-matome API状態メニューも公式Reactルートの生成完了を待ち、両メニューを公式管理外へ配置するよう修正した。
+  filter-matome API状態メニューも公式Reactルートの生成完了を待ち、両メニューを公式管理外へ配置した。
+  CommonHeaderの最小幅がビューポートを超える場合も両メニューを画面右端へ収めるよう修正した。
 - Windowsのシステムプロキシ環境でnlFilter Labのheadless検証がloopback APIへ接続できず停止する
   問題と、Javaソースの改行差をパーサー変更と誤検知する問題を修正した。
 - 視聴ページ以外やCommonHeaderの遅延生成時にもNicoCacheメニューを安定して利用できるよう、

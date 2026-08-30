@@ -185,7 +185,11 @@ function populateHeader(document, commonHeader, mode) {
   return {accountItem, registerItem, root};
 }
 
-function createPage({pathname = "/watch/sm9", headerMode = "logged-out"} = {}) {
+function createPage({
+  pathname = "/watch/sm9",
+  headerMode = "logged-out",
+  innerWidth = 0,
+} = {}) {
   const elements = new Map();
   const documentListeners = new Map();
   const document = {
@@ -231,6 +235,7 @@ function createPage({pathname = "/watch/sm9", headerMode = "logged-out"} = {}) {
     },
   };
   const window = {
+    innerWidth,
     NicoCache_nl,
     location: {pathname, href: `https://www.nicovideo.jp${pathname}`},
     addEventListener(type, listener) { windowListeners.set(type, listener); },
@@ -377,6 +382,15 @@ test("ログイン時も公式myリンクのアカウント項目直前へ配置
   assert.equal(container.parentElement.tagName, "BODY");
   assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
   assert.equal(page.header.accountItem.getAttribute("data-ncnl-account-space"), "true");
+});
+
+test("狭いビューポートでは画面外のアカウント項目より手前へクランプする", () => {
+  const page = createPage({pathname: "/", headerMode: "logged-in", innerWidth: 480});
+  const container = page.document.getElementById("ncnl_common_header_menu");
+  const rect = container.getBoundingClientRect();
+  assert.ok(rect.left >= 0);
+  assert.ok(rect.right <= 480);
+  assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
 });
 
 test("公式CommonHeaderルートの生成前はDOMへ挿入せず生成後に配置する", () => {
