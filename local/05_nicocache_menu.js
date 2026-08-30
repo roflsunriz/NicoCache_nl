@@ -11,12 +11,10 @@
 
   var containerId = "ncnl_common_header_menu";
   var legacyHostId = "ncnl_common_header_extension_host";
+  var accountHostId = "ncnl_common_header_account_host";
   var currentVideoId = null;
   var watchListenerInitialized = false;
   var mountedAccountItem = null;
-  var accountOriginalMarginLeft = "";
-  var accountBaseMarginLeft = "0px";
-  var accountReservedWidth = 0;
   var positionFrame = 0;
 
   var getVideoId = function() {
@@ -71,7 +69,7 @@
         "right:auto;left:0;" +
       "}" +
       "#" + containerId + "[data-ncnl-mounted=account]{" +
-        "position:fixed;z-index:101001;" +
+        "position:relative;z-index:1;" +
       "}" +
       "#" + containerId + "[data-ncnl-open=true] .ncnl-common-header-popover{" +
         "visibility:visible;opacity:1;pointer-events:auto;" +
@@ -337,44 +335,33 @@
     } : null;
   };
 
-  var releaseAccountSpace = function() {
-    if (!mountedAccountItem) return;
-    if (accountOriginalMarginLeft) {
-      mountedAccountItem.style.marginLeft = accountOriginalMarginLeft;
-    } else {
-      mountedAccountItem.style.removeProperty("margin-left");
-    }
-    mountedAccountItem.removeAttribute("data-ncnl-account-space");
-    mountedAccountItem.removeAttribute("data-ncnl-account-original-margin");
-    mountedAccountItem.removeAttribute("data-ncnl-account-base-margin");
-    mountedAccountItem.removeAttribute("data-ncnl-account-width");
-    mountedAccountItem = null;
-    accountOriginalMarginLeft = "";
-    accountBaseMarginLeft = "0px";
-    accountReservedWidth = 0;
+  var clearLegacyAccountSpace = function(accountItem) {
+    if (!accountItem) return;
+    var attributes = [
+      "data-ncnl-account-space", "data-ncnl-account-original-margin",
+      "data-ncnl-account-base-margin", "data-ncnl-account-width",
+      "data-filter-matome-account-space", "data-filter-matome-account-original-margin",
+      "data-filter-matome-account-base-margin", "data-filter-matome-account-width",
+    ];
+    var reserved = attributes.some(function(name) { return accountItem.hasAttribute(name); });
+    if (reserved) accountItem.style.removeProperty("margin-left");
+    attributes.forEach(function(name) { accountItem.removeAttribute(name); });
   };
 
-  var reserveAccountSpace = function(accountItem, width) {
-    if (mountedAccountItem !== accountItem) {
-      releaseAccountSpace();
-      mountedAccountItem = accountItem;
-      if (accountItem.hasAttribute("data-ncnl-account-space")) {
-        accountOriginalMarginLeft = accountItem.getAttribute("data-ncnl-account-original-margin") || "";
-        accountBaseMarginLeft = accountItem.getAttribute("data-ncnl-account-base-margin") || "0px";
-        accountReservedWidth = Number(accountItem.getAttribute("data-ncnl-account-width")) || 0;
-      } else {
-        accountOriginalMarginLeft = accountItem.style.marginLeft;
-        accountBaseMarginLeft = getComputedStyle(accountItem).marginLeft || "0px";
-      }
-      accountItem.setAttribute("data-ncnl-account-space", "true");
-      accountItem.setAttribute("data-ncnl-account-original-margin", accountOriginalMarginLeft);
-      accountItem.setAttribute("data-ncnl-account-base-margin", accountBaseMarginLeft);
+  var releaseAccountSpace = function() {
+    clearLegacyAccountSpace(mountedAccountItem);
+    mountedAccountItem = null;
+  };
+
+  var ensureAccountHost = function() {
+    var host = document.getElementById(accountHostId);
+    if (!host) {
+      host = document.createElement("div");
+      host.id = accountHostId;
+      host.style.cssText = "position:fixed;top:0;right:0;z-index:101001;display:flex;height:36px;";
+      document.body.appendChild(host);
     }
-    if (accountReservedWidth !== width) {
-      accountReservedWidth = width;
-      accountItem.style.marginLeft = "calc(" + accountBaseMarginLeft + " + " + width + "px)";
-      accountItem.setAttribute("data-ncnl-account-width", String(width));
-    }
+    return host;
   };
 
   var positionAccountMenu = function(container) {
@@ -384,22 +371,19 @@
     }
     if (!mountedAccountItem || !mountedAccountItem.isConnected
         || container.getAttribute("data-ncnl-mounted") !== "account") return;
-    var width = Math.ceil(container.getBoundingClientRect().width);
-    if (width <= 0) return;
-    reserveAccountSpace(mountedAccountItem, width);
+    var host = document.getElementById(accountHostId);
+    if (!host) return;
     var accountRect = mountedAccountItem.getBoundingClientRect();
-    var left = Math.max(0, accountRect.left - width);
-    var viewportWidth = Math.max(window.innerWidth || 0,
-      document.documentElement.clientWidth || 0);
-    if (viewportWidth > 0) {
-      left = Math.min(left, Math.max(0, viewportWidth - width));
-    }
+    var viewportWidth = document.documentElement.clientWidth || window.innerWidth || 0;
+    var accountLeft = viewportWidth > 0
+      ? Math.min(Math.max(0, accountRect.left), viewportWidth) : Math.max(0, accountRect.left);
+    host.style.right = Math.round(Math.max(0, viewportWidth - accountLeft)) + "px";
+    host.style.top = Math.round(accountRect.top) + "px";
+    var containerRect = container.getBoundingClientRect();
     var popover = container.querySelector(".ncnl-common-header-popover");
     var popoverWidth = popover ? Math.ceil(popover.getBoundingClientRect().width) : 0;
     container.setAttribute("data-ncnl-popover-align",
-      popoverWidth > 0 && left + width - popoverWidth < 0 ? "left" : "right");
-    container.style.left = Math.round(left) + "px";
-    container.style.top = Math.round(accountRect.top) + "px";
+      popoverWidth > 0 && containerRect.right - popoverWidth < 0 ? "left" : "right");
   };
 
   var scheduleAccountMenuPosition = function() {
@@ -412,10 +396,16 @@
   };
 
   var mountAccountMenu = function(container, accountItem) {
+    if (mountedAccountItem !== accountItem) releaseAccountSpace();
+    mountedAccountItem = accountItem;
+    clearLegacyAccountSpace(accountItem);
+    var host = ensureAccountHost();
+    var filterMenu = document.getElementById("filter-matome-api-status-menu");
+    if (filterMenu && filterMenu.parentElement === host) host.insertBefore(container, filterMenu);
+    else if (container.parentElement !== host) host.insertBefore(container, host.firstChild);
     container.setAttribute("data-ncnl-mounted", "account");
-    if (container.parentElement !== document.body) document.body.appendChild(container);
-    var width = Math.ceil(container.getBoundingClientRect().width);
-    if (width > 0) reserveAccountSpace(accountItem, width);
+    container.style.removeProperty("left");
+    container.style.removeProperty("top");
     positionAccountMenu(container);
   };
 
@@ -430,7 +420,8 @@
     if (!container || !placement
         || container.getAttribute("data-ncnl-mounted") !== placement.mounted) return false;
     if (placement.mounted === "account") {
-      return container.parentElement === document.body && mountedAccountItem === placement.reference;
+      return container.parentElement && container.parentElement.id === accountHostId
+        && mountedAccountItem === placement.reference;
     }
     return container.parentElement === placement.parent
       && container.nextElementSibling === placement.reference;

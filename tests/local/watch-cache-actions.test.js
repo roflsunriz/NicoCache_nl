@@ -292,7 +292,7 @@ test("watchページのNicoCacheメニューをREST APIへ接続しSPA動画切�
   const page = createPage();
   const container = page.document.getElementById("ncnl_common_header_menu");
   assert.ok(container);
-  assert.equal(container.parentElement.tagName, "BODY");
+  assert.equal(container.parentElement.id, "ncnl_common_header_account_host");
   assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
   assert.equal(container.children[0].textContent, "NicoCache");
 
@@ -363,7 +363,7 @@ test("全画面表示中はNicoCacheメニューを閉じて非表示状態に�
   page.document.dispatchEvent({type: "fullscreenchange"});
   assert.equal(container.getAttribute("data-ncnl-fullscreen"), null);
   assert.equal(container.getAttribute("aria-hidden"), null);
-  assert.equal(container.parentElement.tagName, "BODY");
+  assert.equal(container.parentElement.id, "ncnl_common_header_account_host");
 });
 
 test("非ログイン時は会員登録とアカウントプレースホルダーの間へ配置する", () => {
@@ -371,15 +371,14 @@ test("非ログイン時は会員登録とアカウントプレースホルダ�
   const container = page.document.getElementById("ncnl_common_header_menu");
   const actions = container.querySelector(".ncnl-common-header-actions");
   const menuRect = container.getBoundingClientRect();
-  const registerRect = page.header.registerItem.getBoundingClientRect();
   const accountRect = page.header.accountItem.getBoundingClientRect();
 
-  assert.equal(container.parentElement.tagName, "BODY");
+  assert.equal(container.parentElement.id, "ncnl_common_header_account_host");
   assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
   assert.equal(page.header.registerItem.nextElementSibling, page.header.accountItem);
-  assert.equal(menuRect.left, registerRect.right);
-  assert.equal(menuRect.right, accountRect.left);
-  assert.equal(page.header.accountItem.getAttribute("data-ncnl-account-space"), "true");
+  assert.ok(menuRect.right <= accountRect.left);
+  assert.equal(page.header.accountItem.getAttribute("data-ncnl-account-space"), null);
+  assert.equal(page.header.accountItem.style.marginLeft, "");
   assert.equal(container.getAttribute("data-ncnl-video-id"), null);
   assert.equal(actions.hidden, true);
 });
@@ -387,9 +386,10 @@ test("非ログイン時は会員登録とアカウントプレースホルダ�
 test("ログイン時も公式myリンクのアカウント項目直前へ配置する", () => {
   const page = createPage({pathname: "/", headerMode: "logged-in"});
   const container = page.document.getElementById("ncnl_common_header_menu");
-  assert.equal(container.parentElement.tagName, "BODY");
+  assert.equal(container.parentElement.id, "ncnl_common_header_account_host");
   assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
-  assert.equal(page.header.accountItem.getAttribute("data-ncnl-account-space"), "true");
+  assert.equal(page.header.accountItem.getAttribute("data-ncnl-account-space"), null);
+  assert.equal(page.header.accountItem.style.marginLeft, "");
 });
 
 test("狭いビューポートでは画面外のアカウント項目より手前へクランプする", () => {
