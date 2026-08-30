@@ -2,6 +2,9 @@ package nlfilterlab;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.SocketAddress;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -63,7 +66,7 @@ final class HeadlessRunner {
             server = new LabServer(repositoryRoot, labRoot, 0);
             server.start();
             String origin = "http://127.0.0.1:" + server.port();
-            HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
+            HttpClient client = loopbackClient();
             String form = buildForm(repositoryRoot, options);
             HttpResponse<String> render = client.send(HttpRequest.newBuilder(URI.create(origin + "/api/render"))
                     .timeout(Duration.ofSeconds(15))
@@ -147,6 +150,24 @@ final class HeadlessRunner {
         return String.join("&", fields);
     }
 
+    static HttpClient loopbackClient() {
+        return HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .version(HttpClient.Version.HTTP_1_1)
+                .proxy(new ProxySelector() {
+                    @Override
+                    public List<Proxy> select(URI uri) {
+                        return List.of(Proxy.NO_PROXY);
+                    }
+
+                    @Override
+                    public void connectFailed(URI uri, SocketAddress address, IOException exception) {
+                        // loopbackへ直接接続するため、別プロキシーへのフォールバックは行わない。
+                    }
+                })
+                .build();
+    }
+
     private static List<Path> selectedFiles(Path repositoryRoot, Options options) throws Exception {
         return options.noFilters ? List.of() : options.files.isEmpty()
                 ? RepositoryFilters.tracked(repositoryRoot)
@@ -177,6 +198,7 @@ final class HeadlessRunner {
         Files.createDirectories(profile);
         List<String> command = new ArrayList<>(List.of(browser.toString(), "--headless=new", "--disable-gpu",
                 "--no-first-run", "--no-default-browser-check", "--hide-scrollbars",
+                "--no-proxy-server",
                 "--run-all-compositor-stages-before-draw", "--virtual-time-budget=3000",
                 "--user-data-dir=" + profile.toAbsolutePath(),
                 "--window-size=" + options.width + "," + options.height));

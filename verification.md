@@ -1,5 +1,33 @@
 # 検証手順
 
+## nlFilter Lab
+
+### 自動検証
+
+リポジトリ直下で次を実行し、すべて終了コード`0`になることを確認する。
+
+```powershell
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 source-check --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 test
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 compatibility --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 headless --fixture watch --cache-menu-probe
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 headless --fixture search --spa-add 3 --popthumb-probe
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 headless --fixture anime --spa-add 2 --popthumb-probe
+```
+
+`source-check`はソース改行をLFへ正規化したSHA-256とJAR内classの生バイトSHA-256を照合する。
+`compatibility`では`syntax.source.status`と`syntax.productionOracle.status`がともに`matched`であることを
+確認する。headlessでは`status=passed`、診断・コンソールエラーが0、`failures=[]`であることに加え、
+`final.html`、`screenshot.png`、`console.json`、`render.json`が生成されることを確認する。
+
+Windowsのシステムプロキシが有効な環境でも、LabのJavaクライアントとChromeはloopbackへ直接接続する。
+再発防止テストでは到達不能な既定プロキシを一時設定し、`/api/config`へ接続できることを確認する。
+
+### 復旧
+
+問題が発生した場合は`nlFilters/tools/nlfilter-lab/`と`parser-baseline.properties`を直前のコミットへ
+戻す。基準ハッシュだけを変更せず、本体パーサーとの`compatibility --json`照合まで再実行する。
+
 ## CommonHeaderのNicoCacheメニュー
 
 ### 目的

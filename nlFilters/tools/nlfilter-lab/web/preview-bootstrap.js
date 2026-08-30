@@ -1,9 +1,21 @@
 (() => {
   "use strict";
   const token = location.pathname.split("/").pop();
+  const fixture = document.documentElement.dataset.fixture;
+  if (fixture === "watch" && !location.pathname.startsWith("/watch/")) {
+    history.replaceState(history.state, "", `/watch/sm9${location.search}`);
+  }
 
   function addToken(url) {
-    const value = String(url);
+    let value = String(url);
+    try {
+      const parsed = new URL(value, location.href);
+      if (parsed.hostname === "nicocachenl.test" && parsed.pathname.startsWith("/cache/")) {
+        value = parsed.pathname + parsed.search;
+      }
+    } catch (_) {
+      // URLとして解釈できない値は元の文字列のまま判定する。
+    }
     if (!value.startsWith("/cache/")) return value;
     return `${value}${value.includes("?") ? "&" : "?"}__nlftoken=${encodeURIComponent(token)}`;
   }
@@ -193,10 +205,10 @@
     check(isVisuallyBetween(menu, notification(), account()),
       "通知とアカウントメニューの間に表示されていません");
     check(menu.querySelectorAll('[role="menuitem"]').length === 5, "メニュー項目が5件ではありません");
-    check(pathname(item("movie")) === "/cache/sm9/auto/movie", "動画保存URLが不正です");
-    check(pathname(item("comments")) === "/cache/sm9.comments.json", "コメント保存URLが不正です");
-    check(pathname(item("audio")) === "/cache/sm9/auto/audio", "音声保存URLが不正です");
-    check(pathname(item("manage")) === "/cache/", "キャッシュ画面URLが不正です");
+    check(pathname(item("movie")) === "/api/v1/videos/sm9/exports/video", "動画保存URLが不正です");
+    check(pathname(item("comments")) === "/api/v1/videos/sm9/exports/comments", "コメント保存URLが不正です");
+    check(pathname(item("audio")) === "/api/v1/videos/sm9/exports/audio", "音声保存URLが不正です");
+    check(pathname(item("manage")) === "/cache", "キャッシュ画面URLが不正です");
     check(item("manage") && !item("manage").hasAttribute("download"), "キャッシュ画面リンクがdownload扱いです");
     check(popover?.getAttribute("aria-hidden") === "true", "初期状態でメニューが閉じていません");
 
@@ -297,19 +309,19 @@
     let confirms = 0;
     let mutationRequests = 0;
     const originalConfirm = window.confirm;
-    const originalGet = window.NicoCache_nl?.get;
+    const originalFetch = window.fetch;
     window.confirm = () => { confirms++; return false; };
-    if (window.NicoCache_nl) window.NicoCache_nl.get = () => { mutationRequests++; };
+    window.fetch = () => { mutationRequests++; return Promise.resolve({ok: true}); };
     item("remove")?.click();
     window.confirm = originalConfirm;
-    if (window.NicoCache_nl) window.NicoCache_nl.get = originalGet;
+    window.fetch = originalFetch;
     check(confirms === 1 && mutationRequests === 0, "削除キャンセル時に変更APIを呼び出しました");
 
     const originalUrl = location.href;
     history.pushState({}, "", "/watch/sm83");
     dispatchEvent(new PopStateEvent("popstate"));
     await wait(40);
-    check(pathname(item("movie")) === "/cache/sm83/auto/movie", "SPA動画切替へ追従しません");
+    check(pathname(item("movie")) === "/api/v1/videos/sm83/exports/video", "SPA動画切替へ追従しません");
     history.replaceState({}, "", originalUrl);
     dispatchEvent(new PopStateEvent("popstate"));
     await wait(40);

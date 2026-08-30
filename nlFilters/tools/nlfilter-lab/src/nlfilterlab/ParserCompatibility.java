@@ -1,7 +1,9 @@
 package nlfilterlab;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -83,7 +85,7 @@ final class ParserCompatibility {
             } else {
                 String actual;
                 try {
-                    actual = sha256(source);
+                    actual = sha256Source(source);
                 } catch (IOException exception) {
                     entries.add(new Entry(name, source, expected, null, Status.SOURCE_MISSING));
                     continue;
@@ -135,10 +137,11 @@ final class ParserCompatibility {
         return json.append("]}").toString();
     }
 
-    private static String sha256(Path path) throws IOException {
-        try (InputStream input = Files.newInputStream(path)) {
-            return sha256(input);
-        }
+    private static String sha256Source(Path path) throws IOException {
+        String source = Files.readString(path, StandardCharsets.UTF_8)
+                .replace("\r\n", "\n")
+                .replace('\r', '\n');
+        return sha256(new ByteArrayInputStream(source.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static String sha256(InputStream input) throws IOException {

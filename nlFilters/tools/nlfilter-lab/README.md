@@ -50,6 +50,7 @@ NicoCache_nl 本体の関連ソースだけを確認する場合は次を使い�
 ## ヘッドレステスト
 
 Chrome または Edge の headless モードでプレビューを実行し、結果をコーディングエージェントから直接読める形で保存します。
+Lab自身のloopback APIとプレビューはシステムプロキシを経由せず、HTTP/1.1で直接接続します。
 
 ```powershell
 .\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 headless `
@@ -101,4 +102,4 @@ Chrome または Edge の headless モードでプレビューを実行し、結
 
 最終確認では、通常どおり NicoCache_nl 経由の対象ページでも動作を確認してください。
 
-`parser-baseline.properties` は `EasyRewriter.java` と関連する Java/Nest 正規表現実装、およびJAR内の対応classのSHA-256を保持します。JAR側の基準値は、リポジトリ標準の `.\build-javac.ps1 -JavaVersion 25` で作成したJARを使用します。本体ソースは変更頻度が低くても変更され得るため、差異を検出したら先に実装内容とLabの互換性を再監査し、必要なコードとテストを直した後にだけ基準値を更新してください。ハッシュだけを合わせて警告を消してはいけません。
+`parser-baseline.properties` は `EasyRewriter.java` と関連する Java/Nest 正規表現実装、およびJAR内の対応classのSHA-256を保持します。ソース側はWindowsとUnixのチェックアウト差を誤検知しないよう改行をLFへ正規化してから計算し、JAR側はバイト列をそのまま計算します。JAR側の基準値は、リポジトリ標準の `.\build-javac.ps1 -JavaVersion 25` で作成したJARを使用します。本体ソースは変更頻度が低くても変更され得るため、差異を検出したら先に実装内容とLabの互換性を再監査し、必要なコードとテストを直した後にだけ基準値を更新してください。ハッシュだけを合わせて警告を消してはいけません。

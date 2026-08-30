@@ -1,12 +1,15 @@
 package nlfilterlab;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.net.InetSocketAddress;
+import java.net.ProxySelector;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -51,10 +54,12 @@ public final class NlFilterLabTests {
         run("追跡ファイルを辞書順で列挙", () -> trackedOrder(repository));
         run("NicoCache_nlパーサーソースの基準一致", () -> parserSourceBaseline(repository));
         run("パーサーソースの差異と部分欠落を検出", () -> parserSourceChanges(repository, temporary));
+        run("パーサーソースの改行差を同一内容として扱う", () -> parserSourceLineEndings(repository, temporary));
         run("稼働中EasyRewriterを構文オラクルとして呼び出す", () -> productionParserOracle(repository));
         run("全セクション・全オプションを本体内部表現と照合", () -> parserOptionCorpus(repository, temporary));
         run("副作用のない置換結果を本体実行結果と照合", () -> productionExecutionCorpus(repository, temporary));
         run("ローカルサーバーのOrigin・本文・パス境界", () -> serverBoundaries(repository));
+        run("headless用loopback通信はシステムプロキシを迂回", () -> loopbackBypassesSystemProxy(repository));
 
         System.out.println("PASS: " + passed + " tests");
     }
@@ -404,6 +409,35 @@ public final class NlFilterLabTests {
                 "partial source");
     }
 
+    private static void parserSourceLineEndings(Path repository, Path temporary) throws Exception {
+        Path installation = temporary.resolve("parser-line-endings");
+        Path copiedRepository = installation.resolve("nlFilters");
+        Path copiedLab = temporary.resolve("parser-line-endings-lab");
+        Files.createDirectories(copiedRepository);
+        Files.createDirectories(copiedLab);
+        Files.copy(Path.of(System.getProperty("nlfilterlab.root")).resolve("parser-baseline.properties"),
+                copiedLab.resolve("parser-baseline.properties"),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(repository.getParent().resolve("NicoCache_nl.jar"), installation.resolve("NicoCache_nl.jar"),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+        for (String relative : List.of(
+                "processor/impl/EasyRewriter.java",
+                "common/regex/JavaPattern.java",
+                "common/regex/JavaMatcher.java",
+                "common/regex/NestPattern.java",
+                "common/regex/NestMatcher.java")) {
+            Path source = repository.getParent().resolve("src/dareka").resolve(relative);
+            Path destination = installation.resolve("src/dareka").resolve(relative);
+            Files.createDirectories(destination.getParent());
+            String crlf = Files.readString(source, StandardCharsets.UTF_8)
+                    .replace("\r\n", "\n").replace('\r', '\n').replace("\n", "\r\n");
+            Files.writeString(destination, crlf, StandardCharsets.UTF_8);
+        }
+        assertEquals("matched", ParserCompatibility.inspect(copiedRepository, copiedLab).statusName(),
+                "CRLF source hash");
+    }
+
     private static void productionParserOracle(Path repository) throws Exception {
         int productionRules = 0;
         for (Path file : RepositoryFilters.tracked(repository)) {
@@ -470,36 +504,60 @@ public final class NlFilterLabTests {
         server.start();
         try {
             String base = "http://127.0.0.1:" + server.port();
-            HttpClient client = HttpClient.newHttpClient();
-            HttpResponse<String> config = client.send(HttpRequest.newBuilder(URI.create(base + "/api/config")).GET().build(),
+            HttpClient client = HeadlessRunner.loopbackClient();
+            HttpResponse<String> config = client.send(HttpRequest.newBuilder(URI.create(base + "/api/config"))
+                            .timeout(Duration.ofSeconds(5)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(200, config.statusCode(), "config status");
             assertContains(config.body(), "\"parserCompatibility\":{\"status\":\"matched\"",
                     "config parser compatibility");
 
             HttpResponse<String> sandboxOrigin = client.send(HttpRequest.newBuilder(URI.create(base + "/api/config"))
-                            .header("Origin", "null").GET().build(), HttpResponse.BodyHandlers.ofString());
+                            .timeout(Duration.ofSeconds(5)).header("Origin", "null").GET().build(),
+                    HttpResponse.BodyHandlers.ofString());
             assertEquals(200, sandboxOrigin.statusCode(), "sandbox Origin許可");
             assertEquals("null", sandboxOrigin.headers().firstValue("Access-Control-Allow-Origin").orElse(""),
                     "sandbox CORS応答");
 
             HttpResponse<String> foreign = client.send(HttpRequest.newBuilder(URI.create(base + "/api/render"))
+                            .timeout(Duration.ofSeconds(5))
                             .header("Origin", "https://example.com")
-                            .POST(HttpRequest.BodyPublishers.ofString("fixture=watch"))
+                            .POST(HttpRequest.BodyPublishers.noBody())
                             .build(), HttpResponse.BodyHandlers.ofString());
             assertEquals(403, foreign.statusCode(), "外部Origin拒否");
             assertTrue(foreign.headers().firstValue("Access-Control-Allow-Origin").isEmpty(), "外部OriginへCORSを許可しない");
 
             HttpResponse<String> oversized = client.send(HttpRequest.newBuilder(URI.create(base + "/api/render"))
+                            .timeout(Duration.ofSeconds(5))
                             .POST(HttpRequest.BodyPublishers.ofString("x".repeat(1024 * 1024 + 1)))
                             .build(), HttpResponse.BodyHandlers.ofString());
             assertEquals(413, oversized.statusCode(), "大きすぎる本文を拒否");
 
             HttpResponse<String> traversal = client.send(HttpRequest.newBuilder(
-                            URI.create(base + "/local/%2e%2e/config.properties")).GET().build(),
+                            URI.create(base + "/local/%2e%2e/config.properties"))
+                    .timeout(Duration.ofSeconds(5)).GET().build(),
                     HttpResponse.BodyHandlers.ofString());
             assertEquals(404, traversal.statusCode(), "localパストラバーサル拒否");
         } finally {
+            server.stop();
+        }
+    }
+
+    private static void loopbackBypassesSystemProxy(Path repository) throws Exception {
+        Path labRoot = Path.of(System.getProperty("nlfilterlab.root", "tools/nlfilter-lab"))
+                .toAbsolutePath().normalize();
+        ProxySelector original = ProxySelector.getDefault();
+        LabServer server = new LabServer(repository, labRoot, 0);
+        server.start();
+        try {
+            ProxySelector.setDefault(ProxySelector.of(new InetSocketAddress("127.0.0.1", 9)));
+            HttpClient client = HeadlessRunner.loopbackClient();
+            HttpResponse<String> response = client.send(HttpRequest.newBuilder(
+                            URI.create("http://127.0.0.1:" + server.port() + "/api/config"))
+                    .timeout(Duration.ofSeconds(5)).GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertEquals(200, response.statusCode(), "loopback direct status");
+        } finally {
+            ProxySelector.setDefault(original);
             server.stop();
         }
     }
