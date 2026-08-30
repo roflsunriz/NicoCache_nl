@@ -10,6 +10,7 @@
   window.__ncnlWatchCacheActionsInitialized = true;
 
   var containerId = "ncnl_common_header_menu";
+  var legacyHostId = "ncnl_common_header_extension_host";
   var currentVideoId = null;
   var watchListenerInitialized = false;
   var mountedAccountItem = null;
@@ -150,8 +151,21 @@
     });
   };
 
+  var findOfficialRoot = function(commonHeader) {
+    if (commonHeader && commonHeader.matches(".nico-CommonHeaderRoot")) return commonHeader;
+    return commonHeader && commonHeader.querySelector(".nico-CommonHeaderRoot");
+  };
+
+  var findCommonHeader = function() {
+    return document.getElementById("CommonHeader")
+      || document.querySelector(".nico-CommonHeaderRoot")
+      || (/(?:^|\.)nicoft\.io$/.test(window.location.hostname)
+        || window.location.hostname === "www.beta.hiroba.nicovideo.jp"
+        ? document.body : null);
+  };
+
   var findServiceNavigation = function(commonHeader) {
-    var root = commonHeader.querySelector(".nico-CommonHeaderRoot");
+    var root = findOfficialRoot(commonHeader);
     if (!root) return null;
     var anchors = root.querySelectorAll("a[href]");
     for (var i = 0; i < anchors.length; i++) {
@@ -162,7 +176,7 @@
   };
 
   var findAccountMenuItem = function(commonHeader) {
-    var root = commonHeader.querySelector(".nico-CommonHeaderRoot");
+    var root = findOfficialRoot(commonHeader);
     if (!root) return null;
     var anchors = root.querySelectorAll("a[href]");
     // CommonHeader 3.13.0はフォロー新着内にも/myリンクを追加するため、
@@ -172,7 +186,9 @@
     for (var i = 0; i < anchors.length; i++) {
       try {
         var url = new URL(anchors[i].href, window.location.href);
-        if (url.hostname === "www.nicovideo.jp" && url.pathname === "/my") {
+        var commonHeaderReference = url.searchParams.get("cmnhd_ref") || "";
+        var isAccountUrl = url.hostname === "www.nicovideo.jp" && url.pathname === "/my";
+        if (isAccountUrl || /(?:^|&)pos=header(?:&|$)/.test(commonHeaderReference)) {
           var item = anchors[i].parentElement;
           if (!item || !item.parentElement || !item.previousElementSibling) continue;
           var depth = 0;
@@ -222,6 +238,69 @@
     return reference && reference.id === containerId ? reference.nextElementSibling : reference;
   };
 
+  var findNicoFtAccountMenuItem = function() {
+    if (!/(?:^|\.)nicoft\.io$/.test(window.location.hostname)) return null;
+    var anchors = document.querySelectorAll("a[href]");
+    for (var i = 0; i < anchors.length; i++) {
+      try {
+        var url = new URL(anchors[i].href, window.location.href);
+        if ((url.hostname === "nicoft.io" || url.hostname === "www.nicoft.io")
+            && url.pathname === "/login") return anchors[i];
+      } catch (error) {
+        // 不正なhrefはNicoFTのアカウント項目ではないため無視する.
+      }
+    }
+    return null;
+  };
+
+  var findHirobaPlacement = function() {
+    if (window.location.hostname !== "www.beta.hiroba.nicovideo.jp"
+        || document.readyState === "loading") return null;
+    var anchors = document.querySelectorAll("a[href]");
+    for (var i = 0; i < anchors.length; i++) {
+      try {
+        var url = new URL(anchors[i].href, window.location.href);
+        if (url.hostname !== window.location.hostname || url.pathname !== "/settings"
+            || !anchors[i].parentElement) continue;
+        var filterMenu = document.getElementById("filter-matome-api-status-menu");
+        return {
+          parent: anchors[i].parentElement,
+          reference: filterMenu && filterMenu.parentElement === anchors[i].parentElement
+            ? filterMenu : anchors[i],
+          mounted: "service",
+        };
+      } catch (error) {
+        // 不正なhrefは広場ヘッダーの設定項目ではないため無視する.
+      }
+    }
+    return null;
+  };
+
+  var findLegacyHeaderHost = function(commonHeader) {
+    var inner = document.getElementById("siteHeaderInner");
+    if (!inner || !commonHeader.contains(inner)) return null;
+    var anchors = inner.querySelectorAll("a[href]");
+    var serviceLinks = 0;
+    for (var i = 0; i < anchors.length; i++) {
+      try {
+        var url = new URL(anchors[i].href, window.location.href);
+        if (url.hostname === "www.nicovideo.jp"
+            || /^(?:seiga|live|news|dic)\.nicovideo\.jp$/.test(url.hostname)) serviceLinks++;
+      } catch (error) {
+        // 不正なhrefは旧共通ヘッダーのサービス項目ではないため無視する.
+      }
+    }
+    if (serviceLinks < 3) return null;
+    var host = document.getElementById(legacyHostId);
+    if (!host) {
+      host = document.createElement("div");
+      host.id = legacyHostId;
+      host.style.cssText = "position:fixed;top:0;right:0;z-index:101000;display:flex;height:36px;";
+      inner.appendChild(host);
+    }
+    return host;
+  };
+
   var findPlacement = function(commonHeader) {
     var accountItem = findAccountMenuItem(commonHeader);
     if (accountItem) {
@@ -231,11 +310,30 @@
         mounted: "account",
       };
     }
+    var nicoFtAccountItem = findNicoFtAccountMenuItem();
+    if (nicoFtAccountItem) {
+      return {
+        parent: nicoFtAccountItem.parentElement,
+        reference: nicoFtAccountItem,
+        mounted: "account",
+      };
+    }
+    var hirobaPlacement = findHirobaPlacement();
+    if (hirobaPlacement) return hirobaPlacement;
     var navigation = findServiceNavigation(commonHeader);
-    return navigation ? {
-      parent: navigation,
-      reference: findInsertionReference(navigation),
-      mounted: "service",
+    if (navigation) {
+      return {
+        parent: navigation,
+        reference: findInsertionReference(navigation),
+        mounted: "service",
+      };
+    }
+    var legacyHost = findLegacyHeaderHost(commonHeader);
+    var filterMenu = document.getElementById("filter-matome-api-status-menu");
+    return legacyHost ? {
+      parent: legacyHost,
+      reference: filterMenu && filterMenu.parentElement === legacyHost ? filterMenu : null,
+      mounted: "legacy",
     } : null;
   };
 
@@ -491,7 +589,7 @@
   };
 
   var initialize = function() {
-    var commonHeader = document.getElementById("CommonHeader");
+    var commonHeader = findCommonHeader();
     if (!commonHeader) return false;
     var placement = findPlacement(commonHeader);
     if (!placement) {
@@ -523,7 +621,7 @@
   };
 
   var headerObserver = new MutationObserver(function() {
-    var commonHeader = document.getElementById("CommonHeader");
+    var commonHeader = findCommonHeader();
     var container = document.getElementById(containerId);
     var placement = commonHeader && findPlacement(commonHeader);
     ensureWatchListener();
@@ -545,5 +643,10 @@
     if (container) synchronizeFullscreenState(container);
     initialize();
   });
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function() {
+      setTimeout(initialize, 0);
+    }, {once: true});
+  }
   initialize();
 })();

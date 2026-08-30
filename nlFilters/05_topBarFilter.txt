@@ -16,11 +16,12 @@ if (<freeSpace> < 3) alert("キャッシュフォルダの空き容量が3GBを�
 
 [Replace]
 Name = NicoCacheヘッダーメニューを追加
-URL = www\.nicovideo\.jp/
+FullURL = (https?):\/\/(?:(?:[^\/]+\.)*nicovideo\.jp|(?:www\.)?nicoft\.io)(?:\/.*)?$
 ContentType = text/html
 Match<
-(?=<!--nicocachenl-head-->)
+(<head(?:[^>]+)?>)
 >
 Replace<
-<script type="text/javascript" src="/$TS(local/05_nicocache_menu.js)"></script><CRLF>
+$1
+<script type="text/javascript" src="$URL1://www.nicovideo.jp/$TS(local/05_nicocache_menu.js)"></script><CRLF>
 >

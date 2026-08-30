@@ -56,6 +56,7 @@ import dareka.processor.URLResourceCache;
 import dareka.processor.impl.Cache;
 import dareka.processor.impl.CmafCachingProcessor;
 import dareka.processor.impl.DomandCVIEntry;
+import dareka.processor.impl.LocalDirProcessor;
 import dareka.processor.impl.VideoDescriptor;
 import dareka.processor.util.LocalFlvTemplate;
 
@@ -125,6 +126,8 @@ public final class FunctionalTestMain {
                         this::testUrlResourceTransferTimeout);
                 run("default settings layout and obsolete key removal",
                         () -> DefaultsLayoutUnitTest.run(repository));
+                run("cross-service local URL routing",
+                        FunctionalTestMain::testCrossServiceLocalUrls);
                 run("template reload and CMAF utility validation",
                         this::testTemplateAndCmafUtility);
                 run("CMAF cache progress size stability",
@@ -337,6 +340,18 @@ public final class FunctionalTestMain {
             keyStore.store(output, "NicoCache".toCharArray());
         }
         prepareMitmKeyStore();
+    }
+
+    private static void testCrossServiceLocalUrls() {
+        assertTrue(LocalDirProcessor.isSupportedURL(
+                "https://www.beta.hiroba.nicovideo.jp/local/features/dist/features.js"),
+                "nested nicovideo local URL");
+        assertTrue(LocalDirProcessor.isSupportedURL(
+                "https://nicoft.io/local/features/dist/features.js"),
+                "NicoFT local URL");
+        assertTrue(!LocalDirProcessor.isSupportedURL(
+                "https://example.com/local/features/dist/features.js"),
+                "unrelated local URL");
     }
 
     private void prepareMitmKeyStore() throws Exception {

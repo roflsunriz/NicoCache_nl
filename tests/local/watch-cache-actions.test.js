@@ -107,6 +107,11 @@ class FakeElement {
     return target === this || this.children.some((child) => child.contains(target));
   }
 
+  matches(selector) {
+    return selector.startsWith(".")
+      && this.className?.split(/\s+/).includes(selector.slice(1));
+  }
+
   getBoundingClientRect() {
     const marginMatch = String(this.style.marginLeft || "").match(/\+\s*(\d+(?:\.\d+)?)px\)/);
     const styleLeft = String(this.style.left || "").match(/^(-?\d+(?:\.\d+)?)px$/);
@@ -200,6 +205,9 @@ function createPage({
     },
     getElementById(id) {
       return elements.get(id) || null;
+    },
+    querySelector(selector) {
+      return document.body?.querySelector(selector) || null;
     },
     addEventListener(type, listener) {
       documentListeners.set(type, listener);
@@ -402,5 +410,28 @@ test("公式CommonHeaderルートの生成前はDOMへ挿入せず生成後に�
   page.flushMutations();
   const container = page.document.getElementById("ncnl_common_header_menu");
   assert.ok(container);
+  assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
+});
+
+test("CommonHeaderのホストIDが異なっても公式ルートから配置する", () => {
+  const page = createPage();
+  page.commonHeader.id = "common-header";
+  page.document.elements.delete("CommonHeader");
+  page.flushMutations();
+
+  const container = page.document.getElementById("ncnl_common_header_menu");
+  assert.ok(container);
+  assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
+});
+
+test("サービス固有my URLも公式cmnhd_refからアカウント項目と判定する", () => {
+  const page = createPage({headerMode: "logged-in"});
+  const accountAnchor = page.header.root.querySelectorAll("a[href]")
+    .find((anchor) => anchor.href.includes("/my"));
+  accountAnchor.href = "https://seiga.nicovideo.jp/my/?cmnhd_ref=device%3Dpc%26site%3Dseiga%26pos%3Dheader";
+  accountAnchor.setAttribute("href", accountAnchor.href);
+  page.flushMutations();
+
+  const container = page.document.getElementById("ncnl_common_header_menu");
   assert.equal(container.getAttribute("data-ncnl-mounted"), "account");
 });

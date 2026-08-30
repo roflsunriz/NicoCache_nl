@@ -22,3 +22,6 @@
 *.dmc.nico
 *.nvcomment.nicovideo.jp
 nicocachenl.test
+www.beta.hiroba.nicovideo.jp
+nicoft.io
+*.nicoft.io

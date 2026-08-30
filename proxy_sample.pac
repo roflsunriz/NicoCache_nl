@@ -28,6 +28,8 @@ function FindProxyForURL(url, host) {
        || shExpMatch(host, '*.nimg.jp')
        || shExpMatch(host, '*.video.nimg.jp')
        || shExpMatch(host, '*.dmc.nico')
+       || host.toLowerCase() === 'nicoft.io'
+       || shExpMatch(host.toLowerCase(), '*.nicoft.io')
       ) && (url.indexOf('http:') == 0 || url.indexOf('https:') == 0)) {
     return 'PROXY 127.0.0.1:8080';
   };

@@ -33,7 +33,7 @@ final class FilterEngine {
     private static final Pattern CASE_WHEN_PATTERN = Pattern.compile(
             "<when\\s+(?:\"(.*?)\"|else)>(.*?)(?:$|(?=<when))", Pattern.DOTALL);
     private static final Pattern LOCAL_URL = Pattern.compile(
-            "^https?://[^/]+\\.nicovideo\\.jp/((?:flv|nico)player\\.swf|flvplayer_wrapper\\.swf|" +
+            "^https?://(?:[^/]+\\.nicovideo\\.jp|(?:www\\.)?nicoft\\.io)/((?:flv|nico)player\\.swf|flvplayer_wrapper\\.swf|" +
                     "flv_booster\\.swf|local(/?|/[^?]*|\\w+\\.\\w+))(\\?.*)?$");
 
     private final Path repositoryRoot;

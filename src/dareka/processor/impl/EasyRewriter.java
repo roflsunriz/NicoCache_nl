@@ -348,7 +348,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
     }
 
     static final Pattern LOCAL_URL_PATTERN = Pattern.compile(
-            "(https?://[^/]+\\.nicovideo\\.jp/)(local/[^\\?]+)");
+            "(https?://(?:[^/]+\\.nicovideo\\.jp|(?:www\\.)?nicoft\\.io)/)(local/[^\\?]+)");
 
     // URLを読み込むタグに変換
     private String modifySpecialAppend(UserFilter u, String url) {

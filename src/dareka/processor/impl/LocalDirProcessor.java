@@ -25,7 +25,7 @@ public class LocalDirProcessor implements Processor {
     // 任意のMethodにマッチ
     private static final String[] SUPPORTED_METHODS = new String[] { null };
     private static final Pattern LOCAL_DIR_PATTERN = Pattern
-        .compile("^https?://[^/]+\\.nicovideo\\.jp/((?:flv|nico)player\\.swf|flvplayer_wrapper\\.swf|flv_booster\\.swf|local(/?|/[^?]*|\\w+\\.\\w+))(\\?.*)?$");
+        .compile("^https?://(?:[^/]+\\.nicovideo\\.jp|(?:www\\.)?nicoft\\.io)/((?:flv|nico)player\\.swf|flvplayer_wrapper\\.swf|flv_booster\\.swf|local(/?|/[^?]*|\\w+\\.\\w+))(\\?.*)?$");
 
     // - 2024-12-16 追記. 変更前の表現は次のようなものだった.
     //   ..."local(/?|/[-_\\w./]+|\\w+\\.\\w+)"...
