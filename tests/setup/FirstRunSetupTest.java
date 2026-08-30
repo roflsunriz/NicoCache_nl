@@ -534,7 +534,8 @@ public final class FirstRunSetupTest {
                 "proxy.pac must be created");
         assertContains(
                 Files.readString(directory.resolve("proxy.pac")),
-                "host.toLowerCase() === 'debug'",
+                "normalizedHost === 'nicocachenl.test'"
+                        + " || normalizedHost === 'debug'",
                 "proxy.pac debug virtual host route");
         assertContains(
                 Files.readString(directory.resolve("NicoCacheGUI.property")),
