@@ -26,6 +26,7 @@ public final class NlFilterLabTests {
         Files.createDirectories(temporary);
 
         run("追跡中フィルターをエラーなく解析", () -> trackedFiltersParse(repository));
+        run("CommonHeaderメニューを全wwwページへ挿入", () -> commonHeaderMenuScope(repository));
         run("システムフィルターに不要なルールを戻さない",
                 () -> systemFilterHasNoObsoleteRules(repository));
         run("未閉鎖ブロックを検出", () -> unclosedBlock(temporary));
@@ -72,6 +73,22 @@ public final class NlFilterLabTests {
         assertEquals(8, files.size(), "追跡フィルター数");
         assertTrue(!all.hasErrors(), "既存フィルターにエラーがない");
         assertEquals(40, all.rules.size(), "既存ルール数");
+    }
+
+    private static void commonHeaderMenuScope(Path repository) throws Exception {
+        Path file = repository.resolve("05_topBarFilter.txt");
+        ParseResult parsed = new FilterParser().parse(file);
+        String html = "<html><head><!--nicocachenl-head--></head><body></body></html>";
+        for (String path : List.of(
+                "/", "/video_top", "/ranking/genre", "/newarrival", "/search/test", "/tag/test",
+                "/watch/sm9", "/user/2")) {
+            SimulationResult result = simulate(repository, parsed.rules, html,
+                    "https://www.nicovideo.jp" + path, "text/html", FilterRule.CacheState.NONE);
+            assertContains(result.rendered, "05_nicocache_menu.js", "menu script: " + path);
+        }
+        SimulationResult otherHost = simulate(repository, parsed.rules, html,
+                "https://live.nicovideo.jp/watch/lv1", "text/html", FilterRule.CacheState.NONE);
+        assertTrue(!otherHost.rendered.contains("05_nicocache_menu.js"), "www以外へメニューを挿入しない");
     }
 
     private static void systemFilterHasNoObsoleteRules(Path repository) throws Exception {
