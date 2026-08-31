@@ -6,6 +6,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- PRラベル設定のYAML解釈をより安全かつ正確に保つため、`actions/labeler`を
+  `js-yaml 5.2.3`同梱の署名済みコミットへ更新し、固定SHAを検証する契約テストも追従させた。
+
 ### Fixed
 
 - `proxy_sample.pac`の整理後も初回セットアップCIが旧式のdebugホスト式を要求して失敗しないよう、

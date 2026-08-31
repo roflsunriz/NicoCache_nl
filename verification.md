@@ -100,3 +100,47 @@ responsive、実況の旧36pxヘッダー、NicoFT、広場の独自44pxヘッ�
 
 問題が発生した場合は`nlFilters/05_topBarFilter.txt`のメニュー読込URLと
 `local/05_nicocache_menu.js`を直前のコミットへ戻し、上記の自動検証と実ページ検証を再実行する。
+
+## actions/labelerの更新
+
+### 更新元の確認
+
+固定SHAを変更するときは、`actions/labeler`公式リポジトリのコミット署名、直前SHAとの親子関係、
+リリースノート、比較差分を確認する。`98ce1450c7908643084f7487327dfa4f4bf8a367`は
+`2c2a2313b245ae5cb1ddbddf76be67b266211c91`の直接の子で、`js-yaml 5.2.2`から`5.2.3`への
+更新と生成済みbundle・ライセンス情報だけを含む。`js-yaml 5.2.3`では、タグとmappingの
+プロトタイプ継承参照、低年号timestamp、欠落mapping値、tabで字下げされたfolded scalarが修正される。
+
+### 互換性とセキュリティの検証
+
+更新先SHAの公式ソースで次を実行し、すべて終了コード`0`になることを確認する。
+
+```powershell
+npm ci
+npm run format-check
+npm run lint
+npm test
+npm run build
+git diff --exit-code
+npm audit --omit=dev
+```
+
+更新先に同梱された`js-yaml 5.2.3`で`.github/labeler.yml`を読み、12個のラベル定義が
+`actions/labeler`の`getLabelConfigResultFromObject`を通過することを確認する。
+`.github/workflows/pull-request-governance.yml`だけを変更ファイルとしてglob判定し、
+`area: ci`だけが一致することも確認する。リポジトリ側では次を実行する。
+
+```powershell
+.\tests\release\test-github-community-files.ps1
+.\tests\release\test-release-workflow.ps1
+```
+
+`pull_request_target`はbaseブランチのworkflowを使うため、Dependabot PR上のlabelジョブ成功だけを
+更新先Actionの実行証拠にしない。workflowはPR headをcheckoutせず、任意の`run`ステップを持たず、
+job権限を`contents: read`と`pull-requests: write`に限定したままにする。最後にPRのCIを再実行し、
+`build-and-test`、全OS/JDKジョブ、runtime compatibility matrixとgateが成功することを確認する。
+
+### 復旧
+
+問題が発生した場合は、workflowと契約テストの固定SHAを直前の検証済みSHAへ同時に戻し、
+上記のローカル検証とPR CIを再実行する。workflowだけを戻して契約テストを緩めてはならない。
