@@ -18,8 +18,10 @@ import dareka.processor.HttpResponseHeader;
 /** nlFilterの一回の適用結果と、読み込み世代ごとの通常ログ集計。 */
 final class NlFilterDiagnostics implements AutoCloseable {
     static final long REPEAT_INTERVAL_MILLIS = 60_000;
+    static final long OBSERVATION_INTERVAL_MILLIS = REPEAT_INTERVAL_MILLIS;
 
     enum Reason {
+        MATCH_CONFIRMED("INFO", "この読み込み期間に一致を確認しました。未一致の通知を解除します"),
         MATCH_ZERO(false, "一致箇所がありません"),
         APPEND_TARGET_MISSING(false, "挿入位置が見つかりません"),
         UNRESOLVED_VARIABLE(false, "置換に必要な変数を解決できません"),
@@ -30,11 +32,15 @@ final class NlFilterDiagnostics implements AutoCloseable {
         PROCESSING_ERROR(true, "フィルターの処理中にエラーが発生しました"),
         LIST_WRITE_FAILED(true, "リストへの登録に失敗しました");
 
-        final boolean error;
+        final String level;
         final String message;
 
         Reason(boolean error, String message) {
-            this.error = error;
+            this(error ? "ERROR" : "WARN", message);
+        }
+
+        Reason(String level, String message) {
+            this.level = level;
             this.message = message;
         }
     }
@@ -99,8 +105,14 @@ final class NlFilterDiagnostics implements AutoCloseable {
                 problem(source.append ? Reason.APPEND_TARGET_MISSING : Reason.MATCH_ZERO,
                         -1, source.append ? source.appendTarget : "");
             }
+            confirmMatch(source, context, matches, applied);
             for (Map.Entry<Key, String> problem : problems.entrySet()) {
-                report(problem.getKey(), context, problem.getValue(), matches, applied);
+                Reason reason = problem.getKey().reason;
+                if (reason == Reason.MATCH_ZERO || reason == Reason.APPEND_TARGET_MISSING) {
+                    observeMiss(problem.getKey(), context, problem.getValue());
+                } else {
+                    report(problem.getKey(), context, problem.getValue(), matches, applied);
+                }
             }
         }
     }
@@ -140,14 +152,31 @@ final class NlFilterDiagnostics implements AutoCloseable {
         }
     }
 
+    private static final class MatchObservation {
+        boolean matched;
+        boolean notified;
+        long firstMiss;
+        long lastPrinted;
+        long total;
+        long pending;
+        Key key;
+        Context context;
+        String detail;
+    }
+
     private final LongSupplier clock;
     private final Consumer<String> sink;
     // キーは読込済み定義・固定の理由・定義内の行のみ。URL数には比例して増えない。
     private final Map<Key, Repeated> repeated = new LinkedHashMap<>();
+    // URLごとの必須一致にはしない。同じ定義が別の応答で一致した実績を記録する。
+    private final Map<Source, MatchObservation> observations = new LinkedHashMap<>();
     private boolean closed;
 
     NlFilterDiagnostics() {
-        this(() -> System.nanoTime() / 1_000_000, Logger::warning);
+        this(() -> System.nanoTime() / 1_000_000, message -> {
+            if (message.startsWith("[INFO]")) Logger.info(message);
+            else Logger.warning(message);
+        });
     }
 
     NlFilterDiagnostics(LongSupplier clock, Consumer<String> sink) {
@@ -161,6 +190,49 @@ final class NlFilterDiagnostics implements AutoCloseable {
 
     void definitionError(Source source, int line, Reason reason, String detail) {
         report(new Key(source, reason, line), null, clean(detail), 0, 0);
+    }
+
+    private synchronized void confirmMatch(Source source, Context context, long matches, long applied) {
+        if (matches == 0) return;
+        MatchObservation observation = observations.computeIfAbsent(source, ignored -> new MatchObservation());
+        if (observation.matched) return;
+        observation.matched = true;
+        observation.pending = 0;
+        observation.key = null;
+        observation.context = null;
+        observation.detail = null;
+        if (observation.notified) {
+            sink.accept(format(new Key(source, Reason.MATCH_CONFIRMED, source.line(-1)),
+                    context, "", matches, applied));
+        }
+    }
+
+    private synchronized void observeMiss(Key key, Context context, String detail) {
+        MatchObservation observation = observations.computeIfAbsent(key.source, ignored -> new MatchObservation());
+        if (observation.matched) return;
+        long now = clock.getAsLong();
+        if (observation.total == 0) observation.firstMiss = now;
+        observation.total++;
+        observation.pending++;
+        observation.key = key;
+        observation.context = context;
+        observation.detail = detail;
+        long previous = observation.notified ? observation.lastPrinted : observation.firstMiss;
+        if (closed || now - previous >= OBSERVATION_INTERVAL_MILLIS) {
+            printObservation(observation, now);
+        }
+    }
+
+    private void printObservation(MatchObservation observation, long now) {
+        if (observation.matched || observation.pending == 0) return;
+        String summary = observation.detail + (observation.detail.isEmpty() ? "" : "; ")
+                + "この読み込み期間に一致未確認・未一致応答計=" + observation.total + "件";
+        String message = format(observation.key, observation.context, summary, 0, 0);
+        if (observation.notified) message += " 同種の事象が追加" + observation.pending + "回";
+        sink.accept(message);
+        observation.notified = true;
+        observation.lastPrinted = now;
+        observation.pending = 0;
     }
 
     private synchronized void report(Key key, Context context, String detail,
@@ -197,21 +269,26 @@ final class NlFilterDiagnostics implements AutoCloseable {
     public synchronized void close() {
         if (closed) return;
         closed = true;
+        long now = clock.getAsLong();
+        for (MatchObservation observation : observations.values()) printObservation(observation, now);
         for (Repeated entry : repeated.values()) printPending(entry);
         repeated.clear();
+        // 旧リクエストが参照する間は一致確認を忘れない。参照がなくなれば世代ごと回収される。
     }
 
     private static String format(Key key, Context context, String detail,
             long matches, long applied) {
         Source source = key.source;
         StringBuilder message = new StringBuilder(256);
-        message.append(key.reason.error ? "[ERROR]" : "[WARN]")
+        message.append('[').append(key.reason.level).append(']')
                 .append("[nlFilter][").append(key.reason).append("] ")
                 .append(clean(source.file));
         if (key.line > 0) message.append(':').append(key.line);
-        message.append(" Name=\"").append(clean(source.name)).append("\" ")
-                .append(source.append || key.reason == Reason.APPEND_TARGET_MISSING ? "Append: " : "Match: ")
-                .append(key.reason.message);
+        message.append(" Name=\"").append(clean(source.name)).append("\" ");
+        if (key.reason != Reason.MATCH_CONFIRMED) {
+            message.append(source.append || key.reason == Reason.APPEND_TARGET_MISSING ? "Append: " : "Match: ");
+        }
+        message.append(key.reason.message);
         if (detail != null && !detail.isEmpty()) message.append(" (").append(detail).append(')');
         if (context != null) {
             message.append(" 一致=").append(matches).append(" 処理成功=").append(applied)

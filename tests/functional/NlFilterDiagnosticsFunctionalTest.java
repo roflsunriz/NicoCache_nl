@@ -3,7 +3,6 @@ package functional;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -11,13 +10,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
-import java.util.function.LongSupplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -52,7 +44,7 @@ public final class NlFilterDiagnosticsFunctionalTest {
         Logger.setHandler(logger);
         try {
             testNormalReplacementStillUsesParsedFilter();
-            testMatchZeroAfterResponseGates(directory, logger);
+            testResponseGatesPermitNormalReplacement(directory, logger);
             testEachLinePartialMismatchIsDebugOnly(directory, logger);
             testMultiCompletionIsNotReportedAsZero(directory, logger);
             testAppendTargetMissing(directory, logger, "[Style]",
@@ -66,8 +58,7 @@ public final class NlFilterDiagnosticsFunctionalTest {
             testRequestHeaderDiagnostics(directory, logger);
             testUnusedConfigDoesNotReportMatchZero(directory, logger);
             testDiagnosticLogsRedactQuerySecrets(directory, logger);
-            testAggregationClockAndFlush();
-            testAggregationIsSafeUnderConcurrentReports();
+            NlFilterHealthFunctionalTest.run();
         } finally {
             Logger.setHandler(original);
             deleteTree(directory);
@@ -114,9 +105,9 @@ public final class NlFilterDiagnosticsFunctionalTest {
         }
     }
 
-    private static void testMatchZeroAfterResponseGates(Path directory,
+    private static void testResponseGatesPermitNormalReplacement(Path directory,
             RecordingLogger logger) throws Exception {
-        String name = "response gates match zero";
+        String name = "response gates normal replacement";
         Path source = writeFilter(directory, "response-gates-zero.txt", filter(
                 "# nlフィルタ定義(文字コード判定用なのでこの行は削除しないこと)",
                 "[Replace]",
@@ -128,10 +119,10 @@ public final class NlFilterDiagnosticsFunctionalTest {
                 "MatchLocal = TRUE",
                 "Require = required-marker",
                 "Match<",
-                "absent-token",
+                "required-marker",
                 ">",
                 "Replace<",
-                "replacement",
+                "gate-replaced",
                 ">"));
         EasyRewriter rewriter = newRewriter();
         parseAndInstall(rewriter, source);
@@ -144,15 +135,13 @@ public final class NlFilterDiagnosticsFunctionalTest {
 
         logger.clear();
         String result = apply(rewriter, localUrl,
-                "required-marker without the target", request, response, matched);
-        assertEquals("required-marker without the target", result,
-                "zero-match filters must leave the content intact");
-        assertEquals(1, logger.warningCodeCount("MATCH_ZERO"),
-                "one filter application must produce one MATCH_ZERO warning");
-        assertWarningContains(logger, "MATCH_ZERO", name,
-                "MATCH_ZERO must identify the filter");
+                "required-marker", request, response, matched);
+        assertEquals("gate-replaced", result,
+                "all response gates must preserve ordinary replacement behavior");
+        assertNoWarningCode(logger, "MATCH_ZERO",
+                "a successful response-gated replacement must not warn");
         assertNoDebugCode(logger, "MATCH_ZERO",
-                "MATCH_ZERO must be a normal warning, not a debug-only message");
+                "MATCH_ZERO must not be emitted as debug output either");
     }
 
     private static void testEachLinePartialMismatchIsDebugOnly(Path directory,
@@ -260,6 +249,9 @@ public final class NlFilterDiagnosticsFunctionalTest {
                 matched);
         assertEquals(content, result,
                 "a missing Append target must leave content intact");
+        assertNoWarningCode(logger, "APPEND_TARGET_MISSING",
+                "an initial Append miss must remain pending before scope close");
+        closeDiagnostics(rewriter);
         assertWarningSource(logger, "APPEND_TARGET_MISSING", source, name);
     }
 
@@ -284,6 +276,9 @@ public final class NlFilterDiagnosticsFunctionalTest {
                 matched);
         assertEquals(content, result,
                 "a URL-form Append missing its target must leave content intact");
+        assertNoWarningCode(logger, "APPEND_TARGET_MISSING",
+                "a URL-form Append miss must remain pending before scope close");
+        closeDiagnostics(rewriter);
         assertWarningSource(logger, "APPEND_TARGET_MISSING", source, name);
     }
 
@@ -489,10 +484,10 @@ public final class NlFilterDiagnosticsFunctionalTest {
                 "Name = redacted query",
                 "FullURL = https://example\\.invalid/redacted\\?token=" + secret,
                 "Match<",
-                "missing-token",
+                "known-token",
                 ">",
                 "Replace<",
-                "replacement",
+                "<nlVar:unassigned-redaction-variable>",
                 ">"));
         EasyRewriter rewriter = newRewriter();
         parseAndInstall(rewriter, source);
@@ -500,86 +495,11 @@ public final class NlFilterDiagnosticsFunctionalTest {
         ArrayList<?> matched = matched(rewriter, url, null, response);
         assertEquals(1, matched.size(), "redaction fixture must reach the filter");
         logger.clear();
-        apply(rewriter, url, "ordinary content", null, response, matched);
-        assertWarningContains(logger, "MATCH_ZERO", "redacted query",
-                "redaction fixture must emit a normal warning");
+        apply(rewriter, url, "known-token", null, response, matched);
+        assertWarningContains(logger, "UNRESOLVED_VARIABLE", "redacted query",
+                "redaction fixture must emit an immediate variable diagnostic");
         assertNotContains(logger.warningText(), secret,
                 "normal diagnostic logs must redact query secrets");
-    }
-
-    private static void testAggregationClockAndFlush() throws Exception {
-        AtomicLong clock = new AtomicLong();
-        List<String> messages = new ArrayList<>();
-        DiagnosticsHarness diagnostics = new DiagnosticsHarness(clock::get,
-                messages::add);
-        Object source = diagnostics.source("aggregation.txt", "aggregation");
-        zeroMatch(diagnostics, source);
-        assertEquals(1, messages.size(), "the first diagnostic must be immediate");
-        zeroMatch(diagnostics, source);
-        assertEquals(1, messages.size(), "a duplicate inside 60 seconds is aggregated");
-        clock.addAndGet(diagnostics.repeatIntervalMillis());
-        zeroMatch(diagnostics, source);
-        assertEquals(2, messages.size(), "the next duplicate at 60 seconds flushes");
-        assertContains(messages.get(1), "追加2回",
-                "the timed flush must include every pending duplicate");
-        zeroMatch(diagnostics, source);
-        diagnostics.close();
-        assertEquals(3, messages.size(), "close must flush the final pending duplicate");
-        assertContains(messages.get(2), "追加1回",
-                "close must report the final aggregated count");
-        diagnostics.close();
-        assertEquals(3, messages.size(), "close must not flush the same event twice");
-        zeroMatch(diagnostics, source);
-        assertEquals(4, messages.size(),
-                "an in-flight request reporting after close must be emitted immediately");
-
-        List<String> freshMessages = new ArrayList<>();
-        DiagnosticsHarness fresh = new DiagnosticsHarness(clock::get,
-                freshMessages::add);
-        zeroMatch(fresh, source);
-        assertEquals(1, freshMessages.size(),
-                "a new diagnostics generation must report independently");
-        fresh.close();
-
-        List<String> distinctMessages = new ArrayList<>();
-        DiagnosticsHarness distinct = new DiagnosticsHarness(clock::get,
-                distinctMessages::add);
-        Object firstSource = distinct.source("source-a.txt", "source A");
-        Object secondSource = distinct.source("source-b.txt", "source B");
-        zeroMatch(distinct, firstSource);
-        zeroMatch(distinct, secondSource);
-        distinct.unresolvedVariable(firstSource);
-        assertEquals(3, distinctMessages.size(),
-                "source and reason changes must have independent first reports");
-        distinct.close();
-    }
-
-    private static void testAggregationIsSafeUnderConcurrentReports()
-            throws Exception {
-        List<String> messages = new ArrayList<>();
-        DiagnosticsHarness diagnostics = new DiagnosticsHarness(() -> 0L,
-                messages::add);
-        Object source = diagnostics.source("parallel.txt", "parallel");
-        ExecutorService executor = Executors.newFixedThreadPool(8);
-        try {
-            List<Callable<Void>> tasks = new ArrayList<>();
-            for (int i = 0; i < 8; i++) {
-                tasks.add(() -> {
-                    zeroMatch(diagnostics, source);
-                    return null;
-                });
-            }
-            for (Future<Void> result : executor.invokeAll(tasks)) {
-                result.get();
-            }
-        } finally {
-            executor.shutdownNow();
-        }
-        diagnostics.close();
-        assertEquals(2, messages.size(),
-                "concurrent duplicates must produce one immediate and one flush message");
-        assertContains(messages.get(1), "追加7回",
-                "concurrent aggregation must retain every duplicate");
     }
 
     private static Object filterFile(Path source) throws Exception {
@@ -662,6 +582,13 @@ public final class NlFilterDiagnosticsFunctionalTest {
         nextCheckTime.setLong(rewriter, Long.MAX_VALUE);
     }
 
+    private static void closeDiagnostics(EasyRewriter rewriter) throws Exception {
+        Method close = EasyRewriter.class.getDeclaredMethod(
+                "closeInstanceDiagnostics");
+        close.setAccessible(true);
+        close.invoke(rewriter);
+    }
+
     private static Class<?> nested(String name) throws ClassNotFoundException {
         return Class.forName(EasyRewriter.class.getName() + "$" + name);
     }
@@ -691,11 +618,6 @@ public final class NlFilterDiagnosticsFunctionalTest {
         }
         return new HttpRequestHeader("GET " + uri + " HTTP/1.1\r\n"
                 + "Host: example.invalid\r\n" + headers + "\r\n");
-    }
-
-    private static void zeroMatch(DiagnosticsHarness diagnostics, Object source)
-            throws Exception {
-        diagnostics.zeroMatch(source);
     }
 
     private static void assertWarningSource(RecordingLogger logger,
@@ -844,119 +766,6 @@ public final class NlFilterDiagnosticsFunctionalTest {
 
         synchronized String infoText() {
             return String.join("\n", info);
-        }
-    }
-
-    /** Calls the package-private diagnostics helper without placing test code in dareka/. */
-    private static final class DiagnosticsHarness {
-        private static final String TYPE =
-                "dareka.processor.impl.NlFilterDiagnostics";
-
-        private final Object diagnostics;
-        private final Class<?> sourceType;
-        private final Class<?> contextType;
-        private final Constructor<?> sourceConstructor;
-        private final Method begin;
-        private final Method close;
-        private final long repeatIntervalMillis;
-
-        DiagnosticsHarness(LongSupplier clock, Consumer<String> sink)
-                throws Exception {
-            Class<?> diagnosticType = Class.forName(TYPE);
-            Constructor<?> constructor = diagnosticType.getDeclaredConstructor(
-                    LongSupplier.class, Consumer.class);
-            constructor.setAccessible(true);
-            diagnostics = constructor.newInstance(clock, sink);
-            sourceType = Class.forName(TYPE + "$Source");
-            contextType = Class.forName(TYPE + "$Context");
-            sourceConstructor = sourceType.getDeclaredConstructor();
-            sourceConstructor.setAccessible(true);
-            begin = diagnosticType.getDeclaredMethod("begin", sourceType,
-                    contextType);
-            begin.setAccessible(true);
-            close = diagnosticType.getDeclaredMethod("close");
-            close.setAccessible(true);
-            Field interval = diagnosticType.getDeclaredField(
-                    "REPEAT_INTERVAL_MILLIS");
-            interval.setAccessible(true);
-            repeatIntervalMillis = interval.getLong(null);
-        }
-
-        Object source(String file, String name) throws Exception {
-            Object source = sourceConstructor.newInstance();
-            set(source, "file", file);
-            set(source, "name", name);
-            set(source, "sectionLine", 1);
-            set(source, "operationLine", 2);
-            return source;
-        }
-
-        long repeatIntervalMillis() {
-            return repeatIntervalMillis;
-        }
-
-        void zeroMatch(Object source) throws Exception {
-            Object run = begin(source);
-            finish(run, true);
-        }
-
-        void unresolvedVariable(Object source) throws Exception {
-            Object run = begin(source);
-            Class<?> reasonType = Class.forName(TYPE + "$Reason");
-            Object unresolved = null;
-            for (Object value : reasonType.getEnumConstants()) {
-                if ("UNRESOLVED_VARIABLE".equals(((Enum<?>) value).name())) {
-                    unresolved = value;
-                    break;
-                }
-            }
-            if (unresolved == null) {
-                throw new AssertionError("UNRESOLVED_VARIABLE reason is unavailable");
-            }
-            Method problem = run.getClass().getDeclaredMethod("problem",
-                    reasonType, int.class, String.class);
-            problem.setAccessible(true);
-            invoke(problem, run, unresolved, -1, "test");
-            finish(run, false);
-        }
-
-        void close() throws Exception {
-            invoke(close, diagnostics);
-        }
-
-        private Object begin(Object source) throws Exception {
-            return invoke(begin, diagnostics, source, null);
-        }
-
-        private static void finish(Object run, boolean expectMatch)
-                throws Exception {
-            Method finish = run.getClass().getDeclaredMethod("finish",
-                    boolean.class);
-            finish.setAccessible(true);
-            invoke(finish, run, expectMatch);
-        }
-
-        private static void set(Object target, String fieldName, Object value)
-                throws Exception {
-            Field field = target.getClass().getDeclaredField(fieldName);
-            field.setAccessible(true);
-            field.set(target, value);
-        }
-
-        private static Object invoke(Method method, Object target,
-                Object... arguments) throws Exception {
-            try {
-                return method.invoke(target, arguments);
-            } catch (InvocationTargetException failure) {
-                Throwable cause = failure.getCause();
-                if (cause instanceof Exception) {
-                    throw (Exception) cause;
-                }
-                if (cause instanceof Error) {
-                    throw (Error) cause;
-                }
-                throw new AssertionError(cause);
-            }
         }
     }
 

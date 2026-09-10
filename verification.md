@@ -32,27 +32,32 @@ Windowsのシステムプロキシが有効な環境でも、LabのJavaクライ
 
 ### 判定と検証対象
 
-対象条件通過後の1セクション・1適用を単位に診断する。`Match`の一致と、本文置換・変数や
-リストへの登録を別々に数え、既存の出力と副作用を確認する。
+対象条件通過後の各適用で`Match`の一致と、本文置換・変数やリストへの登録を別々に数え、
+既存の出力と副作用を確認する。未一致の判定は1セクションの定義ごと・読み込み世代ごとに
+行い、広いURL条件へ入る全応答に一致を要求しない。一致実績を同名の別定義へ流用しない。
 
 | 観点 | 期待する結果 |
 | --- | --- |
 | URL・RequireHeader・ContentType・StatusCode・MatchLocal・Require | 各条件の不成立だけでは通常の未一致警告を出さない |
-| Match全体0件 | デバッグ無効でも`[WARN][nlFilter][MATCH_ZERO]`と出典・対象の情報を出す |
-| EachLine | 全体0件はWARN、部分不一致は既存Debug有効時だけ行番号付きで表示する |
+| Match全体0件 | 初回は保留し、60秒経過後の次回未一致または再読込・終了で、一致未確認の定義だけ`[WARN][nlFilter][MATCH_ZERO]`と出典・対象・集計件数を出す |
+| 広いURL条件・応答の到着順 | 不一致→一致→不一致、一致→不一致のどちらでも未一致警告を出さず、再読込まで実績を保持する |
+| 警告後の一致 | `MATCH_CONFIRMED`をINFOで1回出し、その世代の保留未一致を解除する |
+| EachLine | 全体0件を未一致として集計し、部分不一致は既存Debug有効時だけ行番号付きで表示する |
 | Multi・ReplaceDelay | 反復検索の終了を失敗にせず、遅延置換の順序と結果を維持する |
-| Script・Styleの通常挿入 | 実際の挿入後に成功を数え、失敗時は結合に参加した全定義へ出典付きで通知する |
+| Script・Styleの通常挿入 | 実際の挿入後に成功を数え、挿入先なしを各定義の未一致実績へ集計する。一度挿入できた定義は別応答の挿入先なしを警告しない |
 | URL形式のAppend | 内部のReplace化後も元のName・Appendの行と挿入位置を報告する |
 | 未定義nlVar・不正キャプチャ参照 | 未解決変数はWARN、置換例外はERRORとして理由を区別する |
 | AddVariable・AddList・idGroup | 登録成功やキャッシュ条件見送りをMatch未一致と誤判定しない |
 | RequestHeader・Config | URL選別の不一致・設定の未使用は警告せず、ヘッダー置換失敗のDROPを維持する |
 | 構文・正規表現・EOF | 不正な数値、正規表現、未知オプション、未閉鎖ブロックを出典付きで報告する |
-| 集計・並列処理 | 初回即時、60秒境界の次回発生時に追加件数を出し、別の定義・理由は別集計にする |
-| 再読込・終了 | 旧世代を排出し、旧リクエストの遅延完了も記録する。終了後のloadで新世代を作らない |
+| エラー集計・並列処理 | 変数解決不能や処理例外は一致実績にかかわらず初回即時、60秒境界の次回発生時に追加件数を出し、別の定義・理由は別集計にする |
+| 再読込・終了 | 旧世代の未表示分を排出し、旧リクエストの遅延完了も記録する。旧世代で確認した一致は忘れず、新世代へは持ち越さない。終了後のloadで新世代を作らない |
 | 秘匿 | URLのuserinfo・クエリ値・フラグメント、Cookie、処理本文、例外の生メッセージを通常診断へ転記しない |
 
 `NlFilterDiagnosticsFunctionalTest`は実際の`parseFilterFile`、登録、選別、本文適用、
-`onRequest`を通す。`NlFilterDiagnosticsLifecycleFunctionalTest`はloadと終了を競合させ、
+`onRequest`を通す。`NlFilterHealthFunctionalTest`は複数応答の到着順、一度も一致しない定義、
+一致確認後の実エラー、定義・世代の分離、並列処理を確認する。
+`NlFilterDiagnosticsLifecycleFunctionalTest`はloadと終了を競合させ、
 閉じた診断世代が復活しないことと、旧処理の結果が出力されることを確認する。
 集計の時間境界は時計を差し替え、60秒間の実時間待機に依存しない。
 
@@ -60,14 +65,15 @@ Windowsのシステムプロキシが有効な環境でも、LabのJavaクライ
 
 ```powershell
 .\test-functional.ps1 -KeepWorkDir -LibraryDirectory .\lib
-.\build-javac.ps1 -LibraryDirectory .\lib -OutputDirectory .\.test-work\nlfilter-diagnostics\build
-.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar source-check --json
-.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar compatibility --json
-.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar test
-.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar check --json
+.\build-javac.ps1 -LibraryDirectory .\lib -OutputDirectory .\.test-work\nlfilter-health\build
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-health\build\NicoCache_nl.jar source-check --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-health\build\NicoCache_nl.jar compatibility --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-health\build\NicoCache_nl.jar test
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-health\build\NicoCache_nl.jar check --json
 ```
 
 通常ログは既存の`Logger.warning`経路へ`[WARN]`または`[ERROR]`を含む文字列を渡す。
+未一致警告後の一致確認は`Logger.info`経路へ`[INFO]`として渡す。
 GUIの通常ログ表示と、既存設定に従うファイル出力を再利用する。フィルターの必須指定や
 新たなデバッグ設定は追加しない。終了時の排出は`Main`の既存リソース終了処理から呼ぶ。
 
@@ -76,17 +82,22 @@ GUIの通常ログ表示と、既存設定に従うファイル出力を再利�
 - 変更前の本体を隔離コンパイルし、通常置換の退行テストとLabの既存35件が合格した。
 - 変更後の正規ビルド、`--release 11 -Xlint:all -Werror`による本体・機能テストのコンパイルが成功した。
 - 本体機能テスト28件、Extension ABI 1482項目、同梱Extensionサンプルのコンパイルが合格した。
+- 誤検知修正では、JavaScriptの不一致→一致→不一致と一致→不一致、通常／URL形式Append、
+  警告前後の一致確認、確認後の変数・処理エラー、同一ファイル・同一名の別定義、世代切替、
+  並列8件の未一致集計と一致の混在を診断テストから実行した。
 - Labの38件が合格した。明示したJARがなければ別JARへ切り替えないこと、非UTF-8の
   コンソール設定でも日本語を含む互換性JSONをUTF-8で保存できること、既存のPowerShell引数形式を
   維持することを含む。
 - 隔離した候補基準でテストと本体オラクル照合を終えてから正式な基準へ反映した。
-  ソース・classの22項目が`matched`、`syntax.source.status`と`syntax.productionOracle.status`も
+  ソース・classの23項目が`matched`、`syntax.source.status`と`syntax.productionOracle.status`も
   `matched`で、追跡フィルターの`check --json`も成功した。
 - 検証済み本体JARを反映して通常再起動し、新PID・対象JAR・GUI起動モード・running状態と
-  JARハッシュを確認した。稼働JARを使った既定の`source-check`も22項目が一致した。
+  JARハッシュを確認した。稼働JARを使った既定の`source-check`も23項目が一致した。
 - ループバック限定の一時フィルターとHTTP Originを使い、実プロキシ経由の応答と通常ログで
-  Match全体0件、Script/Styleの挿入先なし、ファイル・行・HTTP応答情報、クエリとCookieの
-  秘匿を確認した。一時フィルターを削除し、検証用Originも終了した。
+  JavaScriptとScript/Styleの不一致→一致→不一致が警告されないことを確認した。
+  61秒後の次回未一致で一度も一致しない定義だけが警告され、警告後の初回一致がINFOで
+  通知されること、再読込で未確認定義の残件だけを排出すること、ファイル・行・HTTP応答情報と
+  クエリ・Cookieの秘匿を確認した。一時フィルターを削除し、検証用Originも終了した。
 
 ### 実環境への反映と復旧
 

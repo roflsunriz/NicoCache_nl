@@ -165,7 +165,8 @@ final class ParserCompatibility {
         entries.put("jar.UserFilter.class", "dareka/processor/impl/EasyRewriter$UserFilter.class");
         entries.put("jar.FilterLists.class", "dareka/processor/impl/EasyRewriter$FilterLists.class");
         entries.put("jar.MatchedFilters.class", "dareka/processor/impl/EasyRewriter$MatchedFilters.class");
-        for (String nested : List.of("", "$Source", "$Context", "$Run", "$Reason", "$Key", "$Repeated")) {
+        for (String nested : List.of("", "$Source", "$Context", "$Run", "$Reason", "$Key", "$Repeated",
+                "$MatchObservation")) {
             entries.put("jar.NlFilterDiagnostics" + nested + ".class",
                     "dareka/processor/impl/NlFilterDiagnostics" + nested + ".class");
         }
