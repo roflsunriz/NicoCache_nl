@@ -45,7 +45,7 @@ public class Main {
         if (server != null) {
             server.stop();
         }
-        shutdownProcessorSchedulers();
+        shutdownProcessorResources();
     }
 
     static void markExpectedStop(String mode) {
@@ -96,18 +96,19 @@ public class Main {
         if (server != null) {
             server.forceStop();
         }
-        shutdownProcessorSchedulers();
+        shutdownProcessorResources();
         Runtime.getRuntime().halt(0);
     }
 
-    private static void shutdownProcessorSchedulers() {
-        for (String className : new String[] {
-                "dareka.processor.impl.ExtThumbProcessor",
-                "dareka.processor.impl.GetThumbInfoProcessor" }) {
+    private static void shutdownProcessorResources() {
+        for (String[] cleanup : new String[][] {
+                { "dareka.processor.impl.ExtThumbProcessor", "shutdownScheduler" },
+                { "dareka.processor.impl.GetThumbInfoProcessor", "shutdownScheduler" },
+                { "dareka.processor.impl.EasyRewriter", "closeDiagnostics" } }) {
             try {
-                Class<?> processor = Class.forName(className);
+                Class<?> processor = Class.forName(cleanup[0]);
                 java.lang.reflect.Method method =
-                        processor.getDeclaredMethod("shutdownScheduler");
+                        processor.getDeclaredMethod(cleanup[1]);
                 method.setAccessible(true);
                 method.invoke(null);
             } catch (ReflectiveOperationException | SecurityException error) {

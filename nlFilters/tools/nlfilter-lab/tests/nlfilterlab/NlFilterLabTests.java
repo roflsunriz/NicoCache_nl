@@ -59,6 +59,9 @@ public final class NlFilterLabTests {
         run("稼働中EasyRewriterを構文オラクルとして呼び出す", () -> productionParserOracle(repository));
         run("全セクション・全オプションを本体内部表現と照合", () -> parserOptionCorpus(repository, temporary));
         run("副作用のない置換結果を本体実行結果と照合", () -> productionExecutionCorpus(repository, temporary));
+        run("検証対象JARの明示指定を構文検証と基準照合へ反映", () -> productionJarOverride(repository, temporary));
+        run("非UTF-8コンソールでも互換性JSONをUTF-8で出力", () -> cliJsonEncoding(repository, temporary));
+        run("PowerShellの既存引数形式とJAR指定を両立", () -> powershellArguments(repository, temporary));
         run("ローカルサーバーのOrigin・本文・パス境界", () -> serverBoundaries(repository));
         run("headless用loopback通信はシステムプロキシを迂回", () -> loopbackBypassesSystemProxy(repository));
 
@@ -451,11 +454,12 @@ public final class NlFilterLabTests {
         Files.copy(Path.of(System.getProperty("nlfilterlab.root")).resolve("parser-baseline.properties"),
                 copiedLab.resolve("parser-baseline.properties"),
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        Files.copy(repository.getParent().resolve("NicoCache_nl.jar"), installation.resolve("NicoCache_nl.jar"),
+        Files.copy(ProductionParserOracle.productionJar(repository), installation.resolve("NicoCache_nl.jar"),
                 java.nio.file.StandardCopyOption.REPLACE_EXISTING);
 
         for (String relative : List.of(
                 "processor/impl/EasyRewriter.java",
+                "processor/impl/NlFilterDiagnostics.java",
                 "common/regex/JavaPattern.java",
                 "common/regex/JavaMatcher.java",
                 "common/regex/NestPattern.java",
@@ -573,6 +577,79 @@ public final class NlFilterLabTests {
             assertEquals(404, traversal.statusCode(), "localパストラバーサル拒否");
         } finally {
             server.stop();
+        }
+    }
+
+    private static void productionJarOverride(Path repository, Path temporary) throws Exception {
+        String previous = System.getProperty("nlfilterlab.productionJar");
+        Path missing = temporary.resolve("not-built.jar").toAbsolutePath().normalize();
+        Path labRoot = Path.of(System.getProperty("nlfilterlab.root")).toAbsolutePath().normalize();
+        try {
+            System.setProperty("nlfilterlab.productionJar", missing.toString());
+            assertEquals(missing, ProductionParserOracle.productionJar(repository), "explicit jar path");
+            Path filter = RepositoryFilters.tracked(repository).get(0);
+            assertTrue(!ProductionParserOracle.parse(repository, filter).available(),
+                    "missing explicit jar must not fall back to the installed jar");
+            assertTrue(!ProductionParserOracle.executePure(repository, filter,
+                    "https://example.com/", "body").available(), "execution must use the explicit jar");
+            assertTrue(ParserCompatibility.inspect(repository, labRoot).entries().stream()
+                    .filter(entry -> entry.name().startsWith("jar."))
+                    .allMatch(entry -> entry.source().equals(missing)
+                            && entry.status() == ParserCompatibility.Status.SOURCE_MISSING),
+                    "all binary baseline checks must use the explicit jar");
+        } finally {
+            if (previous == null) System.clearProperty("nlfilterlab.productionJar");
+            else System.setProperty("nlfilterlab.productionJar", previous);
+        }
+    }
+
+    private static void cliJsonEncoding(Path repository, Path temporary) throws Exception {
+        Path javaExecutable = Path.of(System.getProperty("java.home"), "bin",
+                System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java");
+        Path output = temporary.resolve("cli-encoding.json");
+        List<String> command = List.of(javaExecutable.toString(),
+                "-Dstdout.encoding=windows-31j", "-Dstderr.encoding=windows-31j",
+                "-Dsun.stdout.encoding=windows-31j", "-Dsun.stderr.encoding=windows-31j",
+                "-Dnlfilterlab.root=" + System.getProperty("nlfilterlab.root"),
+                "-Dnlfilterlab.repository=" + repository,
+                "-Dnlfilterlab.productionJar=" + ProductionParserOracle.productionJar(repository),
+                "-cp", System.getProperty("java.class.path"), "nlfilterlab.Main", "compatibility", "--json");
+        Process process = new ProcessBuilder(command).redirectErrorStream(true)
+                .redirectOutput(output.toFile()).start();
+        if (!process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+            process.destroyForcibly();
+            throw new AssertionError("JSON export timed out");
+        }
+        assertEquals(0, process.exitValue(), "JSON export exit code");
+        String json = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                .decode(java.nio.ByteBuffer.wrap(Files.readAllBytes(output))).toString();
+        assertTrue(json.startsWith("{") && json.stripTrailing().endsWith("}"), "JSON envelope");
+        assertContains(json, "\"externalBoundaries\"", "Japanese compatibility details");
+    }
+
+    private static void powershellArguments(Path repository, Path temporary) throws Exception {
+        Path script = repository.resolve("tools/nlfilter-lab/nlfilter-lab.ps1");
+        for (boolean explicitJar : List.of(false, true)) {
+            List<String> command = new ArrayList<>(List.of("pwsh", "-NoProfile", "-NonInteractive",
+                    "-File", script.toString()));
+            if (explicitJar) {
+                command.add("-ProductionJar");
+                command.add(ProductionParserOracle.productionJar(repository).toString());
+            }
+            command.addAll(List.of("source-check", "--json"));
+            Path output = temporary.resolve("powershell-arguments-" + explicitJar + ".json");
+            Process process = new ProcessBuilder(command).redirectErrorStream(true)
+                    .redirectOutput(output.toFile()).start();
+            if (!process.waitFor(30, java.util.concurrent.TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new AssertionError("PowerShell argument test timed out");
+            }
+            // 未更新のインストールJARによる基準不一致は許容するが、--jsonをパス扱いしてはいけない。
+            assertTrue(process.exitValue() == 0 || process.exitValue() == 1, "wrapper exit code");
+            String json = Files.readString(output, StandardCharsets.UTF_8).strip();
+            assertTrue(json.startsWith("{") && json.endsWith("}"), "wrapper JSON output: " + json);
+            assertContains(json, "\"entries\"", "wrapper source-check report");
         }
     }
 

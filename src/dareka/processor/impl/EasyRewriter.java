@@ -61,8 +61,21 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         ArrayList<UserFilter> replace = new ArrayList<>();
         ArrayList<UserFilter> config  = new ArrayList<>();
         ArrayList<UserFilter> header  = new ArrayList<>();
+        final NlFilterDiagnostics diagnostics = new NlFilterDiagnostics();
     }
-    private FilterLists filterLists = new FilterLists();
+
+    @SuppressWarnings("serial")
+    private static final class MatchedFilters extends ArrayList<UserFilter> {
+        final NlFilterDiagnostics diagnostics;
+
+        MatchedFilters(FilterLists filters) {
+            super(filters.replace.size());
+            diagnostics = filters.diagnostics;
+        }
+    }
+
+    private volatile FilterLists filterLists = new FilterLists();
+    private boolean diagnosticsClosing;
     private ArrayList<FilterFile> filterFiles = new ArrayList<>();
     private Pattern supportedURLs = NULL_PATTERN;
     private volatile long nextCheckTime;
@@ -136,6 +149,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
             "\\$|^(?:コピー|Copy)(?:| \\(\\d+\\)) (?:〜|of) ");
 
     private synchronized void load() {
+        if (diagnosticsClosing) return;
         ArrayList<FilterFile> newFilterFile = new ArrayList<>();
         if (this == INSTANCE_SYS) {
             if (!addFilterFile(
@@ -198,7 +212,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                 }
             }
             if (f.parsed.isEmpty()) {
-                parseFilterFile(f);
+                parseFilterFile(f, newFilterLists.diagnostics);
             }
             for (UserFilter u : f.parsed) {
                 if (f.getName().equals("nlFilter.txt")) {
@@ -213,7 +227,9 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                     (System.nanoTime() - start) / 1000000);
         }
         filterFiles = newFilterFile;
+        NlFilterDiagnostics previousDiagnostics = filterLists.diagnostics;
         filterLists = newFilterLists;
+        previousDiagnostics.close();
         confMap = newConfMap();
 
         updateSupportedURLs();
@@ -230,14 +246,18 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
 
     // フィルタ読み込み
     private void parseFilterFile(FilterFile file) {
+        parseFilterFile(file, filterLists.diagnostics);
+    }
+
+    private void parseFilterFile(FilterFile file, NlFilterDiagnostics diagnostics) {
         LineNumberReader reader = null;
         String readed;
+        UserFilter u = null;
         try {
             file.parsed.clear();
             reader = file.getReader();
             int state = -1;
             boolean append = false, specialAppend = false;
-            UserFilter u = null;
             StringBuilder sb = new StringBuilder(256);
             while ((readed = reader.readLine()) != null) {
                 try {
@@ -245,22 +265,32 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                         readed = readed.trim();
                     }
                     if (state == -1) {
-                        if ((u = parseSection(readed)) != null)
+                        if ((u = parseSection(readed)) != null) {
+                            u.source.file = file.getPath();
+                            u.source.sectionLine = reader.getLineNumber();
                             state = 0;
+                        }
                         append = specialAppend = false;
                     } else if (state == 0) {
                         if (readed.startsWith("#")) { // コメントアウト
                             continue;
                         } else if (readed.equalsIgnoreCase("Match<")) {
+                            u.source.operationLine = reader.getLineNumber();
+                            u.source.eachLine = u.each;
+                            u.source.matchLines.clear();
                             sb.setLength(0);
                             state = 1;
                         } else if (readed.equalsIgnoreCase("Replace<")) {
                             sb.setLength(0);
                             state = 2;
                         } else if (readed.equalsIgnoreCase("Append<")) {
+                            u.source.append = true;
+                            u.source.operationLine = reader.getLineNumber();
                             if (u.section == UserFilter.STYLE) {
+                                u.source.appendTarget = "</head>";
                                 parseMatch(u, "(?=</head>)");
                             } else if (u.section == UserFilter.SCRIPT) {
+                                u.source.appendTarget = "</body>";
                                 parseMatch(u, "(?=</body>)");
                             }
                             append = true;
@@ -269,7 +299,9 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                             sb.setLength(0);
                             state = 2;
                         } else if (!parseOption(u, readed)) {
-                            errorLog("Syntax", file.getPath(), reader, readed);
+                            diagnostics.definitionError(u.source, reader.getLineNumber(),
+                                    NlFilterDiagnostics.Reason.SYNTAX_ERROR,
+                                    "オプション名・ブロックの開始と終端を確認してください");
                             state = -1;
                         }
                     } else {
@@ -297,6 +329,9 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                                 break;
                             }
                         }
+                        if (state == 1 && (sb.length() > 0 || !readed.isEmpty())) {
+                            u.source.matchLines.add(reader.getLineNumber());
+                        }
                         if (u.each && sb.length() > 0) {
                             sb.append("\0");
                         }
@@ -314,13 +349,26 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                             sb.append("\r\n");
                         }
                     }
-                } catch (PatternSyntaxException e) {
-                    Logger.error(e);
+                } catch (IllegalArgumentException e) {
+                    diagnostics.definitionError(u.source,
+                            u.source.failedPatternLine > 0 ? u.source.failedPatternLine : reader.getLineNumber(),
+                            e instanceof PatternSyntaxException
+                                    ? NlFilterDiagnostics.Reason.PATTERN_ERROR
+                                    : NlFilterDiagnostics.Reason.SYNTAX_ERROR,
+                            NlFilterDiagnostics.describe(e));
                     state = -1;
                 }
             }
+            if (state != -1 && u != null) {
+                diagnostics.definitionError(u.source, reader.getLineNumber(),
+                        NlFilterDiagnostics.Reason.SYNTAX_ERROR,
+                        "定義の途中でファイルが終了しました。ブロック終端 > と置換定義を確認してください");
+            }
         } catch (IOException e) {
-            Logger.error(e);
+            NlFilterDiagnostics.Source source = u == null ? new NlFilterDiagnostics.Source() : u.source;
+            source.file = file.getPath();
+            diagnostics.definitionError(source, reader == null ? 0 : reader.getLineNumber(),
+                    NlFilterDiagnostics.Reason.READ_ERROR, NlFilterDiagnostics.describe(e));
         } finally {
             CloseUtil.close(reader);
         }
@@ -378,19 +426,14 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
 
     // エラーログを表示する
     static void errorLog(
-            String kind, String path, LineNumberReader reader, String readed) {
+            String kind, String path, LineNumberReader reader) {
         StringBuilder sb = new StringBuilder(256);
-        sb.append(kind).append(" error");
+        sb.append("[ERROR][nlFilter] ").append(kind).append(" error");
         if (reader != null) {
             sb.append(" at line ").append(reader.getLineNumber());
         }
         if (path != null) {
-            sb.append(" in ").append(path);
-        }
-        if (readed != null) {
-            for (String s : readed.split("[\r\n\0]+")) {
-                sb.append("\n => ").append(s);
-            }
+            sb.append(" in ").append(NlFilterDiagnostics.clean(path));
         }
         Logger.warning(sb.toString());
     }
@@ -473,6 +516,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
             u.statusCodes = Arrays.stream(parts).mapToInt(Integer::parseInt).toArray();
         } else if (param[0].equalsIgnoreCase("Name")) {
             u.name = param[1];
+            u.source.name = param[1];
         } else if (param[0].equalsIgnoreCase("Require")) {
             u.require = new FilterPattern(u, param[1], false);
         } else if (param[0].equalsIgnoreCase("idGroup")) {
@@ -609,8 +653,10 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                     lists.header.add(u);
                     prefix = "header: ";
                 } else {
-                    Logger.warning("  ******** headerFilter needs same " +
-                            "Match&Replace number at " + u.name + " ********");
+                    lists.diagnostics.definitionError(u.source, u.source.line(-1),
+                            NlFilterDiagnostics.Reason.SYNTAX_ERROR,
+                            "RequestHeaderではMatchとReplaceの行数を揃えてください");
+                    return;
                 }
             } else {
                 lists.replace.add(u);
@@ -629,11 +675,9 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
             Logger.info("  " + prefix + u.name + suffix);
             Logger.debug(u.id);
         } else {
-            if (u.name == null) {
-                Logger.warning("  ******** Filter has some errors ********");
-            } else {
-                Logger.warning("  ******** " + u.name + " has some errors ********");
-            }
+            lists.diagnostics.definitionError(u.source, u.source.sectionLine,
+                    NlFilterDiagnostics.Reason.SYNTAX_ERROR,
+                    "Name・URL・Match・Replaceの必須項目を確認してください");
         }
     }
 
@@ -642,6 +686,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         UserFilter u = new UserFilter();
         try {
             u.name = name;
+            u.source.name = name;
             u.url = Pattern.compile(uri);
             parseMatch(u, match);
             parseReplace(u, replace);
@@ -721,13 +766,22 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         }
         String uri = requestHeader.getURI();
         boolean replaced = false;
-        for (UserFilter u : filterLists.header) {
+        FilterLists snapshot = filterLists;
+        for (UserFilter u : snapshot.header) {
+            NlFilterDiagnostics.Run run = snapshot.diagnostics.begin(
+                    u.source, new NlFilterDiagnostics.Context(uri, null));
             for (int i = 0; i < u.match.patterns.length; i++) {
-                if (!u.match.update(i, null)) {
-                    continue;
-                }
-                JavaMatcher jm = u.match.patterns[i].matcher(uri);
-                if (!jm.matches() || selectReplace(u, uri, jm, DUMMY_REPLACES, null) == null) {
+                JavaMatcher jm;
+                try {
+                    if (!u.match.update(i, null)) continue;
+                    jm = u.match.patterns[i].matcher(uri);
+                    if (!jm.matches()) continue;
+                    run.matches++;
+                    if (selectReplace(u, uri, jm, DUMMY_REPLACES, null, run, i) == null) continue;
+                } catch (RuntimeException e) {
+                    run.error(e instanceof PatternSyntaxException
+                            ? NlFilterDiagnostics.Reason.PATTERN_ERROR
+                            : NlFilterDiagnostics.Reason.PROCESSING_ERROR, i, e);
                     continue;
                 }
                 if (debugMode || u.debugMode) {
@@ -735,16 +789,18 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                 }
                 try {
                     uri = jm.replaceFirst(u.replace[i]);
-                } catch (IndexOutOfBoundsException e) {
-                    Logger.error(e);
-                    Logger.warning("invalid replace: " +
-                            u.replace[i] + " on " + u.name + " at " + i);
+                } catch (IndexOutOfBoundsException | IllegalArgumentException e) {
+                    run.error(NlFilterDiagnostics.Reason.PROCESSING_ERROR, i, e);
+                    run.finish(false);
                     // エラーが起きた場合は安全のためリクエストを破棄
                     return RequestFilter.DROP;
                 }
+                run.applied++;
                 Logger.debugWithThread(" => " + uri + " replaced");
                 replaced = true;
             }
+            // RequestHeaderのMatchはURLの対象選別そのもの。
+            run.finish(false);
         }
         if (replaced) {
             requestHeader.setParameter("nl-URI", requestHeader.getURI());
@@ -763,43 +819,75 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         if (url == null && requestHeader != null) {
             url = requestHeader.getURI();
         }
-        ArrayList<UserFilter> matched =
-            new ArrayList<>(filterLists.replace.size());
-        for (UserFilter u : filterLists.replace) {
-            if (!u.url.matcher(url).lookingAt()) {
-                continue;
-            }
-            if (u.requireHeader != null && (requestHeader == null ||
-                    !u.requireHeader.find(requestHeader.toString()))) {
-                continue;
-            }
-            if (u.contentType != null && (responseHeader == null ||
-                    !u.contentType.find(responseHeader.getMessageHeader(
-                            HttpHeader.CONTENT_TYPE)))) {
-                continue;
-            }
-            if (responseHeader != null) {
-                int statusCode = responseHeader.getStatusCode();
-                if (u.statusCodes != null) {
-                    if (!Arrays.stream(u.statusCodes).anyMatch(code -> code == statusCode))
-                        continue;
-                } else {
-                    // For backward compatibility
-                    if (statusCode != 200 && statusCode != 403 && statusCode != 404 && statusCode != 503)
-                        continue;
+        FilterLists snapshot = filterLists;
+        ArrayList<UserFilter> matched = new MatchedFilters(snapshot);
+        for (UserFilter u : snapshot.replace) {
+            try {
+                if (!u.url.matcher(url).lookingAt()) {
+                    debugLog(u, 2, "Skip(URL)", u.id);
+                    continue;
                 }
-            }
-            if (LocalDirProcessor.isSupportedURL(url)) {
-                // local以外もマッチする場合は互換性維持のためMatchLocalを確認
-                // local限定でマッチする場合は新規フィルタなので素通し
-                int pos = url.indexOf("local/");
-                if (pos > 0 && u.url.matcher(url.substring(0, pos)).lookingAt()) {
-                    if (!u.matchLocal) continue;
+                if (u.requireHeader != null && (requestHeader == null ||
+                        !u.requireHeader.find(requestHeader.toString()))) {
+                    debugLog(u, 2, "Skip(RequireHeader)", u.id);
+                    continue;
                 }
+                if (u.contentType != null && (responseHeader == null ||
+                        !u.contentType.find(responseHeader.getMessageHeader(
+                                HttpHeader.CONTENT_TYPE)))) {
+                    debugLog(u, 2, "Skip(ContentType)", u.id);
+                    continue;
+                }
+                if (responseHeader != null) {
+                    int statusCode = responseHeader.getStatusCode();
+                    if (u.statusCodes != null) {
+                        if (!Arrays.stream(u.statusCodes).anyMatch(code -> code == statusCode)) {
+                            debugLog(u, 2, "Skip(StatusCode)", u.id);
+                            continue;
+                        }
+                    } else {
+                        // For backward compatibility
+                        if (statusCode != 200 && statusCode != 403 && statusCode != 404 && statusCode != 503) {
+                            debugLog(u, 2, "Skip(StatusCode)", u.id);
+                            continue;
+                        }
+                    }
+                }
+                if (LocalDirProcessor.isSupportedURL(url)) {
+                    // local以外もマッチする場合は互換性維持のためMatchLocalを確認
+                    // local限定でマッチする場合は新規フィルタなので素通し
+                    int pos = url.indexOf("local/");
+                    if (pos > 0 && u.url.matcher(url.substring(0, pos)).lookingAt()) {
+                        if (!u.matchLocal) {
+                            debugLog(u, 2, "Skip(MatchLocal)", u.id);
+                            continue;
+                        }
+                    }
+                }
+                matched.add(u);
+            } catch (RuntimeException e) {
+                NlFilterDiagnostics.Run run = snapshot.diagnostics.begin(
+                        u.source, new NlFilterDiagnostics.Context(url, responseHeader));
+                run.error(e instanceof PatternSyntaxException
+                        ? NlFilterDiagnostics.Reason.PATTERN_ERROR
+                        : NlFilterDiagnostics.Reason.PROCESSING_ERROR, -1, e);
+                run.finish(false);
             }
-            matched.add(u);
         }
+        flushDebugLog();
         return matched;
+    }
+
+    // Mainの既存終了処理から呼ぶ。Extension向け公開APIは増やさない。
+    static void closeDiagnostics() {
+        INSTANCE_SYS.closeInstanceDiagnostics();
+        INSTANCE_USR.closeInstanceDiagnostics();
+    }
+
+    private synchronized void closeInstanceDiagnostics() {
+        // loadと同じロックで終端化する。終了中の再読込による集計の復活を防ぐ。
+        diagnosticsClosing = true;
+        filterLists.diagnostics.close();
     }
 
     /** コンテンツ文字列にユーザーフィルタを適用する */
@@ -811,6 +899,9 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         }
         FilterContent fc = new FilterContent(
                 url, content, requestHeader, responseHeader);
+        NlFilterDiagnostics diagnostics = userFilters instanceof MatchedFilters
+                ? ((MatchedFilters) userFilters).diagnostics : filterLists.diagnostics;
+        NlFilterDiagnostics.Context context = new NlFilterDiagnostics.Context(url, responseHeader);
 
         if (extensions.size() > 0 && this == INSTANCE_USR) {
             for (NLFilterListener f : extensions) {
@@ -820,6 +911,8 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
 
         StringBuilder sbStyle  = new StringBuilder(4096);
         StringBuilder sbScript = new StringBuilder(8192);
+        ArrayList<NlFilterDiagnostics.Run> styleRuns = new ArrayList<>();
+        ArrayList<NlFilterDiagnostics.Run> scriptRuns = new ArrayList<>();
         ArrayList<UserFilter> delayedFilters = new ArrayList<>();
 
         HashMap<String, Long> profile = new HashMap<>();
@@ -832,20 +925,35 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
             }
             debugLog(u, 1, "MatchURL", u.id);
             long t0 = System.currentTimeMillis();
-            if (u.require == null || u.require.find(fc.content)) {
+            boolean required;
+            try {
+                required = u.require == null || u.require.find(fc.content);
+            } catch (RuntimeException e) {
+                NlFilterDiagnostics.Run run = diagnostics.begin(u.source, context);
+                run.error(e instanceof PatternSyntaxException
+                        ? NlFilterDiagnostics.Reason.PATTERN_ERROR
+                        : NlFilterDiagnostics.Reason.PROCESSING_ERROR, -1, e);
+                run.finish(false);
+                continue;
+            }
+            if (required) {
                 if (u.section == UserFilter.REPLACE) {
                     if (u.replaceDelay) {
                         delayedFilters.add(u);
                     } else {
-                        doReplaces(u, fc);
+                        doReplaces(u, fc, diagnostics.begin(u.source, context));
                     }
                 } else if (u.section == UserFilter.STYLE) {
                     wrapAndConcat(sbStyle, u);
+                    styleRuns.add(diagnostics.begin(u.source, context));
                 } else if (u.section == UserFilter.SCRIPT) {
                     wrapAndConcat(sbScript, u);
+                    scriptRuns.add(diagnostics.begin(u.source, context));
                 } else {
                     Logger.warning("Unknown section name: " + u.section);
                 }
+            } else {
+                debugLog(u, 2, "Skip(Require)", u.id);
             }
             long t1 = System.currentTimeMillis();
             long tdelta = t1 - t0;
@@ -854,14 +962,14 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
             }
         }
         if (sbStyle.length() > 0) {
-            doAppend(APPEND_STYLE, sbStyle, fc);
+            doAppend(APPEND_STYLE, sbStyle, fc, styleRuns);
         }
         if (sbScript.length() > 0) {
-            doAppend(APPEND_SCRIPT, sbScript, fc);
+            doAppend(APPEND_SCRIPT, sbScript, fc, scriptRuns);
         }
         for (UserFilter u : delayedFilters) {
             long t0 = System.currentTimeMillis();
-            doReplaces(u, fc);
+            doReplaces(u, fc, diagnostics.begin(u.source, context));
             long t1 = System.currentTimeMillis();
             long tdelta = t1 - t0;
             if (u.id != null) {
@@ -941,52 +1049,76 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         }
     }
 
-    private void doAppend(JavaPattern type, StringBuilder sb, FilterContent fc) {
-        fc.setMatcher(type);
-        if (fc.find()) {
-            fc.appendReplacement(sb.toString());
-            fc.updateContent();
+    private void doAppend(JavaPattern type, StringBuilder sb, FilterContent fc,
+            ArrayList<NlFilterDiagnostics.Run> runs) {
+        try {
+            fc.setMatcher(type);
+            if (fc.find()) {
+                for (NlFilterDiagnostics.Run run : runs) run.matches++;
+                fc.appendReplacement(sb.toString());
+                fc.updateContent();
+                for (NlFilterDiagnostics.Run run : runs) run.applied++;
+            } else {
+                for (NlFilterDiagnostics.Run run : runs) {
+                    run.problem(NlFilterDiagnostics.Reason.APPEND_TARGET_MISSING, -1,
+                            type == APPEND_STYLE ? "</head>" : "</body>");
+                }
+            }
+        } catch (RuntimeException e) {
+            for (NlFilterDiagnostics.Run run : runs) {
+                run.error(NlFilterDiagnostics.Reason.PROCESSING_ERROR, -1, e);
+            }
+        } finally {
+            for (NlFilterDiagnostics.Run run : runs) run.finish(false);
         }
     }
 
     // コンテンツの置換処理を実行する
-    private void doReplaces(UserFilter u, FilterContent fc) {
+    private void doReplaces(UserFilter u, FilterContent fc, NlFilterDiagnostics.Run run) {
         for (int i = 0; i < u.match.patterns.length; i++) {
-            if (!u.match.update(i, fc)) {
-                continue;
-            }
-            fc.setMatcher(u.match.patterns[i]);
+            long matchesBefore = run.matches;
+            long pendingReplacements = 0;
+            try {
+                if (!u.match.update(i, fc)) continue;
+                fc.setMatcher(u.match.patterns[i]);
 
-            String[] replaces = null;
-            boolean replaced = false;
-            while (fc.find()) {
-                try {
-                    if (u.replaceOnly) {
-                        fc.appendReplacement(u.replace[i]);
-                        replaced = true;
-                    } else {
-                        if (replaces == null) {
-                            replaces = initReplaces(u, i, fc);
+                String[] replaces = null;
+                while (fc.find()) {
+                    run.matches++;
+                    try {
+                        if (u.replaceOnly) {
+                            fc.appendReplacement(u.replace[i]);
+                            pendingReplacements++;
+                        } else {
+                            if (replaces == null) replaces = initReplaces(u, i, fc);
+                            String selected = selectReplace(u, fc.url, fc.mc, replaces,
+                                    fc.thread2id, run, i);
+                            if (selected == null) debugLog(u, 3, "Skip(idGroup)", u.id);
+                            String replace = u.match.replace(selected, i, fc);
+                            if (replace != null && doReplacement(u, fc, replace, run, i)) {
+                                pendingReplacements++;
+                                debugLog(u, 2, "MatchReplace", u.id);
+                            }
                         }
-                        String replace = u.match.replace(
-                                selectReplace(u, fc.url, fc.mc, replaces, fc.thread2id), i, fc);
-                        if (replace != null && doReplacement(u, fc, replace)) {
-                            replaced = true;
-                            debugLog(u, 2, "MatchReplace", u.id);
-                        }
+                    } catch (Exception e) {
+                        run.error(NlFilterDiagnostics.Reason.PROCESSING_ERROR, i, e);
                     }
-                } catch (Exception e) {
-                    Logger.warning("FILTER PROCESSING ERROR: " + u.id);
-                    Logger.error(e);
+                    if (!u.multi) break;
                 }
-                if (!u.multi) break;
-            }
-            if (replaced) {
-                fc.updateContent();
-            } else {
-                debugLog(u, 3, "noReplace", u.id);
+                if (pendingReplacements > 0) {
+                    fc.updateContent();
+                    run.applied += pendingReplacements;
+                } else {
+                    debugLog(u, 3, run.matches == matchesBefore
+                            ? "noMatch(line=" + u.source.line(i) + ")" : "noReplace", u.id);
+                }
+            } catch (RuntimeException e) {
+                run.error(e instanceof PatternSyntaxException
+                        ? NlFilterDiagnostics.Reason.PATTERN_ERROR
+                        : NlFilterDiagnostics.Reason.PROCESSING_ERROR, i, e);
             }
         }
+        run.finish(true);
     }
 
     static final Pattern REPLACE_SPLIT_PATTERN = Pattern.compile(
@@ -1047,7 +1179,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
     // idGroupの指定に応じて置換文字列を選択して返す
     private static String selectReplace(
             UserFilter u, String url, JavaMatcher mc, String[] replaces,
-            HashMap<String, String> thread2id) {
+            HashMap<String, String> thread2id, NlFilterDiagnostics.Run run, int patternIndex) {
         if (u.idGroup[0] <= 0) {
             return replaces[0];
         }
@@ -1059,8 +1191,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                 eachId = mc.group(u.idGroup[1]);
             }
         } catch (IndexOutOfBoundsException e) {
-            Logger.error(e);
-            Logger.warning("invalid idGroup: " + u.name);
+            run.error(NlFilterDiagnostics.Reason.INVALID_GROUP, patternIndex, e);
             return null;
         }
         boolean eachSmidIsThread = eachSmid != null && eachSmid.matches("\\d{10,}");
@@ -1120,8 +1251,11 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         return null; // 置換しない
     }
 
-    private boolean doReplacement(UserFilter u, FilterContent fc, String replace) {
+    private boolean doReplacement(UserFilter u, FilterContent fc, String replace,
+            NlFilterDiagnostics.Run run, int patternIndex) {
         if ((replace = fc.replaceVariables(replace, this == INSTANCE_SYS)) == null) {
+            run.problem(NlFilterDiagnostics.Reason.UNRESOLVED_VARIABLE, patternIndex,
+                    "変数名=" + fc.unresolvedVariable);
             return false;
         }
 
@@ -1135,7 +1269,12 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         if (u.addList != null) {
             String value = fc.getReplace();
             if (value != null && value.length() > 0) {
-                LST.append(u.addList, value, false);
+                if (LST.append(u.addList, value, false)) {
+                    run.applied++;
+                } else {
+                    run.problem(NlFilterDiagnostics.Reason.LIST_WRITE_FAILED, patternIndex,
+                            "登録先=" + u.addList);
+                }
                 debugLog(u, 2, "AddList(" + u.addList + ")", value);
             }
             replaced = false;
@@ -1146,6 +1285,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                 // AddVariableは従来仕様どおり区切りなしで連結する。
                 // 区切りが必要な場合はReplace側で値に含める。
                 String newValue = fc.appendVariable(u.addVariable, value, "");
+                run.applied++;
                 debugLog(u, 2, "AddVariable(" + u.addVariable + ")", newValue);
             }
             replaced = false;
@@ -1526,7 +1666,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                     return true;
                 } catch (IOException e) {
                     Logger.debugWithThread(e);
-                    errorLog("Write", entry.file.getPath(), null, input);
+                    errorLog("Write", entry.file.getPath(), null);
                 } finally {
                     CloseUtil.close(writer);
                     if (written) {
@@ -1623,7 +1763,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                 return true;
             } catch (IOException e) {
                 Logger.debugWithThread(e);
-                errorLog("Read", entry.file.getPath(), reader, line);
+                errorLog("Read", entry.file.getPath(), reader);
                 entry.set = null;
             } finally {
                 CloseUtil.close(reader);
@@ -1650,7 +1790,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
                 }
             } catch (IOException e) {
                 Logger.debugWithThread(e);
-                errorLog("Write", entry.file.getPath(), null, null);
+                errorLog("Write", entry.file.getPath(), null);
             } finally {
                 CloseUtil.close(writer);
                 if (written) {
@@ -1701,7 +1841,9 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
             try {
                 entry.pattern = Pattern.compile(sb.toString());
             } catch (PatternSyntaxException e) {
-                Logger.warning("Pattern syntax error: " + entry.file.getPath());
+                Logger.warning("[ERROR][nlFilter][PATTERN_ERROR] "
+                        + NlFilterDiagnostics.clean(entry.file.getPath()) + " "
+                        + NlFilterDiagnostics.describe(e));
             }
             notifyObservers(list);
         }
@@ -1719,6 +1861,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         };
 
         String section, name, id;
+        final NlFilterDiagnostics.Source source = new NlFilterDiagnostics.Source();
         boolean trimNeeded; // ブラウザからのコピペ対策用
         Pattern url;
         int[] statusCodes;
@@ -1790,7 +1933,12 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
             }
 
             for (int i = 0; i < contents.length; i++) {
-                updatePattern(i, null);
+                try {
+                    updatePattern(i, null);
+                } catch (PatternSyntaxException e) {
+                    u.source.failedPatternLine = match ? u.source.line(i) : 0;
+                    throw e;
+                }
             }
         }
 
@@ -2162,6 +2310,7 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         StringBuffer sb;
         JavaMatcher mc;
         int last, skip;
+        String unresolvedVariable;
 
         HashMap<String, String> nlVars = new HashMap<>();
         HashMap<String, String> thread2id = new HashMap<>();
@@ -2265,12 +2414,14 @@ public class EasyRewriter implements Rewriter, RequestFilter, ConfigObserver {
         }
 
         String replaceVariables(String s, boolean sys) {
+            unresolvedVariable = null;
             String value;
             Matcher m = NLVAR_PATTERN.matcher(s);
             if (m.find()) {
                 StringBuffer sb = new StringBuffer();
                 do {
                     if ((value = getReplace(m.group(1), sys)) == null) {
+                        unresolvedVariable = m.group(1);
                         return null;
                     }
                     m.appendReplacement(sb, value);

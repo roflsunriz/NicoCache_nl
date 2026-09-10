@@ -15,6 +15,7 @@ others/
 list/
 .agents/
 /.test-work/
+/subagents/
 debug.log
 *.tmp
 

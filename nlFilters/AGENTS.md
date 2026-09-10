@@ -52,7 +52,7 @@
 - 最初にリポジトリ直下で`git status --short --branch`を実行し、
   本体を含むユーザーの未コミット変更を把握する。
 - 対象ファイル内の説明、変更履歴、依存するフィルターを先に読む。`09` の共通資産、`10` の旧HTML互換、`11` の現行動的リンク、`15` のキャッシュ表示は役割を分担しているため、片方だけを見て重複実装しない。
-- 公式同梱フィルターの背景と運用は `documents/Readme_nl+mod.txt`、現在の実装は `src/dareka/processor/impl/EasyRewriter.java` を参照する。本体ソースも同じリポジトリにあるが、必要性を確認せずフィルター変更へ混在させない。
+- 公式同梱フィルターの背景と運用は `documents/archive/Readme_nl+mod.txt`、現在の実装は `src/dareka/processor/impl/EasyRewriter.java` を参照する。本体ソースも同じリポジトリにあるが、必要性を確認せずフィルター変更へ混在させない。
 - JavaScript や CSS が参照する `/local/*` の実体、`window.NicoCache_nl`、`/cache/*` API を変更・利用するときは、`local/`、`documents/api.md`、本体実装、呼び出し元を検索して契約を確認する。
 - 追跡中の nlFilter を編集する前に `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 source-check` と `.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check` を本体リポジトリ直下から実行し、本体パーサーソースとの基準一致と既存構文の正常性を確認する。
 
@@ -108,6 +108,7 @@
 - `$INC`、`$SET`、`AddVariable`、`<nlVar:...>` は状態を介して別の置換へ影響する。変数名の利用元を検索し、初期値、数値/文字列、URL単位か設定単位かを確認する。`$SET` の値を動的な式として扱わない。
 - `$TS(path)` は `[Replace]` でローカルファイルの更新時刻をクエリへ付ける用途であり、ファイルが存在しない場合は引数がそのまま残る。`$URL0`、`$URL1` などは `URL` 条件側のキャプチャを参照し、`$0`、`$1` などの本文マッチ参照とは区別する。
 - `[Debug]` は調査対象URL、マッチ、置換結果を大量にログへ出し得る。一時調査だけに使用し、必要な結果を得たら削除する。ログへCookie、本文、個人情報が出ていないか確認する。
+- 通常の未適用診断は`NlFilterDiagnostics.java`が担当する。対象条件通過後のMatch全体0件とAppend挿入先なしは追加設定なしで警告する。EachLineの部分不一致、idGroupの条件スキップ、AddVariable/AddListの成功を本文置換の有無だけで失敗扱いしない。出典は内部Replace化されたURL形式Appendでも保持する。検証方法と集約・秘匿・終了時の契約はルート`verification.md`の「nlFilterの通常診断」を参照する。
 - `#` が行頭にある行だけがコメントになる。ブロック本文の途中や行末コメントを一般的な設定ファイルと同じ感覚で追加しない。
 - ファイルごとの既存の改行コードを維持し、無関係な行末変換や全体整形を混ぜない。文字コードは既存どおり UTF-8 を基本とし、BOMを不用意に追加しない。
 

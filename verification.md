@@ -28,6 +28,74 @@ Windowsのシステムプロキシが有効な環境でも、LabのJavaクライ
 問題が発生した場合は`nlFilters/tools/nlfilter-lab/`と`parser-baseline.properties`を直前のコミットへ
 戻す。基準ハッシュだけを変更せず、本体パーサーとの`compatibility --json`照合まで再実行する。
 
+## nlFilterの通常診断
+
+### 判定と検証対象
+
+対象条件通過後の1セクション・1適用を単位に診断する。`Match`の一致と、本文置換・変数や
+リストへの登録を別々に数え、既存の出力と副作用を確認する。
+
+| 観点 | 期待する結果 |
+| --- | --- |
+| URL・RequireHeader・ContentType・StatusCode・MatchLocal・Require | 各条件の不成立だけでは通常の未一致警告を出さない |
+| Match全体0件 | デバッグ無効でも`[WARN][nlFilter][MATCH_ZERO]`と出典・対象の情報を出す |
+| EachLine | 全体0件はWARN、部分不一致は既存Debug有効時だけ行番号付きで表示する |
+| Multi・ReplaceDelay | 反復検索の終了を失敗にせず、遅延置換の順序と結果を維持する |
+| Script・Styleの通常挿入 | 実際の挿入後に成功を数え、失敗時は結合に参加した全定義へ出典付きで通知する |
+| URL形式のAppend | 内部のReplace化後も元のName・Appendの行と挿入位置を報告する |
+| 未定義nlVar・不正キャプチャ参照 | 未解決変数はWARN、置換例外はERRORとして理由を区別する |
+| AddVariable・AddList・idGroup | 登録成功やキャッシュ条件見送りをMatch未一致と誤判定しない |
+| RequestHeader・Config | URL選別の不一致・設定の未使用は警告せず、ヘッダー置換失敗のDROPを維持する |
+| 構文・正規表現・EOF | 不正な数値、正規表現、未知オプション、未閉鎖ブロックを出典付きで報告する |
+| 集計・並列処理 | 初回即時、60秒境界の次回発生時に追加件数を出し、別の定義・理由は別集計にする |
+| 再読込・終了 | 旧世代を排出し、旧リクエストの遅延完了も記録する。終了後のloadで新世代を作らない |
+| 秘匿 | URLのuserinfo・クエリ値・フラグメント、Cookie、処理本文、例外の生メッセージを通常診断へ転記しない |
+
+`NlFilterDiagnosticsFunctionalTest`は実際の`parseFilterFile`、登録、選別、本文適用、
+`onRequest`を通す。`NlFilterDiagnosticsLifecycleFunctionalTest`はloadと終了を競合させ、
+閉じた診断世代が復活しないことと、旧処理の結果が出力されることを確認する。
+集計の時間境界は時計を差し替え、60秒間の実時間待機に依存しない。
+
+### 実行手順
+
+```powershell
+.\test-functional.ps1 -KeepWorkDir -LibraryDirectory .\lib
+.\build-javac.ps1 -LibraryDirectory .\lib -OutputDirectory .\.test-work\nlfilter-diagnostics\build
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar source-check --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar compatibility --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar test
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar check --json
+```
+
+通常ログは既存の`Logger.warning`経路へ`[WARN]`または`[ERROR]`を含む文字列を渡す。
+GUIの通常ログ表示と、既存設定に従うファイル出力を再利用する。フィルターの必須指定や
+新たなデバッグ設定は追加しない。終了時の排出は`Main`の既存リソース終了処理から呼ぶ。
+
+### 2026-09-10の確認結果
+
+- 変更前の本体を隔離コンパイルし、通常置換の退行テストとLabの既存35件が合格した。
+- 変更後の正規ビルド、`--release 11 -Xlint:all -Werror`による本体・機能テストのコンパイルが成功した。
+- 本体機能テスト28件、Extension ABI 1482項目、同梱Extensionサンプルのコンパイルが合格した。
+- Labの38件が合格した。明示したJARがなければ別JARへ切り替えないこと、非UTF-8の
+  コンソール設定でも日本語を含む互換性JSONをUTF-8で保存できること、既存のPowerShell引数形式を
+  維持することを含む。
+- 隔離した候補基準でテストと本体オラクル照合を終えてから正式な基準へ反映した。
+  ソース・classの22項目が`matched`、`syntax.source.status`と`syntax.productionOracle.status`も
+  `matched`で、追跡フィルターの`check --json`も成功した。
+- 検証済み本体JARを反映して通常再起動し、新PID・対象JAR・GUI起動モード・running状態と
+  JARハッシュを確認した。稼働JARを使った既定の`source-check`も22項目が一致した。
+- ループバック限定の一時フィルターとHTTP Originを使い、実プロキシ経由の応答と通常ログで
+  Match全体0件、Script/Styleの挿入先なし、ファイル・行・HTTP応答情報、クエリとCookieの
+  秘匿を確認した。一時フィルターを削除し、検証用Originも終了した。
+
+### 実環境への反映と復旧
+
+稼働中のJARを直接上書きせず、検証済みJARと元のJARを別の場所へ保存する。ランチャーの
+`--headless --status`で対象PIDを照合し、`--headless --stop`で通常終了して旧PIDの終了を確認する。
+本体JARを差し替えてから従来のGUIまたはヘッドレスの起動方法で復帰し、新PID・JARパス・
+ready状態を確認する。復旧時も通常終了後に保存しておいた本体JARを戻す。ソースとLabの基準も
+戻す場合は同じ変更前リビジョンへ揃え、基準だけを古いJARへ合わせて差異を隠さない。
+
 ## CommonHeaderのNicoCacheメニュー
 
 ### 目的

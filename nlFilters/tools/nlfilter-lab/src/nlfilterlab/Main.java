@@ -1,5 +1,7 @@
 package nlfilterlab;
 
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -14,6 +16,9 @@ public final class Main {
     }
 
     public static void main(String[] args) throws Exception {
+        // JSONをファイルへ保存する場合も、OSのコンソール文字コードに依存させない。
+        System.setOut(new PrintStream(System.out, true, StandardCharsets.UTF_8));
+        System.setErr(new PrintStream(System.err, true, StandardCharsets.UTF_8));
         Path repositoryRoot = Path.of(System.getProperty("nlfilterlab.repository", ".")).toAbsolutePath().normalize();
         Path labRoot = Path.of(System.getProperty("nlfilterlab.root", "tools/nlfilter-lab")).toAbsolutePath().normalize();
         String command = args.length == 0 ? "check" : args[0];

@@ -56,6 +56,15 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## 変更時の注意
 
+- `COMMON-AGENTS.md`の「1ファイルは1000行以下」について、既存の`EasyRewriter.java`へ診断を
+  差し込む変更は例外とする。既存クラスは既に上限を超え、Extensionの公開ABIとLabの本体パーサー
+  照合がネストした型・内部表現へ依存するため、この変更と同時の大規模分割は避ける。
+  新しい責務は1000行以下の別クラスへ分離し、変更前後の本体機能テスト、Extension ABI、Labの
+  構文・置換互換性を代替の品質基準とする。既存クラス全体の再設計や他のファイルには適用しない。
+- nlFilterの通常診断は`NlFilterDiagnostics.java`へ集約する。`getMatchedUserFilter`の戻り値は
+  選別時の診断世代を持つため、途中で通常の`ArrayList`へコピーして世代情報を失わせない。
+  `load`と終了処理は同じインスタンスのロックで直列化し、終了後に再読込で診断世代を復活させない。
+  本体・Lab・終了競合の確認は`verification.md`の「nlFilterの通常診断」に従う。
 - ユーザー操作、設定、ビルド手順が変わる場合は、付属 README、`documents/`、変更履歴の更新要否も確認する。
 - `nicocachenl.test/api/v1` REST APIを変更または利用するときは、実装と構造化エラー形式を確認する。代表的な実装は`src/dareka/processor/impl/NicoCacheWebProcessor.java`にある。キャッシュ実体と再生中CMAFは`nicocachenl.test/media/v1`の内部配信経路として扱い、旧`/cache/*`へ戻さない。
 - `window.NicoCache_nl.watch` は互換ヘルパーであり、ニコニコ動画側の構造変更に影響される。動画 ID は URL や呼び出し元、再生状態は `HTMLMediaElement` などページ上の実体を優先し、このヘルパーは型と失敗時処理を確認したフォールバックとして使う。

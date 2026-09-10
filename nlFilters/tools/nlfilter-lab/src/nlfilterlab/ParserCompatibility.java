@@ -49,6 +49,7 @@ final class ParserCompatibility {
 
     private static final List<String> SOURCE_NAMES = List.of(
             "EasyRewriter.java",
+            "NlFilterDiagnostics.java",
             "JavaPattern.java",
             "JavaMatcher.java",
             "NestPattern.java",
@@ -74,7 +75,8 @@ final class ParserCompatibility {
         List<Entry> entries = new ArrayList<>();
         for (String name : SOURCE_NAMES) {
             Path source = switch (name) {
-                case "EasyRewriter.java" -> sourceRoot.resolve("processor/impl/EasyRewriter.java");
+                case "EasyRewriter.java", "NlFilterDiagnostics.java" ->
+                        sourceRoot.resolve("processor/impl").resolve(name);
                 default -> sourceRoot.resolve("common/regex").resolve(name);
             };
             String expected = baseline.getProperty(name);
@@ -94,7 +96,7 @@ final class ParserCompatibility {
                         expected.equalsIgnoreCase(actual) ? Status.MATCHED : Status.MISMATCH));
             }
         }
-        Path jar = repositoryRoot.getParent().resolve("NicoCache_nl.jar");
+        Path jar = ProductionParserOracle.productionJar(repositoryRoot);
         for (Map.Entry<String, String> specification : JAR_ENTRIES.entrySet()) {
             String name = specification.getKey();
             String expected = baseline.getProperty(name);
@@ -161,6 +163,12 @@ final class ParserCompatibility {
         entries.put("jar.EasyRewriter.class", "dareka/processor/impl/EasyRewriter.class");
         entries.put("jar.FilterPattern.class", "dareka/processor/impl/EasyRewriter$FilterPattern.class");
         entries.put("jar.UserFilter.class", "dareka/processor/impl/EasyRewriter$UserFilter.class");
+        entries.put("jar.FilterLists.class", "dareka/processor/impl/EasyRewriter$FilterLists.class");
+        entries.put("jar.MatchedFilters.class", "dareka/processor/impl/EasyRewriter$MatchedFilters.class");
+        for (String nested : List.of("", "$Source", "$Context", "$Run", "$Reason", "$Key", "$Repeated")) {
+            entries.put("jar.NlFilterDiagnostics" + nested + ".class",
+                    "dareka/processor/impl/NlFilterDiagnostics" + nested + ".class");
+        }
         entries.put("jar.JavaPattern.class", "dareka/common/regex/JavaPattern.class");
         entries.put("jar.JavaMatcher.class", "dareka/common/regex/JavaMatcher.class");
         entries.put("jar.NestPattern.class", "dareka/common/regex/NestPattern.class");

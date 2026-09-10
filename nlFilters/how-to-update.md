@@ -4,6 +4,7 @@
 
 - JDK 17 以上
 - PowerShell 7 以上
+- `test`でJavaScriptの動作確認も行う場合はNode.js
 - Git 管理中のフィルターを検査する場合は Git
 
 外部パッケージのインストールは不要です。コンパイル結果とテスト用一時ファイルは `.cache/nlfilter-lab/` に生成され、Git 管理されません。
@@ -32,7 +33,26 @@ git diff --check -- nlFilters
 
 ## 本体パーサーが変わった場合
 
-`source-check` が差異を報告したら、`EasyRewriter.java`、`JavaPattern.java`、`JavaMatcher.java`、`NestPattern.java`、`NestMatcher.java` とJAR内の対応classの変更内容を確認します。構文受理、正規表現、置換、キャッシュ分岐への影響を互換コーパスへ反映し、必要ならLab実装を修正します。`compatibility --json` と全テスト完了後にだけ `nlFilters/tools/nlfilter-lab/parser-baseline.properties` のSHA-256を現在値へ更新します。基準値だけを先に更新してはいけません。
+`source-check` が差異を報告したら、`EasyRewriter.java`、`NlFilterDiagnostics.java`、
+`JavaPattern.java`、`JavaMatcher.java`、`NestPattern.java`、`NestMatcher.java`とJAR内の対応classを
+確認します。構文受理、正規表現、置換、キャッシュ分岐、診断への影響を互換コーパスや本体の
+機能テストへ反映し、必要ならLab実装を修正します。`compatibility --json`と全テストを確認してから
+`nlFilters/tools/nlfilter-lab/parser-baseline.properties`のSHA-256を更新します。基準値だけを先に
+更新して差異を解消してはいけません。基準更新を含む検証では、隔離した候補基準でテストしてから
+正式な基準へ反映できます。
+
+稼働中の本体を使っている場合は、正規ビルドの出力先を分け、検証対象JARを明示します。
+
+```powershell
+.\build-javac.ps1 -LibraryDirectory .\lib -OutputDirectory .\.test-work\nlfilter-diagnostics\build
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar compatibility --json
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 -ProductionJar .\.test-work\nlfilter-diagnostics\build\NicoCache_nl.jar test
+```
+
+`-ProductionJar`は`check`、`source-check`にも使用できます。ソースは作業ツリー、classの照合と
+本体パーサー・置換の実行は指定JARを使います。指定を省略すると従来どおり本体ルートの
+`NicoCache_nl.jar`を使用します。存在しないJARへ指定した場合に、稼働中JARへ自動で切り替えることはありません。
+検証したJARの実環境への反映には、対象本体を通常終了してからの差し替えと再起動が必要です。
 
 ## 復旧
 

@@ -137,6 +137,10 @@ public final class FunctionalTestMain {
                 run("GUI log filtering primitives", LogSearchUnitTest::run);
                 run("HTTP content encoding negotiation and decoding",
                         HttpEncodingUnitTest::run);
+                run("nlFilter parser and normal replacement regression",
+                        NlFilterDiagnosticsFunctionalTest::run);
+                run("nlFilter diagnostic lifecycle and shutdown serialization",
+                        NlFilterDiagnosticsLifecycleFunctionalTest::run);
                 run("forward proxy GET/POST/HEAD and upstream status", this::testForwardProxy);
                 run("forward proxy byte range", this::testForwardProxyRange);
                 run("HTTPS CONNECT and TLS loopback", this::testHttpsMitmLocalFile);

@@ -29,9 +29,16 @@ final class ProductionParserOracle {
     private ProductionParserOracle() {
     }
 
+    static Path productionJar(Path repositoryRoot) {
+        String override = System.getProperty("nlfilterlab.productionJar");
+        return override == null || override.isBlank()
+                ? repositoryRoot.getParent().resolve("NicoCache_nl.jar")
+                : Path.of(override).toAbsolutePath().normalize();
+    }
+
     static Result parse(Path repositoryRoot, Path file) {
         Path installationRoot = repositoryRoot.getParent();
-        Path jar = installationRoot.resolve("NicoCache_nl.jar");
+        Path jar = productionJar(repositoryRoot);
         if (!Files.isRegularFile(jar)) {
             return new Result(false, "NicoCache_nl.jar が見つかりません", List.of());
         }
@@ -78,7 +85,7 @@ final class ProductionParserOracle {
 
     static ExecutionResult executePure(Path repositoryRoot, Path file, String url, String content) {
         Path installationRoot = repositoryRoot.getParent();
-        Path jar = installationRoot.resolve("NicoCache_nl.jar");
+        Path jar = productionJar(repositoryRoot);
         if (!Files.isRegularFile(jar)) return new ExecutionResult(false, "NicoCache_nl.jar が見つかりません", null);
         try {
             List<URL> urls = runtimeUrls(installationRoot, jar);

@@ -1,8 +1,10 @@
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]
 param(
+    [Parameter(Position = 0)]
     [ValidateSet('check', 'source-check', 'compatibility', 'serve', 'headless', 'test')]
     [string]$Command = 'check',
-    [Parameter(ValueFromRemainingArguments = $true)]
+    [string]$ProductionJar,
+    [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
     [string[]]$Arguments
 )
 
@@ -37,6 +39,10 @@ $JavaArguments = @(
     $Classes
     $MainClass
 )
+if ($ProductionJar) {
+    $VerifiedJar = (Resolve-Path -LiteralPath $ProductionJar).Path
+    $JavaArguments = @("-Dnlfilterlab.productionJar=$VerifiedJar") + $JavaArguments
+}
 if ($Command -ne 'test') {
     $JavaArguments += $Command
 }
