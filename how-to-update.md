@@ -288,7 +288,7 @@ majorとminorは0〜255、buildは0〜65535にする。本体とアップデー�
 
 GitHub Actionsは完全なコミットSHAへ固定し、Dependabotが毎週月曜日に同じ
 メジャー系列の更新を確認する。メジャー更新は自動追従せず、変更内容と移行条件を
-別途レビューする。DependabotとBouncy Castleの更新PRは自動マージしない。
+別途レビューする。Dependabotのpatch／minor更新PRは署名済みコミットとPR用CIの全チェック成功を確認した後に自動マージする。major更新とBouncy Castleの更新PRは手動で確認する。
 
 Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Central
 の公式メタデータから安定版を確認する。更新がある場合だけ
@@ -500,3 +500,9 @@ Linux/macOSパッケージの生成に失敗した場合は、既存のインス
 `data/setup-system-state.json` を削除せず保持し、記録された変更前状態を確認して
 から `packaging/windows/runtime/first-run-setup.ps1 -Action Rollback` 相当の
 復元処理を行う。ユーザーの既存設定を推測で削除しない。
+
+## Dependabot PR の更新
+
+前提は `.github/dependabot.yml` と PR 用の `CI` です。変更パスに応じて Standalone Updater・Unix Packages・Windows Installer も起動します。更新 PR の head SHA と `gh pr checks <PR番号>` の結果を確認してください。patch／minor は起動した全チェック成功後に自動取り込みされます。初回 CI 失敗は failed jobs のみを 1 回再実行し、再失敗した PR は残して手動で修正します。
+
+設定を変えたときは `actionlint .github/workflows/dependabot-automation.yml` と実際の PR の Actions 結果を確認します。問題があれば呼び出し先の共通 workflow SHA を直前の検証済み値へ戻すコミットを push します。取り込まれた依存更新に問題があれば通常の revert コミットで復旧します。

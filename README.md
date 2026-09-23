@@ -165,3 +165,7 @@ java -jar NicoCacheLauncher.jar --headless --check-data-root
 - **標準nlFilterとnlFilter Labの統合**: 標準フィルターを本体と同時に更新でき、独自変更を
   Labで事前検査できるようになりました。独自フィルターは利用者データの`nlFilters/`へ置き、
   検査するときは`nlFilters/tools/nlfilter-lab/`を使用します。
+
+## 依存更新の自動処理
+
+Dependabot は対象の依存関係を毎週確認します。patch／minor 更新は必須の `CI` と、変更内容に応じて起動した Standalone Updater・Unix Packages・Windows Installer を含む全 PR チェックが成功した後に自動で squash merge されます。CI の失敗ジョブは 1 回だけ再実行します。再失敗した PR は残して手動で修正します。major 更新は手動で確認します。
