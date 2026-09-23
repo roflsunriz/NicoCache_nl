@@ -88,7 +88,11 @@ jobs:
           NEW_VERSION: ${{ steps.update.outputs.new-version }}
         run: |
           $branch = 'automation/update-bouncy-castle'
-          $title = "build(deps): Bouncy Castleを$env:NEW_VERSIONへ更新"
+          $newVersion = $env:NEW_VERSION
+          if ([string]::IsNullOrWhiteSpace($newVersion)) {
+            throw '更新後のBouncy Castleバージョンが空です'
+          }
+          $title = "build(deps): Bouncy Castleを${newVersion}へ更新"
           $report = "$env:RUNNER_TEMP\dependency-update-report.md"
           $additionalReport = @(
             ''
@@ -122,15 +126,16 @@ jobs:
           git push --force-with-lease origin "HEAD:refs/heads/$branch"
           if ($LASTEXITCODE -ne 0) { throw '依存更新ブランチのpushに失敗しました' }
 
-          $existing = @(gh pr list `
+          $existingJson = gh pr list `
             --head $branch `
             --base main `
             --state open `
-            --json number `
-            --jq '.[0].number')
+            --json number
           if ($LASTEXITCODE -ne 0) { throw '依存更新PRの検索に失敗しました' }
+          $existing = @($existingJson | ConvertFrom-Json)
           if ($existing.Count -gt 0) {
-            gh pr edit $existing[0] --title $title --body-file $report
+            $existingPullRequestNumber = $existing[0].number
+            gh pr edit $existingPullRequestNumber --title $title --body-file $report
             if ($LASTEXITCODE -ne 0) { throw '依存更新PRの更新に失敗しました' }
           }
           else {

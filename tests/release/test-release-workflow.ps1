@@ -372,6 +372,10 @@ foreach ($required in @(
         'git diff --cached --check',
         'if ($LASTEXITCODE -ne 0)',
         'gh pr list',
+        '$existingJson = gh pr list',
+        '$existing = @($existingJson | ConvertFrom-Json)',
+        '$existingPullRequestNumber = $existing[0].number',
+        '${newVersion}へ更新',
         'gh pr create'
     )) {
     if (-not $dependencyWorkflow.Contains($required)) {
