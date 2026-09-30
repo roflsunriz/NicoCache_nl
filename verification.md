@@ -1,5 +1,34 @@
 # 検証手順
 
+## Issue #20: watchV4のキャッシュ開始
+
+`test-functional.ps1 -LibraryDirectory .\.test-work\build-dependencies`で、watchV4の
+初期HTML、全配信グループの品質、HTTPエラー・対象外URLの除外、mediaだけの更新応答、
+暗号化CMAFの完成と上流停止後の再生を確認する。旧DOMANDのaccess-rights経路も残す。
+
+2026-09-30に公開ページ`sm46857867`と`sm46859043`の非ログイン応答で
+`data.response.$watchV4.data.media.contents`と`media.hls.url`を確認した。
+独立したブラウザーで`/v4/watch/<動画ID>`のmediaだけの更新を観測した。
+この構造を秘密情報を含まない合成fixtureへ反映し、修正前は動画IDがnullとなり
+master playlistへキャッシュ用キーが付かないことを回帰テストで確認した。
+
+修正後の機能テスト27項目、Extension ABI 1482項目（削除0）、`-Xlint:all -Werror`、
+正規ビルドの5 JAR生成、`git diff --check`が成功した。修正JARを使い、独立した
+非ログインブラウザーからメモリ内で渡した実公開2動画のHTML・API更新・成功プレイリストで、
+動画ID、初期HLS登録、実際のHLS要求との対応、音声・映像プレイリスト形式を確認した。
+更新APIの`hls.url`にはURLではない不透明値もあり、これは登録せず、有効な対応を保持する。
+今回の2動画では実HLS要求と初期HTMLのURLはクエリを除いたキーが一致した。
+初期HTMLの署名URLをブラウザーの更新処理なしで直接取得する補助検証は403となった。
+API応答・署名URL・動画本体は成果物へ保存していない。
+
+広いE2Eは`bare LF delimiters`のHTTP拒否で失敗した（200応答）。修正前`c504796`の
+独立worktreeでも同じ1項目が失敗するため、今回のwatchV4変更による退行ではない。
+この失敗で後続GUI E2Eは未実行。HTTP要求パーサーの別修正が必要で、Issue #20の差分には含めない。
+
+実利用プロキシへの適用には、利用者の許可を得た停止・JAR置換・再起動後に通常ブラウザーで
+対象動画を再生し、保存先に完成キャッシュができることを確認する。キャッシュ削除や
+証明書・通常ブラウザー設定変更は必要ない。
+
 ## nlFilter Lab
 
 ### 自動検証
