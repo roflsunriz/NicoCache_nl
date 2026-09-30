@@ -247,7 +247,7 @@ job権限を`contents: read`と`pull-requests: write`に限定したままにす
 
 ## Dependabot 自動処理（2026-09-23）
 
-`.github/workflows/dependabot-automation.yml` を actionlint で検査し、必須の `CI` と、変更パスに応じて起動する Standalone Updater・Unix Packages・Windows Installer の表示名が一致することを確認する。Dependabot の patch／minor かつ起動した全 PR チェック成功の場合だけ取り込み、major・古い SHA・再失敗は残す。
+`.github/workflows/dependabot-automation.yml` を actionlint で検査し、必須の `CI` と、変更パスに応じて起動する Standalone Updater・Unix Packages・Windows Installer の表示名が一致することを確認する。Dependabot の patch／minor／major かつ起動した全 PR チェック成功の場合だけ取り込み、古い SHA・再失敗は残す。
 
 実際の Dependabot PR がまだない場合、動作経路は未検証として扱う。実 PR 発生後に自動化ジョブ、CI の再試行、マージ結果を確認する。
 
