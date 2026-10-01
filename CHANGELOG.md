@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-10-01
+
 ### Changed
 
 - 依存更新を安全に省力化するため、Dependabot の patch／minor PR を既存 CI の全チェック成功後に自動取り込みし、失敗ジョブを一度再実行する設定を追加した。
@@ -16,6 +18,9 @@
 
 ### Fixed
 
+- watchV4の動画で動画情報が`nullnull`となりキャッシュを開始できない問題を修正した。
+  初期HTMLの`$watchV4.data`と`media.contents`を読み取り、`media.hls.url`を動画IDへ関連付ける。
+  `/v4/watch/<動画ID>`が配信情報だけを返す更新でも要求URLから動画IDを得て関連付けを更新する。
 - CI と Dependabot の分類の実行順が前後しても更新を取りこぼさないよう、同じ PR 番号と head SHA を再照合する経路を追加した。
 - Bouncy Castle更新時に、PowerShellの変数境界で版番号がPRタイトルから欠落し、PRがない場合に空の検索結果を既存PRとして扱って自動更新が失敗する問題を修正した。
 - `proxy_sample.pac`の整理後も初回セットアップCIが旧式のdebugホスト式を要求して失敗しないよう、

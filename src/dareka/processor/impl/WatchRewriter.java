@@ -16,8 +16,11 @@ public class WatchRewriter implements Rewriter {
     //   動画切り替え
     // https://www.nicovideo.jp/api/watch/v3_guest/sm9?
     //   非ログイン時の動画切り替え・埋め込みプレイヤー
+    // https://nvapi.nicovideo.jp/v4/watch/sm9?__retry=1
+    //   watchV4のHLS配信URL更新（mediaだけを返す応答もある）
     private static final Pattern WATCH_PAGE_PATTERN = Pattern.compile(
-            "^https?://www\\.nicovideo\\.jp/(?:watch|api/watch/v3(?:_guest)?)/([a-z]{2})?(\\d+)" +
+            "^https?://(?:www\\.nicovideo\\.jp/(?:watch|api/watch/v3(?:_guest)?)"
+            + "|nvapi\\.nicovideo\\.jp/v4/watch)/([a-z]{2})?(\\d+)" +
             "(|\\?.*)$");
 
     // 処理するURLの正規表現
@@ -38,8 +41,15 @@ public class WatchRewriter implements Rewriter {
         //
         WatchVars vars = WatchVars.get(content);
 
+        // watchV4の更新応答はmediaだけを含むため、動画IDは要求URLから得る。
+        if (type != null && vars != null && vars.getJsonObject() != null
+                && responseHeader.getStatusCode() == 200) {
+            CmafCachingProcessor.registerMasterPlaylist(
+                    vars.getJsonObject().getString("media", "hls", "url"), type + id);
+        }
+
         // スレッドIDの場合は動画IDとの対応も記録する
-        if (type == null && vars.getVideoId() != null) {
+        if (type == null && vars != null && vars.getVideoId() != null) {
             NLShared.INSTANCE.putThread2Smid(id, vars.getVideoId());
         }
 

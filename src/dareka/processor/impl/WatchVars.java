@@ -161,6 +161,10 @@ public class WatchVars {
         if (jsonRoot != null && jsonRoot.getObject("data", "response") != null) {
             // 2024-08仕様.
             json = jsonRoot.getObject("data", "response");
+            JsonObject watchV4 = json.getObject("$watchV4", "data");
+            if (watchV4 != null) {
+                json = watchV4;
+            }
         } else if (jsonRoot != null && jsonRoot.getObject("data") != null && jsonRoot.get("meta", "status") != null) {
             json = jsonRoot.getObject("data");
         } else {
@@ -179,7 +183,8 @@ public class WatchVars {
                 dmcInfo = json.getObject("media", "delivery"); // 廃止済み. 消すこと.
                 // 2024-08仕様.
                 domandInfo = json.getObject("media", "domand");
-                deliveryType = domandInfo != null ? DeliveryType.DOMAND
+                JsonArray contents = json.getArray("media", "contents");
+                deliveryType = domandInfo != null || contents != null ? DeliveryType.DOMAND
                         : dmcInfo != null ? DeliveryType.DMC
                         : DeliveryType.CLASSIC;
                 videoId = json.getString("video", "id");
@@ -207,8 +212,13 @@ public class WatchVars {
                         qualityAudios = getQualityAvailability(dmcInfo.getArray("movie", "audios"));
                     }
                     if (isDomandDelivery()) {
-                        qualityVideos = getQualityAvailability(domandInfo.getArray("videos"));
-                        qualityAudios = getQualityAvailability(domandInfo.getArray("audios"));
+                        if (domandInfo != null) {
+                            qualityVideos = getQualityAvailability(domandInfo.getArray("videos"));
+                            qualityAudios = getQualityAvailability(domandInfo.getArray("audios"));
+                        } else {
+                            qualityVideos = getContentQualityAvailability(contents, "videos");
+                            qualityAudios = getContentQualityAvailability(contents, "audios");
+                        }
                     }
 
                     // if (info != null) {
@@ -229,6 +239,9 @@ public class WatchVars {
                 analyzeSmile();
                 analyzeDmc();
                 analyzeDomand();
+                // watchV4は初期HTMLでHLS URLを返し、旧access-rightsを呼ばない。
+                CmafCachingProcessor.registerMasterPlaylist(
+                        json.getString("media", "hls", "url"), videoId);
                 cache.put(videoId, this);
             }
         } else {
@@ -434,6 +447,19 @@ public class WatchVars {
                 NLShared.INSTANCE.put_vid2cid(vid, cid);
             }
         }
+    }
+
+    private Map<String, Boolean> getContentQualityAvailability(JsonArray contents, String kind) {
+        Map<String, Boolean> result = new LinkedHashMap<>();
+        for (JsonValue content : contents.getList()) {
+            Map<String, Boolean> qualities = getQualityAvailability(content.getArray(kind));
+            if (qualities != null) {
+                for (Map.Entry<String, Boolean> quality : qualities.entrySet()) {
+                    result.merge(quality.getKey(), quality.getValue(), (left, right) -> left || right);
+                }
+            }
+        }
+        return result;
     }
 
     // 下記参照のidとその{動画,音声}をユーザーが取得出来るかどうかのMapを作る.

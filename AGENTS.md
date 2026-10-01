@@ -56,6 +56,13 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## 変更時の注意
 
+- watchV4では初期HTMLの`data.response.$watchV4.data`に動画・品質情報と`media.hls.url`がある。
+  `nvapi.nicovideo.jp/v4/watch/<動画ID>`の更新応答には動画IDなしの`data.media`だけの場合もある。
+  旧`access-rights/hls`を前提にせず、`WatchVars`と`WatchRewriter`からCMAFのURL対応を登録する。
+  品質一覧は`media.contents`の全グループを保持する。回帰は`WatchV4UnitTest`と
+  `test-functional.ps1`の初期HTML・部分更新・暗号化保存・オフライン再生で確認する。
+  2026-09-30の実応答では更新APIの`hls.url`に不透明な値もあり、これはURLとして登録しない。
+  上記2動画の実HLS要求は初期HTMLのURLとクエリを除いたキーが一致した。詳細は`verification.md`を参照。
 - ユーザー操作、設定、ビルド手順が変わる場合は、付属 README、`documents/`、変更履歴の更新要否も確認する。
 - `nicocachenl.test/api/v1` REST APIを変更または利用するときは、実装と構造化エラー形式を確認する。代表的な実装は`src/dareka/processor/impl/NicoCacheWebProcessor.java`にある。キャッシュ実体と再生中CMAFは`nicocachenl.test/media/v1`の内部配信経路として扱い、旧`/cache/*`へ戻さない。
 - `window.NicoCache_nl.watch` は互換ヘルパーであり、ニコニコ動画側の構造変更に影響される。動画 ID は URL や呼び出し元、再生状態は `HTMLMediaElement` などページ上の実体を優先し、このヘルパーは型と失敗時処理を確認したフォールバックとして使う。
