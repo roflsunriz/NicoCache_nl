@@ -51,7 +51,7 @@ ISO 8601形式の`createdAt`と`modifiedAt`、`mediaType`、実際の配信URL�
 
 | メソッドとパス | 内容 |
 | --- | --- |
-| `GET /api/v1/videos/<動画ID>/cache-entries` | 動画単位のCMAF/Domandキャッシュ情報 |
+| `GET /api/v1/videos/<動画ID>/cache-entries` | 動画単位のHLS・変換MP4・旧形式キャッシュ情報 |
 | `GET /api/v1/videos/<動画ID>/metadata` | 公開動画情報と公開状態。利用不可も200で状態を返す |
 | `POST /api/v1/cache-entry-queries` | 最大256動画の一括照会。本文は `{"videoIds":["sm9"]}` |
 | `GET /api/v1/cache-entries` | 完成・一時キャッシュ一覧 |
@@ -61,7 +61,12 @@ ISO 8601形式の`createdAt`と`modifiedAt`、`mediaType`、実際の配信URL�
 | `GET /api/v1/cache-entries?query=<正規表現>&mode=regex&order=desc` | 正規表現検索 |
 | `GET /api/v1/cache-directories` | キャッシュ保存先一覧 |
 
-単一動画の応答は`videoId`、`preferred`、`cacheIds`、`cachings`、`completes`、`caches`を持つ。各キャッシュは`complete`、`caching`、`videoMode`、`audioBitrate`、サイズ、タイトル、保存先情報を返す。
+単一動画の応答は`videoId`、`preferred`、`cacheIds`、`cachings`、`completes`、`caches`を持つ。各キャッシュは`complete`、`caching`、`format`（`HLS`、`MP4`、`FLV`、`SWF`）、`videoMode`、`audioBitrate`、サイズ、タイトル、保存先情報を返す。
+HLSの変換後MP4も完成一覧に含め、`preferred`は既存の完成キャッシュ再生と同じ選択規則を使う。
+旧形式では`videoMode`がnullとなり、音声のみの品質名`0p`や既存の`legacyLow`は保持する。
+一時キャッシュは`complete=false`とし、完成一覧と`preferred`には含めない。
+この照会はMP4をHLSへ変換しない。HLSの再取得・保存抑制は既存の
+`workaroundNoDisableDoubleCacheImported`等の設定と本体の判定に従う。
 
 動画メタデータは`availabilityStatus`を必ず持つ。公開中は`available`とタイトル、サムネイル、
 投稿者、長さ、再生・コメント・マイリスト数、タグを返す。削除・非公開など上流APIが

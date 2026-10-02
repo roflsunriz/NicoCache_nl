@@ -56,6 +56,10 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## 変更時の注意
 
+- 動画別RESTの`CmafCacheInfo`はHLSに限定せず、変換MP4・旧形式も返す。完成選択は
+  既存の`Cache.getPreferredCachedVideo`と揃え、`format`と品質を表示に渡す。
+  部分・音声のみ・低品質の状態を保持し、MP4の表示修正をHLS再取得設定の変更と混同しない。
+
 - リリース表示の正本は`Main.VER_STRING`。`check-release-version.ps1`で最新CHANGELOGの
   版・日付、Unix配布版数、タグ、実JARの表示定数を照合する。manifestの版・日付は正規
   ビルドで自動生成する。公開ソースが正しくても導入JARが古い場合があるため、表示不一致は

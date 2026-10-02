@@ -9,10 +9,13 @@ import dareka.common.json.JsonString;
 import dareka.common.json.JsonTrue;
 import dareka.common.json.JsonValue;
 import java.io.File;
+import java.util.Locale;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-/** Builds the CMAF/Domand-only cache information returned by the REST API. */
+/** Builds per-video cache information, including converted and classic MP4s. */
 final class CmafCacheInfo {
     private CmafCacheInfo() {
     }
@@ -33,16 +36,12 @@ final class CmafCacheInfo {
 
         SortedSet<VideoDescriptor> videos = new TreeSet<>();
         if (registered != null) {
-            for (VideoDescriptor video : registered) {
-                if (video.isDmc() && Cache.HLS.equals(video.getPostfix())) {
-                    videos.add(video);
-                }
-            }
+            videos.addAll(registered);
         }
 
         JsonObject info = new JsonObject();
         info.put("videoId", stringOrNull(videoId));
-        VideoDescriptor preferred = Cache.getPreferredCachedVideo(videoId, true, Cache.HLS);
+        VideoDescriptor preferred = Cache.getPreferredCachedVideo(videoId);
         info.put("preferred", stringOrNull(
                 preferred == null ? null : Cache.videoDescriptorToAltId(preferred)));
 
@@ -51,7 +50,18 @@ final class CmafCacheInfo {
         JsonArray completes = new JsonArray();
         JsonObject caches = new JsonObject();
 
+        // Classic IDs omit the extension. Keep one canonical entry when formats
+        // coexist, so an incomplete variant cannot hide the completed media.
+        Map<String, VideoDescriptor> entries = new LinkedHashMap<>();
         for (VideoDescriptor video : videos) {
+            String cacheId = Cache.videoDescriptorToAltId(video);
+            VideoDescriptor previous = entries.get(cacheId);
+            if (previous == null || video.equals(preferred)
+                    || (!new Cache(previous).exists() && new Cache(video).exists())) {
+                entries.put(cacheId, video);
+            }
+        }
+        for (VideoDescriptor video : entries.values()) {
             Cache cache = new Cache(video);
             String cacheId = Cache.videoDescriptorToAltId(video);
             boolean complete = cache.exists();
@@ -79,6 +89,7 @@ final class CmafCacheInfo {
         JsonObject entry = new JsonObject();
         entry.put("videoId", new JsonString(videoId));
         entry.put("cacheId", new JsonString(cacheId));
+        entry.put("format", new JsonString(video.getPostfix().substring(1).toUpperCase(Locale.ROOT)));
         entry.put("complete", booleanValue(complete));
         entry.put("caching", booleanValue(caching));
         entry.put("videoMode", stringOrNull(video.getVideoMode()));

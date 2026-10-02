@@ -1,5 +1,34 @@
 # 検証手順
 
+## MP4変換後のキャッシュ済み表示
+
+動画別RESTの`CmafCacheInfo`はHLSだけを返しており、キャッシュ索引や従来の一覧で認識される
+変換MP4が`preferred`・`completes`・`caches`に出なかった。v1.9.2のクラスに対し、
+小さな合成ファイル`sm991001[720p,192]_Converted.mp4`を登録すると、完成MP4にもかかわらず
+`preferred=null`となる失敗を再現した。修正後は既存の完成キャッシュ選択と揃え、
+形式・品質・完成状態を返す。一覧と視聴ページの共通表示はMP4もバッジに表示する。
+
+`ConvertedCacheInfoUnitTest`で変換MP4、旧MP4、HLSとの共存、部分MP4・HLS、音声のみ、
+旧low・ビットレート付き品質名、消えた実体の反映を確認する。音声のみのバッジは
+「音声」とし、部分キャッシュは完成表示しない。合成ファイルの内容は識別用データであり、
+MP4の実エンコードや`hls2mp4.vbs`実行の検証とは区別する。
+旧形式の拡張子を省いた互換IDが複数形式で重なる場合も、IDを一意にし、
+部分ファイルが完成状態を隠さず、実際の優先メディアと形式が一致することを確認した。
+
+HLS再取得は表示用RESTとは独立している。既存の完成・非lowの単一ファイルがある場合の
+保存抑制、部分・lowの場合、`workaroundNoDisableDoubleCacheImported=true`での抑制解除を
+同fixtureで確認した。この判定と設定は変更していない。MP4をHLSとして配信する変更もない。
+
+- `test-functional.ps1 -LibraryDirectory ./.test-work/build-dependencies -KeepWorkDir`:
+  28項目成功、Extension ABI 1482項目（削除0）成功。実HTTPの単一動画・一括REST照会と
+  変換MP4メディア応答も確認した。
+- 正規`build-javac.ps1`で5 JAR生成成功。Javaコンパイルは`-Xlint:all -Werror`。
+  生成JARの版・日付整合検証成功。表示版は公開済みv1.9.2のままで、変更履歴はUnreleased。
+- ブラウザー側はNodeの仮想DOMによる一覧・視聴ページの回帰。実利用ブラウザーでの確認、
+  稼働JARの置換、実キャッシュの変換・削除、push・公開はこの作業では行わない。
+  `node --test ./tests/local/*.test.js`は最終34件成功（一覧・視聴表示8件を含む）。
+  音声表示の追加確認で不足していた仮想DOMのselector対応を補い、失敗記録を保持して再試験した。
+
 ## リリース版・日付の整合
 
 v1.9.2 のローカル検証では、以下を確認した。
