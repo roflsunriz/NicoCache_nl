@@ -41,6 +41,12 @@ jobs:
         shell: pwsh
         run: .\tests\release\test-java-tool-selection.ps1
 
+      - name: Check release version metadata and regression tests
+        shell: pwsh
+        run: |
+          ./check-release-version.ps1
+          ./tests/release/test-release-version.ps1
+
       - name: Verify repository dependency lock
         shell: pwsh
         run: |
@@ -54,6 +60,10 @@ jobs:
       - name: Build NicoCache Java applications
         shell: pwsh
         run: .\build-javac.ps1 -LibraryDirectory .\.test-work\ci-dependencies -Clean
+
+      - name: Check generated JAR release metadata
+        shell: pwsh
+        run: ./check-release-version.ps1 -JarPath ./NicoCache_nl.jar
 
       - name: Run local browser script tests
         shell: pwsh

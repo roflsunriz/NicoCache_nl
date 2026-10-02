@@ -6,6 +6,15 @@
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-10-02
+
+### Added
+
+- リリース時の版・日付の更新漏れや古いJARの混入を公開前に検出するため、
+  表示定数・CHANGELOG・タグ・Unix配布版数・生成JARの整合検証をCIとReleaseに追加した。
+- JAR単体でもリリース情報を確認できるよう、本体manifestの`Implementation-Version`と
+  `NicoCache-Release-Date`を表示定数から自動生成する。src変更ごとの版番号自動増分は行わない。
+
 ## [1.9.1] - 2026-10-01
 
 ### Changed

@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -15,6 +16,8 @@ import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -201,6 +204,19 @@ public final class BuildMain {
             Attributes attributes = manifest.getMainAttributes();
             attributes.put(Attributes.Name.MANIFEST_VERSION, "1.0");
             attributes.put(Attributes.Name.MAIN_CLASS, mainClass);
+            if (mainClass.equals("dareka.UserDataMain")) {
+                // 表示の正本から生成し、別の版・日付の手更新を増やさない。
+                Matcher release = Pattern.compile(
+                        "VER_STRING\\s*=\\s*\"NicoCache_nl version "
+                        + "(\\d{4}-\\d{2}-\\d{2}) \\(v(\\d+\\.\\d+\\.\\d+)\\)\"")
+                        .matcher(Files.readString(root.resolve("src/dareka/Main.java")));
+                if (!release.find()) {
+                    throw new IOException("Main.VER_STRINGの版・日付を取得できません");
+                }
+                String date = LocalDate.parse(release.group(1)).toString();
+                attributes.put(Attributes.Name.IMPLEMENTATION_VERSION, release.group(2));
+                attributes.putValue("NicoCache-Release-Date", date);
+            }
             if (!classPath.isBlank()) {
                 attributes.put(Attributes.Name.CLASS_PATH, classPath);
             }
