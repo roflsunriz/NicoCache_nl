@@ -133,6 +133,7 @@ public final class FunctionalTestMain {
                 run("CMAF cache progress size stability",
                         CmafCachingProgressUnitTest::run);
                 run("watchV4 metadata and initial playlist registration", WatchV4UnitTest::run);
+                run("converted MP4 and classic cache information", ConvertedCacheInfoUnitTest::run);
                 run("LRU map minimum capacity and eviction",
                         this::testLruMapCapacity);
                 run("GUI log filtering primitives", LogSearchUnitTest::run);
@@ -2004,6 +2005,20 @@ public final class FunctionalTestMain {
         assertContains(cacheInfo.bodyText(), "\"videoMode\":\"720p\"",
                 "REST cache entry mode");
 
+        Response convertedInfo = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900002/cache-entries", "", ""));
+        assertEquals(200, convertedInfo.status, "REST converted MP4 entry status");
+        assertContains(convertedInfo.bodyText(), "\"preferred\":\"sm900002[720p,128].mp4\"",
+                "REST converted MP4 preferred entry");
+        assertContains(convertedInfo.bodyText(), "\"format\":\"MP4\"",
+                "REST converted MP4 format");
+        assertContains(convertedInfo.bodyText(), "\"complete\":true",
+                "REST converted MP4 completed state");
+        Response convertedMedia = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900002/media", "", ""));
+        assertEquals(200, convertedMedia.status, "REST converted MP4 media status");
+        assertEquals("dmc-mp4-content", convertedMedia.bodyText(), "REST converted MP4 media body");
+
         Response cacheEntries = request(nicoCacheWebRequest("GET",
                 "/api/v1/cache-entries", "", ""));
         long hlsDirectorySize = Files.size(sandbox.resolve(
@@ -2062,6 +2077,8 @@ public final class FunctionalTestMain {
                 "REST batch cache query first id");
         assertContains(batch.bodyText(), "\"sm900003\"",
                 "REST batch cache query second id");
+        assertContains(batch.bodyText(), "\"preferred\":\"sm900001\"",
+                "REST batch query includes classic MP4 cache");
 
         Response search = request(nicoCacheWebRequest("GET",
                 "/api/v1/cache-entries?query=Api&order=desc", "", ""));

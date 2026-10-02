@@ -1,5 +1,5 @@
 // NicoCache_nl cache display shared by list pages and the watch page.
-// CMAF/Domand cache details come from the NicoCache REST API.
+// HLS, converted MP4 and classic cache details come from the NicoCache REST API.
 (function() {
   "use strict";
 
@@ -67,9 +67,13 @@
     const videoMode = isCmaf ? cacheData.videoMode : "";
     const audioBitrate = isCmaf ? asPositiveNumber(cacheData.audioBitrate) : 0;
     const quality = isCmaf ? getQualityClass(videoMode) : "legacy";
+    const audioOnly = /^0p?$/i.test(videoMode) && audioBitrate > 0;
 
     const details = [];
-    if (videoMode) details.push("映像 " + videoMode);
+    const format = typeof cacheData.format === "string" ? cacheData.format : "";
+    if (format && format !== "HLS") details.push(format);
+    if (audioOnly) details.push("音声のみ");
+    else if (videoMode) details.push("映像 " + videoMode);
     if (audioBitrate) details.push("音声 " + audioBitrate + "kbps");
     if (!details.length) details.push("CMAF/Domand");
 
@@ -77,6 +81,8 @@
       cacheId: selected.cacheId,
       cacheData: cacheData,
       isCmaf: isCmaf,
+      format: format,
+      audioOnly: audioOnly,
       videoMode: videoMode,
       audioBitrate: audioBitrate,
       quality: quality,
@@ -102,7 +108,7 @@
     if (description.isCmaf) {
       const video = document.createElement("span");
       video.className = "ncnl-cache-video";
-      video.textContent = description.videoMode || "CMAF";
+      video.textContent = description.audioOnly ? "音声" : description.videoMode || "CMAF";
       label.appendChild(video);
       if (description.audioBitrate) {
         const separator = document.createElement("span");
@@ -128,6 +134,7 @@
       description.quality,
       description.videoMode,
       description.audioBitrate,
+      description.format,
       compactMode ? "1" : "0",
     ].join("|");
     if (icon.getAttribute("data-ncnl-cache-render-key") === renderKey) return icon;
