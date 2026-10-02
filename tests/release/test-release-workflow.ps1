@@ -389,4 +389,18 @@ if (-not (($archiveChecksum -join "`n").Contains(
     throw 'Windows distribution archive checksum does not use SHA-256'
 }
 
+$sourceVersionGuard = Get-StepBlock -Name 'Validate release version metadata'
+Assert-ContainsLine $sourceVersionGuard 'run: ./check-release-version.ps1 -ReleaseTag $env:RELEASE_TAG' 'Release source version guard'
+$jarVersionGuard = Get-StepBlock -Name 'Validate generated JAR release metadata'
+Assert-ContainsLine $jarVersionGuard 'run: ./check-release-version.ps1 -ReleaseTag $env:RELEASE_TAG -JarPath ./NicoCache_nl.jar' 'Release JAR version guard'
+$ciVersionGuard = Get-Content -Raw -LiteralPath (Join-Path $root '.github/workflows/ci.yml')
+foreach ($stepName in @('Validate packaged Windows JAR release metadata', 'Validate packaged Unix JAR release metadata')) {
+    $packagedGuard = Get-StepBlock -Name $stepName
+    if (-not (($packagedGuard -join "`n").Contains('./check-release-version.ps1 -ReleaseTag $env:RELEASE_TAG -JarPath'))) {
+        throw "Packaged JAR version guard is missing: $stepName"
+    }
+}
+foreach ($command in @('./check-release-version.ps1', './tests/release/test-release-version.ps1', './check-release-version.ps1 -JarPath ./NicoCache_nl.jar')) {
+    if (-not $ciVersionGuard.Contains($command)) { throw "CI release version guard is missing: $command" }
+}
 Write-Output 'Release workflow contract tests passed'

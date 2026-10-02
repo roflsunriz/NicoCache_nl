@@ -200,6 +200,9 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 4. 継続パッケージ検証の版固定値を更新する。
    `.github/workflows/unix-packages.yml` の `APP_VERSION` を本体版へ、
    `UPDATER_VERSION` を `updater/VERSION` と同じ値へ揃える。
+   `./check-release-version.ps1 -ReleaseTag "v<version>"`で表示定数・CHANGELOG・
+   配布版数・タグの一致を確認する。日付はリリース日を明示し、ビルド日の自動上書きや
+   src変更ごとの版番号自動増分は行わない。未リリースの変更は`Unreleased`へ記録する。
 5. 機能テストとExtension ABI互換テストを実行する。
 
    ```powershell
@@ -221,7 +224,14 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 
    ```powershell
    .\build-javac.ps1 -LibraryDirectory .\.test-work\build-dependencies
+   .\check-release-version.ps1 -ReleaseTag "v<version>" -JarPath .\NicoCache_nl.jar
    ```
+
+   manifestの`Implementation-Version`と`NicoCache-Release-Date`は`Main.VER_STRING`
+   から自動生成される。検証はmanifestだけでなくJAR内の実際の表示定数も確認する。
+   CIとReleaseが不一致をエラーとして拒否するため、手動でmanifestだけを修正しない。
+   公開版が正しくても導入済みJARが古ければ稼働時の表示は変わらない。
+   配布JARと導入JARのハッシュ・表示を確認し、置換と再起動は別途明示的に実施する。
 
 7. `git status --short --branch` と `git diff --check` で、生成物や無関係な
    差分がないことを確認する。テストまたはビルドが失敗した場合はタグを作成せず、
