@@ -395,5 +395,42 @@ job権限を`contents: read`と`pull-requests: write`に限定したままにす
 - ホストの HKCU InstallDir・ユーザーのアンインストール登録・NicoCache サービスは
   試験前後で一致した（この環境ではいずれも未登録）。ホストに MSI を実行していない。
   全ライフサイクル CI は既存の GitHub Actions 専用ガードを維持し、ローカルでは
-  実行していない。追加した CustomExplicit ケースの CI 実行は未確認であり、
-  上記の実 Sandbox 試験・MSI 構造検証と区別する。
+  実行していない。追加した CustomExplicit ケースは、後述の専用ゲストで
+  元の関数を実行して確認した。CI ワークフロー全体の成功とは区別する。
+
+### CustomExplicit 追加回帰ケースの隔離実行
+
+- 当初未実行だった具体的理由は `test-windows-msi.ps1` の24行目のガードで、
+  `GITHUB_ACTIONS=true` 以外の実行を製品登録前に拒否するためだった。
+  専用 Sandbox 内でも元スクリプト全体の呼出しが同じ例外になることを実測した。
+  GitHub Actions の環境変数を偽装したり、既存ガードを変更したりしていない。
+- 前回停止したゲストは破棄済みなので、同じ既存 Windows Sandbox 機能から新しい
+  使い捨てゲストを作成した。WDAGUtilityAccount / Microsoft Virtual Machine を
+  実測で確認した別ハーネスで、元ファイルを UTF-8 で読み、PowerShell AST から
+  ケース関数と依存する検証関数を変更せず読み込んだ。
+  `Invoke-LocationUpgradeCase -Case CustomExplicit` をそのまま呼び出した。
+- CI と同じ試験用旧版1.0.0（UseLegacyProgramsInstallPath）／新版1.0.1を
+  正規 `build-windows-package.ps1 -PackageType Msi` で作成した。
+  新規ソフトウェア導入、Windows 機能の変更、ホスト上の MSI 実行は不要だった。
+  ホストの InstallDir・製品登録・NicoCache サービスは元の基準状態と一致した。
+- 2026-10-03 13:45:18 UTC にケース全体が成功した。旧版導入、CLI 明示先への
+  更新、アンインストールの終了コードはすべて0。配布版番号、HKCU InstallDir、
+  スタートメニュー／デスクトップの両ショートカット、意図しないプロセスなし、
+  旧配置先の除去、新配置先のアンインストール後の除去を、元の検証関数で確認した。
+  ゲストのプロキシ・自動起動・証明書・登録・ショートカット状態も前後で一致した。
+- 前回の実対話試験は「既存先を初期表示→画面で別の先を選択→実配置・登録」を
+  検証した。追加ケースは「CLI の INSTALLFOLDER→登録・両ショートカット追従→
+  旧配置先とアンインストール残骸の除去」を検証する。追加ケースは未起動で
+  config.properties がない条件であり、前回の設定・キャッシュを持つ更新／失敗復元
+  試験を置き換えるものではない。CI ワークフロー全体は実行していない。
+- 証拠は調査タスクの `isolation/ci-case-output/` に保存した。
+  `case-context.json` はガード拒否・ゲスト識別・元ファイルのハッシュを、
+  `case-result.json` はケース成功と前後状態を、`msi-custom-explicit-*.log` は
+  実 MSI の終了0と明示先登録を記録する。元テストファイルの SHA-256 は
+  `a435eac70c9aa6b4e2124daea7881aa1b7450e648a35ebf138d7d8fdf9dfa5ef`。
+  MSI のハッシュと正規ビルドログも同じ出力領域に保持した。
+- 初回のビルド失敗（Git の日本語パスの読取り設定）と、ログオン時の自動開始に
+  重なった補助起動のガード拒否を保存した。前者は実行プロセスの UTF-8 設定で
+  解消し、後者は作業領域が既にあることを理由に後続呼出しだけを拒否した。
+  先に始まったケースはそのまま成功し、元の検証条件を緩めていない。
+  証拠保存後に、この追加試験用 Sandbox だけを停止した。

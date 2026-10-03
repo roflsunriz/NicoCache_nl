@@ -69,6 +69,9 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
   Custom / CustomExplicit を併せて検証する。ローカルの実 MSI 試験は専用の
   使い捨て VM / Windows Sandbox に限定する。同一ホストの別フォルダーは
   MSI 製品登録を隔離しない。2026-10-03 の実測は `verification.md` を参照。
+  GitHub Actions 専用ガードを持つ全スクリプトはローカルで実行しない。
+  専用ゲストでは元のケース関数を変更せず読み込む別ハーネスで検証できる。
+  GITHUB_ACTIONS を偽装せず、ケース単体の実測と CI 全体の成功を区別する。
 
 - 動画別RESTの`CmafCacheInfo`はHLSに限定せず、変換MP4・旧形式も返す。完成選択は
   既存の`Cache.getPreferredCachedVideo`と揃え、`format`と品質を表示に渡す。
