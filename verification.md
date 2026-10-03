@@ -1,5 +1,45 @@
 # 検証手順
 
+## v1.9.4統合・公開準備（2026-10-03）
+
+remote main `14a255998fdbaa3f87329d3d742c3d2cfcfa2060`から独立コピーを作り、
+サムネイル保存先の修正`aab8566`とMSI明示配置先の修正・検証記録
+`feae9c7`／`0191e94`を取り込んだ。競合したAGENTSとCHANGELOGは両方の記録を保持した。
+表示定数、最新CHANGELOG、Unix配布検証版をv1.9.4／2026-10-03へ揃えた。
+既存の自動manifest生成とReleaseワークフローを利用し、稼働JARの置換は行わない。
+checkout内と2つの元作業コピーに`.agents/skills`の追加指示は存在しなかった。
+
+Windows 11／Temurin 25.0.4.1で、正規5 JARビルドと実JARの版・日付・tag照合、
+機能29項目（サムネイル起動条件、再読込、移行、権限を含む）、Extension ABI 1,482項目、
+API 4項目、初回設定15項目、変換器29 assertion、ブラウザー34件、
+版回帰13ケース、Java選択、依存ロック・更新、Release契約、community契約、
+起動管理、データルート診断10ケース、常駐診断、Windows設定スクリプト契約が成功した。
+コンパイルは既存の`--release 11 -Xlint:all -Werror`を維持した。
+
+`test-e2e.ps1 -LibraryDirectory .test-work/release-dependencies -KeepWorkDir`は
+11項目中10成功で、裸LF拒否に200応答する先行検証と同じ失敗を確認した。
+ただし独立したServerSocket／Socketだけの照合で、送信75バイトのLF要求が
+受信時に78バイトのCRLF要求へ変換されることを確認した。この通信経路の変換原因は
+特定していない。同じ最終E2Eクラスと実E2E本体JARのパーサーへByteArrayInputStreamで
+直接渡したLF要求は`HttpIOException: invalid HTTP header field`で拒否された。
+先行記録の「既存問題」は製品パーサーの不良が確定した意味ではない。
+HTTPテストの期待値を変えず、最終remote commitのCIで全体を再確認する。
+ローカルで停止した後段も同じ最終クラスで別途実行し、ランチャー各契約と
+GUI E2E 10項目は成功した。証跡は`.test-work/release-v1.9.4/`に保持した。
+
+最初のsandbox内Java実行はファイルアクセス制限でコンパイルできなかった。
+通常ユーザー権限で再検証し成功した。一時的なJAVA_TOOL_OPTIONSの指定もJava選択の
+版判定を阻害したため外した。製品コードやテスト期待値の変更は行っていない。
+2026-10-03のOSV照会は固定Maven依存5件すべて既知脆弱性0件。
+Maven Central上のBouncy Castle 1.86／Brotli 0.1.2はロックと一致した。
+zstd-jniは最新版1.5.7-20に対してロック1.5.7-12だが、今回承認された2件の
+修正リリース範囲に従い依存更新を含めない。
+
+実config/cache/auth/PAC/cert、稼働JAR、元作業コピーは変更しない。
+MSI導入・OS設定変更を伴う試験はこのホストでは実行せず、一時GitHubランナーの
+Windows Installer／Releaseに委ねる。掲示板の本体起動失敗そのものと
+Error 5→強制終了→配置移動は未再現であり、この公開で解決済みとは扱わない。
+
 ## サムネイルキャッシュ保存先の不在と起動（2026-10-03）
 
 対象報告は https://egg.5ch.io/test/read.cgi/software/1769353155/54 。本文へのアクセスは

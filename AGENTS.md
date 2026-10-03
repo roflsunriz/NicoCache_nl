@@ -81,6 +81,10 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
   版・日付、Unix配布版数、タグ、実JARの表示定数を照合する。manifestの版・日付は正規
   ビルドで自動生成する。公開ソースが正しくても導入JARが古い場合があるため、表示不一致は
   稼働API・導入JAR・公開JARを区別して調べる。本番の置換・再起動は別途の承認範囲で扱う。
+- ローカルE2Eの裸LF拒否が200応答になる場合は、送受信バイトも照合する。
+  2026-10-03の統合検証では、独立ループバックへの75バイトのLF要求が受信側で
+  78バイトのCRLF要求へ変換された。同じ生成クラスへの直接入力は拒否したため、
+  製品の入力検証不良と断定せず、remote CIと比較する。詳細は`verification.md`を参照。
 - watchV4では初期HTMLの`data.response.$watchV4.data`に動画・品質情報と`media.hls.url`がある。
   `nvapi.nicovideo.jp/v4/watch/<動画ID>`の更新応答には動画IDなしの`data.media`だけの場合もある。
   旧`access-rights/hls`を前提にせず、`WatchVars`と`WatchRewriter`からCMAFのURL対応を登録する。
