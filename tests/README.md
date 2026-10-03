@@ -78,7 +78,16 @@ HTTP サーバーを利用する。
 - Extension と Extension2 のロード、および Processor、stopper Processor、
   Rewriter、RequestFilter、CompleteCache、イベント、終了通知
 
+サムネイルキャッシュの起動回帰は`test-functional.ps1`内の
+`ThumbnailCacheStartupTest`で、無効／有効と不在・既存・親も不在・同名ファイル・
+親ファイル・`ref/`ファイル衝突の12条件、設定再読込、書込不可、既存参照の移行を確認する。
+権限変更は専用fixture内だけに限定し、必ず復元する。`test-launcher.ps1`は同じ必要条件に
+加えて、defaultsからの設定継承、ユーザー設定優先、相対／絶対保存先、読み取り専用診断、
+日本語／英語の作成案内を検証する。`test-e2e.ps1`は実ランチャーJARから無効・保存先不在の
+本体を起動し、保存先を作成しないことを確認する。
+
 ## JDK実行時互換性テスト
+
 
 製品とテストを既定のTemurin 25で一度だけコンパイルし、同じクラスファイルを対象JDKで
 実行する。これにより、JDK固有のコンパイラー差と、利用者が遭遇する実行時差異を分離する。

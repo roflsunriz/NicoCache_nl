@@ -10,8 +10,10 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -182,13 +184,33 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
 
     @Override
     public void update(Config config) {
-        thcacheFolder = UserDataPaths.configuredFile(
+        if (!Boolean.getBoolean("cacheThumbnail")) {
+            return;
+        }
+        File folder = UserDataPaths.configuredFile(
                 System.getProperty("thcacheFolder"), "thcache");
-        thcacheFolder.mkdir();
+        ensureCacheDirectory(folder);
+        thcacheFolder = folder;
         thcacheSubFolders.clear();
         refs = new Refs(thcacheFolder);
         thcacheTimeout = Integer.getInteger("thcacheTimeout", 0);
         thcacheExpires = Integer.getInteger("thcacheExpires", 0) * 3600 * 24;
+    }
+
+    private static void ensureCacheDirectory(File folder) {
+        try {
+            Files.createDirectories(folder.toPath());
+            if (!Files.isReadable(folder.toPath())
+                    || !Files.isWritable(folder.toPath())) {
+                throw new IOException("Thumbnail cache directory is not readable/writable: "
+                        + folder);
+            }
+        } catch (IOException error) {
+            throw new UncheckedIOException(
+                    "Cannot initialize thumbnail cache: " + folder
+                            + " (check thcacheFolder and directory permissions)",
+                    error);
+        }
     }
 
     public ThumbProcessor2() {
@@ -418,8 +440,9 @@ public class ThumbProcessor2 implements Processor, ConfigObserver {
 
         public Refs(File thcacheFolder) {
             thcacheRefFolder = new File(thcacheFolder, "ref");
-            if (!thcacheRefFolder.exists()) {
-                thcacheRefFolder.mkdir();
+            boolean importRequired = !thcacheRefFolder.exists();
+            ensureCacheDirectory(thcacheRefFolder);
+            if (importRequired) {
                 importRefs(thcacheFolder);
             }
         }

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.security.KeyStore;
@@ -19,7 +20,7 @@ final class DataRootInspector {
     private static final String SITE_KEYSTORE_PASSWORD = "NicoCache";
     private static final List<String> SETUP_DIRECTORIES = List.of(
             "cache", "certs", "cvcache", "data", "extensions", "list",
-            "local", "nlFilters", "thcache");
+            "local", "nlFilters");
 
     private DataRootInspector() {
     }
@@ -35,6 +36,7 @@ final class DataRootInspector {
         addConfiguredRootCheck(items, application, data, effectiveConfig);
         addSetupStateCheck(items, data);
         addSetupDirectories(items, data);
+        addThumbnailCacheCheck(items, data, effectiveConfig);
         addTlsClientStoreCheck(items, application, data);
         addMitmChecks(items, application, data, effectiveConfig);
         addProxyCheck(items, data);
@@ -305,6 +307,60 @@ final class DataRootInspector {
                     DataRootInspection.ItemState.ERROR, path, null,
                     "inspection-error");
         }
+    }
+
+    private static void addThumbnailCacheCheck(
+            List<DataRootInspection.Item> items, Path data, Properties config) {
+        String folder = configuredProperty(config, "thcacheFolder");
+        Path path = resolve(data, folder == null ? "thcache" : folder);
+        if (!Boolean.parseBoolean(config.getProperty("cacheThumbnail", "false").trim())) {
+            add(items, "directory-thcache", DataRootInspection.Severity.INFORMATIONAL,
+                    DataRootInspection.ItemState.NOT_APPLICABLE, path, null,
+                    "not-applicable");
+            return;
+        }
+        String reason = "invalid-path";
+        boolean valid = false;
+        if (path != null) {
+            try {
+                reason = thumbnailDirectoryProblem(path);
+                if (reason == null) {
+                    reason = thumbnailDirectoryProblem(path.resolve("ref"));
+                }
+                valid = reason == null;
+                if (valid) {
+                    reason = Files.isDirectory(path.resolve("ref"))
+                            ? "present" : "thumbnail.create";
+                }
+            } catch (SecurityException error) {
+                reason = "inspection-error";
+            }
+        }
+        add(items, "directory-thcache", DataRootInspection.Severity.REQUIRED,
+                valid ? DataRootInspection.ItemState.OK
+                        : DataRootInspection.ItemState.BLOCKED,
+                path, null, reason);
+    }
+
+    /** Mirrors core creation of the cache and reference directories, without writes. */
+    private static String thumbnailDirectoryProblem(Path path) {
+        if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            if (!Files.isDirectory(path)) {
+                return "invalid-type";
+            }
+            return Files.isReadable(path) && Files.isWritable(path)
+                    ? null : "permission";
+        }
+        Path ancestor = path.getParent();
+        while (ancestor != null
+                && !Files.exists(ancestor, LinkOption.NOFOLLOW_LINKS)) {
+            ancestor = ancestor.getParent();
+        }
+        if (ancestor == null || !Files.isDirectory(ancestor)) {
+            return "invalid-type";
+        }
+        return Files.isReadable(ancestor) && Files.isWritable(ancestor)
+                ? null : "permission";
     }
 
     private static void addTlsClientStoreCheck(

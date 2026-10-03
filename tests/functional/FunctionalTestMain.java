@@ -121,6 +121,9 @@ public final class FunctionalTestMain {
                         this::testNicoCacheWebApiContract);
                 run("control force-shutdown contract", this::testControlForceShutdown);
             } else {
+                run("thumbnail cache startup and disabled observer",
+                        () -> ThumbnailCacheStartupTest.run(repository,
+                                sandbox.resolve("thumbnail-startup"), applicationClasspath));
                 run("URL resource cache response policies", this::testUrlResourceCachePolicies);
                 run("URL resource transfer timeout uses public cancellation APIs",
                         this::testUrlResourceTransferTimeout);

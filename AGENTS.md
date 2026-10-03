@@ -56,6 +56,23 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## 変更時の注意
 
+- サムネイル保存先の必要条件は`cacheThumbnail`と`thcacheFolder`に従う。
+  `DataRootInspector`の診断は書き込みを行わず、本体`ThumbProcessor2.update`は無効時に
+  保存先を触らない。有効時の作成失敗は原因付きで伝え、`ref/`不在時の既存サムネイル参照
+  移行を維持する。回帰は`test-launcher.ps1`と`test-functional.ps1`、実ランチャー経路は
+  `test-e2e.ps1`で確認する。2026-10-03のv1.9.3隔離fixtureでは、無効・`thcache`不在の
+  診断「要確認」は再現したが本体起動失敗は再現しなかった。詳細は`verification.md`を参照。
+
+- MSI の InstallDir 復元は UI の CostInitialize より前にも実行し、明示済みの
+  INSTALLFOLDER を上書きしない。実行シーケンスだけで復元すると、対話選択が
+  旧配置先へ戻る。`test-windows-msi-structure.ps1` と実 MSI ライフサイクルの
+  Custom / CustomExplicit を併せて検証する。ローカルの実 MSI 試験は専用の
+  使い捨て VM / Windows Sandbox に限定する。同一ホストの別フォルダーは
+  MSI 製品登録を隔離しない。2026-10-03 の実測は `verification.md` を参照。
+  GitHub Actions 専用ガードを持つ全スクリプトはローカルで実行しない。
+  専用ゲストでは元のケース関数を変更せず読み込む別ハーネスで検証できる。
+  GITHUB_ACTIONS を偽装せず、ケース単体の実測と CI 全体の成功を区別する。
+
 - 動画別RESTの`CmafCacheInfo`はHLSに限定せず、変換MP4・旧形式も返す。完成選択は
   既存の`Cache.getPreferredCachedVideo`と揃え、`format`と品質を表示に渡す。
   部分・音声のみ・低品質の状態を保持し、MP4の表示修正をHLS再取得設定の変更と混同しない。
@@ -64,6 +81,10 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
   版・日付、Unix配布版数、タグ、実JARの表示定数を照合する。manifestの版・日付は正規
   ビルドで自動生成する。公開ソースが正しくても導入JARが古い場合があるため、表示不一致は
   稼働API・導入JAR・公開JARを区別して調べる。本番の置換・再起動は別途の承認範囲で扱う。
+- ローカルE2Eの裸LF拒否が200応答になる場合は、送受信バイトも照合する。
+  2026-10-03の統合検証では、独立ループバックへの75バイトのLF要求が受信側で
+  78バイトのCRLF要求へ変換された。同じ生成クラスへの直接入力は拒否したため、
+  製品の入力検証不良と断定せず、remote CIと比較する。詳細は`verification.md`を参照。
 - watchV4では初期HTMLの`data.response.$watchV4.data`に動画・品質情報と`media.hls.url`がある。
   `nvapi.nicovideo.jp/v4/watch/<動画ID>`の更新応答には動画IDなしの`data.media`だけの場合もある。
   旧`access-rights/hls`を前提にせず、`WatchVars`と`WatchRewriter`からCMAFのURL対応を登録する。

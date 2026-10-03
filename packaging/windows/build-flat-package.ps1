@@ -167,10 +167,16 @@ function New-WindowsMsi {
     <CustomAction Id="NicoCacheRemoveEmptyLegacyInstallDir" Directory="SystemFolder" ExeCommand="cmd.exe /d /c rmdir &quot;[%LOCALAPPDATA]\Programs\NicoCache_nl&quot;" Execute="deferred" Return="ignore" Impersonate="yes" />
     <CustomAction Id="NicoCacheSetArpInstallLocation" Property="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" />
     <CustomAction Id="NicoCacheRollbackWindowsSetup" Directory="TARGETDIR" ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[NICOCACHE_INSTALLDIR]setup\windows\first-run-setup.ps1&quot; -Action Rollback -RemoveApplicationConfig" Execute="immediate" Return="check" />
+    <!-- 画面の初期値を復元してから選択を受け付け、明示指定は上書きしない。 -->
+    <InstallUISequence>
+      <Custom Action="NicoCacheSetLegacyDefaultInstallDir" After="AppSearch">NICOCACHE_INSTALLDIR</Custom>
+      <Custom Action="NicoCacheMarkLegacyDefaultInstallDir" After="NicoCacheSetLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR ~= NICOCACHE_LEGACY_DEFAULT_INSTALLDIR</Custom>
+      <Custom Action="NicoCacheRestoreInstallDir" After="NicoCacheMarkLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR AND NOT INSTALLFOLDER</Custom>
+    </InstallUISequence>
     <InstallExecuteSequence>
       <Custom Action="NicoCacheSetLegacyDefaultInstallDir" After="AppSearch">NICOCACHE_INSTALLDIR</Custom>
       <Custom Action="NicoCacheMarkLegacyDefaultInstallDir" After="NicoCacheSetLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR ~= NICOCACHE_LEGACY_DEFAULT_INSTALLDIR</Custom>
-      <Custom Action="NicoCacheRestoreInstallDir" After="NicoCacheMarkLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Custom>
+      <Custom Action="NicoCacheRestoreInstallDir" After="NicoCacheMarkLegacyDefaultInstallDir">NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR AND NOT INSTALLFOLDER</Custom>
       <Custom Action="NicoCacheSetArpInstallLocation" After="CostFinalize">NOT Installed</Custom>
       <Custom Action="NicoCacheRollbackWindowsSetup" Before="RemoveFiles">REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE AND NICOCACHE_INSTALLDIR</Custom>
       <Custom Action="NicoCacheRemoveEmptyLegacyInstallDir" After="InstallFiles">NICOCACHE_MIGRATE_LEGACY_INSTALLDIR</Custom>
