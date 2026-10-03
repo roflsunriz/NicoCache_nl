@@ -1,5 +1,58 @@
 # 検証手順
 
+## サムネイルキャッシュ保存先の不在と起動（2026-10-03）
+
+対象報告は https://egg.5ch.io/test/read.cgi/software/1769353155/54 。本文へのアクセスは
+この環境からできなかったため、依頼で示された「キャッシュ無効・`thcache`不在」の条件を
+隔離fixtureで検証した。GitHub APIで確認した最新mainは
+`14a255998fdbaa3f87329d3d742c3d2cfcfa2060`、最新公開版はv1.9.3だった。
+
+修正前の正規ビルドで、無効・不在を診断が必須フォルダーの不足として扱う問題は再現した。
+同条件の本体は起動し、`thcache`を作成しなかったため、報告の本体起動失敗までは再現していない。
+有効時は既定の不在フォルダーを作成するが、親もない保存先では`mkdir()`の失敗を無視し、
+本体が待受状態になっても`ref/`を作成できなかった。新しい起動回帰テストを未修正JARに適用し、
+有効・親も不在の条件で失敗することも確認した。
+
+診断は`cacheThumbnail=false`なら保存先を対象外とする。有効時は`thcacheFolder`を
+利用者データルート基準の相対パス、または絶対パスとして解決し、キャッシュと`ref/`の
+存在・種別・読み書き権限、未作成時の親を読み取り専用で確認する。作成可能な保存先は
+本体起動時の自動作成を案内する。本体は無効時の設定再読込でも保存先を触らず、
+有効時は親から作成し、`IOException`を原因付きの`UncheckedIOException`として伝える。
+`ref/`がないときの既存サムネイルからの参照移行は維持する。
+
+検証環境はWindows 11／Temurin 25.0.4.1、独立checkoutと専用の`.test-work/`だけを使った。
+次のコマンドの`dependencies`には既存の検証用ライブラリをコピーし、依存関係は変更していない。
+
+- `test-launcher.ps1 -KeepWorkDir`: 全検証成功。データルート診断10ケースには、無効・不在、
+  無効・同名ファイル、defaults継承とユーザー設定優先、相対／絶対パス、親不在、親ファイル・
+  `ref/`衝突、書込不可、日本語／英語案内、診断でファイルを作らないことを含む。
+- `test-functional.ps1 -LibraryDirectory .test-work/dependencies -KeepWorkDir`: 最終29項目成功。
+  起動回帰の12条件（有効／無効×不在・既存・親も不在・同名ファイル・親ファイル・`ref/`衝突）、
+  設定再読込と再有効化、既存参照の移行、書込不可を含む。既存のサムネイル取得とキャッシュ再利用も
+  成功。Extension ABI 1,482項目、ハッシュと同梱サンプルのコンパイル成功。
+- 上記の本体・ランチャー・テストは`--release 11 -Xlint:all -Werror`でコンパイル成功。
+  Windowsの書込不可はfixture限定のACL変更で作り、`Files.isWritable=false`を確認し、
+  `finally`で元の権限へ復元した。テストはPOSIX権限にも対応するが、Linux/macOSとJDKの
+  全互換マトリクスは今回実行していない。PC全体の権限やOS設定は変更していない。
+- `build-javac.ps1 -LibraryDirectory .test-work/dependencies -Clean`: 正規5 JAR生成成功。
+  `check-release-version.ps1 -JarPath NicoCache_nl.jar`: v1.9.3／2026-10-03の整合成功。
+- 最終生成したランチャー／本体／診断JARを別fixtureへコピーし、無効・不在、無効・同名ファイル、
+  有効・親も不在、有効・既存の4条件で`--headless --start`からHTTP応答を確認した。
+  無効時の不作成、衝突ファイル・既存キャッシュの保全、有効時の`ref/`作成と、4回の
+  `--headless --stop`による本体・診断の正常停止も成功。
+- `test-e2e.ps1 -LibraryDirectory .test-work/dependencies -KeepWorkDir`: 11項目中10項目成功。
+  実ランチャーから無効・不在の本体起動、管理API、診断、障害レポート、正常停止は成功した。
+  残る1件は`malformed and ambiguous HTTP rejection`の裸のLF要求が200を返す既存問題で、
+  未修正v1.9.3 JARでも同じ失敗を確認した。テストを弱めず、専用タスクの範囲外となるHTTP処理は
+  変更していない。E2Eスクリプトがこの失敗で停止するため、後段のGUI検証は未実行。
+  未修正JARの比較実行では、再起動時のcontrol statusファイル置換にも一度
+  `AccessDeniedException`が発生した。今回の変更JARでのE2E再起動と最終4条件の起動停止では
+  この追加失敗は発生していない。
+
+稼働JAR・実config/PAC/cert/auth・実キャッシュには触れていない。公開、push、PR、
+実配備、掲示板投稿は行っていない。報告の本体起動失敗を特定するには、失敗環境の
+有効な`cacheThumbnail`／`thcacheFolder`と、その起動時の例外を追加で照合する必要がある。
+
 ## MP4変換後のキャッシュ済み表示
 
 動画別RESTの`CmafCacheInfo`はHLSだけを返しており、キャッシュ索引や従来の一覧で認識される

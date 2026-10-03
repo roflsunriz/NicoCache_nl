@@ -56,6 +56,13 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## 変更時の注意
 
+- サムネイル保存先の必要条件は`cacheThumbnail`と`thcacheFolder`に従う。
+  `DataRootInspector`の診断は書き込みを行わず、本体`ThumbProcessor2.update`は無効時に
+  保存先を触らない。有効時の作成失敗は原因付きで伝え、`ref/`不在時の既存サムネイル参照
+  移行を維持する。回帰は`test-launcher.ps1`と`test-functional.ps1`、実ランチャー経路は
+  `test-e2e.ps1`で確認する。2026-10-03のv1.9.3隔離fixtureでは、無効・`thcache`不在の
+  診断「要確認」は再現したが本体起動失敗は再現しなかった。詳細は`verification.md`を参照。
+
 - 動画別RESTの`CmafCacheInfo`はHLSに限定せず、変換MP4・旧形式も返す。完成選択は
   既存の`Cache.getPreferredCachedVideo`と揃え、`format`と品質を表示に渡す。
   部分・音声のみ・低品質の状態を保持し、MP4の表示修正をHLS再取得設定の変更と混同しない。
