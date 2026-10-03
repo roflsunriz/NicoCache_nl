@@ -326,3 +326,74 @@ job権限を`contents: read`と`pull-requests: write`に限定したままにす
 実際の Dependabot PR がまだない場合、動作経路は未検証として扱う。実 PR 発生後に自動化ジョブ、CI の再試行、マージ結果を確認する。
 
 大量の Dependabot PR により CI 完了より分類が遅れる場合でも、分類後の `workflow_dispatch` が現在の PR 番号と head SHA を照合して再評価する。別の作成者、古い SHA、未完了の CI はマージしない。
+## 2026-10-03 Windows MSI の配置先引継ぎ調査
+
+- 実行環境は既存 Windows Sandbox（Windows 11 Enterprise 26100、
+  WDAGUtilityAccount）。ホストの製品登録と HKCU を共有しない使い捨てゲストで、
+  ゲスト内 VHD に独立 NTFS ボリューム `M:`（ラベル `ReproM`）を作成した。
+  共有はタスク専用の読取入力とログ出力だけに限定した。
+- 公開 v1.9.1 / v1.9.3 MSI の SHA-256 はそれぞれ
+  `f15a231f1ceb48e80a0a462af083562b6043c6ffe575cf5e94911c9b08f7044c` /
+  `17190dab2434343a349a4c2c5b2abb54ec529dc29f972e63e603fb875225f252`。
+  GitHub Release の検証値と一致したものを使用した。
+- 指定なしの通常更新では `M:\nico` を保持し、旧版の設定・試験用キャッシュの
+  ハッシュも一致した。旧版削除直後に試験用 MST で失敗させると、通常の
+  ロールバックで v1.9.1 と InstallDir が復元され、指定なしの再実行も
+  v1.9.3 を `M:\nico` に配置した。
+- 既存 `M:\nico` に対して `/i <v1.9.3.msi> /qn INSTALLFOLDER="M:\explicit"`
+  を指定すると、実ログの `NicoCacheRestoreInstallDir` が
+  `M:\explicit` を `M:\nico\` に変更した。配布版番号ファイルと InstallDir も
+  `M:\nico` を指した。明示指定を実行シーケンスが上書きする経路は再現済み。
+- `M:\Config.msi` への拒否 ACL 注入だけでは更新は成功し、報告された `.rbf` の
+  Error 5 は再現していない。掲示板での再実行時の入力値・具体的 C 側パス・
+  原因ファイルも不明であり、明示指定の上書きと同じ経路とは断定しない。
+- 旧版削除直後に待機する試験用 MST を入れ、ゲスト内の msiexec と待機プロセスを
+  強制終了した。直後は InstallDir と両製品の登録がなかったが、指定なし／
+  `INSTALLFOLDER="M:\nico"` 明示の再実行はいずれも `M:\nico` に v1.9.3 を配置し、
+  設定と試験用キャッシュも保持した。C 側へ移る経路は、この条件では未再現。
+- 診断ログは調査タスクの `isolation/output/` に保存した。オフライン Sandbox の
+  Windows Installer パッケージ検証は約2分、MST 使用時はさらに約2分を要した。
+  検証途中のハーネスタイムアウトと、実 MSI の最終終了コードを区別する。
+
+### 再現手順と修正版の回帰
+
+1. ホストで実行せず、専用 Sandbox 内で VHD の `M:` を作り、公開 v1.9.1 を
+   `msiexec /i NicoCache_nl-1.9.1.msi /qn INSTALLFOLDER="M:\nico" /L*V! <log>`
+   で入れる。試験用 config.properties と cache/repro-sentinel.txt を追加する。
+2. 公開 v1.9.3 の指定なし更新と `INSTALLFOLDER="M:\explicit"` 更新を、
+   それぞれ旧版を入れ直して比較する。後者の期待値は `M:\explicit`、
+   実際は `M:\nico` だった。更新ログの PROPERTY CHANGE、HKCU InstallDir、
+   Windows Installer ProductState、NicoCache_nl.version を合わせて判定した。
+3. 診断用 MST だけに Type 19 の失敗、または Type 34 の待機を追加し、
+   InstallExecuteSequence の1502（RemoveExistingProducts の直後）で実行する。
+   通常ロールバックと、ゲスト内プロセス強制終了後の再実行を別々に観測する。
+   MST は試験専用で、製品コードには追加していない。
+4. 明示指定上書きが実測で再現した後に、復元条件へ `NOT INSTALLFOLDER` を加え、
+   対話画面でも CostInitialize より前に既存先を復元する最小変更を行った。
+   旧版削除順序や、失敗後の登録を強制的に書き戻す処理は変更していない。
+
+- 正規ビルドで作成した試験用修正版 MSI の SHA-256:
+  `1b4d1c4f832a10ce5e53c8035ce13435cb14e6fe56bf9c7dabd45e1c5a65999a`。
+  MSI 構造検証と変更した PowerShell ファイルの構文検証は成功した。
+- 修正版の指定なし通常更新は終了0、`M:\nico` と v1.9.3 を確認し、設定と
+  試験キャッシュの SHA-256 は更新前と一致した。
+- 修正版を旧版削除直後に失敗させると終了1603。v1.9.1 の ProductState=5、
+  InstallDir=`M:\nico\` と両ハッシュが復元された。
+- その状態から修正版の実対話画面を起動すると `M:\nico\` が初期表示された。
+  画面で `M:\explicit` を選んで完了すると、終了0、登録先と実ファイルが
+  `M:\explicit\`、v1.9.3 の ProductState=5 になった。実行側の復元処理は
+  条件不成立でスキップされ、旧版の ProductState=-1 も確認した。
+- 配置先を変更した場合、旧配置先の設定と試験キャッシュは同じハッシュで残った。
+  任意の配置先変更に伴う設定・キャッシュの自動移動はこの変更には含めない。
+- 対話操作待ちで最初の観測処理は10分のタイムアウトを記録した。MSI は終了させず、
+  完了画面を閉じた後の実ログで client MainEngineThread=0 と製品状態を確認した。
+  タイムアウト記録は削除せず、別の完了観測処理の結果も保存した。
+- 修正版の証拠は `fixed-normal-upgrade*`、`fixed-failure-upgrade*`、
+  `fixed-explicit-ui*`、`ui-04-install-folder*` / `ui-05-selected-explicit*`。
+  元版の証拠は `normal-upgrade-explicit-other*`、`injected-fail-*`、`hardkill-*`。
+  状態 JSON の未存在値 `{}` は PowerShell 5 の空値であり、配置先の値ではない。
+- ホストの HKCU InstallDir・ユーザーのアンインストール登録・NicoCache サービスは
+  試験前後で一致した（この環境ではいずれも未登録）。ホストに MSI を実行していない。
+  全ライフサイクル CI は既存の GitHub Actions 専用ガードを維持し、ローカルでは
+  実行していない。追加した CustomExplicit ケースの CI 実行は未確認であり、
+  上記の実 Sandbox 試験・MSI 構造検証と区別する。

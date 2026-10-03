@@ -63,6 +63,13 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
   `test-e2e.ps1`で確認する。2026-10-03のv1.9.3隔離fixtureでは、無効・`thcache`不在の
   診断「要確認」は再現したが本体起動失敗は再現しなかった。詳細は`verification.md`を参照。
 
+- MSI の InstallDir 復元は UI の CostInitialize より前にも実行し、明示済みの
+  INSTALLFOLDER を上書きしない。実行シーケンスだけで復元すると、対話選択が
+  旧配置先へ戻る。`test-windows-msi-structure.ps1` と実 MSI ライフサイクルの
+  Custom / CustomExplicit を併せて検証する。ローカルの実 MSI 試験は専用の
+  使い捨て VM / Windows Sandbox に限定する。同一ホストの別フォルダーは
+  MSI 製品登録を隔離しない。2026-10-03 の実測は `verification.md` を参照。
+
 - 動画別RESTの`CmafCacheInfo`はHLSに限定せず、変換MP4・旧形式も返す。完成選択は
   既存の`Cache.getPreferredCachedVideo`と揃え、`format`と品質を表示に渡す。
   部分・音声のみ・低品質の状態を保持し、MP4の表示修正をHLS再取得設定の変更と混同しない。
