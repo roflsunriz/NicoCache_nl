@@ -85,6 +85,11 @@ public final class EndToEndTestMain {
             prepareSandbox();
             startProduct();
 
+            run("launcher starts core with disabled missing thumbnail cache", () -> {
+                if (Files.exists(data.resolve("thcache"))) {
+                    throw new AssertionError("disabled cache must remain absent after launcher startup");
+                }
+            });
             run("launcher and control API", this::testControlApi);
             run("launcher starts diagnostics watchdog",
                     this::testDiagnosticsStarted);
@@ -121,7 +126,7 @@ public final class EndToEndTestMain {
             }
             throw new AssertionError("end-to-end tests failed");
         }
-        System.out.println("End-to-end tests passed: 10");
+        System.out.println("End-to-end tests passed: 11");
     }
 
     private void prepareSandbox() throws IOException {
@@ -131,7 +136,6 @@ public final class EndToEndTestMain {
         Files.createDirectories(data.resolve("extensions"));
         Files.createDirectories(data.resolve("cache"));
         Files.createDirectories(data.resolve("cvcache"));
-        Files.createDirectories(data.resolve("thcache"));
 
         try (var defaults = Files.list(repository.resolve("defaults"))) {
             defaults.filter(Files::isRegularFile).forEach(source -> copy(

@@ -236,7 +236,7 @@ if ($setLegacySequenceRow.Count -ne 1 -or
             'NICOCACHE_INSTALLDIR ~= NICOCACHE_LEGACY_DEFAULT_INSTALLDIR' -or
         $restoreSequenceRow.Count -ne 1 -or
         [string]$restoreSequenceRow[0][1] -ne
-            'NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR' -or
+            'NICOCACHE_INSTALLDIR AND NOT NICOCACHE_MIGRATE_LEGACY_INSTALLDIR AND NOT INSTALLFOLDER' -or
         $removeEmptySequenceRow.Count -ne 1 -or
         [string]$removeEmptySequenceRow[0][1] -ne
             'NICOCACHE_MIGRATE_LEGACY_INSTALLDIR' -or
@@ -253,6 +253,38 @@ if ($setLegacySequenceRow.Count -ne 1 -or
         $migrationSequences.NicoCacheRemoveEmptyLegacyInstallDir -ge
             $migrationSequences.InstallFinalize) {
     throw '旧誤既定先の判定、任意インストール先保持、製品除去順序が不正です'
+}
+$uiLocationRows = @(Invoke-MsiQuery (
+        'SELECT `Action`, `Condition`, `Sequence` FROM `InstallUISequence` ' +
+        "WHERE `Action` = 'AppSearch' OR `Action` = 'CostInitialize' OR " +
+        "`Action` = 'NicoCacheSetLegacyDefaultInstallDir' OR " +
+        "`Action` = 'NicoCacheMarkLegacyDefaultInstallDir' OR " +
+        "`Action` = 'NicoCacheRestoreInstallDir'"
+    ) 3)
+$uiLocationSequences = @{}
+foreach ($row in $uiLocationRows) {
+    $uiLocationSequences[[string]$row[0]] = [int]$row[2]
+}
+foreach ($action in @('NicoCacheSetLegacyDefaultInstallDir',
+        'NicoCacheMarkLegacyDefaultInstallDir', 'NicoCacheRestoreInstallDir')) {
+    $uiRow = @($uiLocationRows | Where-Object { [string]$_[0] -eq $action })
+    $executeRow = @($migrationSequenceRows | Where-Object {
+        [string]$_[0] -eq $action
+    })
+    if ($uiRow.Count -ne 1 -or
+            [string]$uiRow[0][1] -ne [string]$executeRow[0][1]) {
+        throw '対話画面と無人実行でインストール先復元条件が一致しません'
+    }
+}
+if ($uiLocationSequences.AppSearch -ge
+        $uiLocationSequences.NicoCacheSetLegacyDefaultInstallDir -or
+        $uiLocationSequences.NicoCacheSetLegacyDefaultInstallDir -ge
+        $uiLocationSequences.NicoCacheMarkLegacyDefaultInstallDir -or
+        $uiLocationSequences.NicoCacheMarkLegacyDefaultInstallDir -ge
+        $uiLocationSequences.NicoCacheRestoreInstallDir -or
+        $uiLocationSequences.NicoCacheRestoreInstallDir -ge
+        $uiLocationSequences.CostInitialize) {
+    throw '既存インストール先の復元が対話画面の既定値計算より先になっていません'
 }
 $tables = @(Invoke-MsiQuery 'SELECT `Name` FROM `_Tables`' 1 | ForEach-Object { [string]$_[0] })
 if ($tables -contains 'WixRemoveFolderEx') {

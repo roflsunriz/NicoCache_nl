@@ -121,6 +121,9 @@ public final class FunctionalTestMain {
                         this::testNicoCacheWebApiContract);
                 run("control force-shutdown contract", this::testControlForceShutdown);
             } else {
+                run("thumbnail cache startup and disabled observer",
+                        () -> ThumbnailCacheStartupTest.run(repository,
+                                sandbox.resolve("thumbnail-startup"), applicationClasspath));
                 run("URL resource cache response policies", this::testUrlResourceCachePolicies);
                 run("URL resource transfer timeout uses public cancellation APIs",
                         this::testUrlResourceTransferTimeout);
@@ -132,6 +135,8 @@ public final class FunctionalTestMain {
                         this::testTemplateAndCmafUtility);
                 run("CMAF cache progress size stability",
                         CmafCachingProgressUnitTest::run);
+                run("watchV4 metadata and initial playlist registration", WatchV4UnitTest::run);
+                run("converted MP4 and classic cache information", ConvertedCacheInfoUnitTest::run);
                 run("LRU map minimum capacity and eviction",
                         this::testLruMapCapacity);
                 run("GUI log filtering primitives", LogSearchUnitTest::run);
@@ -647,6 +652,25 @@ public final class FunctionalTestMain {
                         + "</thumb></nicovideo_thumb_response>")
                         .getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "text/xml; charset=utf-8");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/watch/sm900010".equals(path)) {
+                byte[] body = WatchV4UnitTest.html(WatchV4UnitTest.data("sm900010",
+                        cmafMasterUrl().replace("bbbbbbbbbbbbbbbb", "1111111111111111")))
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "text/html; charset=utf-8");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+                return;
+            }
+            if ("/v4/watch/sm900010".equals(path)) {
+                byte[] body = ("{\"meta\":{\"status\":200},\"data\":{"
+                        + "\"responseType\":\"media\",\"media\":{\"hls\":{\"url\":\""
+                        + cmafMasterUrl() + "?session=functional\"}}}}")
+                        .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
                 exchange.sendResponseHeaders(200, body.length);
                 exchange.getResponseBody().write(body);
                 return;
@@ -1469,11 +1493,20 @@ public final class FunctionalTestMain {
     }
 
     private void testCmafMasterFlow() throws Exception {
-        Response accessRights = request("GET http://nvapi.nicovideo.jp/v1/watch/sm900010/access-rights/hls"
-                + "?actionTrackId=functional HTTP/1.1\r\n"
-                + "Host: nvapi.nicovideo.jp\r\nConnection: close\r\n\r\n");
-        assertEquals(200, accessRights.status, "CMAF access-rights status");
-        assertContains(accessRights.bodyText(), cmafMasterUrl(), "CMAF contentUrl");
+        Response watch = request(absoluteRequest("http://www.nicovideo.jp/watch/sm900010",
+                "www.nicovideo.jp"));
+        assertEquals(200, watch.status, "watchV4 initial HTML status");
+        assertContains(watch.bodyText(), "$watchV4", "watchV4 response passes through");
+
+        Response initialMaster = request(absoluteRequest(cmafMasterUrl()
+                .replace("bbbbbbbbbbbbbbbb", "1111111111111111") + "?session=initial",
+                "delivery.domand.nicovideo.jp"));
+        assertContains(initialMaster.bodyText(), "nicocachenl_domandcvikey=",
+                "initial HTML alone enables caching");
+        Response refresh = request(absoluteRequest(
+                "http://nvapi.nicovideo.jp/v4/watch/sm900010?__retry=1", "nvapi.nicovideo.jp"));
+        assertEquals(200, refresh.status, "watchV4 media refresh status");
+        assertContains(refresh.bodyText(), "\"responseType\":\"media\"", "partial response passes through");
 
         Response master = request("GET " + cmafMasterUrl() + "?session=functional HTTP/1.1\r\n"
                 + "Host: delivery.domand.nicovideo.jp\r\nConnection: close\r\n\r\n");
@@ -1975,6 +2008,20 @@ public final class FunctionalTestMain {
         assertContains(cacheInfo.bodyText(), "\"videoMode\":\"720p\"",
                 "REST cache entry mode");
 
+        Response convertedInfo = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900002/cache-entries", "", ""));
+        assertEquals(200, convertedInfo.status, "REST converted MP4 entry status");
+        assertContains(convertedInfo.bodyText(), "\"preferred\":\"sm900002[720p,128].mp4\"",
+                "REST converted MP4 preferred entry");
+        assertContains(convertedInfo.bodyText(), "\"format\":\"MP4\"",
+                "REST converted MP4 format");
+        assertContains(convertedInfo.bodyText(), "\"complete\":true",
+                "REST converted MP4 completed state");
+        Response convertedMedia = request(nicoCacheWebRequest("GET",
+                "/api/v1/videos/sm900002/media", "", ""));
+        assertEquals(200, convertedMedia.status, "REST converted MP4 media status");
+        assertEquals("dmc-mp4-content", convertedMedia.bodyText(), "REST converted MP4 media body");
+
         Response cacheEntries = request(nicoCacheWebRequest("GET",
                 "/api/v1/cache-entries", "", ""));
         long hlsDirectorySize = Files.size(sandbox.resolve(
@@ -2033,6 +2080,8 @@ public final class FunctionalTestMain {
                 "REST batch cache query first id");
         assertContains(batch.bodyText(), "\"sm900003\"",
                 "REST batch cache query second id");
+        assertContains(batch.bodyText(), "\"preferred\":\"sm900001\"",
+                "REST batch query includes classic MP4 cache");
 
         Response search = request(nicoCacheWebRequest("GET",
                 "/api/v1/cache-entries?query=Api&order=desc", "", ""));

@@ -116,6 +116,7 @@ class FakeElement {
       return this.hasAttribute("data-ncnl-cache-icon");
     }
     if (selector === ".cacheIcon") return this.classList.contains("cacheIcon");
+    if (selector === ".ncnl-cache-video") return this.classList.contains("ncnl-cache-video");
     return false;
   }
 
@@ -255,6 +256,40 @@ function videoInfo({videoMode = "1080p", audioBitrate = 192, legacyLow = false} 
   };
 }
 
+test("変換MP4・旧MP4をキャッシュ済み表示し、部分キャッシュを表示しない", async () => {
+  const convertedId = "sm1[720p,192].mp4";
+  const converted = {
+    preferred: convertedId, completes: [convertedId],
+    caches: {[convertedId]: {complete: true, format: "MP4", videoMode: "720p", audioBitrate: 192}},
+  };
+  const classic = {
+    preferred: "sm2", completes: ["sm2"],
+    caches: {sm2: {complete: true, format: "MP4", videoMode: null, audioBitrate: 0}},
+  };
+  const partial = {preferred: null, completes: [], caches: {
+    "sm3[1080p,192].mp4": {complete: false, format: "MP4", videoMode: "1080p", audioBitrate: 192},
+  }};
+  const audioOnly = {preferred: "sm4[0p,192].mp4", completes: ["sm4[0p,192].mp4"], caches: {
+    "sm4[0p,192].mp4": {complete: true, format: "MP4", videoMode: "0p", audioBitrate: 192},
+  }};
+  const page = createPage({sm1: converted, sm2: classic, sm3: partial, sm4: audioOnly});
+  await flushAsyncWork();
+  const convertedIcon = page.cards[0].thumbnailHost.querySelector("[data-ncnl-cache-icon]");
+  assert.ok(convertedIcon);
+  assert.match(convertedIcon.getAttribute("title"), /キャッシュ済み: MP4.*720p.*192kbps/);
+  assert.equal(convertedIcon.getAttribute("data-ncnl-cache-id"), convertedId);
+  assert.ok(convertedIcon.classList.contains("ncnl-cache-quality-hd"));
+  const classicIcon = page.cards[1].thumbnailHost.querySelector("[data-ncnl-cache-icon]");
+  assert.ok(classicIcon);
+  assert.match(classicIcon.getAttribute("title"), /キャッシュ済み: MP4$/);
+  assert.equal(page.cards[2].thumbnailHost.querySelector("[data-ncnl-cache-icon]"), null);
+  const audioIcon = page.cards[3].thumbnailHost.querySelector("[data-ncnl-cache-icon]");
+  assert.ok(audioIcon);
+  assert.match(audioIcon.getAttribute("title"), /キャッシュ済み: MP4.*音声のみ.*192kbps/);
+  assert.doesNotMatch(audioIcon.getAttribute("title"), /映像/);
+  assert.equal(audioIcon.querySelector(".ncnl-cache-video").textContent, "音声");
+});
+
 const flushAsyncWork = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 test("v3のCMAF品質とキャッシュなしをリンク色classとアイコンへ反映する", async () => {
@@ -386,7 +421,7 @@ test("キャッシュ情報取得後に遅延描画されたサムネイルへ�
   assert.equal(page.requests.length, 1);
 });
 
-function createWatchPage(thumbnailWidth) {
+function createWatchPage(thumbnailWidth, cacheInfo = videoInfo()) {
   const itemSelector =
     '[data-anchor-page="watch"][data-anchor-href*="/watch/"][data-decoration-video-id]';
   const thumbnailSelector = 'a[href*="/watch/"] img[src*="/thumbnails/"]';
@@ -464,7 +499,7 @@ function createWatchPage(thumbnailWidth) {
       requests.push({url, init});
       return {
         ok: true,
-        json: async () => ({sm1: videoInfo()}),
+        json: async () => ({sm1: cacheInfo}),
       };
     },
     MutationObserver: FakeMutationObserver,
@@ -498,4 +533,16 @@ test("視聴ページの関連動画もサムネイル幅に応じてアイコ�
   page.thumbnail.clientWidth = 94;
   page.resizeObservers[0].callback([{target: page.thumbnail}]);
   assert.equal(icon.classList.contains("ncnl-cache-icon--compact"), true);
+});
+
+test("視聴ページの変換MP4にもキャッシュ済み品質を表示する", async () => {
+  const cacheId = "sm1[720p,192].mp4";
+  const page = createWatchPage(160, {preferred: cacheId, completes: [cacheId], caches: {
+    [cacheId]: {complete: true, format: "MP4", videoMode: "720p", audioBitrate: 192},
+  }});
+  await flushAsyncWork();
+  const icon = page.item.querySelector(":scope .cacheIcon");
+  assert.ok(icon);
+  assert.match(icon.getAttribute("title"), /キャッシュ済み: MP4.*720p.*192kbps/);
+  assert.equal(icon.getAttribute("data-ncnl-cache-id"), cacheId);
 });

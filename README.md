@@ -141,6 +141,8 @@ java -jar NicoCacheLauncher.jar --headless --check-data-root
   NicoCache_nl経由で各ページを開くと自動表示され、動画リンクへカーソルを合わせると
   サムネイル情報ポップアップも表示されます。新しく保存するCMAF/Domandキャッシュの
   ファイル名には`low`を付けませんが、既存の`low`付きキャッシュも引き続き利用できます。
+  変換済みMP4や旧形式キャッシュにも保存済みバッジを表示します。MP4の形式はツールチップで
+  確認でき、音声のみは「音声」と表示します。取得途中のキャッシュには完成バッジを付けません。
 - **コモンヘッダーのキャッシュ操作**: CommonHeaderのあるページへ「NicoCache」メニューを
   追加しました。ログイン時はアカウント項目の直前、非ログイン時は「ニコニコ会員登録」と
   アカウントプレースホルダーの間に表示されます。視聴ページでは「動画保存」「コメント保存」
@@ -168,4 +170,4 @@ java -jar NicoCacheLauncher.jar --headless --check-data-root
 
 ## 依存更新の自動処理
 
-Dependabot は対象の依存関係を毎週確認します。patch／minor 更新は必須の `CI` と、変更内容に応じて起動した Standalone Updater・Unix Packages・Windows Installer を含む全 PR チェックが成功した後に自動で squash merge されます。CI の失敗ジョブは 1 回だけ再実行します。再失敗した PR は残して手動で修正します。major 更新は手動で確認します。
+Dependabot は対象の依存関係を毎週確認します。patch／minor／major 更新は必須の `CI` と、変更内容に応じて起動した Standalone Updater・Unix Packages・Windows Installer を含む全 PR チェックが成功した後に自動で squash merge されます。CI の失敗ジョブは 1 回だけ再実行します。再失敗した PR は残して手動で修正します。

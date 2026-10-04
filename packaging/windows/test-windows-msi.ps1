@@ -39,6 +39,9 @@ $legacyInstallRoot = [System.IO.Path]::GetFullPath(
 $customInstallRoot = [System.IO.Path]::GetFullPath(
     (Join-Path $testRoot 'windows-msi-custom-install')
 )
+$explicitInstallRoot = [System.IO.Path]::GetFullPath(
+    (Join-Path $testRoot 'windows-msi-explicit-install')
+)
 $userDataRoot = [System.IO.Path]::GetFullPath(
     (Join-Path $testRoot 'windows-msi-user-data')
 )
@@ -75,6 +78,12 @@ if (-not $customInstallRoot.StartsWith(
 }
 if (Test-Path -LiteralPath $customInstallRoot) {
     throw "MSIカスタム試験先が既に存在します: $customInstallRoot"
+}
+if (-not $explicitInstallRoot.StartsWith(
+        $testRoot + [System.IO.Path]::DirectorySeparatorChar,
+        [System.StringComparison]::OrdinalIgnoreCase) -or
+        (Test-Path -LiteralPath $explicitInstallRoot)) {
+    throw "安全でない、または既に存在するMSI明示指定先です: $explicitInstallRoot"
 }
 foreach ($candidate in @($installRoot, $legacyInstallRoot)) {
     if (Test-Path -LiteralPath $candidate) {
@@ -392,22 +401,27 @@ function Assert-InstallRootRemoved {
 function Invoke-LocationUpgradeCase {
     param(
         [Parameter(Mandatory)]
-        [ValidateSet('LegacyWithoutConfig', 'Custom')]
+        [ValidateSet('LegacyWithoutConfig', 'Custom', 'CustomExplicit')]
         [string]$Case
     )
 
-    $isCustom = $Case -eq 'Custom'
+    $isCustom = $Case -in @('Custom', 'CustomExplicit')
+    $isExplicit = $Case -eq 'CustomExplicit'
     $previousRoot = if ($isCustom) {
         $customInstallRoot
     } else {
         $legacyInstallRoot
     }
-    $expectedRoot = if ($isCustom) {
+    $expectedRoot = if ($isExplicit) {
+        $explicitInstallRoot
+    } elseif ($isCustom) {
         $customInstallRoot
     } else {
         $installRoot
     }
-    $logSuffix = if ($isCustom) { 'custom' } else { 'legacy-no-config' }
+    $logSuffix = if ($isExplicit) { 'custom-explicit' } elseif ($isCustom) {
+        'custom'
+    } else { 'legacy-no-config' }
     $caseInstalled = $false
     $caseUpgraded = $false
     $caseFailure = $null
@@ -428,7 +442,7 @@ function Invoke-LocationUpgradeCase {
         Assert-RegisteredInstallRoot -ExpectedRoot $previousRoot
 
         $caseConfigPath = Join-Path $previousRoot 'config.properties'
-        if ($isCustom) {
+        if ($isCustom -and -not $isExplicit) {
             Set-Content -LiteralPath $caseConfigPath `
                 -Value 'installerLocationMarker=preserve-custom-location' `
                 -Encoding ascii
@@ -436,9 +450,13 @@ function Invoke-LocationUpgradeCase {
             throw '未起動旧版の試験前にconfig.propertiesが存在します'
         }
 
-        Invoke-MsiExec -ArgumentList @(
+        $upgradeArguments = @(
             '/i', "`"$resolvedMsi`"", '/qn', '/norestart'
-        ) `
+        )
+        if ($isExplicit) {
+            $upgradeArguments += "INSTALLFOLDER=`"$expectedRoot`""
+        }
+        Invoke-MsiExec -ArgumentList $upgradeArguments `
             -FailureMessage "新版MSIへの${Case}試験更新に失敗しました" `
             -LogPath (Join-Path $testRoot "msi-$logSuffix-upgrade.log")
         $caseUpgraded = $true
@@ -450,7 +468,12 @@ function Invoke-LocationUpgradeCase {
         Assert-ShortcutTargetsApplicationRoot -ExpectedRoot $expectedRoot
         Assert-RegisteredInstallRoot -ExpectedRoot $expectedRoot
 
-        if ($isCustom) {
+        if ($isExplicit) {
+            Assert-InstallRootRemoved -ApplicationRoot $previousRoot
+            Assert-InstallRootRemoved -ApplicationRoot $installRoot
+            Assert-InstallRootRemoved -ApplicationRoot $legacyInstallRoot
+            Write-Output 'PASS 更新時の明示INSTALLFOLDER優先と登録・ショートカット追従'
+        } elseif ($isCustom) {
             if ((Get-Content -Raw -LiteralPath (
                         Join-Path $expectedRoot 'config.properties'
                     )) -notmatch 'preserve-custom-location') {
@@ -513,6 +536,7 @@ $previousProductCode = Get-MsiProductCode -Path $resolvedPreviousMsi
 $currentProductCode = Get-MsiProductCode -Path $resolvedMsi
 Invoke-LocationUpgradeCase -Case LegacyWithoutConfig
 Invoke-LocationUpgradeCase -Case Custom
+Invoke-LocationUpgradeCase -Case CustomExplicit
 $installed = $false
 $upgraded = $false
 $userStatePath = Join-Path $userDataRoot 'data\installer-lifecycle-user.txt'

@@ -37,8 +37,14 @@ jobs:
         shell: pwsh
         run: git show -s --format="commit=%H%ncommitted=%cI%nsubject=%s" HEAD
 
+      - name: Validate release version metadata
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: ./check-release-version.ps1 -ReleaseTag $env:RELEASE_TAG
+
       - name: Set up default Temurin 25
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version-file: '.java-version'
@@ -88,6 +94,12 @@ jobs:
         shell: pwsh
         run: .\build-javac.ps1 -LibraryDirectory .\.test-work\release-dependencies -Clean
 
+      - name: Validate generated JAR release metadata
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: ./check-release-version.ps1 -ReleaseTag $env:RELEASE_TAG -JarPath ./NicoCache_nl.jar
+
       - name: Run functional and Extension ABI tests
         shell: pwsh
         run: |
@@ -105,7 +117,7 @@ jobs:
           path: .test-work/functional
 
       - name: Set up Temurin 25 for Windows installer
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version-file: '.java-version'
@@ -132,6 +144,12 @@ jobs:
             -PackageType All `
             -AppVersion $env:APP_VERSION `
             -ZipFileName "NicoCache_nl-$env:RELEASE_TAG.zip"
+
+      - name: Validate packaged Windows JAR release metadata
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ steps.release-tag.outputs.tag }}
+        run: ./check-release-version.ps1 -ReleaseTag $env:RELEASE_TAG -JarPath ./.test-work/windows-package/output/NicoCache_nl/NicoCache_nl.jar
 
       - name: Stage distribution archive
         shell: pwsh
@@ -278,7 +296,7 @@ jobs:
           ref: ${{ needs.build.outputs.tag }}
 
       - name: Set up default Temurin 25
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version-file: '.java-version'
@@ -302,6 +320,15 @@ jobs:
           ./packaging/unix/test-package.ps1 `
             -Platform $env:TARGET_PLATFORM `
             -AppVersion $env:APP_VERSION
+
+      - name: Validate packaged Unix JAR release metadata
+        shell: pwsh
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          $jar = "./.test-work/unix-package-$($env:TARGET_PLATFORM.ToLowerInvariant())/output/NicoCache_nl/NicoCache_nl.jar"
+          ./check-release-version.ps1 -ReleaseTag $env:RELEASE_TAG -JarPath $jar
 
       - name: Build and test Unix standalone updater packages
         shell: pwsh

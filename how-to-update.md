@@ -200,6 +200,9 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 4. 継続パッケージ検証の版固定値を更新する。
    `.github/workflows/unix-packages.yml` の `APP_VERSION` を本体版へ、
    `UPDATER_VERSION` を `updater/VERSION` と同じ値へ揃える。
+   `./check-release-version.ps1 -ReleaseTag "v<version>"`で表示定数・CHANGELOG・
+   配布版数・タグの一致を確認する。日付はリリース日を明示し、ビルド日の自動上書きや
+   src変更ごとの版番号自動増分は行わない。未リリースの変更は`Unreleased`へ記録する。
 5. 機能テストとExtension ABI互換テストを実行する。
 
    ```powershell
@@ -221,7 +224,14 @@ java -jar .\NicoCacheLauncher.jar --headless --start
 
    ```powershell
    .\build-javac.ps1 -LibraryDirectory .\.test-work\build-dependencies
+   .\check-release-version.ps1 -ReleaseTag "v<version>" -JarPath .\NicoCache_nl.jar
    ```
+
+   manifestの`Implementation-Version`と`NicoCache-Release-Date`は`Main.VER_STRING`
+   から自動生成される。検証はmanifestだけでなくJAR内の実際の表示定数も確認する。
+   CIとReleaseが不一致をエラーとして拒否するため、手動でmanifestだけを修正しない。
+   公開版が正しくても導入済みJARが古ければ稼働時の表示は変わらない。
+   配布JARと導入JARのハッシュ・表示を確認し、置換と再起動は別途明示的に実施する。
 
 7. `git status --short --branch` と `git diff --check` で、生成物や無関係な
    差分がないことを確認する。テストまたはビルドが失敗した場合はタグを作成せず、
@@ -286,9 +296,10 @@ majorとminorは0〜255、buildは0〜65535にする。本体とアップデー�
 
 ## リポジトリ依存関係
 
-GitHub Actionsは完全なコミットSHAへ固定し、Dependabotが毎週月曜日に同じ
-メジャー系列の更新を確認する。メジャー更新は自動追従せず、変更内容と移行条件を
-別途レビューする。Dependabotのpatch／minor更新PRは署名済みコミットとPR用CIの全チェック成功を確認した後に自動マージする。major更新とBouncy Castleの更新PRは手動で確認する。
+GitHub Actionsは完全なコミットSHAへ固定し、Dependabotが毎週月曜日に更新を確認する。
+patch／minor／majorを問わず、署名済みDependabot PRはPR用CIの全チェック成功後に
+自動マージする。初回CI失敗はfailed jobsだけを1回再実行し、再失敗したPRは手動で修正する。
+Bouncy Castleの更新PRは別の更新workflowで作成するため、個別に確認する。
 
 Bouncy Castleは毎週の `Update repository dependencies` workflow がMaven Central
 の公式メタデータから安定版を確認する。更新がある場合だけ
@@ -503,7 +514,7 @@ Linux/macOSパッケージの生成に失敗した場合は、既存のインス
 
 ## Dependabot PR の更新
 
-前提は `.github/dependabot.yml` と PR 用の `CI` です。変更パスに応じて Standalone Updater・Unix Packages・Windows Installer も起動します。更新 PR の head SHA と `gh pr checks <PR番号>` の結果を確認してください。patch／minor は起動した全チェック成功後に自動取り込みされます。初回 CI 失敗は failed jobs のみを 1 回再実行し、再失敗した PR は残して手動で修正します。
+前提は `.github/dependabot.yml` と PR 用の `CI` です。変更パスに応じて Standalone Updater・Unix Packages・Windows Installer も起動します。更新 PR の head SHA と `gh pr checks <PR番号>` の結果を確認してください。patch／minor／major は起動した全チェック成功後に自動取り込みされます。初回 CI 失敗は failed jobs のみを 1 回再実行し、再失敗した PR は残して手動で修正します。
 
 設定を変えたときは `actionlint .github/workflows/dependabot-automation.yml` と実際の PR の Actions 結果を確認します。問題があれば呼び出し先の共通 workflow SHA を直前の検証済み値へ戻すコミットを push します。取り込まれた依存更新に問題があれば通常の revert コミットで復旧します。
 

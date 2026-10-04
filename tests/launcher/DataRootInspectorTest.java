@@ -4,9 +4,17 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
 import java.security.KeyStore;
 import java.util.Comparator;
 import java.util.List;
+import java.util.EnumSet;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.ResourceBundle;
@@ -22,13 +30,15 @@ public final class DataRootInspectorTest {
         try {
             testIncompleteRoot(work);
             testCompleteRoot(work);
+            testThumbnailCacheSettings(work);
+            testThumbnailCachePermissions(work);
             testMissingTlsStoreIsBlocked(work);
             testMitmCertificateRequirements(work);
             testMitmTargetListIsAccepted(work);
             testMitmTargetMismatch(work);
             testTextEncodingMigrationReport(work);
             testLegacyLayoutIsReported(work);
-            System.out.println("Data-root inspection tests passed: 8");
+            System.out.println("Data-root inspection tests passed: 10");
         } finally {
             deleteTree(work);
         }
@@ -128,6 +138,135 @@ public final class DataRootInspectorTest {
         return ResourceBundle.getBundle("nicocache.launcher.messages", locale,
                 ResourceBundle.Control.getNoFallbackControl(
                         ResourceBundle.Control.FORMAT_PROPERTIES));
+    }
+
+    private static void testThumbnailCacheSettings(Path work) throws Exception {
+        Path application = createApplication(work.resolve("thumbnail-app"),
+                true, false);
+        Files.writeString(application.resolve("certificate-targets.txt"),
+                "expected.example\n", StandardCharsets.US_ASCII);
+        Path data = work.resolve("thumbnail-data");
+        createCompleteRoot(data);
+        Path config = application.resolve("config.properties");
+        String original = Files.readString(config);
+        Files.createDirectories(application.resolve("defaults"));
+        Files.writeString(application.resolve("defaults/thumbnail-cache.properties"),
+                "cacheThumbnail=true\nthcacheFolder=thcache\n");
+        Path thumbnail = data.resolve("thcache");
+        Files.delete(thumbnail);
+        assertEquals(DataRootInspection.ItemState.OK,
+                item(DataRootInspector.inspect(application, data),
+                        "directory-thcache").getState(),
+                "default-enabled cache is created at startup");
+        Files.writeString(config, original + "cacheThumbnail=false\n");
+        DataRootInspection disabled = DataRootInspector.inspect(application, data);
+        assertEquals(DataRootInspection.ItemState.NOT_APPLICABLE,
+                item(disabled, "directory-thcache").getState(),
+                "disabled missing thumbnails are not required");
+        assertEquals(DataRootInspection.OverallState.COMPLETE,
+                disabled.getState(), "disabled cache does not add attention");
+        assertTrue(!Files.exists(thumbnail), "inspection must remain read-only");
+        Files.writeString(thumbnail, "keep-disabled-file");
+        assertEquals(DataRootInspection.ItemState.NOT_APPLICABLE,
+                item(DataRootInspector.inspect(application, data),
+                        "directory-thcache").getState(),
+                "disabled cache does not inspect file collisions");
+        Files.writeString(config, original + "cacheThumbnail=true\n");
+        assertEquals(DataRootInspection.ItemState.BLOCKED,
+                item(DataRootInspector.inspect(application, data),
+                        "directory-thcache").getState(),
+                "enabled cache file collision is blocked");
+        Files.delete(thumbnail);
+        Path custom = data.resolve("nested/custom-thumbnails");
+        Files.writeString(config, original
+                + "cacheThumbnail=true\nthcacheFolder=nested/custom-thumbnails\n");
+        DataRootInspection creatable = DataRootInspector.inspect(application, data);
+        assertEquals(custom, item(creatable, "directory-thcache").getPath(),
+                "configured relative thumbnail path uses data root");
+        assertEquals(DataRootInspection.ItemState.OK,
+                item(creatable, "directory-thcache").getState(),
+                "missing writable thumbnail path is created by core on start");
+        assertEquals(DataRootInspection.OverallState.COMPLETE,
+                creatable.getState(), "automatic thumbnail creation is complete");
+        assertTrue(!Files.exists(custom), "diagnosis does not create thumbnail cache");
+        for (Locale locale : List.of(Locale.ENGLISH, Locale.JAPANESE)) {
+            String details = DataRootInspectionFormatter.details(creatable, messages(locale));
+            assertTrue(details.contains(locale.equals(Locale.JAPANESE)
+                            ? "本体起動時" : "on startup"),
+                    "automatic creation guidance is localized: " + locale);
+        }
+        Files.createDirectories(custom);
+        Files.writeString(custom.resolve("ref"), "keep-ref-collision");
+        assertEquals(DataRootInspection.ItemState.BLOCKED,
+                item(DataRootInspector.inspect(application, data),
+                        "directory-thcache").getState(),
+                "reference index collision is blocked");
+        Files.delete(custom.resolve("ref"));
+        Files.writeString(config, original + "cacheThumbnail=true\nthcacheFolder="
+                + custom.toString().replace("\\", "/") + "\n");
+        assertEquals(custom, item(DataRootInspector.inspect(application, data),
+                "directory-thcache").getPath(), "absolute thumbnail cache path");
+        Files.delete(custom);
+        Files.delete(custom.getParent());
+        Files.writeString(custom.getParent(), "keep-parent-collision");
+        assertEquals(DataRootInspection.ItemState.BLOCKED,
+                item(DataRootInspector.inspect(application, data),
+                        "directory-thcache").getState(),
+                "parent file collision is blocked");
+        assertEquals("keep-parent-collision", Files.readString(custom.getParent()),
+                "diagnosis preserves colliding parent file");
+    }
+
+    private static void testThumbnailCachePermissions(Path work) throws Exception {
+        Path application = createApplication(work.resolve("permissions-app"), true, false);
+        Path data = work.resolve("permissions-data");
+        createCompleteRoot(data);
+        Path locked = data.resolve("thcache");
+        AclFileAttributeView acl = Files.getFileAttributeView(locked,
+                AclFileAttributeView.class);
+        PosixFileAttributeView posix = Files.getFileAttributeView(locked,
+                PosixFileAttributeView.class);
+        List<AclEntry> oldAcl = acl == null ? null : acl.getAcl();
+        var oldPermissions = posix == null ? null : posix.readAttributes().permissions();
+        try {
+            if (acl != null) {
+                List<AclEntry> denied = new ArrayList<>(oldAcl);
+                denied.add(0, AclEntry.newBuilder().setType(AclEntryType.DENY)
+                        .setPrincipal(locked.getFileSystem().getUserPrincipalLookupService()
+                                .lookupPrincipalByName(System.getProperty("user.name")))
+                        .setPermissions(EnumSet.of(AclEntryPermission.WRITE_DATA,
+                                AclEntryPermission.APPEND_DATA,
+                                AclEntryPermission.WRITE_NAMED_ATTRS,
+                                AclEntryPermission.WRITE_ATTRIBUTES)).build());
+                acl.setAcl(denied);
+            } else if (posix != null) {
+                posix.setPermissions(PosixFilePermissions.fromString("r-x------"));
+            } else {
+                throw new AssertionError("no fixture permission mechanism available");
+            }
+            assertTrue(!Files.isWritable(locked), "fixture must actually deny writes");
+            Path config = application.resolve("config.properties");
+            String original = Files.readString(config);
+            Files.writeString(config, original + "cacheThumbnail=false\n");
+            assertEquals(DataRootInspection.ItemState.NOT_APPLICABLE,
+                    item(DataRootInspector.inspect(application, data),
+                            "directory-thcache").getState(), "disabled unwritable cache");
+            for (String folder : List.of("thcache", "thcache/nested/cache")) {
+                Files.writeString(config, original
+                        + "cacheThumbnail=true\nthcacheFolder=" + folder + "\n");
+                DataRootInspection.Item result = item(
+                        DataRootInspector.inspect(application, data), "directory-thcache");
+                assertEquals(DataRootInspection.ItemState.BLOCKED, result.getState(),
+                        "enabled unwritable path is blocked: " + folder);
+                assertEquals("permission", result.getReasonKey(), "permission reason");
+            }
+        } finally {
+            if (acl != null) {
+                acl.setAcl(oldAcl);
+            } else if (posix != null) {
+                posix.setPermissions(oldPermissions);
+            }
+        }
     }
 
     private static void testMissingTlsStoreIsBlocked(Path work)

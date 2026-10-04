@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up default Temurin 25
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version-file: '.java-version'
@@ -41,6 +41,12 @@ jobs:
         shell: pwsh
         run: .\tests\release\test-java-tool-selection.ps1
 
+      - name: Check release version metadata and regression tests
+        shell: pwsh
+        run: |
+          ./check-release-version.ps1
+          ./tests/release/test-release-version.ps1
+
       - name: Verify repository dependency lock
         shell: pwsh
         run: |
@@ -54,6 +60,10 @@ jobs:
       - name: Build NicoCache Java applications
         shell: pwsh
         run: .\build-javac.ps1 -LibraryDirectory .\.test-work\ci-dependencies -Clean
+
+      - name: Check generated JAR release metadata
+        shell: pwsh
+        run: ./check-release-version.ps1 -JarPath ./NicoCache_nl.jar
 
       - name: Run local browser script tests
         shell: pwsh
@@ -142,7 +152,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up default Temurin 25
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version-file: '.java-version'
@@ -187,7 +197,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up explicit Temurin 17 compatibility JDK
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           java-version: '17'
@@ -266,14 +276,14 @@ jobs:
       - name: Set up target JDK
         id: setup-target-jdk
         continue-on-error: true
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: ${{ matrix.distribution }}
           java-version: ${{ matrix.java-version }}
 
       - name: Retry target JDK setup after a transient provider failure
         if: steps.setup-target-jdk.outcome == 'failure'
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: ${{ matrix.distribution }}
           java-version: ${{ matrix.java-version }}

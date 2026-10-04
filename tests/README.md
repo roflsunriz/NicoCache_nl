@@ -68,6 +68,8 @@ HTTP サーバーを利用する。
   （外部TLS接続を避けるため、ローカルHTTP fixtureを利用する）
 - DOMAND/CMAF の access-rights、master/sub playlist、AES key、初期化 chunk、
   暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生と、
+  watchV4初期HTMLからの動画・品質情報取得、access-rightsなしのキャッシュ開始、
+  動画IDを含まない`/v4/watch/<動画ID>`応答による配信URL更新、
   アニメ公式動画で使われる `hlsext` 経路、署名更新前後で同名セグメントが続く
   `shlsbid` 経路の鍵・IV世代分離
 - `nicocachenl.test`のREST情報取得、動画メタデータ、検索、管理画面資産、`/media/v1`配信、Range、DELETE、診断、CORS、構造化エラーと、
@@ -76,7 +78,16 @@ HTTP サーバーを利用する。
 - Extension と Extension2 のロード、および Processor、stopper Processor、
   Rewriter、RequestFilter、CompleteCache、イベント、終了通知
 
+サムネイルキャッシュの起動回帰は`test-functional.ps1`内の
+`ThumbnailCacheStartupTest`で、無効／有効と不在・既存・親も不在・同名ファイル・
+親ファイル・`ref/`ファイル衝突の12条件、設定再読込、書込不可、既存参照の移行を確認する。
+権限変更は専用fixture内だけに限定し、必ず復元する。`test-launcher.ps1`は同じ必要条件に
+加えて、defaultsからの設定継承、ユーザー設定優先、相対／絶対保存先、読み取り専用診断、
+日本語／英語の作成案内を検証する。`test-e2e.ps1`は実ランチャーJARから無効・保存先不在の
+本体を起動し、保存先を作成しないことを確認する。
+
 ## JDK実行時互換性テスト
+
 
 製品とテストを既定のTemurin 25で一度だけコンパイルし、同じクラスファイルを対象JDKで
 実行する。これにより、JDK固有のコンパイラー差と、利用者が遭遇する実行時差異を分離する。

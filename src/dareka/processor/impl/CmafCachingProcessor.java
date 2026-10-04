@@ -308,6 +308,13 @@ public class CmafCachingProcessor implements Processor {
     static Map<String,String> masterPlaylistToSmid =
         Collections.synchronizedMap(new LRUMap<String,String>(50));
 
+    static void registerMasterPlaylist(String url, String smid) {
+        if (url != null && smid != null && smid.matches("[a-z]{2}[0-9]+")
+                && MASTER_PLAYLIST_URL_PATTERN.matcher(url).matches()) {
+            masterPlaylistToSmid.put(removeUrlSearch(url), smid);
+        }
+    }
+
     private Resource processApiHls
     (HttpRequestHeader requestHeader, Socket browser, String smid) {
         // 例: https://nvapi.nicovideo.jp/v1/watch/sm1234/access-rights/hls?actionTrackId=1289abcxyz_1234567890123
@@ -623,7 +630,7 @@ public class CmafCachingProcessor implements Processor {
         String smid = videoType + videoId;
 
         if (videoType == null || videoId == null) {
-            // nicocache_nlのjavascriptによるインジェクションが上手くいっていない
+            // watchページ・watch API・access-rightsの応答からURLとの対応が得られていない。
             Logger.info("対象URL(cmaf)ですが動画情報が不明なためキャッシュしません: " + smid);
             Logger.debug("url: " + uri);
             return null;
