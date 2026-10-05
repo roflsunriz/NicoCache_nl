@@ -1,7 +1,13 @@
-title: "[質問] "
+title: '[質問] '
 labels:
   - question
 body:
+  - type: markdown
+    attributes:
+      value: |-
+        実現したいこと、確認・試行したこと、環境を共有してください。再現可能な不具合はIssueの不具合報告へお願いします。
+        導入・利用・開発方法は [README](https://github.com/roflsunriz/NicoCache_nl/blob/HEAD/README.md) を確認してください。
+        本文と添付に秘密情報や個人情報を含めないでください。脆弱性の詳細は公開せず、[セキュリティ方針](https://github.com/roflsunriz/NicoCache_nl/blob/HEAD/SECURITY.md) を確認してください。
   - type: markdown
     attributes:
       value: |
@@ -25,7 +31,8 @@ body:
     id: version
     attributes:
       label: NicoCache_nlの版
-      placeholder: "例: 1.4.2"
+      placeholder: 現在使用している版を記入してください
+      description: ランチャー、GUI、配布ファイル名で確認できる使用中の版を書いてください。公開版と導入版が異なる場合は両方を記載してください。
   - type: dropdown
     id: os
     attributes:
@@ -42,3 +49,10 @@ body:
     attributes:
       label: 補足
       description: 匿名化済みの画面や診断情報があれば添付してください。
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: 公開情報の確認
+      options:
+        - label: 本文・ログ・画像・添付から、認証情報、Cookie、トークン、秘密鍵、個人情報を除いたことを確認しました。
+          required: true
