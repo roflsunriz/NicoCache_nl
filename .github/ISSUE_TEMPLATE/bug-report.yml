@@ -1,9 +1,15 @@
 name: 不具合報告
 description: 再現可能な問題を、修正に必要な情報とともに報告します。
-title: "[Bug] "
+title: '[Bug] '
 labels:
   - bug
 body:
+  - type: markdown
+    attributes:
+      value: |-
+        再現可能な不具合を報告します。対象環境、再現手順、期待した結果と実際の結果を整理してください。
+        導入・利用・開発方法は [README](https://github.com/roflsunriz/NicoCache_nl/blob/HEAD/README.md) を確認してください。
+        本文と添付に秘密情報や個人情報を含めないでください。脆弱性の詳細は公開せず、[セキュリティ方針](https://github.com/roflsunriz/NicoCache_nl/blob/HEAD/SECURITY.md) を確認してください。
   - type: markdown
     attributes:
       value: |
@@ -38,8 +44,8 @@ body:
     id: version
     attributes:
       label: NicoCache_nlの版
-      description: ランチャー、GUI、配布ファイル名などで確認できる版を書いてください。
-      placeholder: "例: 1.4.2"
+      description: ランチャー、GUI、配布ファイル名などで確認できる版を書いてください。 使用中の版を記入し、公開版と導入版が異なる場合は両方を記載してください。
+      placeholder: 現在使用している版を記入してください
     validations:
       required: true
   - type: dropdown
@@ -72,7 +78,7 @@ body:
     id: os-version
     attributes:
       label: OSの版とCPU
-      placeholder: "例: Windows 11 24H2 x64 / Ubuntu 24.04 x64 / macOS 15 arm64"
+      placeholder: '例: Windows 11 24H2 x64 / Ubuntu 24.04 x64 / macOS 15 arm64'
     validations:
       required: true
   - type: textarea
