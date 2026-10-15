@@ -93,3 +93,6 @@ COMMON-AGENTS.md
 # jre and jdk directories
 /jre/
 /jdk/
+
+# エージェントの一時作業メモ
+subagents/
