@@ -140,7 +140,7 @@ jobs:
     name: Default Temurin 25 (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         os:
           - windows-latest
@@ -219,7 +219,7 @@ jobs:
     needs: build-and-test
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       max-parallel: 13
       matrix:
         include:

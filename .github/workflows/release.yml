@@ -273,7 +273,7 @@ jobs:
     needs: build
     name: Build ${{ matrix.platform }} release assets
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         include:
           - platform: Linux
