@@ -121,7 +121,7 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## 依存更新の自動処理
 
-Dependabot は対象の依存関係を毎週確認します。patch／minor／major 更新は必須の `CI` と、変更内容に応じて起動した Standalone Updater・Unix Packages・Windows Installer を含む全 PR チェックが成功した後に自動で squash merge されます。CI の失敗ジョブは 1 回だけ再実行します。再失敗した PR は残して手動で修正します。
+Dependabot は対象の依存関係を毎月28日00:00（Asia/Tokyo）に確認します。patch／minor／major 更新は必須の `CI` と、変更内容に応じて起動した Standalone Updater・Unix Packages・Windows Installer を含む全 PR チェックが成功した場合だけ、同日18:00の月末処理で squash merge されます。CI の失敗ジョブは 1 回だけ再実行します。再失敗した PR は残して手動で修正します。
 
 
 <a id="update-1"></a>
@@ -439,7 +439,7 @@ majorとminorは0〜255、buildは0〜65535にする。本体とアップデー�
 
 ## リポジトリ依存関係
 
-GitHub Actionsは完全なコミットSHAへ固定し、Dependabotが毎週月曜日に更新を確認する。
+GitHub Actionsは完全なコミットSHAへ固定し、Dependabotが毎月28日00:00（Asia/Tokyo）に更新を確認する。
 patch／minor／majorを問わず、署名済みDependabot PRはPR用CIの全チェック成功後に
 自動マージする。初回CI失敗はfailed jobsだけを1回再実行し、再失敗したPRは手動で修正する。
 Bouncy Castleの更新PRは別の更新workflowで作成するため、個別に確認する。
