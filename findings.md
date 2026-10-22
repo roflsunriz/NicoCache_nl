@@ -74,6 +74,11 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
   親一時キャッシュの移動・消失や書込み不能でディレクトリが存在しない場合は従来どおり失敗にする。
   回帰は`CmafChunkDirectoryUnitTest`と`test-functional.ps1`のCMAF完成・オフライン再生で確認する。
 
+- 13ベンダー×Java 17/21/25の実行時互換性matrixは共有Linuxランナーで同時実行する。
+  vendor JDKの初回プロセス起動が10秒を超える実測があるため、`ThumbnailCacheStartupTest`は
+  `FunctionalTestMain`の起動待機基準と同じ20秒までreadyを待つ。ready確認、起動不能fixture、
+  保存先非変更の期待値は緩和せず、単なる時間切れを製品の起動失敗と混同しない。
+
 - リリース表示の正本は`Main.VER_STRING`。`check-release-version.ps1`で最新CHANGELOGの
   版・日付、Unix配布版数、タグ、実JARの表示定数を照合する。manifestの版・日付は正規
   ビルドで自動生成する。公開ソースが正しくても導入JARが古い場合があるため、表示不一致は

@@ -22,6 +22,8 @@ import dareka.processor.impl.ThumbProcessor2;
 
 /** Isolated core startup and configuration-observer regressions. */
 public final class ThumbnailCacheStartupTest {
+    private static final long STARTUP_TIMEOUT_SECONDS = 20;
+
     private ThumbnailCacheStartupTest() {
     }
 
@@ -118,7 +120,9 @@ public final class ThumbnailCacheStartupTest {
         boolean shouldStart = !enabled || !collision;
         try {
             boolean ready = false;
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            // Vendor JDKの初回起動は共有CIランナーの負荷により10秒を超えることがある。
+            long deadline = System.nanoTime()
+                    + TimeUnit.SECONDS.toNanos(STARTUP_TIMEOUT_SECONDS);
             while (process.isAlive() && System.nanoTime() < deadline) {
                 try (Socket socket = new Socket()) {
                     socket.connect(new InetSocketAddress("127.0.0.1", port), 100);
