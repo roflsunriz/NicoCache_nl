@@ -1,5 +1,31 @@
 # 検証手順
 
+## v1.9.6: CMAF先頭セグメントの並行保存（2026-10-22）
+
+実利用環境のデバッグログでは、同じ音声・映像について初期化チャンク`init1`と先頭
+メディアセグメント`1`が同時に要求され、直後に両保存先で`mkdir failed`が発生した。
+一時キャッシュには`init1`と`2`以降が保存され、`1`だけが欠落して7/8のまま完成しないことを
+確認した。ログには署名付き配信URLが含まれるため、値自体は記録・公開していない。
+
+修正後は、2スレッドが同じディレクトリを同時作成して一方の`mkdir()`が`false`を返しても、
+両方が保存処理を継続できる決定的な回帰テストを追加した。ディレクトリが実在しない本当の
+作成失敗は成功扱いしないことも同じテストで確認した。機能テスト30件、Extension ABI
+1,484項目（削除0）、同梱Extensionコンパイルが成功し、既存の暗号化CMAF、shlsbidの鍵世代、
+CMAF完成・上流停止後のオフライン再生も合格した。
+
+ランチャーのoption、control E2E、task、lifecycle、本体process mode、診断起動、
+task scheduler、データルート10件、初回設定と、診断アプリのredactor、path、heartbeat、
+snapshot、thread dump、HTML、headless、GUIが成功した。Temurin 25の正規ビルドは5 JARを
+`.test-work/release-v1.9.6/build/`へ隔離出力し、v1.9.6／2026-10-22の表示・manifest・タグ・
+Unix配布版を確認した。版回帰13件、Release workflow、Java選択、community fileの契約も成功した。
+
+ローカルE2Eは11項目中10項目が成功し、裸LF要求を拒否せず200とする既知の1項目だけが失敗した。
+同じ失敗はv1.9.5以前の検証にも記録済みで、今回のCMAFディレクトリ作成とは異なるHTTP入力
+経路である。期待値の緩和やスキップは行わず、公開前にremote CIのstrict E2Eを確認する。
+依存ロックはBouncy Castle 1.86、Brotli decoder 0.1.2、zstd-jni 1.5.7-12で更新なし、
+ロックと更新処理テストは成功した。GitHubの未解決Dependabot警告、Secret scanning警告、
+Open PRは0件だった。
+
 ## v1.9.5: Watch V4アクセサリー対応（2026-10-22）
 
 添付された同日の実視聴ページソースを値を表示せず構造だけ解析した。初期HTMLは
