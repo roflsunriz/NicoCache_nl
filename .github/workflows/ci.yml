@@ -253,7 +253,14 @@ jobs:
           - { distribution: graalvm, java-version: '17.0.12', major: 17 }
           - { distribution: graalvm, java-version: '21', major: 21 }
           - { distribution: graalvm, java-version: '25', major: 25 }
-          - { distribution: graalvm-community, java-version: '17', major: 17 }
+          - distribution: graalvm-community
+            setupDistribution: jdkfile
+            jdkFile: .test-work/runtime-compatibility/vendor/graalvm-community-jdk-17.0.9_linux-x64_bin.tar.gz
+            jdkUrl: https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-17.0.9/graalvm-community-jdk-17.0.9_linux-x64_bin.tar.gz
+            jdkChecksumUrl: https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-17.0.9/graalvm-community-jdk-17.0.9_linux-x64_bin.tar.gz.sha256
+            checksumCommand: sha256sum
+            java-version: '17.0.9'
+            major: 17
           - { distribution: graalvm-community, java-version: '21', major: 21 }
           - { distribution: graalvm-community, java-version: '25', major: 25 }
           - distribution: jetbrains
@@ -261,6 +268,7 @@ jobs:
             jdkFile: .test-work/runtime-compatibility/vendor/jbrsdk-17.0.10-linux-x64-b1087.21.tar.gz
             jdkUrl: https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-17.0.10-linux-x64-b1087.21.tar.gz
             jdkChecksumUrl: https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-17.0.10-linux-x64-b1087.21.tar.gz.checksum
+            checksumCommand: sha512sum
             java-version: '17.0.10'
             major: 17
           - { distribution: jetbrains, java-version: '21', major: 21 }
@@ -286,6 +294,7 @@ jobs:
           JDK_FILE: ${{ matrix.jdkFile }}
           JDK_URL: ${{ matrix.jdkUrl }}
           JDK_CHECKSUM_URL: ${{ matrix.jdkChecksumUrl }}
+          CHECKSUM_COMMAND: ${{ matrix.checksumCommand }}
         run: |
           set -euo pipefail
           mkdir -p "$(dirname "$JDK_FILE")"
@@ -294,7 +303,15 @@ jobs:
             --output "$JDK_FILE.checksum" "$JDK_CHECKSUM_URL"
           (
             cd "$(dirname "$JDK_FILE")"
-            sha512sum --check "$(basename "$JDK_FILE").checksum"
+            archive_name="$(basename "$JDK_FILE")"
+            checksum_file="$archive_name.checksum"
+            if ! grep -qE '[[:space:]][ *][^[:space:]]+$' "$checksum_file"; then
+              checksum="$(tr -d '[:space:]' < "$checksum_file")"
+              printf '%s  %s\n' "$checksum" "$archive_name" \
+                > "$checksum_file.normalized"
+              checksum_file="$checksum_file.normalized"
+            fi
+            "$CHECKSUM_COMMAND" --check "$checksum_file"
           )
 
       - name: Set up target JDK

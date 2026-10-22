@@ -209,12 +209,19 @@ $jetbrains17 = $runtimeEntries | Where-Object {
 if ($jetbrains17.Version -ne '17.0.10') {
     throw 'JetBrains Java 17 must use the verified upstream 17.0.10 archive'
 }
+$graalCommunity17 = $runtimeEntries | Where-Object {
+    $_.Distribution -eq 'graalvm-community' -and $_.Major -eq 17
+}
+if ($graalCommunity17.Version -ne '17.0.9') {
+    throw 'GraalVM Community Java 17 must use the verified upstream 17.0.9 archive'
+}
 foreach ($required in @(
         'test-runtime-compatibility.ps1 -Mode Prepare',
         'name: runtime-compatibility-tests',
         'include-hidden-files: true',
         'Download pinned vendor JDK with checksum',
-        'sha512sum --check',
+        'CHECKSUM_COMMAND: ${{ matrix.checksumCommand }}',
+        '"$CHECKSUM_COMMAND" --check',
         'distribution: ${{ matrix.setupDistribution || matrix.distribution }}',
         'java-version: ${{ matrix.java-version }}',
         "jdk-file: `${{ matrix.jdkFile || '' }}",
