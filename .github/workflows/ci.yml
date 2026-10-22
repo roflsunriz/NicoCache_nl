@@ -261,8 +261,22 @@ jobs:
             checksumCommand: sha256sum
             java-version: '17.0.9'
             major: 17
-          - { distribution: graalvm-community, java-version: '21', major: 21 }
-          - { distribution: graalvm-community, java-version: '25', major: 25 }
+          - distribution: graalvm-community
+            setupDistribution: jdkfile
+            jdkFile: .test-work/runtime-compatibility/vendor/graalvm-community-jdk-21.0.2_linux-x64_bin.tar.gz
+            jdkUrl: https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-21.0.2/graalvm-community-jdk-21.0.2_linux-x64_bin.tar.gz
+            jdkChecksumUrl: https://github.com/graalvm/graalvm-ce-builds/releases/download/jdk-21.0.2/graalvm-community-jdk-21.0.2_linux-x64_bin.tar.gz.sha256
+            checksumCommand: sha256sum
+            java-version: '21.0.2'
+            major: 21
+          - distribution: graalvm-community
+            setupDistribution: jdkfile
+            jdkFile: .test-work/runtime-compatibility/vendor/graalvm-community-jdk-25i4-25.0.4.1.1_linux-x64_bin.tar.gz
+            jdkUrl: https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.4.4.1.1/graalvm-community-jdk-25i4-25.0.4.1.1_linux-x64_bin.tar.gz
+            jdkChecksumUrl: https://github.com/graalvm/graalvm-ce-builds/releases/download/graal-25.4.4.1.1/graalvm-community-jdk-25i4-25.0.4.1.1_linux-x64_bin.tar.gz.sha256
+            checksumCommand: sha256sum
+            java-version: '25.0.4.1.1'
+            major: 25
           - distribution: jetbrains
             setupDistribution: jdkfile
             jdkFile: .test-work/runtime-compatibility/vendor/jbrsdk-17.0.10-linux-x64-b1087.21.tar.gz

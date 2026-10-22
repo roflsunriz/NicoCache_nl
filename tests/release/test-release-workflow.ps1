@@ -209,11 +209,21 @@ $jetbrains17 = $runtimeEntries | Where-Object {
 if ($jetbrains17.Version -ne '17.0.10') {
     throw 'JetBrains Java 17 must use the verified upstream 17.0.10 archive'
 }
-$graalCommunity17 = $runtimeEntries | Where-Object {
-    $_.Distribution -eq 'graalvm-community' -and $_.Major -eq 17
+$graalCommunityPins = @{
+    17 = '17.0.9'
+    21 = '21.0.2'
+    25 = '25.0.4.1.1'
 }
-if ($graalCommunity17.Version -ne '17.0.9') {
-    throw 'GraalVM Community Java 17 must use the verified upstream 17.0.9 archive'
+foreach ($major in $graalCommunityPins.Keys) {
+    $entry = $runtimeEntries | Where-Object {
+        $_.Distribution -eq 'graalvm-community' -and $_.Major -eq $major
+    }
+    if ($entry.Version -ne $graalCommunityPins[$major]) {
+        throw (
+            "GraalVM Community Java $major must use the verified upstream " +
+            "$($graalCommunityPins[$major]) archive"
+        )
+    }
 }
 foreach ($required in @(
         'test-runtime-compatibility.ps1 -Mode Prepare',

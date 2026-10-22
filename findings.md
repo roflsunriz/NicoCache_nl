@@ -87,9 +87,9 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
   vendor JDKの初回プロセス起動が10秒を超える実測があるため、`ThumbnailCacheStartupTest`は
   `FunctionalTestMain`の起動待機基準と同じ20秒までreadyを待つ。ready確認、起動不能fixture、
   保存先非変更の期待値は緩和せず、単なる時間切れを製品の起動失敗と混同しない。
-  `actions/setup-java`の検索範囲からJDK 17資産が外れても、JetBrainsRuntimeのJBRSDK 17と
-  SHA-512、GraalVM Community 17とSHA-256を各公式リリースから固定取得し、`jdkfile`として
-  検証する。ベンダー構成を取得器の検索範囲だけを理由に削減しない。
+  `actions/setup-java`の検索範囲から旧資産が外れても、JetBrainsRuntimeのJBRSDK 17と
+  SHA-512、GraalVM Community 17/21/25とSHA-256を各公式リリースから固定取得し、
+  `jdkfile`として検証する。ベンダー構成を取得器の検索範囲だけを理由に削減しない。
 
 - リリース表示の正本は`Main.VER_STRING`。`check-release-version.ps1`で最新CHANGELOGの
   版・日付、Unix配布版数、タグ、実JARの表示定数を照合する。manifestの版・日付は正規
