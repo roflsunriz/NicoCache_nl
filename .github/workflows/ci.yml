@@ -256,7 +256,13 @@ jobs:
           - { distribution: graalvm-community, java-version: '17', major: 17 }
           - { distribution: graalvm-community, java-version: '21', major: 21 }
           - { distribution: graalvm-community, java-version: '25', major: 25 }
-          - { distribution: jetbrains, java-version: '17', major: 17 }
+          - distribution: jetbrains
+            setupDistribution: jdkfile
+            jdkFile: .test-work/runtime-compatibility/vendor/jbrsdk-17.0.10-linux-x64-b1087.21.tar.gz
+            jdkUrl: https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-17.0.10-linux-x64-b1087.21.tar.gz
+            jdkChecksumUrl: https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-17.0.10-linux-x64-b1087.21.tar.gz.checksum
+            java-version: '17.0.10'
+            major: 17
           - { distribution: jetbrains, java-version: '21', major: 21 }
           - { distribution: jetbrains, java-version: '25', major: 25 }
           - { distribution: kona, java-version: '17', major: 17 }
@@ -273,20 +279,40 @@ jobs:
           name: runtime-compatibility-tests
           path: .test-work/runtime-compatibility/artifact
 
+      - name: Download pinned vendor JDK with checksum
+        if: ${{ matrix.jdkUrl != '' }}
+        shell: bash
+        env:
+          JDK_FILE: ${{ matrix.jdkFile }}
+          JDK_URL: ${{ matrix.jdkUrl }}
+          JDK_CHECKSUM_URL: ${{ matrix.jdkChecksumUrl }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$JDK_FILE")"
+          curl --fail --location --retry 3 --output "$JDK_FILE" "$JDK_URL"
+          curl --fail --location --retry 3 \
+            --output "$JDK_FILE.checksum" "$JDK_CHECKSUM_URL"
+          (
+            cd "$(dirname "$JDK_FILE")"
+            sha512sum --check "$(basename "$JDK_FILE").checksum"
+          )
+
       - name: Set up target JDK
         id: setup-target-jdk
         continue-on-error: true
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
-          distribution: ${{ matrix.distribution }}
+          distribution: ${{ matrix.setupDistribution || matrix.distribution }}
           java-version: ${{ matrix.java-version }}
+          jdk-file: ${{ matrix.jdkFile || '' }}
 
       - name: Retry target JDK setup after a transient provider failure
         if: steps.setup-target-jdk.outcome == 'failure'
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
-          distribution: ${{ matrix.distribution }}
+          distribution: ${{ matrix.setupDistribution || matrix.distribution }}
           java-version: ${{ matrix.java-version }}
+          jdk-file: ${{ matrix.jdkFile || '' }}
 
       - name: Run runtime compatibility tests
         shell: pwsh

@@ -140,7 +140,7 @@ Assert-ContainsLine $java17Build `
     'Explicit Java 17 compatibility build'
 
 $ciContent = Get-Content -Raw -LiteralPath (Join-Path $root '.github\workflows\ci.yml')
-$runtimeEntries = @([regex]::Matches(
+$inlineRuntimeEntries = @([regex]::Matches(
         $ciContent,
         "(?m)^\s*- \{ distribution: ([^,]+), java-version: '([^']+)', major: (17|21|25) \}\s*$"
     ) | ForEach-Object {
@@ -150,6 +150,37 @@ $runtimeEntries = @([regex]::Matches(
             Major = [int]$_.Groups[3].Value
         }
     })
+$multilineRuntimeEntries = @()
+for ($index = 0; $index -lt $ciLines.Count; $index++) {
+    if ($ciLines[$index] -notmatch '^ {10}- distribution: ([^\s]+)\s*$') {
+        continue
+    }
+    $distribution = $Matches[1]
+    $version = $null
+    $major = $null
+    for ($entryIndex = $index + 1;
+            $entryIndex -lt $ciLines.Count;
+            $entryIndex++) {
+        $entryLine = $ciLines[$entryIndex]
+        if ($entryLine -match '^ {10}- ') {
+            break
+        }
+        if ($entryLine -match "^ {12}java-version: '([^']+)'\s*$") {
+            $version = $Matches[1]
+        } elseif ($entryLine -match '^ {12}major: (17|21|25)\s*$') {
+            $major = [int]$Matches[1]
+            break
+        }
+    }
+    if ($null -ne $version -and $null -ne $major) {
+        $multilineRuntimeEntries += [pscustomobject]@{
+            Distribution = $distribution
+            Version = $version
+            Major = $major
+        }
+    }
+}
+$runtimeEntries = @($inlineRuntimeEntries + $multilineRuntimeEntries)
 $runtimeDistributions = @(
     'temurin', 'zulu', 'liberica', 'microsoft', 'semeru', 'corretto',
     'oracle', 'dragonwell', 'sapmachine', 'graalvm', 'graalvm-community',
@@ -172,12 +203,21 @@ foreach ($pinnedJava17 in @('oracle', 'graalvm')) {
         throw "$pinnedJava17 Java 17 must use the setup-java license-safe 17.0.12 pin"
     }
 }
+$jetbrains17 = $runtimeEntries | Where-Object {
+    $_.Distribution -eq 'jetbrains' -and $_.Major -eq 17
+}
+if ($jetbrains17.Version -ne '17.0.10') {
+    throw 'JetBrains Java 17 must use the verified upstream 17.0.10 archive'
+}
 foreach ($required in @(
         'test-runtime-compatibility.ps1 -Mode Prepare',
         'name: runtime-compatibility-tests',
         'include-hidden-files: true',
-        'distribution: ${{ matrix.distribution }}',
+        'Download pinned vendor JDK with checksum',
+        'sha512sum --check',
+        'distribution: ${{ matrix.setupDistribution || matrix.distribution }}',
         'java-version: ${{ matrix.java-version }}',
+        "jdk-file: `${{ matrix.jdkFile || '' }}",
         'id: setup-target-jdk',
         'continue-on-error: true',
         "if: steps.setup-target-jdk.outcome == 'failure'",

@@ -1,6 +1,6 @@
 # 検証手順
 
-## v1.9.7: Windows MSIの別ドライブ更新とランチャー起動（2026-10-22）
+## v1.9.7: Windows MSIの別ドライブ更新とランチャー起動（2026-10-23）
 
 [Issue #29](https://github.com/roflsunriz/NicoCache_nl/issues/29)では、Windows 11 25H2で
 v1.9.4からの更新とv1.9.5の修復が終了直前に停止し、管理者のコマンドプロンプトから
