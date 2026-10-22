@@ -1,5 +1,50 @@
 # 検証手順
 
+## v1.9.5: Watch V4アクセサリー対応（2026-10-22）
+
+添付された同日の実視聴ページソースを値を表示せず構造だけ解析した。初期HTMLは
+`data.response.$watchV4.data`で、説明文は`video.description`、投稿者は
+`metadata.jsonLd.owner`、タグ10件は`tags.items`、コメントは`comment.nvComment`、
+品質はオブジェクト`media.contents.{videos,audios}`に存在した。旧`response.video`、
+`tag`、`media.domand`、
+`comment.keys`、`comment.server`は存在しなかった。
+
+修正前の実`NicoCache_nl.jar`へ同じHTMLを渡すと、`WatchVars`は動画ID・タイトル・
+NVCommentを取得できたが、`getTags()`は0件だった。修正前の`local/nllib_watch.js`へ
+同じ応答を渡すと警告が1件発生し、`apiData`はURLフォールバックの動画IDだけとなり、
+説明文・投稿者・タグ・コメントを失った。これにより、本体キャッシュはV4対応済みでも
+ブラウザー互換ライブラリと公開アクセサーが未対応だったことを再現した。
+
+修正後はNodeテスト4件でWatch V4初期表示、SPA切替、互換フィールド、旧Watch応答を確認した。
+機能テスト29件、Extension ABI 1,484項目（削除0）、同梱Extensionコンパイルが成功した。
+Javaでは旧direct、旧`response`、V4 direct、V4 `response`、オブジェクト形式と従来の
+複数グループ配列形式の`media.contents`、V4タグ、NVComment共通経路、
+mediaのみの更新応答、CMAF完成・上流停止後再生を確認した。nlFilter Labはsource-check、
+全35テスト、`20_watchFilter.txt`の本体パーサー照合、Watch V4 fixtureのChrome headlessを通過し、
+コンソールエラー0件だった。
+
+全ローカル配信Nodeテスト36件、API契約4件、ランチャー、起動管理、タスク、ライフサイクル、
+診断、データルート10件、診断GUIを含む各テストが成功した。Temurin 25の正規ビルドで
+5 JARを隔離出力し、v1.9.5／2026-10-22の表示・manifest・タグ・Unix配布版と
+版回帰13ケース、Release／community／Java選択の各契約を確認した。
+
+隔離E2Eは11項目中10項目が成功し、裸LF要求を拒否せず200とする既知の1項目だけが失敗した。
+同じ失敗はv1.9.4以前の検証にも記録済みで、今回のWatch応答・コメント・ブラウザー資産とは
+異なるHTTP入力経路である。期待値の緩和やスキップは行わず、公開前のremote CIを必須とする。
+
+依存ロック確認ではBouncy Castle 1.86に更新なし、Brotli decoder 0.1.2、zstd-jni 1.5.7-12の
+整合と更新処理テストが成功した。GitHubの未解決Dependabot警告・Secret scanning警告・
+Open PRは0件だった。Code scanningはrepositoryに解析結果がなくAPIで確認不能だった。
+
+稼働環境は旧5 JARを
+`data/jar-backups/v1.9.4-before-v1.9.5-20261022/`へ退避してからv1.9.5へ置換した。
+設定、PAC、証明書など10ファイルのSHA-256は置換前後で一致した。ランチャー、本体、診断を
+新しいPIDで起動し、`/api/v1/health/ready`の`ready`とv1.9.5表示、HTTPプロキシー経由で
+更新済み`local/nllib_watch.js`が配信されることを確認した。既存キャッシュは削除していない。
+
+`/api/watch/v3`と`v3_guest`の匿名実応答はHTTP 406となり、2026-10-22時点の実形式を
+確認できなかった。移行済みとは断定せず、旧・V4の両ラップ形式を回帰テストへ残した。
+
 ## 2026-10-19: CI高速化
 
 - 変更したGitHub Actionsをactionlint 1.7.12で検査し、エラー0件を確認した。

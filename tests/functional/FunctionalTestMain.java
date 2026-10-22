@@ -567,7 +567,7 @@ public final class FunctionalTestMain {
                     exchange.getResponseBody().write(body);
                     return;
                 }
-                String response = "{\"data\":{\"response\":{"
+                String response = "{\"data\":{\"response\":{\"$watchV4\":{\"data\":{"
                         + "\"video\":{\"id\":\"sm900013\",\"title\":\"Comment Export\","
                         + "\"duration\":1,\"isDeleted\":false},"
                         + "\"comment\":{\"nvComment\":{"
@@ -575,9 +575,11 @@ public final class FunctionalTestMain {
                         + "\"server\":\"http://127.0.0.1:" + upstreamPort
                         + "/nvcomment-export-fixture\",\"params\":{\"targets\":[{"
                         + "\"id\":\"9000130001\",\"fork\":\"main\"}],"
-                        + "\"language\":\"ja-jp\"}}},\"media\":{\"domand\":{"
-                        + "\"videos\":[],\"audios\":[]}},\"system\":{"
-                        + "\"isPeakTime\":false},\"viewer\":{\"isPremium\":true}}}}";
+                        + "\"language\":\"ja-jp\"}}},\"media\":{\"contents\":[{"
+                        + "\"videos\":[],\"audios\":[]}]},\"tags\":{\"items\":[{"
+                        + "\"name\":\"watch-v4\"}]},\"system\":{"
+                        + "\"isPeakTime\":false},\"viewer\":{\"isPremium\":true}}},"
+                        + "\"pcweb\":{}}}}";
                 String html = "<!doctype html><meta name=\"server-response\" content=\""
                         + response.replace("&", "&amp;").replace("\"", "&quot;")
                         + "\">";

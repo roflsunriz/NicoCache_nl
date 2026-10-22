@@ -8,6 +8,18 @@
 
 具体的な手順・構成・知見は [findings.md](<findings.md#update-2>) に移動しました。着手前に該当条件を確認してください。
 
+Watch応答の仕様変更へ追従するときは、認証情報や署名付きURLを保存せず、初期HTML、
+SPA切替応答、`nvapi /v4/watch`更新応答を別々に確認する。`WatchVars`、
+`local/nllib_watch.js`、公開`CommentDownloader`、nlFilter LabのWatch fixtureを同時に監査し、
+旧direct、旧`response`、V4 direct、V4 `response`をテストする。最低限、次を実行する。
+
+```powershell
+node --test .\tests\local\nllib-watch.test.js
+.\test-functional.ps1 -LibraryDirectory .\.test-work\build-dependencies
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 check 20_watchFilter.txt
+.\nlFilters\tools\nlfilter-lab\nlfilter-lab.ps1 test
+```
+
 ## GitHub Actions とリリース
 
 具体的な手順・構成・知見は [findings.md](<findings.md#update-3>) に移動しました。着手前に該当条件を確認してください。

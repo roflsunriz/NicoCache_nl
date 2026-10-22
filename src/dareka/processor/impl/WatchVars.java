@@ -157,19 +157,7 @@ public class WatchVars {
             data = content;
         }
 
-        json = null;
-        if (jsonRoot != null && jsonRoot.getObject("data", "response") != null) {
-            // 2024-08仕様.
-            json = jsonRoot.getObject("data", "response");
-            JsonObject watchV4 = json.getObject("$watchV4", "data");
-            if (watchV4 != null) {
-                json = watchV4;
-            }
-        } else if (jsonRoot != null && jsonRoot.getObject("data") != null && jsonRoot.get("meta", "status") != null) {
-            json = jsonRoot.getObject("data");
-        } else {
-            json = jsonRoot;
-        }
+        json = selectWatchData(jsonRoot);
 
         if (json != null) {
             if (rawJson) {
@@ -183,7 +171,7 @@ public class WatchVars {
                 dmcInfo = json.getObject("media", "delivery"); // 廃止済み. 消すこと.
                 // 2024-08仕様.
                 domandInfo = json.getObject("media", "domand");
-                JsonArray contents = json.getArray("media", "contents");
+                JsonValue contents = json.get("media", "contents");
                 deliveryType = domandInfo != null || contents != null ? DeliveryType.DOMAND
                         : dmcInfo != null ? DeliveryType.DMC
                         : DeliveryType.CLASSIC;
@@ -258,6 +246,17 @@ public class WatchVars {
         if (Boolean.getBoolean("debugWatchVars")) {
             dumpVars();
         }
+    }
+
+    private static JsonObject selectWatchData(JsonObject root) {
+        if (root == null) {
+            return null;
+        }
+        JsonObject data = root.getObject("data");
+        JsonObject response = data == null ? null : data.getObject("response");
+        JsonObject candidate = response != null ? response : data != null ? data : root;
+        JsonObject watchV4 = candidate.getObject("$watchV4", "data");
+        return watchV4 != null ? watchV4 : candidate;
     }
 
     private void dumpVars() {
@@ -449,9 +448,15 @@ public class WatchVars {
         }
     }
 
-    private Map<String, Boolean> getContentQualityAvailability(JsonArray contents, String kind) {
+    private Map<String, Boolean> getContentQualityAvailability(JsonValue contents, String kind) {
+        if (contents instanceof JsonObject) {
+            return getQualityAvailability(((JsonObject)contents).getArray(kind));
+        }
         Map<String, Boolean> result = new LinkedHashMap<>();
-        for (JsonValue content : contents.getList()) {
+        if (!(contents instanceof JsonArray)) {
+            return result;
+        }
+        for (JsonValue content : ((JsonArray)contents).getList()) {
             Map<String, Boolean> qualities = getQualityAvailability(content.getArray(kind));
             if (qualities != null) {
                 for (Map.Entry<String, Boolean> quality : qualities.entrySet()) {
@@ -603,7 +608,10 @@ public class WatchVars {
         if (json != null) {
             JsonValue v = null;
             if (type == Type.Html5) {
-                v = json.get("tag", "items");
+                v = json.get("tags", "items");
+                if (v == null) {
+                    v = json.get("tag", "items");
+                }
             }
             if (v instanceof JsonArray) {
                 for (JsonValue vv : ((JsonArray) v).getList()) {

@@ -1,6 +1,7 @@
 package functional;
 
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 
@@ -8,6 +9,7 @@ import dareka.processor.HttpResponseHeader;
 import dareka.processor.impl.CmafCachingProcessor;
 import dareka.processor.impl.WatchRewriter;
 import dareka.processor.impl.WatchVars;
+import dareka.processor.util.CommentDownloader;
 
 /** 公開watchV4の構造に基づく、秘密情報を含まない合成fixture。 */
 public final class WatchV4UnitTest {
@@ -15,15 +17,38 @@ public final class WatchV4UnitTest {
     }
 
     static String data(String id, String playlist) {
+        return data(id, playlist, true);
+    }
+
+    static String currentData(String id, String playlist) {
+        return data(id, playlist, false);
+    }
+
+    private static String data(String id, String playlist, boolean groupedContents) {
+        String videos = "[{\"id\":\"video-h264-1080p\",\"isAvailable\":false},"
+                + "{\"id\":\"video-h264-720p\",\"isAvailable\":true},"
+                + "{\"id\":\"video-h264-480p\",\"isAvailable\":true}]";
+        String audios = "[{\"id\":\"audio-aac-192kbps\",\"isAvailable\":true},"
+                + "{\"id\":\"audio-aac-128kbps\",\"isAvailable\":true},"
+                + "{\"id\":\"audio-aac-64kbps\",\"isAvailable\":true}]";
+        String contents = groupedContents
+                ? "[{\"videos\":[{\"id\":\"video-h264-1080p\","
+                        + "\"isAvailable\":false},{\"id\":\"video-h264-720p\","
+                        + "\"isAvailable\":true}],\"audios\":[{\"id\":"
+                        + "\"audio-aac-192kbps\",\"isAvailable\":true},{\"id\":"
+                        + "\"audio-aac-128kbps\",\"isAvailable\":true}]},{"
+                        + "\"videos\":[{\"id\":\"video-h264-480p\","
+                        + "\"isAvailable\":true}],\"audios\":[{\"id\":"
+                        + "\"audio-aac-64kbps\",\"isAvailable\":true}]}]"
+                : "{\"videos\":" + videos + ",\"audios\":" + audios + "}";
         return "{\"video\":{\"id\":\"" + id + "\",\"title\":\"Watch V4\","
-                + "\"duration\":1,\"isDeleted\":false},\"media\":{\"contents\":[{"
-                + "\"videos\":[{\"id\":\"video-h264-1080p\",\"isAvailable\":false},"
-                + "{\"id\":\"video-h264-720p\",\"isAvailable\":true}],"
-                + "\"audios\":[{\"id\":\"audio-aac-192kbps\",\"isAvailable\":true},"
-                + "{\"id\":\"audio-aac-128kbps\",\"isAvailable\":true}]},{"
-                + "\"videos\":[{\"id\":\"video-h264-480p\",\"isAvailable\":true}],"
-                + "\"audios\":[{\"id\":\"audio-aac-64kbps\",\"isAvailable\":true}]}],"
+                + "\"duration\":1,\"isDeleted\":false},\"media\":{\"contents\":"
+                + contents + ","
                 + "\"hls\":{\"url\":\"" + playlist + "?session=fixture\"}},"
+                + "\"comment\":{\"nvComment\":{\"threadKey\":\"fixture-key\","
+                + "\"server\":\"https://public.nvcomment.nicovideo.jp\","
+                + "\"params\":{\"targets\":[]}}},"
+                + "\"tags\":{\"items\":[{\"name\":\"watch-v4\"}]},"
                 + "\"system\":{\"isPeakTime\":false},\"viewer\":{\"isPremium\":false}}";
     }
 
@@ -40,16 +65,30 @@ public final class WatchV4UnitTest {
         WatchVars vars = WatchVars.get(html(data("sm990040", url)));
         equal("sm990040", vars.getVideoId(), "watchV4 HTML video ID");
         equal("Watch V4", vars.getVideoTitle(), "watchV4 title");
+        equal(List.of("watch-v4"), vars.getTags(), "watchV4 tags");
+        equal(true, CommentDownloader.hasNvCommentContext(vars),
+                "watchV4 NVComment context");
         equal("sm990040", mappings().get(url), "initial HTML registers playlist without access-rights");
         Map<?, ?> qualities = quality(vars, "qualityVideos");
         equal(false, qualities.get("video-h264-1080p"), "unavailable quality remains unavailable");
         equal(true, qualities.get("video-h264-480p"), "all content groups contribute qualities");
         equal(true, quality(vars, "qualityAudios").get("audio-aac-64kbps"), "audio qualities");
+        WatchVars current = WatchVars.get(html(currentData("sm990045", url)));
+        equal(true, quality(current, "qualityVideos").get("video-h264-720p"),
+                "current object contents video qualities");
+        equal(true, quality(current, "qualityAudios").get("audio-aac-192kbps"),
+                "current object contents audio qualities");
         String next = url.replace("1234abcd", "abcd1234");
         WatchVars raw = WatchVars.get("{\"meta\":{\"status\":200},\"data\":"
                 + data("sm990041", next) + "}");
         equal("sm990041", raw.getVideoId(), "raw watchV4 API video ID");
         equal("sm990041", mappings().get(next), "raw API registers refreshed playlist");
+        WatchVars directV4 = WatchVars.get("{\"meta\":{\"status\":200},\"data\":{"
+                + "\"$watchV4\":{\"data\":" + data("sm990043", next) + "}}}");
+        equal("sm990043", directV4.getVideoId(), "direct wrapped watchV4 video ID");
+        WatchVars rootV4 = WatchVars.get("{\"$watchV4\":{\"data\":"
+                + data("sm990044", next) + "}}");
+        equal("sm990044", rootV4.getVideoId(), "root wrapped watchV4 video ID");
         String refresh = url.replace("1234abcd", "abcddcba");
         String partial = "{\"meta\":{\"status\":200},\"data\":{\"responseType\":\"media\","
                 + "\"media\":{\"hls\":{\"url\":\"" + refresh + "?session=refresh\"}}}}";
@@ -69,7 +108,7 @@ public final class WatchV4UnitTest {
         WatchVars.get(html(data("sm990042", foreign)));
         equal(false, mappings().containsKey(foreign), "unrelated playlist is not registered");
         WatchVars.get(html("{\"media\":{\"hls\":{\"url\":\"" + url + "\"}}}"));
-        equal("sm990040", mappings().get(url), "missing video ID cannot overwrite mapping");
+        equal("sm990045", mappings().get(url), "missing video ID cannot overwrite mapping");
     }
 
     private static void rewrite(String url, String body, int status) throws Exception {

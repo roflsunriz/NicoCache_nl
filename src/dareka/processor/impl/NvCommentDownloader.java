@@ -2,10 +2,9 @@ package dareka.processor.impl;
 
 import java.io.IOException;
 
-import dareka.common.json.JsonObject;
-import dareka.common.json.JsonString;
 import dareka.processor.HttpRequestHeader;
 import dareka.processor.URLResource;
+import dareka.processor.util.CommentDownloader;
 
 /** 現行nvcomment v1のコメントJSONをwatchページの情報から取得する。 */
 final class NvCommentDownloader {
@@ -13,49 +12,12 @@ final class NvCommentDownloader {
     }
 
     static boolean hasContext(WatchVars watchVars) {
-        if (watchVars == null || watchVars.getType() != WatchVars.Type.Html5) {
-            return false;
-        }
-        JsonObject json = watchVars.getJsonObject();
-        JsonObject nvComment = json == null
-                ? null : json.getObject("comment", "nvComment");
-        if (nvComment == null) {
-            return false;
-        }
-        String serverUrl = nvComment.getString("server");
-        String threadKey = nvComment.getString("threadKey");
-        return serverUrl != null && !serverUrl.isEmpty()
-                && threadKey != null && !threadKey.isEmpty()
-                && nvComment.getObject("params") != null;
+        return CommentDownloader.hasNvCommentContext(watchVars);
     }
 
     static URLResource getResource(String videoId, WatchVars watchVars,
             HttpRequestHeader requestHeader) throws IOException {
-        if (!hasContext(watchVars)) {
-            return null;
-        }
-        JsonObject nvComment = watchVars.getJsonObject()
-                .getObject("comment", "nvComment");
-        String serverUrl = nvComment.getString("server");
-        String threadKey = nvComment.getString("threadKey");
-        JsonObject params = nvComment.getObject("params");
-        JsonObject requestJson = new JsonObject()
-                .put("params", params)
-                .put("threadKey", new JsonString(threadKey))
-                .put("additionals", new JsonObject());
-        requestHeader.setMessageHeader("Content-Type",
-                "text/plain;charset=UTF-8");
-        requestHeader.setMessageHeader("Accept", "application/json");
-        requestHeader.setMessageHeader("x-client-os-type", "others");
-        requestHeader.setMessageHeader("x-frontend-id", "6");
-        requestHeader.setMessageHeader("x-frontend-version", "0");
-        String endpoint = serverUrl.endsWith("/")
-                ? serverUrl + "v1/threads" : serverUrl + "/v1/threads";
-        URLResource resource = NicoApiUtil.getURLResource(
-                endpoint, requestHeader, requestJson.toJson());
-        resource.getResponseHeader(null, null).setMessageHeader(
-                "Content-Disposition",
-                "attachment; filename=\"" + videoId + ".comments.json\"");
-        return resource;
+        return CommentDownloader.getNvCommentURLResource(
+                videoId, watchVars, requestHeader);
     }
 }

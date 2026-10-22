@@ -1,5 +1,5 @@
 // watchページ用ライブラリ
-// 2021-03-20, 2024-09-06, 2026-08-06
+// 2021-03-20, 2024-09-06, 2026-08-06, 2026-10-22
 
 /**
  * NicoCache_nl.watch.apiData
@@ -46,6 +46,82 @@
 
 (function() {
   "use strict";
+
+  const asObject = function(value) {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? value : null;
+  };
+
+  const isWatchData = function(value) {
+    return Boolean(value && (asObject(value.video) || asObject(value.media)
+      || asObject(value.comment) || asObject(value.client)));
+  };
+
+  const normalizeWatchData = function(value) {
+    const root = asObject(value);
+    const data = asObject(root && root.data);
+    const response = asObject(data && data.response);
+    let candidate = response;
+    if (!candidate) {
+      if (asObject(data && data.$watchV4)) candidate = data;
+      else if (asObject(root && root.$watchV4)) candidate = root;
+      else if (isWatchData(data)) candidate = data;
+      else if (isWatchData(root)) candidate = root;
+    };
+    if (!candidate) return null;
+
+    const watchV4 = asObject(candidate.$watchV4);
+    const watchData = asObject(watchV4 && watchV4.data);
+    if (!watchData) return isWatchData(candidate) ? candidate : null;
+
+    const normalized = Object.assign({}, watchData);
+    if (asObject(watchData.video)) {
+      normalized.video = Object.assign({}, watchData.video);
+      const thumbnail = asObject(watchData.video.thumbnail);
+      if (thumbnail && !thumbnail.url) {
+        normalized.video.thumbnail = Object.assign({}, thumbnail, {
+          url: thumbnail.normal || thumbnail.middle || thumbnail.large
+            || thumbnail.player || thumbnail.ogp,
+        });
+      };
+    };
+    if (asObject(watchData.tags) && !watchData.tag) {
+      normalized.tag = watchData.tags;
+    };
+
+    const metadata = asObject(watchData.metadata);
+    const jsonLd = asObject(metadata && metadata.jsonLd);
+    const rawOwner = asObject(jsonLd && jsonLd.owner);
+    if (rawOwner && !watchData.owner && !watchData.channel) {
+      const owner = Object.assign({}, rawOwner);
+      if (!owner.name && owner.nickname) owner.name = owner.nickname;
+      if (!owner.nickname && owner.name) owner.nickname = owner.name;
+      if (owner.type === "Organization") normalized.channel = owner;
+      else normalized.owner = owner;
+    };
+
+    const media = asObject(watchData.media);
+    if (media && !media.domand && media.contents) {
+      const videos = [];
+      const audios = [];
+      const contentGroups = Array.isArray(media.contents)
+        ? media.contents : [media.contents];
+      contentGroups.forEach(function(content) {
+        const group = asObject(content);
+        if (!group) return;
+        if (Array.isArray(group.videos)) videos.push.apply(videos, group.videos);
+        if (Array.isArray(group.audios)) audios.push.apply(audios, group.audios);
+      });
+      normalized.media = Object.assign({}, media, {
+        domand: {
+          videos: videos,
+          audios: audios,
+          accessRightKey: media.accessRightKey,
+        },
+      });
+    };
+    return normalized;
+  };
 
   if (NicoCache_nl.watch && NicoCache_nl.watch.__ncnlWatchLibrary) return;
   NicoCache_nl.watch = {
@@ -149,11 +225,11 @@
     if (serverResponse) {
       try {
         const json = JSON.parse(serverResponse.getAttribute("content") || "");
-        if (json && json.data && json.data.response
-            && json.data.response.video && json.data.response.video.id) {
-          NicoCache_nl.watch.apiData = json.data.response;
+        const apiData = normalizeWatchData(json);
+        if (apiData && apiData.video && apiData.video.id) {
+          NicoCache_nl.watch.apiData = apiData;
         } else {
-          throw new Error("server-response.data.response.video.id unavailable");
+          throw new Error("server-response watch data unavailable");
         };
       } catch (error) {
         console.warn("NicoCache_nl: 視聴ページの初期データを解析できませんでした。", error);
@@ -218,7 +294,7 @@
         if (!response.ok) return;
         response.clone().json().then(function(json) {
           const apiData = json && json.meta && json.meta.status === 200
-            && json.data ? json.data.response : null;
+            ? normalizeWatchData(json) : null;
           if (!apiData || !apiData.video || !apiData.video.id) return;
           pendingApiData = apiData;
           if (videoIdFromLocation() === apiData.video.id) {

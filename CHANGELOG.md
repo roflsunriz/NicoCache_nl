@@ -6,6 +6,19 @@
 
 ## [Unreleased]
 
+## [1.9.5] - 2026-10-22
+
+### Fixed
+
+- 現行Watch V4で`server-response.data.response`直下から移動した動画情報を
+  `NicoCache_nl.watch.apiData`へ正規化し、初期表示とSPA動画切替後も説明文、投稿者、
+  タグ、コメント、サムネイル、配信候補をアクセサリーから参照できるようにした。
+  旧Watch応答も引き続き扱う。
+- `WatchVars.getTags()`がWatch V4の`tags.items`を読み取れず空になる問題を修正した。
+  Watch応答の選択は旧direct、旧`response`、V4 direct、V4 `response`へ共通対応する。
+- 公開`CommentDownloader`から現行`comment.nvComment`を使ったコメントJSON取得を利用できる
+  ようにし、本体のコメントエクスポートと同じリクエスト生成経路へ統合した。
+
 ### Changed
 
 - GitHub Actions の月間利用時間を抑えるため、Dependabot version update と自動マージを毎週・即時処理から毎月28日（Asia/Tokyo）の月末一括処理へ変更した。

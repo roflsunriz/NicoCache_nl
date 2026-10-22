@@ -70,6 +70,7 @@ HTTP サーバーを利用する。
   暗号化 media segment、復号、完成処理、上流停止後のキャッシュ再生と、
   watchV4初期HTMLからの動画・品質情報取得、access-rightsなしのキャッシュ開始、
   動画IDを含まない`/v4/watch/<動画ID>`応答による配信URL更新、
+  Watch V4のタグとNVCommentコンテキスト、旧・V4のdirect／`response`応答選択、
   アニメ公式動画で使われる `hlsext` 経路、署名更新前後で同名セグメントが続く
   `shlsbid` 経路の鍵・IV世代分離
 - `nicocachenl.test`のREST情報取得、動画メタデータ、検索、管理画面資産、`/media/v1`配信、Range、DELETE、診断、CORS、構造化エラーと、

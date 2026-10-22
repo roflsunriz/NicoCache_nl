@@ -140,8 +140,56 @@ public class CommentDownloader {
         return r;
     }
 
+    /** 現行NVCommentの取得に必要な情報がWatchVarsにあるかを返す。 */
+    public static boolean hasNvCommentContext(WatchVars watchVars) {
+        if (watchVars == null || watchVars.getType() != WatchVars.Type.Html5) {
+            return false;
+        }
+        JsonObject json = watchVars.getJsonObject();
+        JsonObject nvComment = json == null
+                ? null : json.getObject("comment", "nvComment");
+        if (nvComment == null) {
+            return false;
+        }
+        String serverUrl = nvComment.getString("server");
+        String threadKey = nvComment.getString("threadKey");
+        return serverUrl != null && !serverUrl.isEmpty()
+                && threadKey != null && !threadKey.isEmpty()
+                && nvComment.getObject("params") != null;
+    }
+
+    /** 現行NVComment JSONを取得するURLResourceを返す。 */
+    public static URLResource getNvCommentURLResource(String videoId,
+            WatchVars watchVars, HttpRequestHeader requestHeader) throws IOException {
+        if (!hasNvCommentContext(watchVars)) {
+            return null;
+        }
+        JsonObject nvComment = watchVars.getJsonObject()
+                .getObject("comment", "nvComment");
+        String serverUrl = nvComment.getString("server");
+        String threadKey = nvComment.getString("threadKey");
+        JsonObject requestJson = new JsonObject()
+                .put("params", nvComment.getObject("params"))
+                .put("threadKey", new JsonString(threadKey))
+                .put("additionals", new JsonObject());
+        requestHeader.setMessageHeader("Content-Type",
+                "text/plain;charset=UTF-8");
+        requestHeader.setMessageHeader("Accept", "application/json");
+        requestHeader.setMessageHeader("x-client-os-type", "others");
+        requestHeader.setMessageHeader("x-frontend-id", "6");
+        requestHeader.setMessageHeader("x-frontend-version", "0");
+        String endpoint = serverUrl.endsWith("/")
+                ? serverUrl + "v1/threads" : serverUrl + "/v1/threads";
+        URLResource resource = NicoApiUtil.getURLResource(
+                endpoint, requestHeader, requestJson.toJson());
+        resource.getResponseHeader(null, null).setMessageHeader(
+                "Content-Disposition",
+                "attachment; filename=\"" + videoId + ".comments.json\"");
+        return resource;
+    }
+
     /**
-     * HTML5のWatchVarsからXMLでコメントを取得するための URLResource を返す。
+     * HTML5のWatchVarsから現行NVComment JSONまたは旧XMLコメントを取得する。
      *
      * @param target 取得対象のID(動画ID or スレッドID)
      * @param wv 対象ページのWatchVars
@@ -153,6 +201,9 @@ public class CommentDownloader {
             HttpRequestHeader requestHeader) throws IOException {
         if (wv == null) {
             return null;
+        }
+        if (hasNvCommentContext(wv)) {
+            return getNvCommentURLResource(target, wv, requestHeader);
         }
         int length = -1;
         String user_id;

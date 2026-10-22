@@ -48,8 +48,9 @@ Append<
 
 # - 2024-09-06
 # - 2026-08-02
+# - 2026-10-22: Watch V4の$watchV4.dataをlocal/nllib_watch.jsで正規化する.
 # - server-responseとserver-contextのmetaタグはwatchページの初期化時に一時生成される.
-# - server-responseには動画情報(apiData)が入っている.
+# - server-responseには旧WatchまたはWatch V4の動画情報(apiData)が入っている.
 # - 公式jsは読み取り後すぐに両方のmetaタグを削除するため、DOMContentLoaded時には存在しない.
 # - スクリプトファイル内で取得すると安定しない.
 # - 当該metaタグの直後で取得する方法で安定した.

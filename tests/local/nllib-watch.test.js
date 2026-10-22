@@ -12,7 +12,14 @@ const watchLibrarySource = fs.readFileSync(
   "utf8",
 );
 
-function createPage(nativeFetch) {
+function createPage(nativeFetch, options = {}) {
+  const warnings = [];
+  const NicoCache_nl = {
+    _metaServerResponseTag: options.serverResponse
+      ? {getAttribute: () => options.serverResponse}
+      : null,
+    watch: null,
+  };
   const window = {
     addEventListener() {},
     fetch: nativeFetch,
@@ -20,6 +27,7 @@ function createPage(nativeFetch) {
       href: "https://www.nicovideo.jp/watch/sm9",
       pathname: "/watch/sm9",
     },
+    NicoCache_nl,
   };
   const history = {
     pushState() {},
@@ -27,12 +35,19 @@ function createPage(nativeFetch) {
   };
   const context = vm.createContext({
     URL,
-    console,
+    console: {
+      ...console,
+      warn(...args) {
+        warnings.push(args);
+      },
+    },
     document: {
       addEventListener() {},
-      body: null,
-      querySelector() {
-        return null;
+      body: options.initialize ? {} : null,
+      querySelector(selector) {
+        return options.initialize && selector === 'video[data-name="video-content"]'
+          ? {}
+          : null;
       },
     },
     history,
@@ -40,17 +55,50 @@ function createPage(nativeFetch) {
       disconnect() {}
       observe() {}
     },
-    NicoCache_nl: {
-      _metaServerResponseTag: null,
-      watch: null,
-    },
+    NicoCache_nl,
     setTimeout,
     window,
   });
   vm.runInContext(watchLibrarySource, context, {
     filename: "local/nllib_watch.js",
   });
-  return {context, history, window};
+  return {context, history, warnings, window};
+}
+
+function watchV4Envelope(videoId, groupedContents = false) {
+  const videos = [{id: "video-h264-720p", isAvailable: true}];
+  const audios = [{id: "audio-aac-192kbps", isAvailable: true}];
+  return {
+    meta: {status: 200},
+    data: {
+      response: {
+        $watchV4: {
+          data: {
+            video: {
+              id: videoId,
+              title: "Watch V4",
+              description: "Watch V4 description",
+              thumbnail: {normal: "https://example.invalid/thumbnail.jpg"},
+            },
+            comment: {nvComment: {threadKey: "key"}},
+            tags: {items: [{name: "watch-v4"}]},
+            metadata: {
+              jsonLd: {
+                owner: {id: "1", type: "Person", name: "Owner"},
+              },
+            },
+            media: {
+              accessRightKey: "access-key",
+              contents: groupedContents
+                ? [{videos, audios}]
+                : {videos, audios},
+            },
+          },
+        },
+        pcweb: {},
+      },
+    },
+  };
 }
 
 test("fetchラッパーは呼出側のthisにかかわらずWindowをネイティブfetchへ渡す", async () => {
@@ -76,6 +124,25 @@ test("fetchラッパーは呼出側のthisにかかわらずWindowをネイテ�
   ]);
 });
 
+test("初期server-responseのWatch V4を互換apiDataへ正規化する", () => {
+  const page = createPage(undefined, {
+    initialize: true,
+    serverResponse: JSON.stringify(watchV4Envelope("sm9")),
+  });
+  const apiData = page.context.NicoCache_nl.watch.apiData;
+
+  assert.equal(page.warnings.length, 0);
+  assert.equal(apiData.video.id, "sm9");
+  assert.equal(apiData.video.description, "Watch V4 description");
+  assert.equal(apiData.video.thumbnail.url,
+    "https://example.invalid/thumbnail.jpg");
+  assert.equal(apiData.owner.nickname, "Owner");
+  assert.equal(apiData.tag.items[0].name, "watch-v4");
+  assert.equal(apiData.comment.nvComment.threadKey, "key");
+  assert.equal(apiData.media.domand.videos[0].id, "video-h264-720p");
+  assert.equal(apiData.media.domand.accessRightKey, "access-key");
+});
+
 test("動画情報fetchを監視しSPA切替後のapiDataへ反映する", async () => {
   let page;
   const response = {
@@ -83,8 +150,7 @@ test("動画情報fetchを監視しSPA切替後のapiDataへ反映する", async
     clone() {
       return {
         json: async () => ({
-          meta: {status: 200},
-          data: {response: {video: {id: "sm10"}}},
+          ...watchV4Envelope("sm10", true),
         }),
       };
     },
@@ -107,4 +173,34 @@ test("動画情報fetchを監視しSPA切替後のapiDataへ反映する", async
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   assert.equal(page.context.NicoCache_nl.watch.apiData.video.id, "sm10");
+  assert.equal(page.context.NicoCache_nl.watch.apiData.video.description,
+    "Watch V4 description");
+});
+
+test("旧Watch応答もapiDataとして維持する", async () => {
+  let page;
+  const response = {
+    ok: true,
+    clone() {
+      return {
+        json: async () => ({
+          meta: {status: 200},
+          data: {response: {video: {id: "sm11", title: "Legacy"}}},
+        }),
+      };
+    },
+  };
+  page = createPage(function() {
+    return Promise.resolve(response);
+  });
+
+  await page.window.fetch(
+    "https://www.nicovideo.jp/watch/sm11?responseType=json",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  page.window.location.pathname = "/watch/sm11";
+  page.history.pushState({}, "", "/watch/sm11");
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  assert.equal(page.context.NicoCache_nl.watch.apiData.video.title, "Legacy");
 });
