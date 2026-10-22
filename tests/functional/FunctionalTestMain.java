@@ -135,6 +135,8 @@ public final class FunctionalTestMain {
                         this::testTemplateAndCmafUtility);
                 run("CMAF cache progress size stability",
                         CmafCachingProgressUnitTest::run);
+                run("CMAF concurrent chunk directory creation",
+                        CmafChunkDirectoryUnitTest::run);
                 run("watchV4 metadata and initial playlist registration", WatchV4UnitTest::run);
                 run("converted MP4 and classic cache information", ConvertedCacheInfoUnitTest::run);
                 run("LRU map minimum capacity and eviction",

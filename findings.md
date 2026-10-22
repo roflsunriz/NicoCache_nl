@@ -69,6 +69,11 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
   既存の`Cache.getPreferredCachedVideo`と揃え、`format`と品質を表示に渡す。
   部分・音声のみ・低品質の状態を保持し、MP4の表示修正をHLS再取得設定の変更と混同しない。
 
+- CMAFの初期化チャンクと先頭メディアセグメントは同時に届き得る。音声・映像ディレクトリの
+  `mkdir()`が`false`でも、別スレッドが同じディレクトリを作成済みなら保存を継続する。
+  親一時キャッシュの移動・消失や書込み不能でディレクトリが存在しない場合は従来どおり失敗にする。
+  回帰は`CmafChunkDirectoryUnitTest`と`test-functional.ps1`のCMAF完成・オフライン再生で確認する。
+
 - リリース表示の正本は`Main.VER_STRING`。`check-release-version.ps1`で最新CHANGELOGの
   版・日付、Unix配布版数、タグ、実JARの表示定数を照合する。manifestの版・日付は正規
   ビルドで自動生成する。公開ソースが正しくても導入JARが古い場合があるため、表示不一致は

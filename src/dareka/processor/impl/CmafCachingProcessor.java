@@ -514,6 +514,12 @@ public class CmafCachingProcessor implements Processor {
         return new File(tmpCacheDir, audioOrVideo);
     };
 
+    static boolean createChunkDirectory(File chunkDirectory) {
+        // 初期化チャンクと先頭メディアチャンクは並行して届くことがある。
+        // 別スレッドが先に同じディレクトリを作成した場合も成功として扱う。
+        return chunkDirectory.mkdir() || chunkDirectory.isDirectory();
+    };
+
     /**
      * CMAF のプレイリスト更新で HlsTmpSegments に古いセグメント名が残ると、
      * 実ファイルが揃っていても件数不一致のまま完了判定に到達しない。
@@ -1766,7 +1772,7 @@ class ChunkListener implements TransferListener, Runnable {
                 this.errorOccurred = true;
                 Logger.debug("(cmaf)already cached: " + movieInfo.getVideoDescriptor());
             }
-            else if (!chunkavDir.mkdir()) {
+            else if (!CmafCachingProcessor.createChunkDirectory(chunkavDir)) {
                 Logger.info("error: mkdir failed: " + chunkavDir);
                 this.errorOccurred = true;
             };
