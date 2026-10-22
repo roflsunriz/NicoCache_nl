@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Properties;
 
 final class CoreProcess {
-    private static final Duration START_TIMEOUT = Duration.ofSeconds(30);
+    static final Duration START_TIMEOUT = Duration.ofMinutes(5);
     private static final Duration STOP_TIMEOUT = Duration.ofSeconds(30);
     private final LauncherPaths paths;
     private final DiagnosticsProcess diagnostics;
@@ -65,7 +65,6 @@ final class CoreProcess {
     List<String> buildStartCommand(boolean headless) {
         List<String> command = new ArrayList<>();
         command.add(paths.getJavaExecutable(false).toString());
-        command.add("-Xmx128m");
         command.add("--enable-native-access=ALL-UNNAMED");
         command.add("-Dnicocache.applicationRoot="
                 + paths.getApplicationRoot());

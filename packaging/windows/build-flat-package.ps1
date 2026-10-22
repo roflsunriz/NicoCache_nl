@@ -6,7 +6,8 @@ param(
     [ValidateSet('AppImage', 'Zip', 'Msi', 'All')]
     [string]$PackageType = 'AppImage',
     [string]$ZipFileName,
-    [switch]$UseLegacyProgramsInstallPath
+    [switch]$UseLegacyProgramsInstallPath,
+    [switch]$UseLegacyUnelevatedPackage
 )
 
 Set-StrictMode -Version Latest
@@ -67,7 +68,8 @@ function New-WindowsMsi {
     param(
         [string]$SourceRoot,
         [string]$Destination,
-        [bool]$UseLegacyInstallPath
+        [bool]$UseLegacyInstallPath,
+        [bool]$UseLegacyPrivileges
     )
     $heat = Get-RequiredCommand 'heat'
     $candle = Get-RequiredCommand 'candle'
@@ -117,11 +119,16 @@ function New-WindowsMsi {
     } else {
         '<Directory Id="LocalAppDataFolder"><Directory Id="INSTALLFOLDER" Name="NicoCache_nl" /></Directory>'
     }
+    $packagePrivilegesXml = if ($UseLegacyPrivileges) {
+        'InstallScope="perUser"'
+    } else {
+        'InstallPrivileges="elevated"'
+    }
     $xml = @"
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*" Name="NicoCache_nl" Language="1041" Codepage="932" Version="$msiVersion" Manufacturer="NicoCache_nl" UpgradeCode="$upgradeCode">
-    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" Platform="x64" SummaryCodepage="932" Description="ニコニコ動画向けローカルプロキシー兼キャッシュサーバー" />
+    <Package InstallerVersion="500" Compressed="yes" $packagePrivilegesXml Platform="x64" SummaryCodepage="932" Description="ニコニコ動画向けローカルプロキシー兼キャッシュサーバー" />
     <MajorUpgrade DowngradeErrorMessage="新しいバージョンが既にインストールされています。" Schedule="afterInstallInitialize" />
     <MediaTemplate EmbedCab="yes" />
     <Property Id="ARPPRODUCTICON" Value="LauncherIcon" />
@@ -238,7 +245,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Windowsアプリケーションルートの作
 if ($PackageType -in @('Msi', 'All')) {
     New-WindowsMsi $appImagePath `
         (Join-Path $outputRoot "NicoCache_nl-$AppVersion.msi") `
-        -UseLegacyInstallPath:$UseLegacyProgramsInstallPath
+        -UseLegacyInstallPath:$UseLegacyProgramsInstallPath `
+        -UseLegacyPrivileges:$UseLegacyUnelevatedPackage
 }
 if ($PackageType -in @('Zip', 'All')) {
     $archiveName = if ([string]::IsNullOrWhiteSpace($ZipFileName)) {

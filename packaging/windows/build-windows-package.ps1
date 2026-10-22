@@ -9,7 +9,9 @@ param(
 
     [string]$ZipFileName,
 
-    [switch]$UseLegacyProgramsInstallPath
+    [switch]$UseLegacyProgramsInstallPath,
+
+    [switch]$UseLegacyUnelevatedPackage
 )
 
 & (Join-Path $PSScriptRoot 'build-flat-package.ps1') @PSBoundParameters

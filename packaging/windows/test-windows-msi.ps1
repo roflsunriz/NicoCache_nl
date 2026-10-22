@@ -220,6 +220,14 @@ function Get-MsiProductCode {
     }
 }
 
+function Get-MsiWordCountSummary {
+    param([Parameter(Mandatory)][string]$Path)
+
+    $installer = New-Object -ComObject WindowsInstaller.Installer
+    $summary = $installer.SummaryInformation($Path, 0)
+    return [int]$summary.Property(15)
+}
+
 function Get-OsIntegrationState {
     $proxyPath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
     $proxy = Get-ItemProperty -LiteralPath $proxyPath -ErrorAction SilentlyContinue
@@ -534,6 +542,14 @@ function Invoke-LocationUpgradeCase {
 $osStateBefore = Get-OsIntegrationState
 $previousProductCode = Get-MsiProductCode -Path $resolvedPreviousMsi
 $currentProductCode = Get-MsiProductCode -Path $resolvedMsi
+$previousWordCount = Get-MsiWordCountSummary -Path $resolvedPreviousMsi
+$currentWordCount = Get-MsiWordCountSummary -Path $resolvedMsi
+if (($previousWordCount -band 8) -eq 0) {
+    throw '旧版fixtureが修正前の非昇格MSIを再現していません'
+}
+if (($currentWordCount -band 8) -ne 0) {
+    throw '新版MSIが更新・修復に必要なUAC昇格を要求しません'
+}
 Invoke-LocationUpgradeCase -Case LegacyWithoutConfig
 Invoke-LocationUpgradeCase -Case Custom
 Invoke-LocationUpgradeCase -Case CustomExplicit

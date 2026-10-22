@@ -36,6 +36,12 @@ public final class CoreProcessTest {
             assertTrue(guiCommand.contains(
                             "--enable-native-access=ALL-UNNAMED"),
                     "zstd-jni native access must be explicitly enabled");
+            assertFalse(guiCommand.stream().anyMatch(
+                            argument -> argument.startsWith("-Xmx")),
+                    "launcher must not cap the core heap below the JDK default");
+            assertEquals(java.time.Duration.ofMinutes(5),
+                    CoreProcess.START_TIMEOUT,
+                    "slow cache storage must have enough startup time");
 
             List<String> headlessCommand = core.buildStartCommand(true);
             assertTrue(headlessCommand.contains("--headless"),

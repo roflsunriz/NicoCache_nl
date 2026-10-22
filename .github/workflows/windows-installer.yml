@@ -134,6 +134,7 @@ jobs:
           .\packaging\windows\build-windows-package.ps1 `
             -PackageType All `
             -UseLegacyProgramsInstallPath `
+            -UseLegacyUnelevatedPackage `
             -AppVersion $env:TEST_PREVIOUS_VERSION
           $lifecycle = New-Item `
             -ItemType Directory `

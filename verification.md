@@ -1,5 +1,38 @@
 # 検証手順
 
+## v1.9.7: Windows MSIの別ドライブ更新とランチャー起動（2026-10-22）
+
+[Issue #29](https://github.com/roflsunriz/NicoCache_nl/issues/29)では、Windows 11 25H2で
+v1.9.4からの更新とv1.9.5の修復が終了直前に停止し、管理者のコマンドプロンプトから
+実行した場合だけ完了すると報告された。添付画面は`M:\Config.Msi\*.rbf`のセキュリティを
+設定できないエラー1926／エラー5だった。5ch NicoCache27スレの
+[レス53](https://egg.5ch.net/test/read.cgi/software/1769353155/53)にも、`M:\nico`へ導入した
+v1.9.1とv1.9.3の更新で同じエラーが発生し、強制終了後に配置先が既定のCドライブへ戻る
+報告がある。[レス61](https://egg.5ch.net/test/read.cgi/software/1769353155/61)では同じMSIエラーの
+継続に加え、ランチャーを無効化して旧starterと`-Xmx1024m`を使っており、NASを指す
+シンボリックリンクの起動時走査が遅い可能性も報告された。
+
+修正前の本体MSIはWiXの`InstallScope="perUser"`により昇格不要ビットを持ち、別ドライブ
+直下のWindows Installerロールバック領域へACLを設定できなかった。v1.9.7は
+`InstallPrivileges="elevated"`を明示し、`ALLUSERS`を設定しないユーザー単位登録、
+`MSIINSTALLPERUSER=1`、ロールバック有効を維持した。ローカルで生成した公開用MSIは
+Summary Word Countの昇格不要ビットなし、修正前fixtureは同ビットありを実測した。
+構造試験は昇格要求、ユーザー単位登録、`DISABLEROLLBACK`不在、既存の配置先復元、
+ショートカット、アンインストール順序を含めて成功した。MSIと同じアプリケーションルートの
+ZIPは860ファイルの内容一致を確認した。
+
+ランチャーは本体へ固定していた`-Xmx128m`を削除してJDKの自動ヒープ設定を使い、起動待機を
+30秒から5分へ延長した。CoreProcess回帰を含むランチャー全試験、機能テスト30件、
+Extension ABI 1,484項目（削除0）、同梱Extensionコンパイル、診断アプリ、API契約4件、
+初回セットアップ15件、Windows設定ロールバック、隔離アプリイメージ起動が成功した。
+リリース版数13件、Release workflow、Java選択、community file、actionlintも成功した。
+依存ロックはBouncy Castle 1.86、Brotli decoder 0.1.2、zstd-jni 1.5.7-12で更新なしだった。
+
+ローカルE2Eは11項目中10項目が成功し、裸LF要求を拒否せず200とする既知の1項目だけが
+失敗した。同じ失敗はv1.9.6以前にも記録済みで、今回のMSI権限とランチャー起動経路とは
+異なるHTTP入力経路である。期待値の緩和やスキップは行わず、公開前にremote CIのstrict
+E2Eと、Windows Installerの修正前fixtureから新版への更新・修復を確認する。
+
 ## v1.9.6: CMAF先頭セグメントの並行保存（2026-10-22）
 
 実利用環境のデバッグログでは、同じ音声・映像について初期化チャンク`init1`と先頭

@@ -12,6 +12,13 @@ $summaryInformation = $installer.SummaryInformation($msi, 0)
 if ([int]$summaryInformation.Property(1) -ne 932) {
     throw "MSIサマリーのコードページが日本語対応ではありません: $($summaryInformation.Property(1))"
 }
+$wordCountSummary = [int]$summaryInformation.Property(15)
+if (($wordCountSummary -band 8) -ne 0) {
+    throw (
+        'MSIが昇格不要として作成されています。別ドライブの更新・修復で ' +
+        'Config.Msiのロールバック資材を保護できません'
+    )
+}
 $database = $installer.GetType().InvokeMember(
     'OpenDatabase', 'InvokeMethod', $null, $installer, @($msi, 0)
 )
@@ -35,6 +42,28 @@ function Invoke-MsiQuery {
         $rows += ,$values
     }
     return $rows
+}
+
+$scopeProperties = @(Invoke-MsiQuery (
+        'SELECT `Property`, `Value` FROM `Property` WHERE ' +
+        "`Property` = 'ALLUSERS' OR `Property` = 'MSIINSTALLPERUSER' OR " +
+        "`Property` = 'DISABLEROLLBACK'"
+    ) 2)
+$allUsers = @($scopeProperties | Where-Object { [string]$_[0] -eq 'ALLUSERS' })
+$installPerUser = @($scopeProperties | Where-Object {
+        [string]$_[0] -eq 'MSIINSTALLPERUSER'
+    })
+$disableRollback = @($scopeProperties | Where-Object {
+        [string]$_[0] -eq 'DISABLEROLLBACK'
+    })
+if ($allUsers.Count -ne 0) {
+    throw '本体MSIが意図せずコンピューター単位の導入へ変更されています'
+}
+if ($installPerUser.Count -ne 1 -or [string]$installPerUser[0][1] -ne '1') {
+    throw '本体MSIのユーザー単位導入指定がありません'
+}
+if ($disableRollback.Count -ne 0) {
+    throw '本体MSIが安全な失敗復旧に必要なロールバックを無効化しています'
 }
 
 $fileRows = @(Invoke-MsiQuery 'SELECT `FileName`, `Directory_` FROM `File`, `Component` WHERE `File`.`Component_` = `Component`.`Component`' 2)
