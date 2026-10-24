@@ -83,6 +83,13 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
   親一時キャッシュの移動・消失や書込み不能でディレクトリが存在しない場合は従来どおり失敗にする。
   回帰は`CmafChunkDirectoryUnitTest`と`test-functional.ps1`のCMAF完成・オフライン再生で確認する。
 
+- CMAFの重複最終セグメントでは、`ChunkListener`生成後に別応答がキャッシュを完成させ、
+  `nltmp_*`を完成名へ移動してから遅延応答ヘッダーが届くことがある。セグメントロック取得後と
+  一時ファイルopen失敗時に`DomandCVIEntry.completedFlag`を再確認し、完成済みの場合だけ保存を
+  正常終了する。完成前の保存先消失・権限不足は警告を維持する。回帰は機能テストで2本目の
+  最終映像セグメント応答を完成後まで遅延させ、完成キャッシュ、オフライン再生、誤警告不在を
+  確認する。
+
 - 13ベンダー×Java 17/21/25の実行時互換性matrixは共有Linuxランナーで同時実行する。
   vendor JDKの初回プロセス起動が10秒を超える実測があるため、`ThumbnailCacheStartupTest`は
   `FunctionalTestMain`の起動待機基準と同じ20秒までreadyを待つ。ready確認、起動不能fixture、

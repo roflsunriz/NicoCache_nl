@@ -1,5 +1,30 @@
 # 検証手順
 
+## v1.9.8: CMAF完成後の遅延セグメント応答（2026-10-24）
+
+Issue 30の報告順序を隔離した実ソケット試験へ追加した。2本の同一最終映像セグメントを
+並行要求し、2本目は`ChunkListener`生成後、1本目による完成キャッシュ生成まで上流応答
+ヘッダーを遅延させた。v1.9.7実装では`cache completed`後に、移動済み`nltmp_*`配下の
+`tmpcmfP_01.cmfv`を開こうとして「書き込みopen失敗」を記録し、追加した期待値が失敗した。
+
+修正後はセグメントロック取得後と一時ファイルopen失敗時に完成状態を再確認し、完成済みの
+遅延応答だけをキャッシュ書込み対象から外した。同じ再現条件を含む機能テスト30件が成功し、
+完成キャッシュ、復号済み音声・映像、専用管理API、上流停止後のオフライン再生、Extension
+完成通知を維持し、誤警告がないことを確認した。完成前のopen失敗は既存の警告経路に残した。
+
+API契約4件、ランチャーのoption・control・task・lifecycle・本体process mode・診断起動・
+task scheduler・データルート10件・初回設定、診断アプリのredactor・path・heartbeat・
+snapshot・thread dump・HTML・headless・GUIが成功した。Release workflow、版回帰13件、
+Java選択、GitHub community fileの契約も成功した。Temurin 25の正規ビルドは5 JARを
+`.test-work/release-v1.9.8/build/`へ隔離出力し、v1.9.8／2026-10-24の表示・manifest・タグ・
+Unix配布版を確認した。
+
+ローカルE2Eは11項目中10項目が成功し、裸LF要求を拒否せず200とする既知の1項目だけが
+失敗した。同じ失敗はv1.9.7以前にも記録済みで、今回のCMAF保存処理とは異なるHTTP入力
+経路である。期待値の緩和やスキップは行わず、公開前にremote CIのstrict E2Eを確認する。
+依存ロックはBouncy Castle 1.86、Brotli decoder 0.1.2、zstd-jni 1.5.7-12で更新なし、
+ロックと更新処理テストは成功した。GitHubの未解決Dependabot警告とOpen PRは0件だった。
+
 ## v1.9.7: Windows MSIの別ドライブ更新とランチャー起動（2026-10-23）
 
 [Issue #29](https://github.com/roflsunriz/NicoCache_nl/issues/29)では、Windows 11 25H2で

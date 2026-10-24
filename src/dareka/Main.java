@@ -24,7 +24,7 @@ public class Main {
     // "NicoCache_nl+150304mod+231111mod (eR) (based on NicoCache v0.45)"
 
     // public so that external tools can read.
-    public static final String VER_STRING = "NicoCache_nl version 2026-10-23 (v1.9.7)";
+    public static final String VER_STRING = "NicoCache_nl version 2026-10-24 (v1.9.8)";
 
     // accessor for avoiding static link
     public static String getVersion() {

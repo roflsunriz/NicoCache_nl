@@ -803,6 +803,16 @@ public final class FunctionalTestMain {
                             secondSegment ? (byte) 0x2b : (byte) 0x2a,
                             secondSegment ? 2 : 1);
                 }
+                if (path.contains("/hlsbid/") && path.contains("/video/")
+                        && path.substring(path.lastIndexOf('/') + 1).startsWith("01.")
+                        && requestNumber > 1) {
+                    try {
+                        waitForCompletedCmafCache("sm900010", Duration.ofSeconds(8));
+                    } catch (Exception error) {
+                        throw new IOException(
+                                "timed out delaying the late final CMAF segment", error);
+                    }
+                }
                 boolean chunkedCmaf = path.contains("/hlsbid/") || path.contains("/shlsbid/");
                 exchange.sendResponseHeaders(200, chunkedCmaf ? 0 : body.length);
                 if ((path.contains("/hlsext/") || path.contains("/hlsbid/"))
@@ -1523,6 +1533,8 @@ public final class FunctionalTestMain {
         exerciseCmafMedia("sm900010", "hlsbid", "video", "video-h264-720p", "cmfv");
 
         Path completed = waitForCompletedCmafCache("sm900010", Duration.ofSeconds(8));
+        assertLogDoesNotContain("書き込みopen失敗",
+                "late final CMAF segment must not be reported as a write-open failure");
         assertFalse(completed.getFileName().toString().startsWith("sm900010low"),
                 "new CMAF cache filename must not contain low");
         Response cmafInfo = request(nicoCacheWebRequest("GET",
@@ -2267,6 +2279,14 @@ public final class FunctionalTestMain {
             assertFalse(size <= 0, "CMAF progress size must be positive: " + line);
         }
         assertFalse(!found, "CMAF progress log is missing: " + smid);
+    }
+
+    private void assertLogDoesNotContain(String unexpected, String message) throws IOException {
+        byte[] logBytes = Files.readAllBytes(sandbox.resolve("nicocache-functional.log"));
+        String utf8Log = new String(logBytes, StandardCharsets.UTF_8);
+        String windowsLog = new String(logBytes, PAC_CHARSET);
+        assertFalse(utf8Log.contains(unexpected) || windowsLog.contains(unexpected),
+                message + ": " + unexpected);
     }
 
     private void exerciseCmafMedia(String smid, String route, String mediaType,

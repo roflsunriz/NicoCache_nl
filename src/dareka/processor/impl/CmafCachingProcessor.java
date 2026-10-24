@@ -1864,6 +1864,19 @@ class ChunkListener implements TransferListener, Runnable {
         Logger.warning(msg);
     };
 
+    private boolean stopIfCacheCompleted() {
+        if (!movieInfo.getCompletedFlag()) {
+            return false;
+        };
+
+        // 別の応答が最後のセグメントを保存すると、cacheStoreはnltmpを完成名へ
+        // 移動する。移動前に生成済みのlistenerは旧パスを保持しているため、
+        // 以後の応答はキャッシュへ書かず上流本文だけをブラウザーへ通す。
+        errorOccurred = true;
+        close(false);
+        return true;
+    };
+
     private void acquireSegmentLock() {
         if (segmentLockHeld) {
             return;
@@ -2067,6 +2080,10 @@ class ChunkListener implements TransferListener, Runnable {
                 partRAF.seek(0);
             };
         } catch (FileNotFoundException e) {
+            // 完成確認とopenの間にも別セグメントがcacheStoreを実行し得る。
+            if (stopIfCacheCompleted()) {
+                return;
+            };
             errorwarning("書き込みopen失敗: " + partFile);
             return;
         } catch (IOException e) {
@@ -2366,6 +2383,9 @@ class ChunkListener implements TransferListener, Runnable {
         // コンストラクター後に同じセグメントの要求が先に完了している場合がある。
         // 完成ファイルがある要求は一時ファイルを開かず、応答だけ通過させる。
         acquireSegmentLock();
+        if (stopIfCacheCompleted()) {
+            return;
+        };
         if (file.exists()) {
             errorOccurred = true;
             releaseSegmentLock();
