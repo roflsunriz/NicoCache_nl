@@ -25,6 +25,18 @@ Unix配布版を確認した。
 依存ロックはBouncy Castle 1.86、Brotli decoder 0.1.2、zstd-jni 1.5.7-12で更新なし、
 ロックと更新処理テストは成功した。GitHubの未解決Dependabot警告とOpen PRは0件だった。
 
+mainの`053cfd0b32e059d4f740170cfd2199456f2a6b03`では、CI `40081035230`の中心ジョブ、
+Windows／Linux／macOSの既定構成、Temurin 17、13ベンダー×Java 17/21/25の39実行時構成を
+含む全45ジョブが成功した。Windows Installer `40081035151`は隔離アプリルート、MSIの
+導入・修復・更新・アンインストールまで成功し、Unix Packages `40081035153`はLinux／macOS
+とも成功した。
+
+タグ`v1.9.8`のRelease `40081561479`は全4ジョブが成功し、2026-10-24 18:29
+（Asia/Tokyo）に正式公開された。GitHub ReleaseにはWindows、Linux、macOSの本体と独立
+アップデーター、各SHA-256の計30件があり、全件が`uploaded`、全件にGitHubのSHA-256
+digestがあることを確認した。v1.9.8は最新リリースで、Release本文にもIssue 30の修正内容が
+掲載されている。
+
 ## v1.9.7: Windows MSIの別ドライブ更新とランチャー起動（2026-10-23）
 
 [Issue #29](https://github.com/roflsunriz/NicoCache_nl/issues/29)では、Windows 11 25H2で
