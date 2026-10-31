@@ -1,7 +1,7 @@
 @{
     BouncyCastleVersion = '1.86'
     BrotliDecoderVersion = '0.1.2'
-    ZstdJniVersion = '1.5.7-12'
+    ZstdJniVersion = '1.5.7-25'
     Artifacts = @(
         @{
             Name = 'bcprov'
@@ -30,8 +30,8 @@
         @{
             Name = 'zstd-jni'
             FileName = 'zstd-jni.jar'
-            Url = 'https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.7-12/zstd-jni-1.5.7-12.jar'
-            Sha256 = '33661c9439a0898c4cc844d675bef56f6ea72e11079173c3cfc8f352c6e73f0c'
+            Url = 'https://repo.maven.apache.org/maven2/com/github/luben/zstd-jni/1.5.7-25/zstd-jni-1.5.7-25.jar'
+            Sha256 = '1ff04cfd265453102c700ba2634b9eb50a3455fee27145c7a6e8a5d0563b1d5f'
         }
     )
 }

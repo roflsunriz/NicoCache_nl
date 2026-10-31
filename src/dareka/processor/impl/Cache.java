@@ -1181,7 +1181,8 @@ public class Cache extends CacheManager {
                 return;
             }
 
-// すでにあるlow等のキャッシュファイルからタイトルと保存先と最終更新日時を取得
+// すでにあるlow等のキャッシュファイルから保存先と最終更新日時を取得。
+// タイトルを引き継ぐのはタイトル付与が有効な場合だけ。
 // 最初に見つけたものを使う
             Set<VideoDescriptor> oldVideos = id2Videos.get(video.getId());
             long mtime = 0;
@@ -1189,7 +1190,9 @@ public class Cache extends CacheManager {
                 for (VideoDescriptor v : oldVideos) {
                     File f = video2File_get(v);
                     if (f != null && f.exists()) {
-                        setDescribe(f, false);
+                        if (Boolean.getBoolean("title")) {
+                            setDescribe(f, false);
+                        }
                         parentDir = f.getParentFile();
                         mtime = f.lastModified();
                         break;

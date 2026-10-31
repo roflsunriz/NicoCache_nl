@@ -48,6 +48,13 @@ NicoCache_nl は、ニコニコ動画向けのローカル HTTP/HTTPS プロキ�
 
 ## 変更時の注意
 
+- `title`は動画情報の取得を止める設定ではなく、キャッシュ名へ動画タイトルを付けるかを
+  制御する。Watch応答などがタイトルを保持するため、CMAFの一時キャッシュと完成用
+  `Cache`は同じ設定を確認する。`Cache.store()`は既存画質の保存先と更新日時を維持しつつ、
+  `title=false`では旧タイトルを引き継がない。旧設定の一時キャッシュを再利用する場合も
+  CMAF完成時の名前を現在の設定に合わせる。明示的な`Cache.setTitle()`と保存済みファイルの
+  自動改名は別扱いとする。回帰は`test-functional.ps1`の設定別実ソケット試験で確認する。
+
 - サムネイル保存先の必要条件は`cacheThumbnail`と`thcacheFolder`に従う。
   `DataRootInspector`の診断は書き込みを行わず、本体`ThumbProcessor2.update`は無効時に
   保存先を触らない。有効時の作成失敗は原因付きで伝え、`ref/`不在時の既存サムネイル参照

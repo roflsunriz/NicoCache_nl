@@ -2625,7 +2625,7 @@ class DomandCVIUtil {
             videoType + videoNumId, postfix, videoMode, audioKbps
             , /*srcid*/"");
 
-        Cache cache = getCache(idInfo, videoDescriptor);
+        Cache cache = DomandCVIEntry.createCache(idInfo, videoDescriptor);
 
         DomandCVIEntry entry = new DomandCVIEntry(
             entryKeyName, videoType, videoNumId, videoHeight, audioKbps
@@ -2654,16 +2654,4 @@ class DomandCVIUtil {
         return vd;
     };
 
-    private static Cache getCache(
-        NicoIdInfoCache.Entry idInfo, VideoDescriptor vd) {
-
-        Cache cache;
-        if (idInfo == null) {
-            cache = new Cache(vd);
-        }
-        else {
-            cache = new Cache(vd, idInfo.getTitle());
-        };
-        return cache;
-    };
 };

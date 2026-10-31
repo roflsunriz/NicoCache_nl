@@ -1,5 +1,32 @@
 # 検証手順
 
+## v1.9.9: キャッシュ名のタイトル設定（2026-10-31）
+
+[NicoCache27のレス82](https://egg.5ch.net/test/read.cgi/software/1769353155/82)では、
+`config.properties`に`title=false`を指定しても保存名にタイトルが付くと報告された。
+修正前の本体を隔離した実ソケット試験で、タイトル取得済みの新規一時フォルダーと、
+タイトル付き低画質キャッシュから置換した完成フォルダーの両方にタイトルが付くことを再現した。
+
+修正後の`test-functional.ps1`は通常の30項目に加え、別の隔離データと本体プロセスで
+`title=false`を検証した。新規一時・完成名、タイトル付き旧画質からの置換、旧設定の
+途中フォルダーの再利用、別動画の保存済みファイル保持、音声・映像の復号とオフライン再生が
+成功した。`title=true`の一時・完成名と、設定無効時の明示的な`Cache.setTitle()`も確認した。
+Extension ABI 1,484項目、同梱Extensionのコンパイル、API契約4項目、ランチャーおよび
+診断アプリの各テストが成功した。実ニコニコへの取得や利用中の本体の置換・再起動は行っていない。
+
+Temurin 25の正規ビルドを隔離チェックアウトへ出力し、5 JARとv1.9.9／2026-10-31の表示・
+manifest・タグ・Unix配布版の一致を確認した。Windows ZIPとMSIを隔離して生成し、
+860ファイルの内容一致、MSI構造、アプリイメージの起動・停止、証明書ストアとWindows
+プロキシー設定の不変性を確認した。実MSIの導入・修復・更新・削除はローカルで実施していない。
+Release workflow、版回帰13項目、Java選択、community file、actionlintも成功した。
+
+依存関係はBouncy Castle 1.86とBrotli decoder 0.1.2を維持し、zstd-jniを1.5.7-12から
+1.5.7-25へ更新した。上流の[GHSA-h5m7-4hv9-cvp3](https://github.com/luben/zstd-jni/security/advisories/GHSA-h5m7-4hv9-cvp3)と
+[GHSA-8v5f-66rc-52f5](https://github.com/luben/zstd-jni/security/advisories/GHSA-8v5f-66rc-52f5)を確認し、
+旧版を含む対象範囲外へ更新した。両問題の本体からの到達性は未評価である。Maven Centralの
+配布物・SHA-256・BSD-2-Clause、Windows／Linux／macOSのx64・ARM64ネイティブ資産、
+zstd展開、依存ロックと更新処理のテストを確認した。
+
 ## v1.9.8: CMAF完成後の遅延セグメント応答（2026-10-24）
 
 Issue 30の報告順序を隔離した実ソケット試験へ追加した。2本の同一最終映像セグメントを

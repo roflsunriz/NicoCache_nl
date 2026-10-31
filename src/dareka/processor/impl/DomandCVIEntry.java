@@ -1060,7 +1060,7 @@ public class DomandCVIEntry {
 
         try {
             // Logger.info("--[v]cache store " + getSmid());
-            finalCache.store();
+            storeCache(finalCache);
         } catch (IOException e) {
             Logger.debugWithThread(e);
         };
@@ -1112,11 +1112,23 @@ public class DomandCVIEntry {
             finalvd = regvd.replaceLow(false);
         };
 
-        if (idInfo == null) {
-            return new Cache(finalvd);
-        };
-        return new Cache(finalvd, idInfo.getTitle());
+        return createCache(idInfo, finalvd);
     };
+
+    static Cache createCache(NicoIdInfoCache.Entry idInfo, VideoDescriptor video) {
+        if (idInfo == null || !Boolean.getBoolean("title")) {
+            return new Cache(video);
+        }
+        return new Cache(video, idInfo.getTitle());
+    }
+
+    private static void storeCache(Cache cache) throws IOException {
+        // 旧設定で作成した一時キャッシュを再開した場合も、完成名は現設定に従う。
+        if (!Boolean.getBoolean("title")) {
+            cache.setDescribe(null);
+        }
+        cache.store();
+    }
 
     // - audio-segmentsはcompleteしたかもという宣言的な名前.
     // - thisがvideoを扱っているなら何もしない.
@@ -1194,7 +1206,7 @@ public class DomandCVIEntry {
 
             try {
                 // Logger.info("--[a]cache store " + getSmid());
-                dest.store();
+                storeCache(dest);
             } catch (IOException e) {
                 Logger.debugWithThread(e);
             };

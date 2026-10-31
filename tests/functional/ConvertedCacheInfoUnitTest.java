@@ -30,7 +30,8 @@ public final class ConvertedCacheInfoUnitTest {
         Map<String, String> properties = new LinkedHashMap<>();
         for (String key : new String[] {"cacheFolder", "convertedCacheFolder", "convertFlv2Mp4",
                 "checkRealCache", "nicocache.userDataRoot", "nicocache.applicationRoot",
-                "useNotReEncodedCache", "workaroundNoDisableDoubleCacheImported"}) {
+                "useNotReEncodedCache", "workaroundNoDisableDoubleCacheImported", "title",
+                "fileNameCharset"}) {
             properties.put(key, System.getProperty(key));
         }
         try {
@@ -65,6 +66,12 @@ public final class ConvertedCacheInfoUnitTest {
             equal(192L, ((JsonNumber) mp4.get("audioBitrate")).getLong(), "converted MP4 audio quality");
             equal("sm991001[720p,192].mp4", ((JsonString) converted.getArray("completes").getList().get(0)).value(), "completed list");
             equal("sm991002", info("sm991002").getString("preferred"), "classic MP4 compatible id");
+            System.setProperty("title", "false");
+            System.setProperty("fileNameCharset", "");
+            Cache manuallyNamed = new Cache(VideoDescriptor.newClassic("sm991002", Cache.MP4, false));
+            equal(true, manuallyNamed.setTitle("Manual Title"), "explicit title remains available");
+            equal(true, Files.exists(root.resolve("sm991002_Manual Title.mp4")),
+                    "explicit title changes the existing filename");
             equal("MP4", info("sm991002").getObject("caches").getObject("sm991002").getString("format"), "classic MP4 format");
             equal("sm991003[1080p,192].hls", info("sm991003").getString("preferred"), "existing HLS preference preserved");
             equal(2, info("sm991003").getObject("caches").getMap().size(), "MP4 and HLS coexist");

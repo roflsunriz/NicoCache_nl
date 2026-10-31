@@ -73,6 +73,7 @@ public final class FunctionalTestMain {
     private final Path classes;
     private final String applicationClasspath;
     private final boolean apiOnly;
+    private final boolean titleDisabled;
     private HttpServer upstream;
     private ExecutorService upstreamExecutor;
     private Process nicocache;
@@ -82,7 +83,7 @@ public final class FunctionalTestMain {
     private final Map<String, AtomicInteger> upstreamRequests = new ConcurrentHashMap<>();
 
     private FunctionalTestMain(Path repository, Path sandbox, Path classes,
-            boolean apiOnly) {
+            boolean apiOnly, boolean titleDisabled) {
         this.repository = repository;
         this.sandbox = sandbox;
         this.application = sandbox.resolve("application");
@@ -90,21 +91,35 @@ public final class FunctionalTestMain {
         this.applicationClasspath = System.getProperty(
                 "nicocache.test.classpath", classes.toString());
         this.apiOnly = apiOnly;
+        this.titleDisabled = titleDisabled;
     }
 
     public static void main(String[] args) throws Exception {
         if (args.length < 3 || args.length > 4
-                || args.length == 4 && !"--api-only".equals(args[3])) {
+                || args.length == 4 && !"--api-only".equals(args[3])
+                        && !"--title-disabled".equals(args[3])) {
             throw new IllegalArgumentException(
-                    "usage: FunctionalTestMain <repository> <sandbox> <classes> [--api-only]");
+                    "usage: FunctionalTestMain <repository> <sandbox> <classes> [--api-only|--title-disabled]");
         }
 
         FunctionalTestMain suite = new FunctionalTestMain(
                 Path.of(args[0]).toAbsolutePath().normalize(),
                 Path.of(args[1]).toAbsolutePath().normalize(),
                 Path.of(args[2]).toAbsolutePath().normalize(),
-                args.length == 4);
+                args.length == 4 && "--api-only".equals(args[3]),
+                args.length == 4 && "--title-disabled".equals(args[3]));
         suite.execute();
+        if (!suite.apiOnly && !suite.titleDisabled) {
+            Path titleSandbox = suite.sandbox.resolve("title-disabled");
+            Path fixtureDirectory = titleSandbox.resolve("extensions");
+            Files.createDirectories(fixtureDirectory);
+            try (var fixtures = Files.list(suite.sandbox.resolve("extensions"))) {
+                fixtures.filter(Files::isRegularFile).forEach(path ->
+                        copy(path, fixtureDirectory.resolve(path.getFileName())));
+            }
+            new FunctionalTestMain(suite.repository, titleSandbox, suite.classes,
+                    false, true).execute();
+        }
     }
 
     private void execute() throws Exception {
@@ -113,7 +128,12 @@ public final class FunctionalTestMain {
             startUpstream();
             startNicoCache();
 
-            if (apiOnly) {
+            if (titleDisabled) {
+                run("title=false encrypted CMAF completion and replacement",
+                        this::testHlsextEncryptedCmafFlow);
+                run("title=false CMAF temporary and completed names and playback",
+                        this::testCmafMasterFlow);
+            } else if (apiOnly) {
                 run("control API contract and authentication", this::testControlApiContract);
                 run("temporary cache family deletion reservation",
                         this::testTemporaryCacheFamilyDeletionReservation);
@@ -212,6 +232,18 @@ public final class FunctionalTestMain {
         Files.createDirectories(sandbox.resolve("thcache"));
         Files.createDirectories(sandbox.resolve("data/tlsclient"));
         Files.createDirectories(sandbox.resolve("certs"));
+
+        if (titleDisabled) {
+            Path previous = sandbox.resolve("cache/sm900011[360p,64]_Previous Title.hls");
+            Files.createDirectories(previous);
+            Files.writeString(previous.resolve("master.m3u8"), "#EXTM3U\n",
+                    StandardCharsets.UTF_8);
+            Path interrupted = sandbox.resolve(
+                    "cache/nltmp_sm900010[720p,128]_Interrupted.hls");
+            Files.createDirectories(interrupted);
+            Files.writeString(interrupted.resolve("resume-marker.m3u8"), "resumed",
+                    StandardCharsets.UTF_8);
+        }
 
         try (var stream = Files.list(repository.resolve("defaults"))) {
             stream.filter(path -> path.getFileName().toString().endsWith(".properties"))
@@ -916,7 +948,7 @@ public final class FunctionalTestMain {
                 "rewriterDefaultCharset=UTF-8",
                 "mimeTypes=local/mime.types",
                 "touchCache=false",
-                "title=true",
+                "title=" + !titleDisabled,
                 "") ;
         config += "userDataRoot="
                 + sandbox.toString().replace("\\", "\\\\") + "\n";
@@ -1507,6 +1539,11 @@ public final class FunctionalTestMain {
     }
 
     private void testCmafMasterFlow() throws Exception {
+        if (titleDisabled) {
+            assertTrue(Files.isDirectory(sandbox.resolve(
+                    "cache/nltmp_sm900010[720p,128]_Interrupted.hls")),
+                    "existing titled partial cache is available for resumption");
+        }
         Response watch = request(absoluteRequest("http://www.nicovideo.jp/watch/sm900010",
                 "www.nicovideo.jp"));
         assertEquals(200, watch.status, "watchV4 initial HTML status");
@@ -1530,9 +1567,31 @@ public final class FunctionalTestMain {
         assertContains(master.bodyText(), "audio-aac-128kbps.m3u8", "CMAF audio playlist");
 
         exerciseCmafMedia("sm900010", "hlsbid", "audio", "audio-aac-128kbps", "cmfa");
+        Path partial = waitForCmafSegment("sm900010", "audio/01.cmfa", Duration.ofSeconds(5))
+                .getParent().getParent();
+        String partialName = partial.getFileName().toString();
+        if (titleDisabled) {
+            assertEquals("nltmp_sm900010[0p,128].hls", partialName,
+                    "title=false temporary CMAF directory");
+        } else {
+            assertContains(partialName, "_Functional CMAF.hls", "title=true temporary CMAF directory");
+        }
         exerciseCmafMedia("sm900010", "hlsbid", "video", "video-h264-720p", "cmfv");
 
         Path completed = waitForCompletedCmafCache("sm900010", Duration.ofSeconds(8));
+        if (titleDisabled) {
+            assertEquals("sm900010[720p,128].hls", completed.getFileName().toString(),
+                    "title=false completed CMAF directory");
+            assertFalse(Files.exists(sandbox.resolve(
+                    "cache/nltmp_sm900010[720p,128]_Interrupted.hls")),
+                    "completed partial cache must not retain its old title");
+            assertFileContains(completed.resolve("resume-marker.m3u8"), "resumed");
+            assertTrue(Files.exists(sandbox.resolve("cache/sm900001_Functional.mp4")),
+                    "existing titled cache must remain unchanged");
+        } else {
+            assertContains(completed.getFileName().toString(), "_Functional CMAF.hls",
+                    "title=true completed CMAF directory");
+        }
         assertLogDoesNotContain("書き込みopen失敗",
                 "late final CMAF segment must not be reported as a write-open failure");
         assertFalse(completed.getFileName().toString().startsWith("sm900010low"),
@@ -1616,7 +1675,14 @@ public final class FunctionalTestMain {
 
         exerciseCmafMedia("sm900011", "hlsext", "audio", "audio-aac-128kbps", "cmfa");
         exerciseCmafMedia("sm900011", "hlsext", "video", "video-h264-720p", "cmfv");
-        waitForCompletedCmafCache("sm900011", Duration.ofSeconds(8));
+        Path completed = waitForCompletedCmafCache("sm900011", Duration.ofSeconds(8));
+        if (titleDisabled) {
+            assertEquals("sm900011[720p,128].hls", completed.getFileName().toString(),
+                    "title=false must not inherit an existing cache title");
+        } else {
+            assertContains(completed.getFileName().toString(), "_Functional CMAF.hls",
+                    "title=true encrypted CMAF directory");
+        }
 
         String localBase = cacheEntryMediaBase("sm900011[720p,128].hls");
         Response video = request(nicoCacheWebRequest(
@@ -2246,7 +2312,7 @@ public final class FunctionalTestMain {
             try (var caches = Files.list(sandbox.resolve("cache"))) {
                 Path completed = caches
                         .filter(Files::isDirectory)
-                        .filter(path -> path.getFileName().toString().startsWith(smid))
+                        .filter(path -> path.getFileName().toString().startsWith(smid + "[720p,128]"))
                         .filter(path -> path.getFileName().toString().endsWith(".hls"))
                         .findFirst().orElse(null);
                 if (completed != null) {

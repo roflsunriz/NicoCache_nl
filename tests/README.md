@@ -73,6 +73,8 @@ HTTP サーバーを利用する。
   Watch V4のタグとNVCommentコンテキスト、旧・V4のdirect／`response`応答選択、
   アニメ公式動画で使われる `hlsext` 経路、署名更新前後で同名セグメントが続く
   `shlsbid` 経路の鍵・IV世代分離
+- `title=true`／`false`の一時・完成CMAF名、旧設定の途中キャッシュ再開、
+  タイトル付き別画質からの置換、既存ファイルの保持と明示的なタイトル変更
 - `nicocachenl.test`のREST情報取得、動画メタデータ、検索、管理画面資産、`/media/v1`配信、Range、DELETE、診断、CORS、構造化エラーと、
   旧管理APIが404になり副作用を起こさないこと
 - 単一 MP4・FLV・SWF、旧 DMC MP4・HLS の検索、配信、削除
