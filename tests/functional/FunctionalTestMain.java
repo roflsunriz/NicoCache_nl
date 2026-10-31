@@ -2290,15 +2290,14 @@ public final class FunctionalTestMain {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < deadline) {
             try (var caches = Files.list(sandbox.resolve("cache"))) {
-                Path cache = caches
+                Path segment = caches
                         .filter(Files::isDirectory)
                         .filter(path -> path.getFileName().toString().startsWith("nltmp_" + smid))
+                        .map(path -> path.resolve(relativePath))
+                        .filter(Files::isRegularFile)
                         .findFirst().orElse(null);
-                if (cache != null) {
-                    Path segment = cache.resolve(relativePath);
-                    if (Files.isRegularFile(segment)) {
-                        return segment;
-                    }
+                if (segment != null) {
+                    return segment;
                 }
             }
             Thread.sleep(50L);
