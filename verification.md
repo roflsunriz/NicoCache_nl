@@ -31,6 +31,18 @@ Release workflow、版回帰13項目、Java選択、community file、actionlint�
 配布物・SHA-256・BSD-2-Clause、Windows／Linux／macOSのx64・ARM64ネイティブ資産、
 zstd展開、依存ロックと更新処理のテストを確認した。
 
+mainの`36edd55a4d52b27034f3a0424bb168bbce84e0c3`ではCI `41169052562`の
+Windows／Linux／macOS、Temurin 17、13配布元×Java 17／21／25を含む全45ジョブが成功した。
+製品コードが同じ先行コミット`acfb1e08bd2c80700eea632ac4a37295d0ae198e`では、
+Windows Installer `41168687389`が隔離された実MSIの導入・修復・更新・削除を完了し、
+Unix Packages `41168687344`もLinux・macOSとも成功した。
+
+タグ`v1.9.9`のRelease `41169594615`は全4ジョブが成功し、2026-10-31 13:50
+（Asia/Tokyo）に正式公開された。最新のGitHub Releaseにある本体・独立アップデーターの
+配布物15件とチェックサム15件はすべてアップロード済みで、各チェックサムはGitHubが示す
+SHA-256と一致した。公開されたWindows ZIPを実際に取得してSHA-256を照合し、内部の
+本体JARの版・日付とzstd-jniのハッシュがリリース定義に一致することも確認した。
+
 ## v1.9.8: CMAF完成後の遅延セグメント応答（2026-10-24）
 
 Issue 30の報告順序を隔離した実ソケット試験へ追加した。2本の同一最終映像セグメントを
