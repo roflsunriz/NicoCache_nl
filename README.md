@@ -176,4 +176,6 @@ java -jar NicoCacheLauncher.jar --headless --check-data-root
 
 ## 依存更新の自動処理
 
-具体的な手順・構成・知見は [findings.md](<findings.md#readme-7>) に移動しました。着手前に該当条件を確認してください。
+更新PRの取り込みは、必要なCIチェックにすべて成功したものだけを対象に、毎月28日18:00（Asia/Tokyo）の月末処理で行います。
+
+Dependabot は対象の依存関係を毎月28日00:00（Asia/Tokyo）に確認します。patch／minor／major 更新は必須の `CI` と、変更内容に応じて起動した Standalone Updater・Unix Packages・Windows Installer を含む全 PR チェックが成功した後に自動で squash merge されます。CI の失敗ジョブは 1 回だけ再実行します。再失敗した PR は残して手動で修正します。
