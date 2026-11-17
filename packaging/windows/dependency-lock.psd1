@@ -1,25 +1,25 @@
 @{
-    BouncyCastleVersion = '1.86'
+    BouncyCastleVersion = '1.87'
     BrotliDecoderVersion = '0.1.2'
     ZstdJniVersion = '1.5.7-25'
     Artifacts = @(
         @{
             Name = 'bcprov'
             FileName = 'bcprov.jar'
-            Url = 'https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.86/bcprov-jdk18on-1.86.jar'
-            Sha256 = '2af190b300cbb0b35e248ccf5f4a06b6072030aeb3da7a98ec73abe5b4cb371f'
+            Url = 'https://repo.maven.apache.org/maven2/org/bouncycastle/bcprov-jdk18on/1.87/bcprov-jdk18on-1.87.jar'
+            Sha256 = '12d2d3dd82a9ec15e92ec7c7943ee64f6097c6dc12c07e984f1693b77565b9aa'
         }
         @{
             Name = 'bcpkix'
             FileName = 'bcpkix.jar'
-            Url = 'https://repo.maven.apache.org/maven2/org/bouncycastle/bcpkix-jdk18on/1.86/bcpkix-jdk18on-1.86.jar'
-            Sha256 = '8d8b41a4b149bdae8d331f059a578870954d1e3ff29f8269a9eb3ee19a7e4ef7'
+            Url = 'https://repo.maven.apache.org/maven2/org/bouncycastle/bcpkix-jdk18on/1.87/bcpkix-jdk18on-1.87.jar'
+            Sha256 = 'a44be2660d72ed88673372b8cc2d53a25a5aaf27122fb803ed93f07147536aa1'
         }
         @{
             Name = 'bcutil'
             FileName = 'bcutil.jar'
-            Url = 'https://repo.maven.apache.org/maven2/org/bouncycastle/bcutil-jdk18on/1.86/bcutil-jdk18on-1.86.jar'
-            Sha256 = '1c268e15f785aafb1e4670d8d6e5f856f69475e96c162dadcd1ff9b350e9139f'
+            Url = 'https://repo.maven.apache.org/maven2/org/bouncycastle/bcutil-jdk18on/1.87/bcutil-jdk18on-1.87.jar'
+            Sha256 = 'af46dd381553fdc466cd0c18f8bf2144c7dbcb7337eee3e16cab15e96613ddf0'
         }
         @{
             Name = 'brotli-dec'
