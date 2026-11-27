@@ -82,7 +82,7 @@ jobs:
             }
 
       - name: Apply changed-file labels
-        uses: actions/labeler@bc32c493030cc908233048429a1f81da3057fbbc # v7.0.0 + security fixes
+        uses: actions/labeler@e418da8824fe5e9edfa64aae6cd5648b895283c4 # v7.0.0 + security fixes
         with:
           repo-token: ${{ github.token }}
           configuration-path: .github/labeler.yml
